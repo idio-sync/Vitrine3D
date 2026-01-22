@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gaussian Splat & Mesh Viewer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <div id="viewer-container">
+            <canvas id="viewer-canvas"></canvas>
+        </div>
+
+        <div id="controls-panel">
+            <h2>Splat/Mesh Viewer</h2>
+
+            <div class="control-section">
+                <h3>Display Mode</h3>
+                <div class="toggle-group">
+                    <button id="btn-splat" class="toggle-btn">Splat</button>
+                    <button id="btn-model" class="toggle-btn">Model</button>
+                    <button id="btn-both" class="toggle-btn active">Both</button>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Load Gaussian Splat</h3>
+                <input type="file" id="splat-input" accept=".ply,.splat,.ksplat" />
+                <label for="splat-input" class="file-label">Choose PLY/Splat File</label>
+                <span id="splat-filename" class="filename">No file loaded</span>
+            </div>
+
+            <div class="control-section">
+                <h3>Load 3D Model</h3>
+                <input type="file" id="model-input" accept=".glb,.gltf,.obj" multiple />
+                <label for="model-input" class="file-label">Choose glTF/OBJ File</label>
+                <span id="model-filename" class="filename">No file loaded</span>
+            </div>
+
+            <div class="control-section">
+                <h3>Splat Settings</h3>
+                <div class="slider-group">
+                    <label for="splat-scale">Scale: <span id="splat-scale-value">1.0</span></label>
+                    <input type="range" id="splat-scale" min="0.1" max="5" step="0.1" value="1" />
+                </div>
+                <div class="slider-group">
+                    <label for="splat-opacity">Opacity: <span id="splat-opacity-value">1.0</span></label>
+                    <input type="range" id="splat-opacity" min="0" max="1" step="0.05" value="1" />
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Model Settings</h3>
+                <div class="slider-group">
+                    <label for="model-scale">Scale: <span id="model-scale-value">1.0</span></label>
+                    <input type="range" id="model-scale" min="0.1" max="5" step="0.1" value="1" />
+                </div>
+                <div class="slider-group">
+                    <label for="model-opacity">Opacity: <span id="model-opacity-value">1.0</span></label>
+                    <input type="range" id="model-opacity" min="0" max="1" step="0.05" value="1" />
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="model-wireframe" />
+                    <label for="model-wireframe">Wireframe</label>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Camera</h3>
+                <button id="btn-reset-camera" class="action-btn">Reset Camera</button>
+                <button id="btn-fit-view" class="action-btn">Fit to View</button>
+            </div>
+
+            <div class="control-section">
+                <h3>Info</h3>
+                <div id="info-panel">
+                    <p>Splat vertices: <span id="splat-vertices">-</span></p>
+                    <p>Model faces: <span id="model-faces">-</span></p>
+                    <p>FPS: <span id="fps-counter">-</span></p>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading-overlay" class="hidden">
+            <div class="loading-spinner"></div>
+            <p id="loading-text">Loading...</p>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mkkellogg/gaussian-splats-3d@0.4.6/build/gaussian-splats-3d.umd.min.js"></script>
+    <script type="module" src="main.js"></script>
+</body>
+</html>
