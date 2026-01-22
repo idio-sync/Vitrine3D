@@ -50,14 +50,16 @@ function init() {
     );
     camera.position.set(0, 1, 3);
 
-    // Renderer
+    // Renderer - use logarithmic depth buffer for better depth precision with splats
     renderer = new THREE.WebGLRenderer({
         canvas: canvas,
-        antialias: true
+        antialias: true,
+        logarithmicDepthBuffer: true
     });
     renderer.setSize(canvas.clientWidth, canvas.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.sortObjects = true;
 
     // Orbit Controls
     controls = new OrbitControls(camera, renderer.domElement);
@@ -93,9 +95,10 @@ function init() {
     const gridHelper = new THREE.GridHelper(10, 10, 0x4a4a6a, 0x2a2a4a);
     scene.add(gridHelper);
 
-    // Model group
+    // Model group - set renderOrder to ensure it renders with proper depth
     modelGroup = new THREE.Group();
     modelGroup.name = 'modelGroup';
+    modelGroup.renderOrder = 1;
     scene.add(modelGroup);
 
     // Handle resize
@@ -418,10 +421,12 @@ async function handleModelFile(event) {
             updateVisibility();
             updateTransformInputs();
 
-            // Count faces
+            // Count faces and log mesh info for debugging
             let faceCount = 0;
+            let meshCount = 0;
             loadedObject.traverse((child) => {
                 if (child.isMesh && child.geometry) {
+                    meshCount++;
                     const geo = child.geometry;
                     if (geo.index) {
                         faceCount += geo.index.count / 3;
@@ -430,7 +435,12 @@ async function handleModelFile(event) {
                     }
                 }
             });
+            console.log(`Model loaded: ${meshCount} meshes, ${Math.round(faceCount)} faces`);
+            console.log('Model bounding box:', new THREE.Box3().setFromObject(loadedObject));
             document.getElementById('model-faces').textContent = Math.round(faceCount).toLocaleString();
+
+            // Auto fit to view after loading
+            setTimeout(() => fitToView(), 100);
         }
 
         hideLoading();
@@ -463,6 +473,20 @@ function loadGLTF(file) {
             url,
             (gltf) => {
                 URL.revokeObjectURL(url);
+                // Ensure all meshes have proper material settings for rendering with splats
+                gltf.scene.traverse((child) => {
+                    if (child.isMesh) {
+                        child.renderOrder = 1;
+                        if (child.material) {
+                            const materials = Array.isArray(child.material) ? child.material : [child.material];
+                            materials.forEach(mat => {
+                                mat.depthTest = true;
+                                mat.depthWrite = true;
+                                mat.needsUpdate = true;
+                            });
+                        }
+                    }
+                });
                 resolve(gltf.scene);
             },
             undefined,
@@ -529,10 +553,13 @@ function loadOBJWithoutMaterials(loader, url, resolve, reject) {
             URL.revokeObjectURL(url);
             object.traverse((child) => {
                 if (child.isMesh) {
+                    child.renderOrder = 1;
                     child.material = new THREE.MeshStandardMaterial({
                         color: 0x888888,
                         metalness: 0.1,
-                        roughness: 0.8
+                        roughness: 0.8,
+                        depthTest: true,
+                        depthWrite: true
                     });
                 }
             });
@@ -827,7 +854,23 @@ function loadGLTFFromUrl(url) {
         const loader = new GLTFLoader();
         loader.load(
             url,
-            (gltf) => resolve(gltf.scene),
+            (gltf) => {
+                // Ensure all meshes have proper material settings for rendering with splats
+                gltf.scene.traverse((child) => {
+                    if (child.isMesh) {
+                        child.renderOrder = 1;
+                        if (child.material) {
+                            const materials = Array.isArray(child.material) ? child.material : [child.material];
+                            materials.forEach(mat => {
+                                mat.depthTest = true;
+                                mat.depthWrite = true;
+                                mat.needsUpdate = true;
+                            });
+                        }
+                    }
+                });
+                resolve(gltf.scene);
+            },
             undefined,
             (error) => reject(error)
         );
@@ -841,12 +884,17 @@ function loadOBJFromUrl(url) {
             url,
             (object) => {
                 object.traverse((child) => {
-                    if (child.isMesh && !child.material) {
-                        child.material = new THREE.MeshStandardMaterial({
-                            color: 0x888888,
-                            metalness: 0.1,
-                            roughness: 0.8
-                        });
+                    if (child.isMesh) {
+                        child.renderOrder = 1;
+                        if (!child.material) {
+                            child.material = new THREE.MeshStandardMaterial({
+                                color: 0x888888,
+                                metalness: 0.1,
+                                roughness: 0.8,
+                                depthTest: true,
+                                depthWrite: true
+                            });
+                        }
                     }
                 });
                 resolve(object);
