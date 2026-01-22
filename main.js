@@ -22,7 +22,8 @@ const state = {
     modelLoaded: false,
     modelOpacity: 1,
     modelWireframe: false,
-    controlsVisible: config.showControls
+    controlsVisible: config.showControls,
+    splatInScene: false  // Track if splat is currently in scene
 };
 
 // Three.js objects
@@ -50,16 +51,14 @@ function init() {
     );
     camera.position.set(0, 1, 3);
 
-    // Renderer - use logarithmic depth buffer for better depth precision with splats
+    // Renderer
     renderer = new THREE.WebGLRenderer({
         canvas: canvas,
-        antialias: true,
-        logarithmicDepthBuffer: true
+        antialias: true
     });
     renderer.setSize(canvas.clientWidth, canvas.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.sortObjects = true;
 
     // Orbit Controls
     controls = new OrbitControls(camera, renderer.domElement);
@@ -280,12 +279,23 @@ function updateVisibility() {
     const showSplat = state.displayMode === 'splat' || state.displayMode === 'both';
     const showModel = state.displayMode === 'model' || state.displayMode === 'both';
 
+    // For SplatMesh, we need to add/remove from scene since visible property may not work
     if (splatMesh) {
-        splatMesh.visible = showSplat;
+        if (showSplat && !state.splatInScene) {
+            scene.add(splatMesh);
+            state.splatInScene = true;
+            console.log('Splat added to scene');
+        } else if (!showSplat && state.splatInScene) {
+            scene.remove(splatMesh);
+            state.splatInScene = false;
+            console.log('Splat removed from scene');
+        }
     }
 
+    // For regular Three.js objects, visible property works fine
     if (modelGroup) {
         modelGroup.visible = showModel;
+        console.log('Model visibility:', showModel);
     }
 }
 
@@ -337,6 +347,7 @@ async function handleSplatFile(event) {
             scene.remove(splatMesh);
             if (splatMesh.dispose) splatMesh.dispose();
             splatMesh = null;
+            state.splatInScene = false;
         }
 
         // Create object URL for the file
@@ -361,13 +372,19 @@ async function handleSplatFile(event) {
             }, 30000);
         });
 
-        scene.add(splatMesh);
+        // Add to scene based on current display mode
+        const showSplat = state.displayMode === 'splat' || state.displayMode === 'both';
+        if (showSplat) {
+            scene.add(splatMesh);
+            state.splatInScene = true;
+        } else {
+            state.splatInScene = false;
+        }
 
         // Clean up URL after a delay
         setTimeout(() => URL.revokeObjectURL(fileUrl), 5000);
 
         state.splatLoaded = true;
-        updateVisibility();
         updateTransformInputs();
 
         // Update info - Spark doesn't expose count directly, show file name
@@ -769,6 +786,7 @@ async function loadSplatFromUrl(url) {
             scene.remove(splatMesh);
             if (splatMesh.dispose) splatMesh.dispose();
             splatMesh = null;
+            state.splatInScene = false;
         }
 
         // Create SplatMesh using Spark
@@ -777,10 +795,14 @@ async function loadSplatFromUrl(url) {
         // Wait a moment for initialization
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        scene.add(splatMesh);
+        // Add to scene based on current display mode
+        const showSplat = state.displayMode === 'splat' || state.displayMode === 'both';
+        if (showSplat) {
+            scene.add(splatMesh);
+            state.splatInScene = true;
+        }
 
         state.splatLoaded = true;
-        updateVisibility();
         updateTransformInputs();
 
         // Update UI
