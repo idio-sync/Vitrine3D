@@ -200,6 +200,82 @@ input[type="range"]::-webkit-slider-thumb:hover {
     margin-bottom: 0;
 }
 
+.action-btn.secondary {
+    background: #2a2a3a;
+    border: 1px solid #4a4a6a;
+}
+
+.action-btn.secondary:hover {
+    background: #3a3a4a;
+}
+
+.toggle-btn.small {
+    padding: 6px 8px;
+    font-size: 0.75rem;
+}
+
+.position-inputs {
+    margin-bottom: 10px;
+}
+
+.position-inputs > label {
+    display: block;
+    font-size: 0.75rem;
+    color: #888;
+    margin-bottom: 5px;
+}
+
+.xyz-inputs {
+    display: flex;
+    gap: 5px;
+}
+
+.xyz-inputs input[type="number"] {
+    flex: 1;
+    width: 100%;
+    padding: 5px 8px;
+    background: #2a2a4a;
+    border: 1px solid #3a3a5a;
+    border-radius: 3px;
+    color: #ddd;
+    font-size: 0.75rem;
+    text-align: center;
+}
+
+.xyz-inputs input[type="number"]:focus {
+    outline: none;
+    border-color: #6a6aba;
+}
+
+.xyz-inputs input[type="number"]::-webkit-inner-spin-button,
+.xyz-inputs input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.hint-text {
+    font-size: 0.7rem;
+    color: #666;
+    margin-top: 8px;
+    text-align: center;
+}
+
+#transform-hint {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: #aaa;
+}
+
+#transform-hint.hidden {
+    display: none;
+}
+
 #info-panel {
     font-size: 0.8rem;
     color: #888;

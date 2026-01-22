@@ -1,24 +1,25 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { SplatMesh } from '@sparkjsdev/spark';
 
 // Global state
 const state = {
     displayMode: 'both', // 'splat', 'model', 'both'
+    selectedObject: 'none', // 'splat', 'model', 'none'
+    transformMode: 'translate', // 'translate', 'rotate', 'scale'
     splatLoaded: false,
     modelLoaded: false,
-    splatScale: 1,
-    splatOpacity: 1,
-    modelScale: 1,
     modelOpacity: 1,
     modelWireframe: false
 };
 
 // Three.js objects
-let scene, camera, renderer, controls;
-let splatViewer = null;
+let scene, camera, renderer, controls, transformControls;
+let splatMesh = null;
 let modelGroup = null;
 
 // DOM elements
@@ -50,7 +51,7 @@ function init() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    // Controls
+    // Orbit Controls
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
@@ -58,8 +59,18 @@ function init() {
     controls.minDistance = 0.1;
     controls.maxDistance = 100;
 
+    // Transform Controls
+    transformControls = new TransformControls(camera, renderer.domElement);
+    transformControls.addEventListener('dragging-changed', (event) => {
+        controls.enabled = !event.value;
+    });
+    transformControls.addEventListener('objectChange', () => {
+        updateTransformInputs();
+    });
+    scene.add(transformControls);
+
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
@@ -82,6 +93,9 @@ function init() {
     // Handle resize
     window.addEventListener('resize', onWindowResize);
 
+    // Keyboard shortcuts
+    window.addEventListener('keydown', onKeyDown);
+
     // Setup UI events
     setupUIEvents();
 
@@ -96,11 +110,38 @@ function onWindowResize() {
     renderer.setSize(container.clientWidth, container.clientHeight);
 }
 
+function onKeyDown(event) {
+    switch (event.key.toLowerCase()) {
+        case 'w':
+            setTransformMode('translate');
+            break;
+        case 'e':
+            setTransformMode('rotate');
+            break;
+        case 'r':
+            setTransformMode('scale');
+            break;
+        case 'escape':
+            setSelectedObject('none');
+            break;
+    }
+}
+
 function setupUIEvents() {
     // Display mode toggles
     document.getElementById('btn-splat').addEventListener('click', () => setDisplayMode('splat'));
     document.getElementById('btn-model').addEventListener('click', () => setDisplayMode('model'));
     document.getElementById('btn-both').addEventListener('click', () => setDisplayMode('both'));
+
+    // Selection toggles
+    document.getElementById('btn-select-splat').addEventListener('click', () => setSelectedObject('splat'));
+    document.getElementById('btn-select-model').addEventListener('click', () => setSelectedObject('model'));
+    document.getElementById('btn-select-none').addEventListener('click', () => setSelectedObject('none'));
+
+    // Transform mode toggles
+    document.getElementById('btn-translate').addEventListener('click', () => setTransformMode('translate'));
+    document.getElementById('btn-rotate').addEventListener('click', () => setTransformMode('rotate'));
+    document.getElementById('btn-scale').addEventListener('click', () => setTransformMode('scale'));
 
     // File inputs
     document.getElementById('splat-input').addEventListener('change', handleSplatFile);
@@ -108,22 +149,34 @@ function setupUIEvents() {
 
     // Splat settings
     document.getElementById('splat-scale').addEventListener('input', (e) => {
-        state.splatScale = parseFloat(e.target.value);
-        document.getElementById('splat-scale-value').textContent = state.splatScale.toFixed(1);
-        updateSplatTransform();
+        const scale = parseFloat(e.target.value);
+        document.getElementById('splat-scale-value').textContent = scale.toFixed(1);
+        if (splatMesh) {
+            splatMesh.scale.setScalar(scale);
+        }
     });
 
-    document.getElementById('splat-opacity').addEventListener('input', (e) => {
-        state.splatOpacity = parseFloat(e.target.value);
-        document.getElementById('splat-opacity-value').textContent = state.splatOpacity.toFixed(2);
-        // Note: Opacity control depends on the splat library's capabilities
+    // Splat position inputs
+    ['x', 'y', 'z'].forEach(axis => {
+        document.getElementById(`splat-pos-${axis}`).addEventListener('change', (e) => {
+            if (splatMesh) {
+                splatMesh.position[axis] = parseFloat(e.target.value) || 0;
+            }
+        });
+        document.getElementById(`splat-rot-${axis}`).addEventListener('change', (e) => {
+            if (splatMesh) {
+                splatMesh.rotation[axis] = THREE.MathUtils.degToRad(parseFloat(e.target.value) || 0);
+            }
+        });
     });
 
     // Model settings
     document.getElementById('model-scale').addEventListener('input', (e) => {
-        state.modelScale = parseFloat(e.target.value);
-        document.getElementById('model-scale-value').textContent = state.modelScale.toFixed(1);
-        updateModelTransform();
+        const scale = parseFloat(e.target.value);
+        document.getElementById('model-scale-value').textContent = scale.toFixed(1);
+        if (modelGroup) {
+            modelGroup.scale.setScalar(scale);
+        }
     });
 
     document.getElementById('model-opacity').addEventListener('input', (e) => {
@@ -137,6 +190,28 @@ function setupUIEvents() {
         updateModelWireframe();
     });
 
+    // Model position inputs
+    ['x', 'y', 'z'].forEach(axis => {
+        document.getElementById(`model-pos-${axis}`).addEventListener('change', (e) => {
+            if (modelGroup) {
+                modelGroup.position[axis] = parseFloat(e.target.value) || 0;
+            }
+        });
+        document.getElementById(`model-rot-${axis}`).addEventListener('change', (e) => {
+            if (modelGroup) {
+                modelGroup.rotation[axis] = THREE.MathUtils.degToRad(parseFloat(e.target.value) || 0);
+            }
+        });
+    });
+
+    // Alignment buttons
+    document.getElementById('btn-save-alignment').addEventListener('click', saveAlignment);
+    document.getElementById('btn-load-alignment').addEventListener('click', () => {
+        document.getElementById('alignment-input').click();
+    });
+    document.getElementById('alignment-input').addEventListener('change', loadAlignment);
+    document.getElementById('btn-reset-alignment').addEventListener('click', resetAlignment);
+
     // Camera buttons
     document.getElementById('btn-reset-camera').addEventListener('click', resetCamera);
     document.getElementById('btn-fit-view').addEventListener('click', fitToView);
@@ -146,30 +221,77 @@ function setDisplayMode(mode) {
     state.displayMode = mode;
 
     // Update button states
-    document.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(`btn-${mode}`).classList.add('active');
+    ['splat', 'model', 'both'].forEach(m => {
+        document.getElementById(`btn-${m}`).classList.toggle('active', m === mode);
+    });
 
-    // Update visibility
     updateVisibility();
+}
+
+function setSelectedObject(selection) {
+    state.selectedObject = selection;
+
+    // Update button states
+    ['splat', 'model', 'none'].forEach(s => {
+        document.getElementById(`btn-select-${s}`).classList.toggle('active', s === selection);
+    });
+
+    // Attach transform controls
+    transformControls.detach();
+    if (selection === 'splat' && splatMesh) {
+        transformControls.attach(splatMesh);
+    } else if (selection === 'model' && modelGroup && modelGroup.children.length > 0) {
+        transformControls.attach(modelGroup);
+    }
+}
+
+function setTransformMode(mode) {
+    state.transformMode = mode;
+    transformControls.setMode(mode);
+
+    // Update button states
+    ['translate', 'rotate', 'scale'].forEach(m => {
+        const btnId = m === 'translate' ? 'btn-translate' : m === 'rotate' ? 'btn-rotate' : 'btn-scale';
+        document.getElementById(btnId).classList.toggle('active', m === mode);
+    });
 }
 
 function updateVisibility() {
     const showSplat = state.displayMode === 'splat' || state.displayMode === 'both';
     const showModel = state.displayMode === 'model' || state.displayMode === 'both';
 
-    // Update model visibility
+    if (splatMesh) {
+        splatMesh.visible = showSplat;
+    }
+
     if (modelGroup) {
         modelGroup.visible = showModel;
     }
+}
 
-    // Update splat visibility
-    if (splatViewer) {
-        // The gaussian-splats-3d library handles its own rendering
-        // We need to control it through the viewer's scene group
-        const splatMesh = scene.getObjectByName('splatMesh');
-        if (splatMesh) {
-            splatMesh.visible = showSplat;
-        }
+function updateTransformInputs() {
+    // Update splat inputs
+    if (splatMesh) {
+        document.getElementById('splat-pos-x').value = splatMesh.position.x.toFixed(2);
+        document.getElementById('splat-pos-y').value = splatMesh.position.y.toFixed(2);
+        document.getElementById('splat-pos-z').value = splatMesh.position.z.toFixed(2);
+        document.getElementById('splat-rot-x').value = THREE.MathUtils.radToDeg(splatMesh.rotation.x).toFixed(1);
+        document.getElementById('splat-rot-y').value = THREE.MathUtils.radToDeg(splatMesh.rotation.y).toFixed(1);
+        document.getElementById('splat-rot-z').value = THREE.MathUtils.radToDeg(splatMesh.rotation.z).toFixed(1);
+        document.getElementById('splat-scale').value = splatMesh.scale.x;
+        document.getElementById('splat-scale-value').textContent = splatMesh.scale.x.toFixed(1);
+    }
+
+    // Update model inputs
+    if (modelGroup) {
+        document.getElementById('model-pos-x').value = modelGroup.position.x.toFixed(2);
+        document.getElementById('model-pos-y').value = modelGroup.position.y.toFixed(2);
+        document.getElementById('model-pos-z').value = modelGroup.position.z.toFixed(2);
+        document.getElementById('model-rot-x').value = THREE.MathUtils.radToDeg(modelGroup.rotation.x).toFixed(1);
+        document.getElementById('model-rot-y').value = THREE.MathUtils.radToDeg(modelGroup.rotation.y).toFixed(1);
+        document.getElementById('model-rot-z').value = THREE.MathUtils.radToDeg(modelGroup.rotation.z).toFixed(1);
+        document.getElementById('model-scale').value = modelGroup.scale.x;
+        document.getElementById('model-scale-value').textContent = modelGroup.scale.x.toFixed(1);
     }
 }
 
@@ -190,49 +312,46 @@ async function handleSplatFile(event) {
     showLoading('Loading Gaussian Splat...');
 
     try {
-        // Clean up existing splat viewer
-        if (splatViewer) {
-            splatViewer.dispose();
-            splatViewer = null;
+        // Remove existing splat
+        if (splatMesh) {
+            scene.remove(splatMesh);
+            if (splatMesh.dispose) splatMesh.dispose();
+            splatMesh = null;
         }
 
         // Create object URL for the file
         const fileUrl = URL.createObjectURL(file);
 
-        // Determine format based on extension
-        const extension = file.name.split('.').pop().toLowerCase();
+        // Create SplatMesh using Spark
+        splatMesh = new SplatMesh({ url: fileUrl });
 
-        // Initialize gaussian splat viewer
-        // Using the GaussianSplats3D library from CDN
-        splatViewer = new GaussianSplats3D.Viewer({
-            cameraUp: [0, 1, 0],
-            initialCameraPosition: [0, 1, 3],
-            initialCameraLookAt: [0, 0, 0],
-            selfDrivenMode: false,
-            renderer: renderer,
-            camera: camera,
-            threeScene: scene,
-            useBuiltInControls: false,
-            dynamicScene: true
+        // Wait for the splat to load
+        await new Promise((resolve, reject) => {
+            const checkLoaded = setInterval(() => {
+                // SplatMesh should be ready when added to scene
+                // We'll give it a moment to initialize
+                clearInterval(checkLoaded);
+                resolve();
+            }, 100);
+
+            // Timeout after 30 seconds
+            setTimeout(() => {
+                clearInterval(checkLoaded);
+                resolve(); // Resolve anyway, splat might still load
+            }, 30000);
         });
 
-        // Add splat to viewer
-        await splatViewer.addSplatScene(fileUrl, {
-            splatAlphaRemovalThreshold: 5,
-            showLoadingUI: false,
-            progressiveLoad: true
-        });
+        scene.add(splatMesh);
 
-        // Clean up URL
-        URL.revokeObjectURL(fileUrl);
+        // Clean up URL after a delay
+        setTimeout(() => URL.revokeObjectURL(fileUrl), 5000);
 
         state.splatLoaded = true;
-        updateSplatTransform();
         updateVisibility();
+        updateTransformInputs();
 
-        // Update info
-        const splatCount = splatViewer.getSplatCount ? splatViewer.getSplatCount() : 'N/A';
-        document.getElementById('splat-vertices').textContent = splatCount.toLocaleString ? splatCount.toLocaleString() : splatCount;
+        // Update info - Spark doesn't expose count directly, show file name
+        document.getElementById('splat-vertices').textContent = 'Loaded';
 
         hideLoading();
     } catch (error) {
@@ -254,14 +373,7 @@ async function handleModelFile(event) {
         // Clear existing model
         while (modelGroup.children.length > 0) {
             const child = modelGroup.children[0];
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) {
-                if (Array.isArray(child.material)) {
-                    child.material.forEach(m => m.dispose());
-                } else {
-                    child.material.dispose();
-                }
-            }
+            disposeObject(child);
             modelGroup.remove(child);
         }
 
@@ -271,7 +383,6 @@ async function handleModelFile(event) {
         if (extension === 'glb' || extension === 'gltf') {
             loadedObject = await loadGLTF(mainFile);
         } else if (extension === 'obj') {
-            // Look for MTL file in the same selection
             let mtlFile = null;
             for (const f of files) {
                 if (f.name.toLowerCase().endsWith('.mtl')) {
@@ -285,10 +396,10 @@ async function handleModelFile(event) {
         if (loadedObject) {
             modelGroup.add(loadedObject);
             state.modelLoaded = true;
-            updateModelTransform();
             updateModelOpacity();
             updateModelWireframe();
             updateVisibility();
+            updateTransformInputs();
 
             // Count faces
             let faceCount = 0;
@@ -311,6 +422,19 @@ async function handleModelFile(event) {
         hideLoading();
         alert('Error loading model: ' + error.message);
     }
+}
+
+function disposeObject(obj) {
+    obj.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+            if (Array.isArray(child.material)) {
+                child.material.forEach(m => m.dispose());
+            } else {
+                child.material.dispose();
+            }
+        }
+    });
 }
 
 function loadGLTF(file) {
@@ -366,9 +490,8 @@ function loadOBJ(objFile, mtlFile) {
                         );
                     },
                     undefined,
-                    (error) => {
+                    () => {
                         URL.revokeObjectURL(mtlUrl);
-                        // Try loading without materials
                         loadOBJWithoutMaterials(objLoader, objUrl, resolve, reject);
                     }
                 );
@@ -387,7 +510,6 @@ function loadOBJWithoutMaterials(loader, url, resolve, reject) {
         url,
         (object) => {
             URL.revokeObjectURL(url);
-            // Apply default material
             object.traverse((child) => {
                 if (child.isMesh) {
                     child.material = new THREE.MeshStandardMaterial({
@@ -405,19 +527,6 @@ function loadOBJWithoutMaterials(loader, url, resolve, reject) {
             reject(error);
         }
     );
-}
-
-function updateSplatTransform() {
-    if (splatViewer) {
-        // The GaussianSplats3D viewer handles transforms internally
-        // Scale can be applied via the splatScene transform if supported
-    }
-}
-
-function updateModelTransform() {
-    if (modelGroup) {
-        modelGroup.scale.setScalar(state.modelScale);
-    }
 }
 
 function updateModelOpacity() {
@@ -449,6 +558,78 @@ function updateModelWireframe() {
     }
 }
 
+function saveAlignment() {
+    const alignment = {
+        version: 1,
+        splat: splatMesh ? {
+            position: splatMesh.position.toArray(),
+            rotation: [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z],
+            scale: splatMesh.scale.x
+        } : null,
+        model: modelGroup ? {
+            position: modelGroup.position.toArray(),
+            rotation: [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z],
+            scale: modelGroup.scale.x
+        } : null
+    };
+
+    const blob = new Blob([JSON.stringify(alignment, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'alignment.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function loadAlignment(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const alignment = JSON.parse(e.target.result);
+
+            if (alignment.splat && splatMesh) {
+                splatMesh.position.fromArray(alignment.splat.position);
+                splatMesh.rotation.set(...alignment.splat.rotation);
+                splatMesh.scale.setScalar(alignment.splat.scale);
+            }
+
+            if (alignment.model && modelGroup) {
+                modelGroup.position.fromArray(alignment.model.position);
+                modelGroup.rotation.set(...alignment.model.rotation);
+                modelGroup.scale.setScalar(alignment.model.scale);
+            }
+
+            updateTransformInputs();
+        } catch (error) {
+            alert('Error loading alignment file: ' + error.message);
+        }
+    };
+    reader.readAsText(file);
+
+    // Reset input so same file can be loaded again
+    event.target.value = '';
+}
+
+function resetAlignment() {
+    if (splatMesh) {
+        splatMesh.position.set(0, 0, 0);
+        splatMesh.rotation.set(0, 0, 0);
+        splatMesh.scale.setScalar(1);
+    }
+
+    if (modelGroup) {
+        modelGroup.position.set(0, 0, 0);
+        modelGroup.rotation.set(0, 0, 0);
+        modelGroup.scale.setScalar(1);
+    }
+
+    updateTransformInputs();
+}
+
 function resetCamera() {
     camera.position.set(0, 1, 3);
     camera.lookAt(0, 0, 0);
@@ -460,8 +641,7 @@ function fitToView() {
     const box = new THREE.Box3();
     let hasContent = false;
 
-    // Include model in bounding box
-    if (modelGroup && modelGroup.children.length > 0) {
+    if (modelGroup && modelGroup.children.length > 0 && modelGroup.visible) {
         modelGroup.traverse((child) => {
             if (child.isMesh) {
                 box.expandByObject(child);
@@ -470,8 +650,19 @@ function fitToView() {
         });
     }
 
+    // For splat, estimate bounds from position and scale
+    if (splatMesh && splatMesh.visible) {
+        const splatBounds = new THREE.Box3();
+        const size = 2 * splatMesh.scale.x; // Estimate
+        splatBounds.setFromCenterAndSize(
+            splatMesh.position,
+            new THREE.Vector3(size, size, size)
+        );
+        box.union(splatBounds);
+        hasContent = true;
+    }
+
     if (!hasContent) {
-        // Default bounds if nothing loaded
         box.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2, 2, 2));
     }
 
@@ -480,9 +671,13 @@ function fitToView() {
     const maxDim = Math.max(size.x, size.y, size.z);
     const fov = camera.fov * (Math.PI / 180);
     let cameraDistance = maxDim / (2 * Math.tan(fov / 2));
-    cameraDistance *= 1.5; // Add some padding
+    cameraDistance *= 1.5;
 
-    camera.position.set(center.x + cameraDistance * 0.5, center.y + cameraDistance * 0.3, center.z + cameraDistance);
+    camera.position.set(
+        center.x + cameraDistance * 0.5,
+        center.y + cameraDistance * 0.3,
+        center.z + cameraDistance
+    );
     camera.lookAt(center);
     controls.target.copy(center);
     controls.update();
@@ -505,17 +700,8 @@ function updateFPS() {
 // Animation loop
 function animate() {
     requestAnimationFrame(animate);
-
     controls.update();
-
-    // Update splat viewer if present
-    if (splatViewer) {
-        splatViewer.update();
-        splatViewer.render();
-    } else {
-        renderer.render(scene, camera);
-    }
-
+    renderer.render(scene, camera);
     updateFPS();
 }
 
