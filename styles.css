@@ -443,7 +443,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
-    z-index: 100;
+    z-index: 1000;
+    pointer-events: auto;
 }
 
 .toggle-controls-btn:hover {
