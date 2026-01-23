@@ -85,22 +85,14 @@ function init() {
     controls.maxDistance = 100;
 
     // Orbit Controls - Right (synced with main)
+    // Note: Both controls share the same camera, so they naturally stay in sync
+    // We just need both to be able to receive input
     controlsRight = new OrbitControls(camera, rendererRight.domElement);
     controlsRight.enableDamping = true;
     controlsRight.dampingFactor = 0.05;
     controlsRight.screenSpacePanning = true;
     controlsRight.minDistance = 0.1;
     controlsRight.maxDistance = 100;
-
-    // Sync controls - when one moves, update the other
-    controls.addEventListener('change', () => {
-        controlsRight.target.copy(controls.target);
-        controlsRight.update();
-    });
-    controlsRight.addEventListener('change', () => {
-        controls.target.copy(controlsRight.target);
-        controls.update();
-    });
 
     // Transform Controls
     transformControls = new TransformControls(camera, renderer.domElement);
