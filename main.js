@@ -1,10 +1,24 @@
+// Debug: Log at module start
+console.log('main.js module starting to load...');
+
+// Global error handler
+window.onerror = function(message, source, lineno, colno, error) {
+    console.error('Global error:', message, 'at', source, 'line', lineno);
+    return false;
+};
+
 import * as THREE from 'three';
+console.log('THREE loaded:', !!THREE);
+
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+console.log('Three.js addons loaded');
+
 import { SplatMesh } from '@sparkjsdev/spark';
+console.log('SplatMesh loaded:', !!SplatMesh);
 
 // Get configuration from window (set by config.js)
 const config = window.APP_CONFIG || {
@@ -1415,4 +1429,21 @@ function animate() {
 }
 
 // Initialize when DOM is ready
-init();
+console.log('Setting up initialization...');
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOMContentLoaded fired, calling init()');
+        try {
+            init();
+        } catch (e) {
+            console.error('Init error:', e);
+        }
+    });
+} else {
+    console.log('DOM already ready, calling init()');
+    try {
+        init();
+    } catch (e) {
+        console.error('Init error:', e);
+    }
+}
