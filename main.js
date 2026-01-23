@@ -518,20 +518,23 @@ function loadGLTF(file) {
                             child.geometry.computeVertexNormals();
                         }
 
-                        // Convert MeshBasicMaterial to MeshStandardMaterial for lighting support
-                        if (child.material && child.material.isMeshBasicMaterial) {
-                            const oldMaterial = child.material;
-                            child.material = new THREE.MeshStandardMaterial({
-                                color: oldMaterial.color,
-                                map: oldMaterial.map,
-                                alphaMap: oldMaterial.alphaMap,
-                                transparent: oldMaterial.transparent,
-                                opacity: oldMaterial.opacity,
-                                side: oldMaterial.side,
-                                metalness: 0.1,
-                                roughness: 0.8
-                            });
-                            oldMaterial.dispose();
+                        // Convert non-PBR materials to MeshStandardMaterial for lighting support
+                        if (child.material) {
+                            const mat = child.material;
+                            if (mat.isMeshBasicMaterial || mat.isLineBasicMaterial || mat.isPointsMaterial) {
+                                const oldMaterial = mat;
+                                child.material = new THREE.MeshStandardMaterial({
+                                    color: oldMaterial.color || new THREE.Color(0x888888),
+                                    map: oldMaterial.map,
+                                    alphaMap: oldMaterial.alphaMap,
+                                    transparent: oldMaterial.transparent || false,
+                                    opacity: oldMaterial.opacity !== undefined ? oldMaterial.opacity : 1,
+                                    side: oldMaterial.side || THREE.FrontSide,
+                                    metalness: 0.1,
+                                    roughness: 0.8
+                                });
+                                oldMaterial.dispose();
+                            }
                         }
                     }
                 });
@@ -570,10 +573,31 @@ function loadOBJ(objFile, mtlFile) {
                                 URL.revokeObjectURL(objUrl);
                                 URL.revokeObjectURL(mtlUrl);
 
-                                // Ensure normals exist for proper lighting
+                                // Process materials and normals for proper lighting
                                 object.traverse((child) => {
-                                    if (child.isMesh && child.geometry && !child.geometry.attributes.normal) {
-                                        child.geometry.computeVertexNormals();
+                                    if (child.isMesh) {
+                                        // Ensure normals exist for proper lighting
+                                        if (child.geometry && !child.geometry.attributes.normal) {
+                                            child.geometry.computeVertexNormals();
+                                        }
+
+                                        // Convert to MeshStandardMaterial for consistent PBR lighting
+                                        if (child.material) {
+                                            const oldMaterial = child.material;
+                                            const color = oldMaterial.color?.clone() || new THREE.Color(0x888888);
+                                            const map = oldMaterial.map || null;
+
+                                            child.material = new THREE.MeshStandardMaterial({
+                                                color: color,
+                                                map: map,
+                                                metalness: 0.1,
+                                                roughness: 0.8
+                                            });
+
+                                            if (oldMaterial.dispose) {
+                                                oldMaterial.dispose();
+                                            }
+                                        }
                                     }
                                 });
 
@@ -922,20 +946,23 @@ function loadGLTFFromUrl(url) {
                             child.geometry.computeVertexNormals();
                         }
 
-                        // Convert MeshBasicMaterial to MeshStandardMaterial for lighting support
-                        if (child.material && child.material.isMeshBasicMaterial) {
-                            const oldMaterial = child.material;
-                            child.material = new THREE.MeshStandardMaterial({
-                                color: oldMaterial.color,
-                                map: oldMaterial.map,
-                                alphaMap: oldMaterial.alphaMap,
-                                transparent: oldMaterial.transparent,
-                                opacity: oldMaterial.opacity,
-                                side: oldMaterial.side,
-                                metalness: 0.1,
-                                roughness: 0.8
-                            });
-                            oldMaterial.dispose();
+                        // Convert non-PBR materials to MeshStandardMaterial for lighting support
+                        if (child.material) {
+                            const mat = child.material;
+                            if (mat.isMeshBasicMaterial || mat.isLineBasicMaterial || mat.isPointsMaterial) {
+                                const oldMaterial = mat;
+                                child.material = new THREE.MeshStandardMaterial({
+                                    color: oldMaterial.color || new THREE.Color(0x888888),
+                                    map: oldMaterial.map,
+                                    alphaMap: oldMaterial.alphaMap,
+                                    transparent: oldMaterial.transparent || false,
+                                    opacity: oldMaterial.opacity !== undefined ? oldMaterial.opacity : 1,
+                                    side: oldMaterial.side || THREE.FrontSide,
+                                    metalness: 0.1,
+                                    roughness: 0.8
+                                });
+                                oldMaterial.dispose();
+                            }
                         }
                     }
                 });
@@ -961,12 +988,20 @@ function loadOBJFromUrl(url) {
                             child.geometry.computeVertexNormals();
                         }
 
-                        if (!child.material) {
-                            child.material = new THREE.MeshStandardMaterial({
-                                color: 0x888888,
-                                metalness: 0.1,
-                                roughness: 0.8
-                            });
+                        // Convert any material to MeshStandardMaterial for consistent lighting
+                        const oldMaterial = child.material;
+                        const color = oldMaterial?.color?.clone() || new THREE.Color(0x888888);
+                        const map = oldMaterial?.map || null;
+
+                        child.material = new THREE.MeshStandardMaterial({
+                            color: color,
+                            map: map,
+                            metalness: 0.1,
+                            roughness: 0.8
+                        });
+
+                        if (oldMaterial && oldMaterial.dispose) {
+                            oldMaterial.dispose();
                         }
                     }
                 });
@@ -989,54 +1024,100 @@ function setupCollapsibles() {
     });
 }
 
-// Auto align objects
+// Auto align objects - aligns model to splat by matching bounding box centers
 function autoAlignObjects() {
-    if (!splatMesh && !modelGroup) {
-        alert('Load both a splat and a model first');
+    if (!splatMesh || !modelGroup || modelGroup.children.length === 0) {
+        alert('Both splat and model must be loaded for auto-alignment');
         return;
     }
 
     const splatBox = new THREE.Box3();
     const modelBox = new THREE.Box3();
-    let hasSplat = false;
-    let hasModel = false;
 
-    // Get splat bounds
-    if (splatMesh) {
+    // Get splat bounds - try to use actual geometry bounds first
+    let splatBoundsFound = false;
+
+    // Try expandByObject which works if splatMesh has proper bounding info
+    try {
+        splatBox.expandByObject(splatMesh);
+        // Check if we got valid bounds (not infinite/empty)
+        if (splatBox.isEmpty() || !isFinite(splatBox.min.x)) {
+            splatBoundsFound = false;
+        } else {
+            splatBoundsFound = true;
+        }
+    } catch (e) {
+        splatBoundsFound = false;
+    }
+
+    // Fallback: try to compute from geometry if available
+    if (!splatBoundsFound && splatMesh.geometry) {
+        try {
+            splatMesh.geometry.computeBoundingBox();
+            if (splatMesh.geometry.boundingBox) {
+                splatBox.copy(splatMesh.geometry.boundingBox);
+                splatBox.applyMatrix4(splatMesh.matrixWorld);
+                splatBoundsFound = true;
+            }
+        } catch (e) {
+            splatBoundsFound = false;
+        }
+    }
+
+    // Final fallback: estimate based on position and scale
+    if (!splatBoundsFound || splatBox.isEmpty()) {
         const size = 2 * splatMesh.scale.x;
         splatBox.setFromCenterAndSize(
             splatMesh.position,
             new THREE.Vector3(size, size, size)
         );
-        hasSplat = true;
     }
 
-    // Get model bounds
-    if (modelGroup && modelGroup.children.length > 0) {
-        modelGroup.traverse((child) => {
-            if (child.isMesh) {
-                modelBox.expandByObject(child);
-                hasModel = true;
-            }
-        });
-    }
+    // Get model bounds - reset modelGroup transform temporarily to get local bounds
+    const originalPosition = modelGroup.position.clone();
+    modelGroup.position.set(0, 0, 0);
+    modelGroup.updateMatrixWorld(true);
 
-    if (!hasSplat || !hasModel) {
-        alert('Both splat and model must be loaded for auto-alignment');
+    modelGroup.traverse((child) => {
+        if (child.isMesh) {
+            modelBox.expandByObject(child);
+        }
+    });
+
+    // Restore original position
+    modelGroup.position.copy(originalPosition);
+    modelGroup.updateMatrixWorld(true);
+
+    if (modelBox.isEmpty()) {
+        alert('Could not compute model bounds');
         return;
     }
 
-    // Calculate centers
+    // Get centers and bottoms of bounding boxes
     const splatCenter = splatBox.getCenter(new THREE.Vector3());
     const modelCenter = modelBox.getCenter(new THREE.Vector3());
 
-    // Calculate offset needed to align centers
-    const offset = new THREE.Vector3().subVectors(splatCenter, modelCenter);
+    // Calculate offset to align centers in X and Z, and bottoms in Y
+    const splatBottom = splatBox.min.y;
+    const modelBottom = modelBox.min.y;
 
-    // Apply offset to model (keeping splat in place)
+    const offset = new THREE.Vector3(
+        splatCenter.x - modelCenter.x,
+        splatBottom - modelBottom,  // Align bottoms instead of centers for Y
+        splatCenter.z - modelCenter.z
+    );
+
+    // Apply offset to model position
     modelGroup.position.add(offset);
+    modelGroup.updateMatrixWorld(true);
 
     updateTransformInputs();
+
+    console.log('Auto-align complete:', {
+        splatBounds: { min: splatBox.min.toArray(), max: splatBox.max.toArray() },
+        modelBounds: { min: modelBox.min.toArray(), max: modelBox.max.toArray() },
+        offset: offset.toArray()
+    });
 }
 
 // FPS counter

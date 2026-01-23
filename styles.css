@@ -71,6 +71,11 @@ body {
     justify-content: space-between;
     align-items: center;
     transition: color 0.2s;
+    margin-bottom: 0;
+}
+
+.control-section.collapsible:not(.collapsed) .collapsible-header {
+    margin-bottom: 5px;
 }
 
 .collapsible-header:hover {
@@ -78,23 +83,29 @@ body {
 }
 
 .collapse-icon {
-    font-size: 1.2rem;
+    font-size: 1rem;
     font-weight: bold;
-    transition: transform 0.2s;
+    transition: transform 0.3s ease-out;
+    display: inline-block;
 }
 
 .control-section.collapsible.collapsed .collapse-icon {
-    transform: rotate(90deg);
+    transform: rotate(-90deg);
 }
 
 .collapsible-content {
     max-height: 1000px;
     overflow: hidden;
-    transition: max-height 0.3s ease-out;
+    padding-top: 5px;
+    transition: max-height 0.3s ease-out, padding-top 0.3s ease-out, opacity 0.2s ease-out;
+    opacity: 1;
 }
 
 .control-section.collapsible.collapsed .collapsible-content {
     max-height: 0;
+    padding-top: 0;
+    opacity: 0;
+    pointer-events: none;
 }
 
 .toggle-group {
