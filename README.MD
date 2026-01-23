@@ -80,6 +80,66 @@ Add these secrets to your GitHub repository:
 - Branch pushes create tags like `username/splat-mesh-compare:branch-name`
 - Pushes to `main` also create the `latest` tag
 
+## URL Parameters
+
+The viewer supports URL parameters for embedding with different configurations:
+
+| Parameter | Values | Description |
+|-----------|--------|-------------|
+| `splat` | URL | Path or URL to splat file to load on startup |
+| `model` | URL | Path or URL to model file to load on startup |
+| `controls` | `full`, `minimal`, `none` | Control panel mode |
+| `mode` | `splat`, `model`, `both`, `split` | Initial display mode |
+
+### Control Modes
+
+- **full** - All controls visible (default)
+- **minimal** - Only the display mode toggle (Splat/Model/Both/Split buttons)
+- **none** - No UI at all, just the viewer
+
+### Example URLs
+
+```
+# Main instance with full controls
+https://viewer.website.com
+
+# Pre-loaded files with minimal UI
+https://viewer.website.com?splat=/assets/scene.ply&model=/assets/model.glb&controls=minimal
+
+# Split view comparison with no controls
+https://viewer.website.com?splat=/assets/scene.ply&model=/assets/model.glb&controls=none&mode=split
+
+# Start in model-only view
+https://viewer.website.com?model=/assets/model.glb&mode=model
+```
+
+## Embedding
+
+You can embed the viewer on other pages using an iframe:
+
+```html
+<iframe
+  src="https://viewer.website.com?splat=/path/to/scene.ply&model=/path/to/model.glb&controls=minimal&mode=split"
+  width="100%"
+  height="600"
+  frameborder="0"
+  allow="fullscreen">
+</iframe>
+```
+
+### CORS Considerations
+
+If your viewer is hosted at `viewer.website.com` and your files are on `website.com`, you'll need to configure CORS headers on your file server to allow cross-origin requests:
+
+```
+Access-Control-Allow-Origin: https://viewer.website.com
+```
+
+Or for development:
+```
+Access-Control-Allow-Origin: *
+```
+
 ## Usage
 
 ### Loading Files
@@ -90,11 +150,14 @@ Add these secrets to your GitHub repository:
 - **Splat**: Show only the Gaussian splat
 - **Model**: Show only the 3D model
 - **Both**: Overlay both (useful for comparison)
+- **Split**: Side-by-side view with splat on left, model on right (synced camera)
 
 ### Transform Controls
-1. Select which object to transform: **Splat** or **Model** (or None to disable)
+1. Select which object to transform: **Splat**, **Model**, **Both** (synchronized), or **None** to disable
 2. Choose transform mode: **Move**, **Rotate**, or **Scale**
 3. Drag the gizmo handles in the 3D view, or use the input fields in the panel
+
+**Tip:** Select **Both** to move the splat and model together after aligning them.
 
 **Keyboard shortcuts:**
 - `W` - Move mode
