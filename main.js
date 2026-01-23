@@ -77,11 +77,15 @@ function init() {
     });
     scene.add(transformControls);
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // Lighting - Enhanced for better mesh visibility
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    // Hemisphere light for better color graduation
+    const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+    scene.add(hemisphereLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
     directionalLight.position.set(5, 5, 5);
     scene.add(directionalLight);
 
@@ -463,6 +467,33 @@ function loadGLTF(file) {
             url,
             (gltf) => {
                 URL.revokeObjectURL(url);
+
+                // Process materials and normals for proper lighting
+                gltf.scene.traverse((child) => {
+                    if (child.isMesh) {
+                        // Ensure normals exist for proper lighting
+                        if (child.geometry && !child.geometry.attributes.normal) {
+                            child.geometry.computeVertexNormals();
+                        }
+
+                        // Convert MeshBasicMaterial to MeshStandardMaterial for lighting support
+                        if (child.material && child.material.isMeshBasicMaterial) {
+                            const oldMaterial = child.material;
+                            child.material = new THREE.MeshStandardMaterial({
+                                color: oldMaterial.color,
+                                map: oldMaterial.map,
+                                alphaMap: oldMaterial.alphaMap,
+                                transparent: oldMaterial.transparent,
+                                opacity: oldMaterial.opacity,
+                                side: oldMaterial.side,
+                                metalness: 0.1,
+                                roughness: 0.8
+                            });
+                            oldMaterial.dispose();
+                        }
+                    }
+                });
+
                 resolve(gltf.scene);
             },
             undefined,
@@ -496,6 +527,14 @@ function loadOBJ(objFile, mtlFile) {
                             (object) => {
                                 URL.revokeObjectURL(objUrl);
                                 URL.revokeObjectURL(mtlUrl);
+
+                                // Ensure normals exist for proper lighting
+                                object.traverse((child) => {
+                                    if (child.isMesh && child.geometry && !child.geometry.attributes.normal) {
+                                        child.geometry.computeVertexNormals();
+                                    }
+                                });
+
                                 resolve(object);
                             },
                             undefined,
@@ -529,6 +568,11 @@ function loadOBJWithoutMaterials(loader, url, resolve, reject) {
             URL.revokeObjectURL(url);
             object.traverse((child) => {
                 if (child.isMesh) {
+                    // Ensure normals exist for proper lighting
+                    if (child.geometry && !child.geometry.attributes.normal) {
+                        child.geometry.computeVertexNormals();
+                    }
+
                     child.material = new THREE.MeshStandardMaterial({
                         color: 0x888888,
                         metalness: 0.1,
@@ -827,7 +871,35 @@ function loadGLTFFromUrl(url) {
         const loader = new GLTFLoader();
         loader.load(
             url,
-            (gltf) => resolve(gltf.scene),
+            (gltf) => {
+                // Process materials and normals for proper lighting
+                gltf.scene.traverse((child) => {
+                    if (child.isMesh) {
+                        // Ensure normals exist for proper lighting
+                        if (child.geometry && !child.geometry.attributes.normal) {
+                            child.geometry.computeVertexNormals();
+                        }
+
+                        // Convert MeshBasicMaterial to MeshStandardMaterial for lighting support
+                        if (child.material && child.material.isMeshBasicMaterial) {
+                            const oldMaterial = child.material;
+                            child.material = new THREE.MeshStandardMaterial({
+                                color: oldMaterial.color,
+                                map: oldMaterial.map,
+                                alphaMap: oldMaterial.alphaMap,
+                                transparent: oldMaterial.transparent,
+                                opacity: oldMaterial.opacity,
+                                side: oldMaterial.side,
+                                metalness: 0.1,
+                                roughness: 0.8
+                            });
+                            oldMaterial.dispose();
+                        }
+                    }
+                });
+
+                resolve(gltf.scene);
+            },
             undefined,
             (error) => reject(error)
         );
@@ -841,12 +913,19 @@ function loadOBJFromUrl(url) {
             url,
             (object) => {
                 object.traverse((child) => {
-                    if (child.isMesh && !child.material) {
-                        child.material = new THREE.MeshStandardMaterial({
-                            color: 0x888888,
-                            metalness: 0.1,
-                            roughness: 0.8
-                        });
+                    if (child.isMesh) {
+                        // Ensure normals exist for proper lighting
+                        if (child.geometry && !child.geometry.attributes.normal) {
+                            child.geometry.computeVertexNormals();
+                        }
+
+                        if (!child.material) {
+                            child.material = new THREE.MeshStandardMaterial({
+                                color: 0x888888,
+                                metalness: 0.1,
+                                roughness: 0.8
+                            });
+                        }
                     }
                 });
                 resolve(object);
