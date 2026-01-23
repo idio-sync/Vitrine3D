@@ -199,7 +199,16 @@ function onKeyDown(event) {
 
 function setupUIEvents() {
     // Controls panel toggle
-    document.getElementById('btn-toggle-controls').addEventListener('click', toggleControlsPanel);
+    const toggleBtn = document.getElementById('btn-toggle-controls');
+    console.log('Toggle button found:', toggleBtn);
+    if (toggleBtn) {
+        toggleBtn.onclick = function(e) {
+            console.log('Toggle button clicked via onclick');
+            e.preventDefault();
+            e.stopPropagation();
+            toggleControlsPanel();
+        };
+    }
 
     // Display mode toggles
     document.getElementById('btn-splat').addEventListener('click', () => setDisplayMode('splat'));
