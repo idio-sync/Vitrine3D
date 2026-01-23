@@ -10,12 +10,14 @@ import { SplatMesh } from '@sparkjsdev/spark';
 const config = window.APP_CONFIG || {
     defaultSplatUrl: '',
     defaultModelUrl: '',
-    showControls: true
+    showControls: true,
+    controlsMode: 'full', // full, minimal, none
+    initialViewMode: 'both' // splat, model, both, split
 };
 
 // Global state
 const state = {
-    displayMode: 'both', // 'splat', 'model', 'both', 'split'
+    displayMode: config.initialViewMode || 'both', // 'splat', 'model', 'both', 'split'
     selectedObject: 'none', // 'splat', 'model', 'both', 'none'
     transformMode: 'translate', // 'translate', 'rotate', 'scale'
     splatLoaded: false,
@@ -148,8 +150,12 @@ function init() {
     // Setup UI events
     setupUIEvents();
 
-    // Apply initial controls visibility
+    // Apply initial controls visibility and mode
     applyControlsVisibility();
+    applyControlsMode();
+
+    // Set initial display mode from config
+    setDisplayMode(state.displayMode);
 
     // Load default files if configured
     loadDefaultFiles();
@@ -968,6 +974,7 @@ function fitToView() {
 // Controls panel visibility
 function toggleControlsPanel() {
     state.controlsVisible = !state.controlsVisible;
+    console.log('Toggle controls:', state.controlsVisible);
     applyControlsVisibility();
 }
 
@@ -975,16 +982,54 @@ function applyControlsVisibility() {
     const controlsPanel = document.getElementById('controls-panel');
     const toggleBtn = document.getElementById('btn-toggle-controls');
 
+    console.log('Applying visibility:', state.controlsVisible, controlsPanel, toggleBtn);
+
     if (state.controlsVisible) {
+        controlsPanel.style.display = '';
         controlsPanel.classList.remove('panel-hidden');
         toggleBtn.classList.remove('controls-hidden');
     } else {
+        controlsPanel.style.display = 'none';
         controlsPanel.classList.add('panel-hidden');
         toggleBtn.classList.add('controls-hidden');
     }
 
     // Trigger resize to adjust canvas
     setTimeout(onWindowResize, 10);
+}
+
+// Apply controls mode (full, minimal, none)
+function applyControlsMode() {
+    const mode = config.controlsMode || 'full';
+
+    if (mode === 'none') {
+        // Hide everything
+        document.getElementById('controls-panel').style.display = 'none';
+        document.getElementById('btn-toggle-controls').style.display = 'none';
+        return;
+    }
+
+    if (mode === 'minimal') {
+        // Show only display mode toggle
+        // Hide all other sections
+        const sections = document.querySelectorAll('#controls-panel .control-section');
+        sections.forEach((section, index) => {
+            // Keep only the first section (Display Mode) and hide the rest
+            if (index === 0) {
+                section.style.display = '';
+            } else {
+                section.style.display = 'none';
+            }
+        });
+
+        // Hide the main title
+        const title = document.querySelector('#controls-panel h2');
+        if (title) title.style.display = 'none';
+
+        // Make the panel narrower for minimal mode
+        document.getElementById('controls-panel').style.width = '200px';
+    }
+    // 'full' mode shows everything (default)
 }
 
 // Load default files from configuration
