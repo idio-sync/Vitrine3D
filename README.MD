@@ -12,7 +12,6 @@ A simple web-based viewer for comparing Gaussian splat files with traditional 3D
 - Manual position and rotation input fields for precise alignment
 - Wireframe mode and adjustable opacity for models
 - Orbit camera controls (rotate, pan, zoom)
-- Hideable controls panel for fullscreen viewing
 - FPS counter and mesh statistics
 
 ## Quick Start
@@ -66,19 +65,6 @@ services:
       - DEFAULT_MODEL_URL=
       - SHOW_CONTROLS=true
 ```
-
-## GitHub Actions / CI
-
-This repository includes a GitHub Actions workflow (`.github/workflows/docker-push.yml`) that automatically builds and pushes Docker images to Docker Hub on every push.
-
-### Required Secrets
-Add these secrets to your GitHub repository:
-- `DOCKERHUB_USER` - Your Docker Hub username
-- `DOCKERHUB_TOKEN` - Your Docker Hub access token
-
-### Image Tags
-- Branch pushes create tags like `username/splat-mesh-compare:branch-name`
-- Pushes to `main` also create the `latest` tag
 
 ## URL Parameters
 
