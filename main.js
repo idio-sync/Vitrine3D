@@ -968,6 +968,7 @@ function fitToView() {
 // Controls panel visibility
 function toggleControlsPanel() {
     state.controlsVisible = !state.controlsVisible;
+    console.log('Toggle controls:', state.controlsVisible);
     applyControlsVisibility();
 }
 
@@ -975,10 +976,14 @@ function applyControlsVisibility() {
     const controlsPanel = document.getElementById('controls-panel');
     const toggleBtn = document.getElementById('btn-toggle-controls');
 
+    console.log('Applying visibility:', state.controlsVisible, controlsPanel, toggleBtn);
+
     if (state.controlsVisible) {
+        controlsPanel.style.display = '';
         controlsPanel.classList.remove('panel-hidden');
         toggleBtn.classList.remove('controls-hidden');
     } else {
+        controlsPanel.style.display = 'none';
         controlsPanel.classList.add('panel-hidden');
         toggleBtn.classList.add('controls-hidden');
     }
