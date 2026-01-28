@@ -1047,23 +1047,38 @@ function applyControlsVisibility() {
     const controlsPanel = document.getElementById('controls-panel');
     const toggleBtn = document.getElementById('btn-toggle-controls');
 
-    console.log('[main.js] Applying visibility:', state.controlsVisible);
-    console.log('[main.js] Panel BEFORE:', controlsPanel.style.display, controlsPanel.className);
-
-    if (state.controlsVisible) {
-        // Show the panel - remove all hiding mechanisms
-        controlsPanel.style.display = 'block';  // Explicitly set to block instead of empty
-        controlsPanel.classList.remove('panel-hidden');
-        controlsPanel.classList.remove('hidden');
-        toggleBtn.classList.remove('controls-hidden');
-    } else {
-        // Hide the panel
-        controlsPanel.style.display = 'none';
-        controlsPanel.classList.add('panel-hidden');
-        toggleBtn.classList.add('controls-hidden');
+    if (!controlsPanel) {
+        console.warn('[main.js] Controls panel not found');
+        return;
     }
 
-    console.log('[main.js] Panel AFTER:', controlsPanel.style.display, controlsPanel.className);
+    console.log('[main.js] Applying visibility:', state.controlsVisible);
+
+    if (state.controlsVisible) {
+        // SHOW PANEL
+        // 1. Remove the CSS class that hides it
+        controlsPanel.classList.remove('panel-hidden');
+        controlsPanel.classList.remove('hidden');
+
+        // 2. Clear the inline 'display: none' style entirely. 
+        // This returns control to the stylesheet (which defaults to visible/block).
+        controlsPanel.style.display = '';
+        
+        // 3. Force a style check to ensure the browser registers the change (fixes some rendering edge cases)
+        // eslint-disable-next-line no-unused-expressions
+        controlsPanel.offsetHeight; 
+
+        if (toggleBtn) toggleBtn.classList.remove('controls-hidden');
+    } else {
+        // HIDE PANEL
+        // 1. Add the CSS class
+        controlsPanel.classList.add('panel-hidden');
+        
+        // 2. Force inline style to none (redundancy ensures it hides)
+        controlsPanel.style.display = 'none';
+
+        if (toggleBtn) toggleBtn.classList.add('controls-hidden');
+    }
 
     // Trigger resize to adjust canvas
     setTimeout(onWindowResize, 10);
