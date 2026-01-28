@@ -1044,46 +1044,57 @@ function toggleControlsPanel() {
 }
 
 function applyControlsVisibility() {
-    const controlsPanel = document.getElementById('controls-panel');
-    const toggleBtn = document.getElementById('btn-toggle-controls');
+    try {
+        const controlsPanel = document.getElementById('controls-panel');
+        const toggleBtn = document.getElementById('btn-toggle-controls');
 
-    if (!controlsPanel) {
-        console.warn('[main.js] Controls panel not found');
-        return;
-    }
+        console.log('[main.js] applyControlsVisibility - State:', state.controlsVisible);
 
-    console.log('[main.js] Applying visibility:', state.controlsVisible);
+        if (!controlsPanel) {
+            console.error('[main.js] Error: controls-panel element not found!');
+            return;
+        }
 
-    if (state.controlsVisible) {
-        // SHOW PANEL
-        // 1. Remove the CSS class that hides it
-        controlsPanel.classList.remove('panel-hidden');
-        controlsPanel.classList.remove('hidden');
+        if (state.controlsVisible) {
+            console.log('[main.js] Showing panel...');
+            
+            // 1. Remove all classes that might hide it
+            controlsPanel.classList.remove('panel-hidden');
+            controlsPanel.classList.remove('hidden');
+            
+            // 2. NUCLEAR OPTION: Remove the inline 'style' attribute entirely.
+            // This guarantees 'display: none' is gone and allows the CSS file to take over.
+            controlsPanel.removeAttribute('style'); 
+            
+            // 3. Update toggle button icon state
+            if (toggleBtn) toggleBtn.classList.remove('controls-hidden');
+            
+        } else {
+            console.log('[main.js] Hiding panel...');
+            
+            // 1. Add hidden class
+            controlsPanel.classList.add('panel-hidden');
+            
+            // 2. Force inline style
+            controlsPanel.style.display = 'none';
+            
+            // 3. Update toggle button icon state
+            if (toggleBtn) toggleBtn.classList.add('controls-hidden');
+        }
 
-        // 2. Clear the inline 'display: none' style entirely. 
-        // This returns control to the stylesheet (which defaults to visible/block).
-        controlsPanel.style.display = '';
+        console.log('[main.js] Panel visibility applied successfully.');
         
-        // 3. Force a style check to ensure the browser registers the change (fixes some rendering edge cases)
-        // eslint-disable-next-line no-unused-expressions
-        controlsPanel.offsetHeight; 
-
-        if (toggleBtn) toggleBtn.classList.remove('controls-hidden');
-    } else {
-        // HIDE PANEL
-        // 1. Add the CSS class
-        controlsPanel.classList.add('panel-hidden');
+        // Trigger resize to adjust canvas
+        setTimeout(() => {
+            if (typeof onWindowResize === 'function') {
+                onWindowResize();
+            }
+        }, 10);
         
-        // 2. Force inline style to none (redundancy ensures it hides)
-        controlsPanel.style.display = 'none';
-
-        if (toggleBtn) toggleBtn.classList.add('controls-hidden');
+    } catch (e) {
+        console.error('[main.js] CRASH in applyControlsVisibility:', e);
     }
-
-    // Trigger resize to adjust canvas
-    setTimeout(onWindowResize, 10);
 }
-
 // Apply controls mode (full, minimal, none)
 function applyControlsMode() {
     const mode = config.controlsMode || 'full';
