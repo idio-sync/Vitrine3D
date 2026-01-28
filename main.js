@@ -11,6 +11,10 @@ import { SplatMesh } from '@sparkjsdev/spark';
 window.moduleLoaded = true;
 console.log('[main.js] Module loaded successfully, THREE:', !!THREE, 'SplatMesh:', !!SplatMesh);
 
+// Expose THREE globally for debugging and potential library compatibility
+window.THREE = THREE;
+console.log('[main.js] THREE.REVISION:', THREE.REVISION);
+
 // Global error handler for runtime errors
 window.onerror = function(message, source, lineno, colno, error) {
     console.error('[main.js] Runtime error:', message, 'at', source, 'line', lineno);
@@ -252,7 +256,24 @@ function setupUIEvents() {
             console.log('[main.js] Toggle button clicked');
             e.preventDefault();
             e.stopPropagation();
-            toggleControlsPanel();
+            try {
+                toggleControlsPanel();
+            } catch (err) {
+                console.error('[main.js] Error in toggleControlsPanel:', err);
+                // Fallback: directly manipulate DOM if toggle function fails
+                const panel = document.getElementById('controls-panel');
+                if (panel) {
+                    const isHidden = panel.style.display === 'none' || panel.classList.contains('panel-hidden');
+                    if (isHidden) {
+                        panel.style.display = 'block';
+                        panel.classList.remove('panel-hidden');
+                    } else {
+                        panel.style.display = 'none';
+                        panel.classList.add('panel-hidden');
+                    }
+                    state.controlsVisible = !isHidden;
+                }
+            }
         };
     }
 
@@ -423,20 +444,30 @@ function setSelectedObject(selection) {
         document.getElementById(`btn-select-${s}`).classList.toggle('active', s === selection);
     });
 
-    // Attach transform controls
-    transformControls.detach();
+    // Attach transform controls with error handling
+    try {
+        transformControls.detach();
+    } catch (e) {
+        console.warn('[main.js] Error detaching transform controls:', e);
+    }
 
-    if (selection === 'splat' && splatMesh) {
-        transformControls.attach(splatMesh);
-    } else if (selection === 'model' && modelGroup && modelGroup.children.length > 0) {
-        transformControls.attach(modelGroup);
-    } else if (selection === 'both') {
-        // For both, attach to splat and sync model
-        if (splatMesh) {
+    try {
+        if (selection === 'splat' && splatMesh) {
             transformControls.attach(splatMesh);
-        } else if (modelGroup && modelGroup.children.length > 0) {
+        } else if (selection === 'model' && modelGroup && modelGroup.children.length > 0) {
             transformControls.attach(modelGroup);
+        } else if (selection === 'both') {
+            // For both, attach to splat and sync model
+            if (splatMesh) {
+                transformControls.attach(splatMesh);
+            } else if (modelGroup && modelGroup.children.length > 0) {
+                transformControls.attach(modelGroup);
+            }
         }
+    } catch (attachError) {
+        console.error('[main.js] Error attaching transform controls:', attachError);
+        console.error('[main.js] This may be due to THREE.js instance mismatch.');
+        // Don't re-throw - allow the rest of the application to continue
     }
 }
 
@@ -596,6 +627,14 @@ async function handleSplatFile(event) {
         // Create SplatMesh using Spark
         splatMesh = new SplatMesh({ url: fileUrl });
 
+        // Verify SplatMesh is a valid THREE.Object3D (detect instance conflicts)
+        if (!(splatMesh instanceof THREE.Object3D)) {
+            console.warn('[main.js] WARNING: SplatMesh is not an instance of THREE.Object3D!');
+            console.warn('[main.js] This may indicate multiple THREE.js instances are loaded.');
+            console.warn('[main.js] SplatMesh constructor:', splatMesh.constructor?.name);
+            // Try to proceed anyway - some operations may still work
+        }
+
         // Wait for the splat to load
         await new Promise((resolve, reject) => {
             const checkLoaded = setInterval(() => {
@@ -612,7 +651,13 @@ async function handleSplatFile(event) {
             }, 30000);
         });
 
-        scene.add(splatMesh);
+        try {
+            scene.add(splatMesh);
+        } catch (addError) {
+            console.error('[main.js] Error adding splatMesh to scene:', addError);
+            console.error('[main.js] This is likely due to THREE.js instance mismatch with Spark library.');
+            throw addError;
+        }
 
         // Clean up URL after a delay
         setTimeout(() => URL.revokeObjectURL(fileUrl), 5000);
@@ -1038,62 +1083,80 @@ function fitToView() {
 
 // Controls panel visibility
 function toggleControlsPanel() {
+    console.log('[main.js] toggleControlsPanel called, current state:', state.controlsVisible);
     state.controlsVisible = !state.controlsVisible;
-    console.log('Toggle controls:', state.controlsVisible);
+    console.log('[main.js] New state:', state.controlsVisible);
     applyControlsVisibility();
 }
 
 function applyControlsVisibility() {
-    try {
-        const controlsPanel = document.getElementById('controls-panel');
-        const toggleBtn = document.getElementById('btn-toggle-controls');
+    const controlsPanel = document.getElementById('controls-panel');
+    const toggleBtn = document.getElementById('btn-toggle-controls');
 
-        console.log('[main.js] applyControlsVisibility - State:', state.controlsVisible);
+    console.log('[main.js] applyControlsVisibility - State:', state.controlsVisible);
 
-        if (!controlsPanel) {
-            console.error('[main.js] Error: controls-panel element not found!');
-            return;
-        }
+    if (!controlsPanel) {
+        console.error('[main.js] Error: controls-panel element not found!');
+        return;
+    }
 
-        if (state.controlsVisible) {
-            console.log('[main.js] Showing panel...');
-            
-            // 1. Remove all classes that might hide it
-            controlsPanel.classList.remove('panel-hidden');
-            controlsPanel.classList.remove('hidden');
-            
-            // 2. NUCLEAR OPTION: Remove the inline 'style' attribute entirely.
-            // This guarantees 'display: none' is gone and allows the CSS file to take over.
-            controlsPanel.removeAttribute('style'); 
-            
-            // 3. Update toggle button icon state
-            if (toggleBtn) toggleBtn.classList.remove('controls-hidden');
-            
+    // Check if controls mode is 'none' - if so, always hide
+    const mode = config.controlsMode || 'full';
+    if (mode === 'none') {
+        console.log('[main.js] Controls mode is "none", keeping hidden');
+        controlsPanel.style.display = 'none';
+        if (toggleBtn) toggleBtn.style.display = 'none';
+        return;
+    }
+
+    if (state.controlsVisible) {
+        console.log('[main.js] Showing panel...');
+
+        // Remove hidden classes
+        controlsPanel.classList.remove('panel-hidden');
+        controlsPanel.classList.remove('hidden');
+
+        // Explicitly set display to flex/block (not just removing style)
+        // This ensures visibility regardless of any other inline styles
+        controlsPanel.style.display = 'block';
+
+        // Re-apply mode-specific styles if needed
+        if (mode === 'minimal') {
+            controlsPanel.style.width = '200px';
         } else {
-            console.log('[main.js] Hiding panel...');
-            
-            // 1. Add hidden class
-            controlsPanel.classList.add('panel-hidden');
-            
-            // 2. Force inline style
-            controlsPanel.style.display = 'none';
-            
-            // 3. Update toggle button icon state
-            if (toggleBtn) toggleBtn.classList.add('controls-hidden');
+            controlsPanel.style.width = '';  // Use CSS default
         }
 
-        console.log('[main.js] Panel visibility applied successfully.');
-        
-        // Trigger resize to adjust canvas
-        setTimeout(() => {
+        // Update toggle button icon state
+        if (toggleBtn) toggleBtn.classList.remove('controls-hidden');
+
+        console.log('[main.js] Panel shown. Display:', controlsPanel.style.display, 'Classes:', controlsPanel.className);
+
+    } else {
+        console.log('[main.js] Hiding panel...');
+
+        // Add hidden class
+        controlsPanel.classList.add('panel-hidden');
+
+        // Force inline style to hide
+        controlsPanel.style.display = 'none';
+
+        // Update toggle button icon state
+        if (toggleBtn) toggleBtn.classList.add('controls-hidden');
+
+        console.log('[main.js] Panel hidden. Display:', controlsPanel.style.display, 'Classes:', controlsPanel.className);
+    }
+
+    // Trigger resize to adjust canvas (with error handling)
+    setTimeout(() => {
+        try {
             if (typeof onWindowResize === 'function') {
                 onWindowResize();
             }
-        }, 10);
-        
-    } catch (e) {
-        console.error('[main.js] CRASH in applyControlsVisibility:', e);
-    }
+        } catch (e) {
+            console.error('[main.js] Error in onWindowResize:', e);
+        }
+    }, 10);
 }
 // Apply controls mode (full, minimal, none)
 function applyControlsMode() {
@@ -1154,10 +1217,21 @@ async function loadSplatFromUrl(url) {
         // Create SplatMesh using Spark
         splatMesh = new SplatMesh({ url: url });
 
+        // Verify SplatMesh is a valid THREE.Object3D
+        if (!(splatMesh instanceof THREE.Object3D)) {
+            console.warn('[main.js] WARNING: SplatMesh is not an instance of THREE.Object3D!');
+            console.warn('[main.js] This may indicate multiple THREE.js instances are loaded.');
+        }
+
         // Wait a moment for initialization
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        scene.add(splatMesh);
+        try {
+            scene.add(splatMesh);
+        } catch (addError) {
+            console.error('[main.js] Error adding splatMesh to scene:', addError);
+            throw addError;
+        }
 
         state.splatLoaded = true;
         updateVisibility();
@@ -1471,35 +1545,52 @@ function updateFPS() {
 }
 
 // Animation loop
+let animationErrorCount = 0;
+const MAX_ANIMATION_ERRORS = 10;
+
 function animate() {
     requestAnimationFrame(animate);
-    controls.update();
-    controlsRight.update();
 
-    if (state.displayMode === 'split') {
-        // Split view - render splat on left, model on right
-        const splatVisible = splatMesh ? splatMesh.visible : false;
-        const modelVisible = modelGroup ? modelGroup.visible : false;
+    try {
+        controls.update();
+        controlsRight.update();
 
-        // Left view - splat only
-        if (splatMesh) splatMesh.visible = true;
-        if (modelGroup) modelGroup.visible = false;
-        renderer.render(scene, camera);
+        if (state.displayMode === 'split') {
+            // Split view - render splat on left, model on right
+            const splatVisible = splatMesh ? splatMesh.visible : false;
+            const modelVisible = modelGroup ? modelGroup.visible : false;
 
-        // Right view - model only
-        if (splatMesh) splatMesh.visible = false;
-        if (modelGroup) modelGroup.visible = true;
-        rendererRight.render(scene, camera);
+            // Left view - splat only
+            if (splatMesh) splatMesh.visible = true;
+            if (modelGroup) modelGroup.visible = false;
+            renderer.render(scene, camera);
 
-        // Restore visibility
-        if (splatMesh) splatMesh.visible = splatVisible;
-        if (modelGroup) modelGroup.visible = modelVisible;
-    } else {
-        // Normal view
-        renderer.render(scene, camera);
+            // Right view - model only
+            if (splatMesh) splatMesh.visible = false;
+            if (modelGroup) modelGroup.visible = true;
+            rendererRight.render(scene, camera);
+
+            // Restore visibility
+            if (splatMesh) splatMesh.visible = splatVisible;
+            if (modelGroup) modelGroup.visible = modelVisible;
+        } else {
+            // Normal view
+            renderer.render(scene, camera);
+        }
+
+        updateFPS();
+
+        // Reset error count on successful frame
+        animationErrorCount = 0;
+    } catch (e) {
+        animationErrorCount++;
+        if (animationErrorCount <= MAX_ANIMATION_ERRORS) {
+            console.error('[main.js] Animation loop error:', e);
+        }
+        if (animationErrorCount === MAX_ANIMATION_ERRORS) {
+            console.error('[main.js] Suppressing further animation errors...');
+        }
     }
-
-    updateFPS();
 }
 
 // Initialize when DOM is ready
