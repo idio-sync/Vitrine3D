@@ -76,10 +76,13 @@ body {
 
 #controls-panel {
     width: 280px;
+    min-width: 280px; /* Force minimum width */
+    flex-shrink: 0;   /* CRITICAL: Prevent flexbox from crushing this element */
     background: #0f0f1a;
     padding: 20px;
     overflow-y: auto;
     border-left: 1px solid #333;
+    z-index: 100;     /* Ensure it sits on top if overlaps occur */
 }
 
 /* Controls panel visibility - using specific class instead of .hidden */
