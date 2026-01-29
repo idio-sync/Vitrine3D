@@ -76,7 +76,7 @@ body {
 
 #controls-panel {
     width: 280px;
-    min-width: 280px; 
+    min-width: 280px;
     flex-shrink: 0;
     position: relative;
     background: #0f0f1a;
@@ -84,20 +84,17 @@ body {
     overflow-y: auto;
     border-left: 1px solid #333;
     z-index: 100;
+    /* Smooth transition for show/hide */
+    transition: width 0.15s ease-out, min-width 0.15s ease-out, padding 0.15s ease-out;
 }
 
-/* Controls panel visibility - using width collapse instead of display: none
-   This keeps the element in flexbox layout, allowing reliable re-expansion */
-#controls-panel {
-    transition: width 0.2s ease-out, min-width 0.2s ease-out, padding 0.2s ease-out, border-width 0.2s ease-out;
-}
-
+/* Controls panel visibility - width collapse keeps element in flexbox layout */
 #controls-panel.panel-hidden {
-    width: 0;
-    min-width: 0;
-    padding: 0;
-    overflow: hidden;
-    border-left-width: 0;
+    width: 0 !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    border-left-width: 0 !important;
 }
 
 #controls-panel h2 {

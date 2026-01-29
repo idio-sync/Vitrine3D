@@ -1109,8 +1109,6 @@ function toggleControlsPanel() {
 }
 
 function applyControlsVisibilityDirect(controlsPanel, shouldShow) {
-    console.log('[main.js] applyControlsVisibilityDirect, shouldShow:', shouldShow);
-
     const toggleBtn = document.getElementById('btn-toggle-controls');
 
     // Check controls mode
@@ -1128,28 +1126,30 @@ function applyControlsVisibilityDirect(controlsPanel, shouldShow) {
         return;
     }
 
-    // Clear any inline display styles - let CSS handle visibility via class
+    // Clear any inline display/visibility styles
     controlsPanel.style.display = '';
     controlsPanel.style.visibility = '';
     controlsPanel.style.opacity = '';
 
     if (shouldShow) {
-        // Remove hidden class - CSS transition will animate width back
+        // Remove hidden class - CSS !important rules will release control
         controlsPanel.classList.remove('panel-hidden', 'hidden');
 
-        // Set width for minimal mode
+        // Clear inline overrides - let CSS base values take effect
+        controlsPanel.style.width = '';
+        controlsPanel.style.minWidth = '';
+        controlsPanel.style.padding = '';
+        controlsPanel.style.overflow = '';
+
+        // For minimal mode, set narrower width after clearing
         if (mode === 'minimal') {
             controlsPanel.style.width = '200px';
             controlsPanel.style.minWidth = '200px';
-        } else {
-            // Clear any inline width overrides, let CSS handle it
-            controlsPanel.style.width = '';
-            controlsPanel.style.minWidth = '';
         }
 
         if (toggleBtn) toggleBtn.classList.remove('controls-hidden');
     } else {
-        // Add hidden class - CSS will collapse width to 0
+        // Add hidden class - CSS !important rules will collapse the panel
         controlsPanel.classList.add('panel-hidden');
 
         if (toggleBtn) toggleBtn.classList.add('controls-hidden');
@@ -1160,7 +1160,7 @@ function applyControlsVisibilityDirect(controlsPanel, shouldShow) {
         try {
             if (typeof onWindowResize === 'function') onWindowResize();
         } catch (e) { /* ignore */ }
-    }, 250); // Match CSS transition duration
+    }, 200);
 }
 
 // Legacy function for initial setup - calls the new direct function
