@@ -52,9 +52,6 @@ let ambientLight, hemisphereLight, directionalLight1, directionalLight2;
 let rendererRight = null;
 let controlsRight = null;
 
-// Group for synchronized movement
-let syncGroup = null;
-
 // DOM elements (with null checks for debugging)
 const canvas = document.getElementById('viewer-canvas');
 const canvasRight = document.getElementById('viewer-canvas-right');
@@ -180,11 +177,6 @@ function init() {
     // Grid helper
     const gridHelper = new THREE.GridHelper(10, 10, 0x4a4a6a, 0x2a2a4a);
     scene.add(gridHelper);
-
-    // Sync group for moving both objects together
-    syncGroup = new THREE.Group();
-    syncGroup.name = 'syncGroup';
-    scene.add(syncGroup);
 
     // Model group
     modelGroup = new THREE.Group();
@@ -430,7 +422,8 @@ function setDisplayMode(mode) {
 
     // Update button states
     ['splat', 'model', 'both', 'split'].forEach(m => {
-        document.getElementById(`btn-${m}`).classList.toggle('active', m === mode);
+        const btn = document.getElementById(`btn-${m}`);
+        if (btn) btn.classList.toggle('active', m === mode);
     });
 
     // Handle split view
@@ -438,14 +431,14 @@ function setDisplayMode(mode) {
     const splitLabels = document.getElementById('split-labels');
 
     if (mode === 'split') {
-        container.classList.add('split-view');
-        canvasRight.classList.remove('hidden');
-        splitLabels.classList.remove('hidden');
+        if (container) container.classList.add('split-view');
+        if (canvasRight) canvasRight.classList.remove('hidden');
+        if (splitLabels) splitLabels.classList.remove('hidden');
         onWindowResize();
     } else {
-        container.classList.remove('split-view');
-        canvasRight.classList.add('hidden');
-        splitLabels.classList.add('hidden');
+        if (container) container.classList.remove('split-view');
+        if (canvasRight) canvasRight.classList.add('hidden');
+        if (splitLabels) splitLabels.classList.add('hidden');
         onWindowResize();
     }
 
@@ -457,7 +450,8 @@ function setSelectedObject(selection) {
 
     // Update button states
     ['splat', 'model', 'both', 'none'].forEach(s => {
-        document.getElementById(`btn-select-${s}`).classList.toggle('active', s === selection);
+        const btn = document.getElementById(`btn-select-${s}`);
+        if (btn) btn.classList.toggle('active', s === selection);
     });
 
     // Attach transform controls with error handling
@@ -490,8 +484,10 @@ function setSelectedObject(selection) {
 // Sync both objects when moving in "both" mode
 let lastSplatPosition = new THREE.Vector3();
 let lastSplatRotation = new THREE.Euler();
+let lastSplatScale = new THREE.Vector3(1, 1, 1);
 let lastModelPosition = new THREE.Vector3();
 let lastModelRotation = new THREE.Euler();
+let lastModelScale = new THREE.Vector3(1, 1, 1);
 
 function syncBothObjects() {
     if (!splatMesh || !modelGroup) return;
@@ -504,14 +500,14 @@ function syncBothObjects() {
             splatMesh.rotation.y - lastSplatRotation.y,
             splatMesh.rotation.z - lastSplatRotation.z
         );
+        // Calculate scale ratio to apply proportionally
+        const scaleRatio = lastSplatScale.x !== 0 ? splatMesh.scale.x / lastSplatScale.x : 1;
 
         modelGroup.position.add(deltaPos);
         modelGroup.rotation.x += deltaRot.x;
         modelGroup.rotation.y += deltaRot.y;
         modelGroup.rotation.z += deltaRot.z;
-
-        // Match scale
-        modelGroup.scale.copy(splatMesh.scale);
+        modelGroup.scale.multiplyScalar(scaleRatio);
     } else if (transformControls.object === modelGroup) {
         const deltaPos = new THREE.Vector3().subVectors(modelGroup.position, lastModelPosition);
         const deltaRot = new THREE.Euler(
@@ -519,36 +515,40 @@ function syncBothObjects() {
             modelGroup.rotation.y - lastModelRotation.y,
             modelGroup.rotation.z - lastModelRotation.z
         );
+        // Calculate scale ratio to apply proportionally
+        const scaleRatio = lastModelScale.x !== 0 ? modelGroup.scale.x / lastModelScale.x : 1;
 
         splatMesh.position.add(deltaPos);
         splatMesh.rotation.x += deltaRot.x;
         splatMesh.rotation.y += deltaRot.y;
         splatMesh.rotation.z += deltaRot.z;
-
-        // Match scale
-        splatMesh.scale.copy(modelGroup.scale);
+        splatMesh.scale.multiplyScalar(scaleRatio);
     }
 
-    // Update last positions
+    // Update last positions and scales
     if (splatMesh) {
         lastSplatPosition.copy(splatMesh.position);
         lastSplatRotation.copy(splatMesh.rotation);
+        lastSplatScale.copy(splatMesh.scale);
     }
     if (modelGroup) {
         lastModelPosition.copy(modelGroup.position);
         lastModelRotation.copy(modelGroup.rotation);
+        lastModelScale.copy(modelGroup.scale);
     }
 }
 
-// Store last positions when selection changes
+// Store last positions, rotations, and scales when selection changes
 function storeLastPositions() {
     if (splatMesh) {
         lastSplatPosition.copy(splatMesh.position);
         lastSplatRotation.copy(splatMesh.rotation);
+        lastSplatScale.copy(splatMesh.scale);
     }
     if (modelGroup) {
         lastModelPosition.copy(modelGroup.position);
         lastModelRotation.copy(modelGroup.rotation);
+        lastModelScale.copy(modelGroup.scale);
     }
 }
 
@@ -559,7 +559,8 @@ function setTransformMode(mode) {
     // Update button states
     ['translate', 'rotate', 'scale'].forEach(m => {
         const btnId = m === 'translate' ? 'btn-translate' : m === 'rotate' ? 'btn-rotate' : 'btn-scale';
-        document.getElementById(btnId).classList.toggle('active', m === mode);
+        const btn = document.getElementById(btnId);
+        if (btn) btn.classList.toggle('active', m === mode);
     });
 
     // Store positions when changing mode
@@ -588,28 +589,38 @@ function updateVisibility() {
 }
 
 function updateTransformInputs() {
+    // Helper to safely set input value
+    const setInputValue = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.value = value;
+    };
+    const setTextContent = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    };
+
     // Update splat inputs
     if (splatMesh) {
-        document.getElementById('splat-pos-x').value = splatMesh.position.x.toFixed(2);
-        document.getElementById('splat-pos-y').value = splatMesh.position.y.toFixed(2);
-        document.getElementById('splat-pos-z').value = splatMesh.position.z.toFixed(2);
-        document.getElementById('splat-rot-x').value = THREE.MathUtils.radToDeg(splatMesh.rotation.x).toFixed(1);
-        document.getElementById('splat-rot-y').value = THREE.MathUtils.radToDeg(splatMesh.rotation.y).toFixed(1);
-        document.getElementById('splat-rot-z').value = THREE.MathUtils.radToDeg(splatMesh.rotation.z).toFixed(1);
-        document.getElementById('splat-scale').value = splatMesh.scale.x;
-        document.getElementById('splat-scale-value').textContent = splatMesh.scale.x.toFixed(1);
+        setInputValue('splat-pos-x', splatMesh.position.x.toFixed(2));
+        setInputValue('splat-pos-y', splatMesh.position.y.toFixed(2));
+        setInputValue('splat-pos-z', splatMesh.position.z.toFixed(2));
+        setInputValue('splat-rot-x', THREE.MathUtils.radToDeg(splatMesh.rotation.x).toFixed(1));
+        setInputValue('splat-rot-y', THREE.MathUtils.radToDeg(splatMesh.rotation.y).toFixed(1));
+        setInputValue('splat-rot-z', THREE.MathUtils.radToDeg(splatMesh.rotation.z).toFixed(1));
+        setInputValue('splat-scale', splatMesh.scale.x);
+        setTextContent('splat-scale-value', splatMesh.scale.x.toFixed(1));
     }
 
     // Update model inputs
     if (modelGroup) {
-        document.getElementById('model-pos-x').value = modelGroup.position.x.toFixed(2);
-        document.getElementById('model-pos-y').value = modelGroup.position.y.toFixed(2);
-        document.getElementById('model-pos-z').value = modelGroup.position.z.toFixed(2);
-        document.getElementById('model-rot-x').value = THREE.MathUtils.radToDeg(modelGroup.rotation.x).toFixed(1);
-        document.getElementById('model-rot-y').value = THREE.MathUtils.radToDeg(modelGroup.rotation.y).toFixed(1);
-        document.getElementById('model-rot-z').value = THREE.MathUtils.radToDeg(modelGroup.rotation.z).toFixed(1);
-        document.getElementById('model-scale').value = modelGroup.scale.x;
-        document.getElementById('model-scale-value').textContent = modelGroup.scale.x.toFixed(1);
+        setInputValue('model-pos-x', modelGroup.position.x.toFixed(2));
+        setInputValue('model-pos-y', modelGroup.position.y.toFixed(2));
+        setInputValue('model-pos-z', modelGroup.position.z.toFixed(2));
+        setInputValue('model-rot-x', THREE.MathUtils.radToDeg(modelGroup.rotation.x).toFixed(1));
+        setInputValue('model-rot-y', THREE.MathUtils.radToDeg(modelGroup.rotation.y).toFixed(1));
+        setInputValue('model-rot-z', THREE.MathUtils.radToDeg(modelGroup.rotation.z).toFixed(1));
+        setInputValue('model-scale', modelGroup.scale.x);
+        setTextContent('model-scale-value', modelGroup.scale.x.toFixed(1));
     }
 }
 
@@ -651,21 +662,9 @@ async function handleSplatFile(event) {
             // Try to proceed anyway - some operations may still work
         }
 
-        // Wait for the splat to load
-        await new Promise((resolve, reject) => {
-            const checkLoaded = setInterval(() => {
-                // SplatMesh should be ready when added to scene
-                // We'll give it a moment to initialize
-                clearInterval(checkLoaded);
-                resolve();
-            }, 100);
-
-            // Timeout after 30 seconds
-            setTimeout(() => {
-                clearInterval(checkLoaded);
-                resolve(); // Resolve anyway, splat might still load
-            }, 30000);
-        });
+        // Brief delay to allow SplatMesh initialization
+        // Note: Spark library doesn't expose a ready callback, so we use a short delay
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         try {
             scene.add(splatMesh);
@@ -832,78 +831,73 @@ function loadGLTF(file) {
 }
 
 function loadOBJ(objFile, mtlFile) {
-    return new Promise(async (resolve, reject) => {
-        const objUrl = URL.createObjectURL(objFile);
+    const objUrl = URL.createObjectURL(objFile);
 
-        try {
-            const objLoader = new OBJLoader();
+    return new Promise((resolve, reject) => {
+        const objLoader = new OBJLoader();
 
-            if (mtlFile) {
-                const mtlUrl = URL.createObjectURL(mtlFile);
-                const mtlLoader = new MTLLoader();
+        if (mtlFile) {
+            const mtlUrl = URL.createObjectURL(mtlFile);
+            const mtlLoader = new MTLLoader();
 
-                mtlLoader.load(
-                    mtlUrl,
-                    (materials) => {
-                        materials.preload();
-                        objLoader.setMaterials(materials);
+            mtlLoader.load(
+                mtlUrl,
+                (materials) => {
+                    materials.preload();
+                    objLoader.setMaterials(materials);
 
-                        objLoader.load(
-                            objUrl,
-                            (object) => {
-                                URL.revokeObjectURL(objUrl);
-                                URL.revokeObjectURL(mtlUrl);
+                    objLoader.load(
+                        objUrl,
+                        (object) => {
+                            URL.revokeObjectURL(objUrl);
+                            URL.revokeObjectURL(mtlUrl);
 
-                                // Process materials and normals for proper lighting
-                                object.traverse((child) => {
-                                    if (child.isMesh) {
-                                        // Ensure normals exist for proper lighting
-                                        if (child.geometry && !child.geometry.attributes.normal) {
-                                            child.geometry.computeVertexNormals();
-                                        }
+                            // Process materials and normals for proper lighting
+                            object.traverse((child) => {
+                                if (child.isMesh) {
+                                    // Ensure normals exist for proper lighting
+                                    if (child.geometry && !child.geometry.attributes.normal) {
+                                        child.geometry.computeVertexNormals();
+                                    }
 
-                                        // Convert to MeshStandardMaterial for consistent PBR lighting
-                                        if (child.material) {
-                                            const oldMaterial = child.material;
-                                            const color = oldMaterial.color?.clone() || new THREE.Color(0x888888);
-                                            const map = oldMaterial.map || null;
+                                    // Convert to MeshStandardMaterial for consistent PBR lighting
+                                    if (child.material) {
+                                        const oldMaterial = child.material;
+                                        const color = oldMaterial.color?.clone() || new THREE.Color(0x888888);
+                                        const map = oldMaterial.map || null;
 
-                                            child.material = new THREE.MeshStandardMaterial({
-                                                color: color,
-                                                map: map,
-                                                metalness: 0.1,
-                                                roughness: 0.8
-                                            });
+                                        child.material = new THREE.MeshStandardMaterial({
+                                            color: color,
+                                            map: map,
+                                            metalness: 0.1,
+                                            roughness: 0.8
+                                        });
 
-                                            if (oldMaterial.dispose) {
-                                                oldMaterial.dispose();
-                                            }
+                                        if (oldMaterial.dispose) {
+                                            oldMaterial.dispose();
                                         }
                                     }
-                                });
+                                }
+                            });
 
-                                resolve(object);
-                            },
-                            undefined,
-                            (error) => {
-                                URL.revokeObjectURL(objUrl);
-                                URL.revokeObjectURL(mtlUrl);
-                                reject(error);
-                            }
-                        );
-                    },
-                    undefined,
-                    () => {
-                        URL.revokeObjectURL(mtlUrl);
-                        loadOBJWithoutMaterials(objLoader, objUrl, resolve, reject);
-                    }
-                );
-            } else {
-                loadOBJWithoutMaterials(objLoader, objUrl, resolve, reject);
-            }
-        } catch (error) {
-            URL.revokeObjectURL(objUrl);
-            reject(error);
+                            resolve(object);
+                        },
+                        undefined,
+                        (error) => {
+                            URL.revokeObjectURL(objUrl);
+                            URL.revokeObjectURL(mtlUrl);
+                            reject(error);
+                        }
+                    );
+                },
+                undefined,
+                () => {
+                    URL.revokeObjectURL(mtlUrl);
+                    loadOBJWithoutMaterials(objLoader, objUrl, resolve, reject);
+                }
+            );
+        } else {
+            loadOBJWithoutMaterials(objLoader, objUrl, resolve, reject);
         }
     });
 }
@@ -1224,11 +1218,13 @@ function applyControlsVisibility() {
 // Apply controls mode (full, minimal, none)
 function applyControlsMode() {
     const mode = config.controlsMode || 'full';
+    const controlsPanel = document.getElementById('controls-panel');
+    const toggleBtn = document.getElementById('btn-toggle-controls');
 
     if (mode === 'none') {
         // Hide everything
-        document.getElementById('controls-panel').style.display = 'none';
-        document.getElementById('btn-toggle-controls').style.display = 'none';
+        if (controlsPanel) controlsPanel.style.display = 'none';
+        if (toggleBtn) toggleBtn.style.display = 'none';
         return;
     }
 
@@ -1250,7 +1246,7 @@ function applyControlsMode() {
         if (title) title.style.display = 'none';
 
         // Make the panel narrower for minimal mode
-        document.getElementById('controls-panel').style.width = '200px';
+        if (controlsPanel) controlsPanel.style.width = '200px';
     }
     // 'full' mode shows everything (default)
 }
