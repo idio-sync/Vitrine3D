@@ -428,6 +428,9 @@ function setupUIEvents() {
     // Auto align button
     addListener('btn-auto-align', 'click', autoAlignObjects);
 
+    // ICP align button
+    addListener('btn-icp-align', 'click', icpAlignObjects);
+
     // Setup collapsible sections
     setupCollapsibles();
 
@@ -1622,6 +1625,409 @@ function loadOBJFromUrl(url) {
             (error) => reject(error)
         );
     });
+}
+
+// ============================================================
+// KD-Tree Implementation for efficient nearest neighbor search
+// ============================================================
+
+class KDTree {
+    constructor(points) {
+        // points is an array of {x, y, z, index}
+        this.root = this.buildTree(points, 0);
+    }
+
+    buildTree(points, depth) {
+        if (points.length === 0) return null;
+
+        const axis = depth % 3; // 0=x, 1=y, 2=z
+        const axisKey = ['x', 'y', 'z'][axis];
+
+        // Sort points by the current axis
+        points.sort((a, b) => a[axisKey] - b[axisKey]);
+
+        const median = Math.floor(points.length / 2);
+
+        return {
+            point: points[median],
+            axis: axis,
+            left: this.buildTree(points.slice(0, median), depth + 1),
+            right: this.buildTree(points.slice(median + 1), depth + 1)
+        };
+    }
+
+    // Find nearest neighbor to target point
+    nearestNeighbor(target) {
+        let best = { point: null, distSq: Infinity };
+        this.searchNearest(this.root, target, best);
+        return best;
+    }
+
+    searchNearest(node, target, best) {
+        if (node === null) return;
+
+        const dx = target.x - node.point.x;
+        const dy = target.y - node.point.y;
+        const dz = target.z - node.point.z;
+        const distSq = dx * dx + dy * dy + dz * dz;
+
+        if (distSq < best.distSq) {
+            best.point = node.point;
+            best.distSq = distSq;
+        }
+
+        const axisKey = ['x', 'y', 'z'][node.axis];
+        const diff = target[axisKey] - node.point[axisKey];
+
+        // Search the closer side first
+        const first = diff < 0 ? node.left : node.right;
+        const second = diff < 0 ? node.right : node.left;
+
+        this.searchNearest(first, target, best);
+
+        // Only search the other side if it could contain a closer point
+        if (diff * diff < best.distSq) {
+            this.searchNearest(second, target, best);
+        }
+    }
+}
+
+// ============================================================
+// ICP (Iterative Closest Point) Alignment
+// ============================================================
+
+// Extract positions from splat mesh (in world space)
+function extractSplatPositions(splatMeshObj, maxPoints = 5000) {
+    const positions = [];
+
+    // Get splat's world matrix for transforming local positions to world space
+    splatMeshObj.updateMatrixWorld(true);
+    const worldMatrix = splatMeshObj.matrixWorld;
+
+    // Try to access splat positions via Spark library's packedSplats API
+    if (splatMeshObj.packedSplats && typeof splatMeshObj.packedSplats.forEachSplat === 'function') {
+        let count = 0;
+        const splatCount = splatMeshObj.packedSplats.splatCount || 0;
+        const stride = Math.max(1, Math.floor(splatCount / maxPoints));
+
+        splatMeshObj.packedSplats.forEachSplat((index, center) => {
+            if (index % stride === 0 && count < maxPoints) {
+                // center is a reused Vector3, so clone and transform to world space
+                const worldPos = new THREE.Vector3(center.x, center.y, center.z);
+                worldPos.applyMatrix4(worldMatrix);
+                positions.push({
+                    x: worldPos.x,
+                    y: worldPos.y,
+                    z: worldPos.z,
+                    index: index
+                });
+                count++;
+            }
+        });
+        console.log(`[ICP] Extracted ${positions.length} splat positions via forEachSplat (world space)`);
+    } else if (splatMeshObj.geometry && splatMeshObj.geometry.attributes.position) {
+        // Fallback: try to read from geometry
+        const posAttr = splatMeshObj.geometry.attributes.position;
+        const stride = Math.max(1, Math.floor(posAttr.count / maxPoints));
+        for (let i = 0; i < posAttr.count && positions.length < maxPoints; i += stride) {
+            const worldPos = new THREE.Vector3(
+                posAttr.getX(i),
+                posAttr.getY(i),
+                posAttr.getZ(i)
+            );
+            worldPos.applyMatrix4(worldMatrix);
+            positions.push({
+                x: worldPos.x,
+                y: worldPos.y,
+                z: worldPos.z,
+                index: i
+            });
+        }
+        console.log(`[ICP] Extracted ${positions.length} splat positions from geometry (world space)`);
+    } else {
+        console.warn('[ICP] Could not find splat position data');
+    }
+
+    return positions;
+}
+
+// Extract vertex positions from model mesh
+function extractMeshVertices(modelGroupObj, maxPoints = 10000) {
+    const positions = [];
+    const allVertices = [];
+
+    // Collect all vertices from all meshes
+    modelGroupObj.traverse((child) => {
+        if (child.isMesh && child.geometry) {
+            const geo = child.geometry;
+            const posAttr = geo.attributes.position;
+            if (!posAttr) return;
+
+            // Get world matrix for this mesh
+            child.updateMatrixWorld(true);
+            const matrix = child.matrixWorld;
+
+            for (let i = 0; i < posAttr.count; i++) {
+                const v = new THREE.Vector3(
+                    posAttr.getX(i),
+                    posAttr.getY(i),
+                    posAttr.getZ(i)
+                );
+                v.applyMatrix4(matrix);
+                allVertices.push({ x: v.x, y: v.y, z: v.z, index: allVertices.length });
+            }
+        }
+    });
+
+    // Subsample if too many vertices
+    const stride = Math.max(1, Math.floor(allVertices.length / maxPoints));
+    for (let i = 0; i < allVertices.length && positions.length < maxPoints; i += stride) {
+        positions.push(allVertices[i]);
+    }
+
+    console.log(`[ICP] Extracted ${positions.length} mesh vertices (from ${allVertices.length} total)`);
+    return positions;
+}
+
+// Compute centroid of points
+function computeCentroid(points) {
+    let cx = 0, cy = 0, cz = 0;
+    for (const p of points) {
+        cx += p.x;
+        cy += p.y;
+        cz += p.z;
+    }
+    const n = points.length;
+    return { x: cx / n, y: cy / n, z: cz / n };
+}
+
+// Compute optimal rotation using SVD-like approach (Kabsch algorithm simplified)
+// Returns a rotation matrix that best aligns source to target
+function computeOptimalRotation(sourcePoints, targetPoints, sourceCentroid, targetCentroid) {
+    // Build the covariance matrix H
+    // H = sum((source - sourceCentroid) * (target - targetCentroid)^T)
+    let h = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0]
+    ];
+
+    for (let i = 0; i < sourcePoints.length; i++) {
+        const s = sourcePoints[i];
+        const t = targetPoints[i];
+
+        const sx = s.x - sourceCentroid.x;
+        const sy = s.y - sourceCentroid.y;
+        const sz = s.z - sourceCentroid.z;
+
+        const tx = t.x - targetCentroid.x;
+        const ty = t.y - targetCentroid.y;
+        const tz = t.z - targetCentroid.z;
+
+        h[0][0] += sx * tx;
+        h[0][1] += sx * ty;
+        h[0][2] += sx * tz;
+        h[1][0] += sy * tx;
+        h[1][1] += sy * ty;
+        h[1][2] += sy * tz;
+        h[2][0] += sz * tx;
+        h[2][1] += sz * ty;
+        h[2][2] += sz * tz;
+    }
+
+    // Compute SVD of H using power iteration (simplified for 3x3)
+    // For robustness, we use a quaternion-based approach instead
+    // This is the Horn's method using quaternion
+    const n11 = h[0][0], n12 = h[0][1], n13 = h[0][2];
+    const n21 = h[1][0], n22 = h[1][1], n23 = h[1][2];
+    const n31 = h[2][0], n32 = h[2][1], n33 = h[2][2];
+
+    // Build the 4x4 matrix for quaternion-based solution
+    const n = [
+        [n11 + n22 + n33, n23 - n32, n31 - n13, n12 - n21],
+        [n23 - n32, n11 - n22 - n33, n12 + n21, n31 + n13],
+        [n31 - n13, n12 + n21, -n11 + n22 - n33, n23 + n32],
+        [n12 - n21, n31 + n13, n23 + n32, -n11 - n22 + n33]
+    ];
+
+    // Find largest eigenvalue/eigenvector using power iteration
+    let q = [1, 0, 0, 0]; // Initial quaternion guess
+    for (let iter = 0; iter < 50; iter++) {
+        // Multiply n * q
+        const newQ = [
+            n[0][0] * q[0] + n[0][1] * q[1] + n[0][2] * q[2] + n[0][3] * q[3],
+            n[1][0] * q[0] + n[1][1] * q[1] + n[1][2] * q[2] + n[1][3] * q[3],
+            n[2][0] * q[0] + n[2][1] * q[1] + n[2][2] * q[2] + n[2][3] * q[3],
+            n[3][0] * q[0] + n[3][1] * q[1] + n[3][2] * q[2] + n[3][3] * q[3]
+        ];
+
+        // Normalize
+        const len = Math.sqrt(newQ[0] * newQ[0] + newQ[1] * newQ[1] + newQ[2] * newQ[2] + newQ[3] * newQ[3]);
+        if (len < 1e-10) break;
+        q = [newQ[0] / len, newQ[1] / len, newQ[2] / len, newQ[3] / len];
+    }
+
+    // Convert quaternion to rotation matrix
+    const qw = q[0], qx = q[1], qy = q[2], qz = q[3];
+    const rotMatrix = new THREE.Matrix4();
+    rotMatrix.set(
+        1 - 2 * qy * qy - 2 * qz * qz, 2 * qx * qy - 2 * qz * qw, 2 * qx * qz + 2 * qy * qw, 0,
+        2 * qx * qy + 2 * qz * qw, 1 - 2 * qx * qx - 2 * qz * qz, 2 * qy * qz - 2 * qx * qw, 0,
+        2 * qx * qz - 2 * qy * qw, 2 * qy * qz + 2 * qx * qw, 1 - 2 * qx * qx - 2 * qy * qy, 0,
+        0, 0, 0, 1
+    );
+
+    return rotMatrix;
+}
+
+// ICP alignment function
+async function icpAlignObjects() {
+    if (!splatMesh || !modelGroup || modelGroup.children.length === 0) {
+        alert('Both splat and model must be loaded for ICP alignment');
+        return;
+    }
+
+    showLoading('Running ICP alignment...');
+
+    // Allow UI to update
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    try {
+        // Extract points
+        const splatPoints = extractSplatPositions(splatMesh, 3000);
+        const meshPoints = extractMeshVertices(modelGroup, 8000);
+
+        if (splatPoints.length < 10) {
+            hideLoading();
+            alert('Could not extract enough splat positions for ICP. The splat may not support position extraction.');
+            return;
+        }
+
+        if (meshPoints.length < 10) {
+            hideLoading();
+            alert('Could not extract enough mesh vertices for ICP.');
+            return;
+        }
+
+        console.log(`[ICP] Starting ICP with ${splatPoints.length} splat points and ${meshPoints.length} mesh points`);
+
+        // Build KD-tree from mesh points for fast nearest neighbor search
+        const kdTree = new KDTree([...meshPoints]);
+
+        // ICP parameters
+        const maxIterations = 50;
+        const convergenceThreshold = 1e-6;
+        let prevMeanError = Infinity;
+
+        // Working copy of splat points (we transform these during iteration)
+        let currentPoints = splatPoints.map(p => ({ x: p.x, y: p.y, z: p.z, index: p.index }));
+
+        // Cumulative transformation
+        let cumulativeMatrix = new THREE.Matrix4();
+
+        for (let iter = 0; iter < maxIterations; iter++) {
+            // Step 1: Find correspondences (nearest neighbors)
+            const correspondences = [];
+            let totalError = 0;
+
+            for (const srcPt of currentPoints) {
+                const nearest = kdTree.nearestNeighbor(srcPt);
+                if (nearest.point) {
+                    correspondences.push({
+                        source: srcPt,
+                        target: nearest.point,
+                        distSq: nearest.distSq
+                    });
+                    totalError += nearest.distSq;
+                }
+            }
+
+            const meanError = totalError / correspondences.length;
+            console.log(`[ICP] Iteration ${iter + 1}: Mean squared error = ${meanError.toFixed(6)}`);
+
+            // Check convergence
+            if (Math.abs(prevMeanError - meanError) < convergenceThreshold) {
+                console.log(`[ICP] Converged after ${iter + 1} iterations`);
+                break;
+            }
+            prevMeanError = meanError;
+
+            // Step 2: Compute optimal transformation
+            const sourceForAlign = correspondences.map(c => c.source);
+            const targetForAlign = correspondences.map(c => c.target);
+
+            const sourceCentroid = computeCentroid(sourceForAlign);
+            const targetCentroid = computeCentroid(targetForAlign);
+
+            // Compute rotation
+            const rotMatrix = computeOptimalRotation(sourceForAlign, targetForAlign, sourceCentroid, targetCentroid);
+
+            // Compute translation: t = targetCentroid - R * sourceCentroid
+            const rotatedSourceCentroid = new THREE.Vector3(sourceCentroid.x, sourceCentroid.y, sourceCentroid.z);
+            rotatedSourceCentroid.applyMatrix4(rotMatrix);
+
+            const translation = new THREE.Vector3(
+                targetCentroid.x - rotatedSourceCentroid.x,
+                targetCentroid.y - rotatedSourceCentroid.y,
+                targetCentroid.z - rotatedSourceCentroid.z
+            );
+
+            // Build transformation matrix: T = translate * rotate
+            const iterMatrix = new THREE.Matrix4();
+            iterMatrix.makeTranslation(translation.x, translation.y, translation.z);
+            iterMatrix.multiply(rotMatrix);
+
+            // Update cumulative transformation
+            cumulativeMatrix.premultiply(iterMatrix);
+
+            // Apply transformation to current points
+            for (const pt of currentPoints) {
+                const v = new THREE.Vector3(pt.x, pt.y, pt.z);
+                v.applyMatrix4(iterMatrix);
+                pt.x = v.x;
+                pt.y = v.y;
+                pt.z = v.z;
+            }
+
+            // Update loading text
+            loadingText.textContent = `ICP iteration ${iter + 1}/${maxIterations}...`;
+            await new Promise(resolve => setTimeout(resolve, 10)); // Allow UI update
+        }
+
+        // Apply cumulative transformation to the splat mesh
+        // We need to apply this as changes to position and rotation
+        const position = new THREE.Vector3();
+        const quaternion = new THREE.Quaternion();
+        const scale = new THREE.Vector3();
+
+        // Get current splat transform
+        splatMesh.updateMatrixWorld(true);
+
+        // Combine: newMatrix = cumulativeMatrix * currentMatrix
+        const newMatrix = new THREE.Matrix4();
+        newMatrix.copy(cumulativeMatrix);
+        newMatrix.multiply(splatMesh.matrix);
+
+        // Decompose the new matrix
+        newMatrix.decompose(position, quaternion, scale);
+
+        // Apply to splat mesh
+        splatMesh.position.copy(position);
+        splatMesh.quaternion.copy(quaternion);
+        splatMesh.scale.copy(scale);
+        splatMesh.updateMatrixWorld(true);
+
+        updateTransformInputs();
+        storeLastPositions();
+
+        console.log('[ICP] Alignment complete');
+        hideLoading();
+
+    } catch (error) {
+        console.error('[ICP] Error during ICP alignment:', error);
+        hideLoading();
+        alert('Error during ICP alignment: ' + error.message);
+    }
 }
 
 // Setup collapsible sections
