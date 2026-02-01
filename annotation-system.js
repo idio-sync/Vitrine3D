@@ -58,7 +58,6 @@ export class AnnotationSystem {
 
         // Bind methods
         this._onClick = this._onClick.bind(this);
-        this._onMouseMove = this._onMouseMove.bind(this);
 
         this._createMarkerContainer();
     }
