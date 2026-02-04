@@ -4,25 +4,25 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { SplatMesh } from '@sparkjsdev/spark';
-import { ArchiveLoader, isArchiveFile } from './archive-loader.js';
-import { AnnotationSystem } from './annotation-system.js';
-import { ArchiveCreator, captureScreenshot } from './archive-creator.js';
-import { CAMERA, TIMING } from './constants.js';
-import { Logger, notify, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject } from './utilities.js';
-import { SceneManager } from './scene-manager.js';
+import { ArchiveLoader, isArchiveFile } from './modules/archive-loader.js';
+import { AnnotationSystem } from './modules/annotation-system.js';
+import { ArchiveCreator, captureScreenshot } from './modules/archive-creator.js';
+import { CAMERA, TIMING } from './modules/constants.js';
+import { Logger, notify, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject } from './modules/utilities.js';
+import { SceneManager } from './modules/scene-manager.js';
 import {
     icpAlignObjects as icpAlignObjectsHandler,
     autoAlignObjects as autoAlignObjectsHandler,
     fitToView as fitToViewHandler,
     resetAlignment as resetAlignmentHandler,
     resetCamera as resetCameraHandler
-} from './alignment.js';
+} from './modules/alignment.js';
 import {
     showLoading,
     hideLoading,
     updateProgress,
     addListener
-} from './ui-controller.js';
+} from './modules/ui-controller.js';
 import {
     formatFileSize,
     switchEditTab,
@@ -30,17 +30,17 @@ import {
     collectMetadata,
     setupLicenseField,
     hideMetadataSidebar
-} from './metadata-manager.js';
+} from './modules/metadata-manager.js';
 import {
     loadSplatFromFile as loadSplatFromFileHandler,
     loadSplatFromUrl as loadSplatFromUrlHandler,
     loadModelFromFile as loadModelFromFileHandler,
     loadModelFromUrl as loadModelFromUrlHandler
-} from './file-handlers.js';
+} from './modules/file-handlers.js';
 import {
     initShareDialog,
     showShareDialog
-} from './share-dialog.js';
+} from './modules/share-dialog.js';
 
 // Create logger for this module
 const log = Logger.getLogger('main.js');
@@ -270,11 +270,6 @@ function createAlignmentDeps() {
 // Initialize the scene
 function init() {
     log.info(' init() starting...');
-
-    // Debug config
-    console.log('[INIT] Config object:', config);
-    console.log('[INIT] showToolbar:', config.showToolbar);
-    console.log('[INIT] window.APP_CONFIG:', window.APP_CONFIG);
 
     // Verify required DOM elements
     if (!canvas) {
@@ -2712,67 +2707,43 @@ function applyControlsMode() {
 
 // Ensure toolbar visibility is maintained (safeguard against race conditions)
 function ensureToolbarVisibility() {
-    console.log('[TOOLBAR] ensureToolbarVisibility called, config.showToolbar:', config.showToolbar);
-
     // Only hide toolbar if explicitly set to false (not undefined)
     if (config.showToolbar === false) {
-        console.log('[TOOLBAR] Toolbar intentionally hidden via URL parameter');
         return; // Toolbar intentionally hidden via URL parameter
     }
 
     const toolbar = document.getElementById('left-toolbar');
-    console.log('[TOOLBAR] Toolbar element:', toolbar);
-
     if (!toolbar) {
-        console.error('[TOOLBAR] Toolbar element not found!');
         return;
     }
-
-    // Get current styles
-    const computedDisplay = window.getComputedStyle(toolbar).display;
-    const inlineDisplay = toolbar.style.display;
-    console.log('[TOOLBAR] Current state - computed:', computedDisplay, 'inline:', inlineDisplay);
 
     // Force toolbar to be visible
     toolbar.style.display = 'flex';
     toolbar.style.visibility = 'visible';
-    toolbar.style.opacity = '1';
-    toolbar.style.zIndex = '10000'; // Very high z-index
-    console.log('[TOOLBAR] Forced toolbar visible');
+    toolbar.style.zIndex = '10000';
 
     // Re-check after file loading completes (delayed checks)
     setTimeout(() => {
         const tb = document.getElementById('left-toolbar');
-        if (tb) {
-            const display = window.getComputedStyle(tb).display;
-            console.log('[TOOLBAR] After 1s - display:', display, 'boundingRect:', tb.getBoundingClientRect());
-            if (config.showToolbar !== false) {
-                tb.style.display = 'flex';
-                tb.style.visibility = 'visible';
-                tb.style.zIndex = '10000';
-            }
+        if (tb && config.showToolbar !== false) {
+            tb.style.display = 'flex';
+            tb.style.visibility = 'visible';
+            tb.style.zIndex = '10000';
         }
     }, 1000);
 
     setTimeout(() => {
         const tb = document.getElementById('left-toolbar');
-        if (tb) {
-            const display = window.getComputedStyle(tb).display;
-            const rect = tb.getBoundingClientRect();
-            console.log('[TOOLBAR] After 3s - display:', display, 'rect:', rect);
-            if (config.showToolbar !== false) {
-                tb.style.display = 'flex';
-                tb.style.visibility = 'visible';
-                tb.style.zIndex = '10000';
-            }
+        if (tb && config.showToolbar !== false) {
+            tb.style.display = 'flex';
+            tb.style.visibility = 'visible';
+            tb.style.zIndex = '10000';
         }
     }, 3000);
 }
 
 // Apply viewer mode settings (toolbar visibility, sidebar state)
 function applyViewerModeSettings() {
-    console.log('[TOOLBAR] applyViewerModeSettings called, config.showToolbar:', config.showToolbar);
-
     // Apply toolbar visibility - only hide if explicitly set to false
     if (config.showToolbar === false) {
         const toolbar = document.getElementById('left-toolbar');
@@ -2780,8 +2751,6 @@ function applyViewerModeSettings() {
             toolbar.style.display = 'none';
             log.info('Toolbar hidden via URL parameter');
         }
-    } else {
-        console.log('[TOOLBAR] Toolbar should be visible (showToolbar is not explicitly false)');
     }
 
     // Apply sidebar state (after a short delay to ensure DOM is ready)
