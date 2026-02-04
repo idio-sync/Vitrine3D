@@ -27,6 +27,12 @@ import {
     resetCamera as resetCameraModule,
     generateShareParams
 } from './alignment.js';
+import {
+    showLoading,
+    hideLoading,
+    updateProgress,
+    addListener
+} from './ui-controller.js';
 
 // Create logger for this module
 const log = Logger.getLogger('main.js');
@@ -383,18 +389,6 @@ function onKeyDown(event) {
         case 'escape':
             setSelectedObject('none');
             break;
-    }
-}
-
-// Helper function to safely add event listeners with null checks
-function addListener(id, event, handler) {
-    const el = document.getElementById(id);
-    if (el) {
-        el.addEventListener(event, handler);
-        return true;
-    } else {
-        log.warn(`Element not found: ${id}`);
-        return false;
     }
 }
 
@@ -899,53 +893,6 @@ function updateTransformInputs() {
         setInputValue('model-scale', modelGroup.scale.x);
         setTextContent('model-scale-value', modelGroup.scale.x.toFixed(1));
     }
-}
-
-function showLoading(text = 'Loading...', showProgress = false) {
-    loadingText.textContent = text;
-    loadingOverlay.classList.remove('hidden');
-
-    // Show/hide progress bar elements
-    const progressContainer = document.getElementById('loading-progress-container');
-    const progressText = document.getElementById('loading-progress-text');
-    if (progressContainer && progressText) {
-        if (showProgress) {
-            progressContainer.classList.remove('hidden');
-            progressText.classList.remove('hidden');
-            updateProgress(0);
-        } else {
-            progressContainer.classList.add('hidden');
-            progressText.classList.add('hidden');
-        }
-    }
-}
-
-function updateProgress(percent, stage = null) {
-    const progressBar = document.getElementById('loading-progress-bar');
-    const progressText = document.getElementById('loading-progress-text');
-    const loadingTextEl = document.getElementById('loading-text');
-
-    if (progressBar) {
-        progressBar.style.width = `${percent}%`;
-    }
-    if (progressText) {
-        progressText.textContent = `${Math.round(percent)}%`;
-    }
-    if (stage && loadingTextEl) {
-        loadingTextEl.textContent = stage;
-    }
-}
-
-function hideLoading() {
-    loadingOverlay.classList.add('hidden');
-
-    // Reset progress bar
-    const progressContainer = document.getElementById('loading-progress-container');
-    const progressText = document.getElementById('loading-progress-text');
-    const progressBar = document.getElementById('loading-progress-bar');
-    if (progressContainer) progressContainer.classList.add('hidden');
-    if (progressText) progressText.classList.add('hidden');
-    if (progressBar) progressBar.style.width = '0%';
 }
 
 // Handle loading splat from URL via prompt
@@ -3626,7 +3573,7 @@ async function icpAlignObjects() {
             }
 
             // Update loading text
-            loadingText.textContent = `ICP iteration ${iter + 1}/${maxIterations}...`;
+            updateProgress((iter + 1) / maxIterations * 100, `ICP iteration ${iter + 1}/${maxIterations}...`);
             await new Promise(resolve => setTimeout(resolve, 10)); // Allow UI update
         }
 
