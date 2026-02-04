@@ -586,17 +586,10 @@ input[type="range"]::-webkit-slider-thumb:hover {
     top: 15px;
     left: 15px;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 8px;
     z-index: 1000;
     pointer-events: auto;
-    transition: left 0.3s ease;
-}
-
-/* Move toolbar when controls panel is open */
-#controls-panel:not(.panel-hidden) ~ #viewer-container #left-toolbar,
-body:has(#controls-panel:not(.panel-hidden)) #left-toolbar {
-    left: 295px;
 }
 
 /* Toggle controls button */
