@@ -147,6 +147,61 @@ export class ArchiveCreator {
                 location: "",
                 convention_hints: []
             },
+            quality_metrics: {
+                tier: "",
+                accuracy_grade: "",
+                capture_resolution: {
+                    value: null,
+                    unit: "mm",
+                    type: "GSD"
+                },
+                alignment_error: {
+                    value: null,
+                    unit: "mm",
+                    method: "RMSE"
+                },
+                scale_verification: ""
+            },
+            archival_record: {
+                standard: "",
+                title: "",
+                alternate_titles: [],
+                ids: {
+                    accession_number: "",
+                    siris_id: "",
+                    uri: ""
+                },
+                creation: {
+                    creator: "",
+                    date_created: "",
+                    period: "",
+                    culture: ""
+                },
+                physical_description: {
+                    medium: "",
+                    dimensions: {
+                        height: "",
+                        width: "",
+                        depth: ""
+                    },
+                    condition: ""
+                },
+                provenance: "",
+                rights: {
+                    copyright_status: "",
+                    credit_line: ""
+                },
+                context: {
+                    description: "",
+                    location_history: ""
+                }
+            },
+            material_standard: {
+                workflow: "",
+                occlusion_packed: false,
+                color_space: "",
+                normal_space: ""
+            },
             data_entries: {},
             annotations: [],
             _meta: {}
@@ -220,6 +275,137 @@ export class ArchiveCreator {
                 ? conventions
                 : conventions.split(',').map(c => c.trim()).filter(c => c);
         }
+    }
+
+    /**
+     * Set quality metrics
+     * @param {Object} metrics - Quality metrics from form
+     */
+    setQualityMetrics(metrics) {
+        if (!metrics) return;
+
+        if (metrics.tier !== undefined) this.manifest.quality_metrics.tier = metrics.tier;
+        if (metrics.accuracyGrade !== undefined) this.manifest.quality_metrics.accuracy_grade = metrics.accuracyGrade;
+        if (metrics.scaleVerification !== undefined) this.manifest.quality_metrics.scale_verification = metrics.scaleVerification;
+
+        if (metrics.captureResolution) {
+            if (metrics.captureResolution.value !== undefined) {
+                this.manifest.quality_metrics.capture_resolution.value = metrics.captureResolution.value;
+            }
+            if (metrics.captureResolution.unit !== undefined) {
+                this.manifest.quality_metrics.capture_resolution.unit = metrics.captureResolution.unit;
+            }
+            if (metrics.captureResolution.type !== undefined) {
+                this.manifest.quality_metrics.capture_resolution.type = metrics.captureResolution.type;
+            }
+        }
+
+        if (metrics.alignmentError) {
+            if (metrics.alignmentError.value !== undefined) {
+                this.manifest.quality_metrics.alignment_error.value = metrics.alignmentError.value;
+            }
+            if (metrics.alignmentError.unit !== undefined) {
+                this.manifest.quality_metrics.alignment_error.unit = metrics.alignmentError.unit;
+            }
+            if (metrics.alignmentError.method !== undefined) {
+                this.manifest.quality_metrics.alignment_error.method = metrics.alignmentError.method;
+            }
+        }
+    }
+
+    /**
+     * Set archival record (Dublin Core)
+     * @param {Object} record - Archival record from form
+     */
+    setArchivalRecord(record) {
+        if (!record) return;
+
+        if (record.standard !== undefined) this.manifest.archival_record.standard = record.standard;
+        if (record.title !== undefined) this.manifest.archival_record.title = record.title;
+        if (record.alternateTitles !== undefined) {
+            this.manifest.archival_record.alternate_titles = Array.isArray(record.alternateTitles)
+                ? record.alternateTitles
+                : [];
+        }
+        if (record.provenance !== undefined) this.manifest.archival_record.provenance = record.provenance;
+
+        if (record.ids) {
+            if (record.ids.accessionNumber !== undefined) {
+                this.manifest.archival_record.ids.accession_number = record.ids.accessionNumber;
+            }
+            if (record.ids.sirisId !== undefined) {
+                this.manifest.archival_record.ids.siris_id = record.ids.sirisId;
+            }
+            if (record.ids.uri !== undefined) {
+                this.manifest.archival_record.ids.uri = record.ids.uri;
+            }
+        }
+
+        if (record.creation) {
+            if (record.creation.creator !== undefined) {
+                this.manifest.archival_record.creation.creator = record.creation.creator;
+            }
+            if (record.creation.dateCreated !== undefined) {
+                this.manifest.archival_record.creation.date_created = record.creation.dateCreated;
+            }
+            if (record.creation.period !== undefined) {
+                this.manifest.archival_record.creation.period = record.creation.period;
+            }
+            if (record.creation.culture !== undefined) {
+                this.manifest.archival_record.creation.culture = record.creation.culture;
+            }
+        }
+
+        if (record.physicalDescription) {
+            if (record.physicalDescription.medium !== undefined) {
+                this.manifest.archival_record.physical_description.medium = record.physicalDescription.medium;
+            }
+            if (record.physicalDescription.condition !== undefined) {
+                this.manifest.archival_record.physical_description.condition = record.physicalDescription.condition;
+            }
+            if (record.physicalDescription.dimensions) {
+                if (record.physicalDescription.dimensions.height !== undefined) {
+                    this.manifest.archival_record.physical_description.dimensions.height = record.physicalDescription.dimensions.height;
+                }
+                if (record.physicalDescription.dimensions.width !== undefined) {
+                    this.manifest.archival_record.physical_description.dimensions.width = record.physicalDescription.dimensions.width;
+                }
+                if (record.physicalDescription.dimensions.depth !== undefined) {
+                    this.manifest.archival_record.physical_description.dimensions.depth = record.physicalDescription.dimensions.depth;
+                }
+            }
+        }
+
+        if (record.rights) {
+            if (record.rights.copyrightStatus !== undefined) {
+                this.manifest.archival_record.rights.copyright_status = record.rights.copyrightStatus;
+            }
+            if (record.rights.creditLine !== undefined) {
+                this.manifest.archival_record.rights.credit_line = record.rights.creditLine;
+            }
+        }
+
+        if (record.context) {
+            if (record.context.description !== undefined) {
+                this.manifest.archival_record.context.description = record.context.description;
+            }
+            if (record.context.locationHistory !== undefined) {
+                this.manifest.archival_record.context.location_history = record.context.locationHistory;
+            }
+        }
+    }
+
+    /**
+     * Set material standard (PBR)
+     * @param {Object} material - Material standard from form
+     */
+    setMaterialStandard(material) {
+        if (!material) return;
+
+        if (material.workflow !== undefined) this.manifest.material_standard.workflow = material.workflow;
+        if (material.occlusionPacked !== undefined) this.manifest.material_standard.occlusion_packed = material.occlusionPacked;
+        if (material.colorSpace !== undefined) this.manifest.material_standard.color_space = material.colorSpace;
+        if (material.normalSpace !== undefined) this.manifest.material_standard.normal_space = material.normalSpace;
     }
 
     /**
@@ -482,6 +668,21 @@ export class ArchiveCreator {
             this.setProvenance(metadata.provenance);
         }
 
+        // Quality Metrics
+        if (metadata.qualityMetrics) {
+            this.setQualityMetrics(metadata.qualityMetrics);
+        }
+
+        // Archival Record (Dublin Core)
+        if (metadata.archivalRecord) {
+            this.setArchivalRecord(metadata.archivalRecord);
+        }
+
+        // Material Standard (PBR)
+        if (metadata.materialStandard) {
+            this.setMaterialStandard(metadata.materialStandard);
+        }
+
         // Asset metadata
         if (metadata.splatMetadata) {
             this.updateSceneMetadata(0, metadata.splatMetadata);
@@ -495,7 +696,7 @@ export class ArchiveCreator {
             this.setCustomFields(metadata.customFields);
         }
 
-        // Quality stats
+        // Quality stats (read-only computed stats)
         if (metadata.qualityStats) {
             this.setQualityStats(metadata.qualityStats);
         }

@@ -1274,6 +1274,56 @@ input[type="range"]::-webkit-slider-thumb:hover {
     color: #666;
 }
 
+/* Inline fields (for Quality Metrics capture resolution / alignment error) */
+.metadata-field.inline-fields {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.metadata-field.inline-fields .field-group {
+    flex: 1;
+    min-width: 0;
+}
+
+.metadata-field.inline-fields .field-group label {
+    font-size: 0.7rem;
+    margin-bottom: 4px;
+}
+
+.metadata-field.inline-fields input,
+.metadata-field.inline-fields select {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+}
+
+/* Dimension inputs (for Archival Record dimensions) */
+.dimension-inputs {
+    display: flex;
+    gap: 8px;
+}
+
+.dimension-inputs input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    background: #2a2a3a;
+    border: 1px solid #3a3a5a;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 0.85rem;
+}
+
+.dimension-inputs input:focus {
+    outline: none;
+    border-color: #4ecdc4;
+}
+
+.dimension-inputs input::placeholder {
+    color: #666;
+}
+
 /* Asset Sections */
 .asset-section {
     margin-bottom: 20px;

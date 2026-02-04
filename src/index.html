@@ -176,8 +176,10 @@
                 <div class="edit-tabs">
                     <button class="edit-tab active" data-tab="project">Project</button>
                     <button class="edit-tab" data-tab="provenance">Provenance</button>
-                    <button class="edit-tab" data-tab="assets">Assets</button>
+                    <button class="edit-tab" data-tab="archival">Archival</button>
                     <button class="edit-tab" data-tab="quality">Quality</button>
+                    <button class="edit-tab" data-tab="material">Material</button>
+                    <button class="edit-tab" data-tab="assets">Assets</button>
                     <button class="edit-tab" data-tab="integrity">Integrity</button>
                 </div>
 
@@ -245,6 +247,106 @@
                     </button>
                 </div>
 
+                <!-- Archival Record Tab (Dublin Core) -->
+                <div class="edit-tab-content" id="edit-tab-archival">
+                    <div class="metadata-field">
+                        <label for="meta-archival-standard">Metadata Standard</label>
+                        <input type="text" id="meta-archival-standard" value="Smithsonian EDAN / Dublin Core" placeholder="Dublin Core, etc.">
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-title">Object Title</label>
+                        <input type="text" id="meta-archival-title" placeholder="Official title of the object">
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-alt-titles">Alternate Titles</label>
+                        <input type="text" id="meta-archival-alt-titles" placeholder="Comma-separated list">
+                        <span class="field-hint">Other names this object is known by</span>
+                    </div>
+
+                    <div class="subsection-header">Identifiers</div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-accession">Accession Number</label>
+                        <input type="text" id="meta-archival-accession" placeholder="e.g., 2023.001.001">
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-siris">SIRIS ID</label>
+                        <input type="text" id="meta-archival-siris" placeholder="Smithsonian SIRIS identifier">
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-uri">URI</label>
+                        <input type="text" id="meta-archival-uri" placeholder="Permanent identifier URL">
+                    </div>
+
+                    <div class="subsection-header">Creation Information</div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-creator">Creator</label>
+                        <input type="text" id="meta-archival-creator" placeholder="Original creator/artist">
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-date-created">Date Created</label>
+                        <input type="text" id="meta-archival-date-created" placeholder="e.g., ca. 1850, 15th century">
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-period">Period</label>
+                        <input type="text" id="meta-archival-period" placeholder="e.g., Renaissance, Ming Dynasty">
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-culture">Culture</label>
+                        <input type="text" id="meta-archival-culture" placeholder="e.g., Japanese, Mayan">
+                    </div>
+
+                    <div class="subsection-header">Physical Description</div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-medium">Medium</label>
+                        <input type="text" id="meta-archival-medium" placeholder="e.g., Bronze, Oil on canvas">
+                    </div>
+                    <div class="metadata-field">
+                        <label>Dimensions</label>
+                        <div class="dimension-inputs">
+                            <input type="text" id="meta-archival-dim-height" placeholder="Height">
+                            <input type="text" id="meta-archival-dim-width" placeholder="Width">
+                            <input type="text" id="meta-archival-dim-depth" placeholder="Depth">
+                        </div>
+                        <span class="field-hint">Include units (e.g., 25 cm, 10 in)</span>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-condition">Condition</label>
+                        <input type="text" id="meta-archival-condition" placeholder="e.g., Good, Minor wear">
+                    </div>
+
+                    <div class="subsection-header">Provenance & Rights</div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-provenance">Provenance</label>
+                        <textarea id="meta-archival-provenance" rows="3" placeholder="Ownership and custody history..."></textarea>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-copyright">Copyright Status</label>
+                        <select id="meta-archival-copyright">
+                            <option value="">Not specified</option>
+                            <option value="Public Domain">Public Domain</option>
+                            <option value="CC0">CC0</option>
+                            <option value="CC-BY">CC-BY</option>
+                            <option value="CC-BY-SA">CC-BY-SA</option>
+                            <option value="CC-BY-NC">CC-BY-NC</option>
+                            <option value="All Rights Reserved">All Rights Reserved</option>
+                        </select>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-credit">Credit Line</label>
+                        <input type="text" id="meta-archival-credit" placeholder="e.g., Gift of John Doe, 2023">
+                    </div>
+
+                    <div class="subsection-header">Context</div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-context-desc">Description</label>
+                        <textarea id="meta-archival-context-desc" rows="3" placeholder="Historical and cultural context..."></textarea>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-archival-location-history">Location History</label>
+                        <input type="text" id="meta-archival-location-history" placeholder="Previous locations/exhibitions">
+                    </div>
+                </div>
+
                 <!-- Assets Tab -->
                 <div class="edit-tab-content" id="edit-tab-assets">
                     <div class="asset-section" id="splat-asset-section">
@@ -287,6 +389,75 @@
 
                 <!-- Quality Tab -->
                 <div class="edit-tab-content" id="edit-tab-quality">
+                    <div class="metadata-field">
+                        <label for="meta-quality-tier">Quality Tier</label>
+                        <select id="meta-quality-tier">
+                            <option value="">Not specified</option>
+                            <option value="Tier 1 - Metrology">Tier 1 - Metrology</option>
+                            <option value="Tier 2 - Reference">Tier 2 - Reference</option>
+                            <option value="Tier 3 - Visualization">Tier 3 - Visualization</option>
+                        </select>
+                        <span class="field-hint">Tier 1: highest precision, Tier 3: display-optimized</span>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-quality-accuracy">Accuracy Grade</label>
+                        <select id="meta-quality-accuracy">
+                            <option value="">Not specified</option>
+                            <option value="A+">A+</option>
+                            <option value="A">A</option>
+                            <option value="B+">B+</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="N/A">N/A</option>
+                        </select>
+                    </div>
+
+                    <div class="subsection-header">Capture Resolution</div>
+                    <div class="metadata-field inline-fields">
+                        <div class="field-group">
+                            <label for="meta-quality-res-value">Value</label>
+                            <input type="number" id="meta-quality-res-value" step="0.01" placeholder="1.0">
+                        </div>
+                        <div class="field-group">
+                            <label for="meta-quality-res-unit">Unit</label>
+                            <select id="meta-quality-res-unit">
+                                <option value="mm">mm</option>
+                                <option value="cm">cm</option>
+                                <option value="m">m</option>
+                            </select>
+                        </div>
+                        <div class="field-group">
+                            <label for="meta-quality-res-type">Type</label>
+                            <input type="text" id="meta-quality-res-type" value="GSD" placeholder="GSD">
+                        </div>
+                    </div>
+
+                    <div class="subsection-header">Alignment Error</div>
+                    <div class="metadata-field inline-fields">
+                        <div class="field-group">
+                            <label for="meta-quality-align-value">Value</label>
+                            <input type="number" id="meta-quality-align-value" step="0.01" placeholder="0.5">
+                        </div>
+                        <div class="field-group">
+                            <label for="meta-quality-align-unit">Unit</label>
+                            <select id="meta-quality-align-unit">
+                                <option value="mm">mm</option>
+                                <option value="cm">cm</option>
+                                <option value="m">m</option>
+                            </select>
+                        </div>
+                        <div class="field-group">
+                            <label for="meta-quality-align-method">Method</label>
+                            <input type="text" id="meta-quality-align-method" value="RMSE" placeholder="RMSE">
+                        </div>
+                    </div>
+
+                    <div class="metadata-field">
+                        <label for="meta-quality-scale-verify">Scale Verification</label>
+                        <input type="text" id="meta-quality-scale-verify" placeholder="e.g., Reference object measured">
+                    </div>
+
+                    <div class="subsection-header">Asset Statistics (Read-only)</div>
                     <div class="quality-stats">
                         <div class="stat-row">
                             <span class="stat-label">Splat Count</span>
@@ -319,6 +490,40 @@
                             <span class="stat-label">Est. Archive Size</span>
                             <span class="stat-value" id="meta-archive-size">-</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Material Standard Tab -->
+                <div class="edit-tab-content" id="edit-tab-material">
+                    <div class="metadata-field">
+                        <label for="meta-material-workflow">PBR Workflow</label>
+                        <select id="meta-material-workflow">
+                            <option value="">Not specified</option>
+                            <option value="Metal/Roughness">Metal/Roughness</option>
+                            <option value="Specular/Glossiness">Specular/Glossiness</option>
+                        </select>
+                        <span class="field-hint">Physically-based rendering workflow used</span>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="meta-material-occlusion-packed">
+                        <label for="meta-material-occlusion-packed">Occlusion Packed (R=AO, G=Roughness, B=Metalness)</label>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-material-colorspace">Color Space</label>
+                        <select id="meta-material-colorspace">
+                            <option value="">Not specified</option>
+                            <option value="Linear sRGB">Linear sRGB</option>
+                            <option value="sRGB">sRGB</option>
+                            <option value="ACEScg">ACEScg</option>
+                        </select>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-material-normalspace">Normal Map Space</label>
+                        <select id="meta-material-normalspace">
+                            <option value="">Not specified</option>
+                            <option value="OpenGL">OpenGL (+Y up)</option>
+                            <option value="DirectX">DirectX (-Y up)</option>
+                        </select>
                     </div>
                 </div>
 
