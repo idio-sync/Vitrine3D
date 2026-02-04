@@ -11,6 +11,22 @@ import { AnnotationSystem } from './annotation-system.js';
 import { ArchiveCreator, captureScreenshot } from './archive-creator.js';
 import { CAMERA, ORBIT_CONTROLS, RENDERER, LIGHTING, GRID, COLORS, TIMING, MATERIAL } from './constants.js';
 import { Logger, notify, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject } from './utilities.js';
+import {
+    KDTree,
+    extractSplatPositions,
+    extractMeshVertices,
+    computeCentroid,
+    computeOptimalRotation,
+    computeSplatBoundsFromPositions,
+    icpAlignObjects as icpAlignObjectsModule,
+    autoAlignObjects as autoAlignObjectsModule,
+    fitToView as fitToViewModule,
+    collectAlignmentData,
+    applyAlignmentData as applyAlignmentDataModule,
+    resetAlignment as resetAlignmentModule,
+    resetCamera as resetCameraModule,
+    generateShareParams
+} from './alignment.js';
 
 // Create logger for this module
 const log = Logger.getLogger('main.js');
@@ -3476,322 +3492,12 @@ function loadOBJFromUrl(url) {
 }
 
 // ============================================================
-// Helper function to compute splat bounds from actual positions
+// Alignment utilities imported from alignment.js:
+// - KDTree (class)
+// - extractSplatPositions, extractMeshVertices
+// - computeCentroid, computeOptimalRotation
+// - computeSplatBoundsFromPositions
 // ============================================================
-
-function computeSplatBoundsFromPositions(splatMeshObj) {
-    const bounds = {
-        min: new THREE.Vector3(Infinity, Infinity, Infinity),
-        max: new THREE.Vector3(-Infinity, -Infinity, -Infinity),
-        center: new THREE.Vector3(),
-        found: false
-    };
-
-    // Get splat's world matrix
-    splatMeshObj.updateMatrixWorld(true);
-    const worldMatrix = splatMeshObj.matrixWorld;
-
-    // Try packedSplats API first
-    if (splatMeshObj.packedSplats && typeof splatMeshObj.packedSplats.forEachSplat === 'function') {
-        const splatCount = splatMeshObj.packedSplats.splatCount || 0;
-        if (splatCount > 0) {
-            let count = 0;
-            const maxSamples = Math.min(splatCount, 1000); // Sample up to 1000 points for speed
-            const stride = Math.max(1, Math.floor(splatCount / maxSamples));
-
-            splatMeshObj.packedSplats.forEachSplat((index, center) => {
-                if (index % stride === 0) {
-                    const worldPos = new THREE.Vector3(center.x, center.y, center.z);
-                    worldPos.applyMatrix4(worldMatrix);
-                    bounds.min.min(worldPos);
-                    bounds.max.max(worldPos);
-                    count++;
-                }
-            });
-
-            if (count > 0) {
-                bounds.center.addVectors(bounds.min, bounds.max).multiplyScalar(0.5);
-                bounds.found = true;
-                log.debug(`[SplatBounds] Computed from ${count} sampled positions`);
-            }
-        }
-    }
-
-    return bounds;
-}
-
-// ============================================================
-// KD-Tree Implementation for efficient nearest neighbor search
-// ============================================================
-
-class KDTree {
-    constructor(points) {
-        // points is an array of {x, y, z, index}
-        this.root = this.buildTree(points, 0);
-    }
-
-    buildTree(points, depth) {
-        if (points.length === 0) return null;
-
-        const axis = depth % 3; // 0=x, 1=y, 2=z
-        const axisKey = ['x', 'y', 'z'][axis];
-
-        // Sort points by the current axis
-        points.sort((a, b) => a[axisKey] - b[axisKey]);
-
-        const median = Math.floor(points.length / 2);
-
-        return {
-            point: points[median],
-            axis: axis,
-            left: this.buildTree(points.slice(0, median), depth + 1),
-            right: this.buildTree(points.slice(median + 1), depth + 1)
-        };
-    }
-
-    // Find nearest neighbor to target point
-    nearestNeighbor(target) {
-        let best = { point: null, distSq: Infinity };
-        this.searchNearest(this.root, target, best);
-        return best;
-    }
-
-    searchNearest(node, target, best) {
-        if (node === null) return;
-
-        const dx = target.x - node.point.x;
-        const dy = target.y - node.point.y;
-        const dz = target.z - node.point.z;
-        const distSq = dx * dx + dy * dy + dz * dz;
-
-        if (distSq < best.distSq) {
-            best.point = node.point;
-            best.distSq = distSq;
-        }
-
-        const axisKey = ['x', 'y', 'z'][node.axis];
-        const diff = target[axisKey] - node.point[axisKey];
-
-        // Search the closer side first
-        const first = diff < 0 ? node.left : node.right;
-        const second = diff < 0 ? node.right : node.left;
-
-        this.searchNearest(first, target, best);
-
-        // Only search the other side if it could contain a closer point
-        if (diff * diff < best.distSq) {
-            this.searchNearest(second, target, best);
-        }
-    }
-}
-
-// ============================================================
-// ICP (Iterative Closest Point) Alignment
-// ============================================================
-
-// Extract positions from splat mesh (in world space)
-function extractSplatPositions(splatMeshObj, maxPoints = 5000) {
-    const positions = [];
-
-    // Get splat's world matrix for transforming local positions to world space
-    splatMeshObj.updateMatrixWorld(true);
-    const worldMatrix = splatMeshObj.matrixWorld;
-
-    // Debug: log available properties
-    log.debug('[extractSplatPositions] Checking available APIs...');
-    log.debug('[extractSplatPositions] packedSplats:', !!splatMeshObj.packedSplats);
-    log.debug('[extractSplatPositions] geometry:', !!splatMeshObj.geometry);
-
-    // Try to access splat positions via Spark library's packedSplats API
-    if (splatMeshObj.packedSplats && typeof splatMeshObj.packedSplats.forEachSplat === 'function') {
-        let count = 0;
-        const splatCount = splatMeshObj.packedSplats.splatCount || 0;
-        log.debug('[extractSplatPositions] splatCount:', splatCount);
-
-        if (splatCount === 0) {
-            log.warn('[extractSplatPositions] splatCount is 0, splat may still be loading');
-        }
-
-        const stride = Math.max(1, Math.floor(splatCount / maxPoints));
-
-        try {
-            splatMeshObj.packedSplats.forEachSplat((index, center) => {
-                if (index % stride === 0 && count < maxPoints) {
-                    // center is a reused Vector3, so clone and transform to world space
-                    const worldPos = new THREE.Vector3(center.x, center.y, center.z);
-                    worldPos.applyMatrix4(worldMatrix);
-                    positions.push({
-                        x: worldPos.x,
-                        y: worldPos.y,
-                        z: worldPos.z,
-                        index: index
-                    });
-                    count++;
-                }
-            });
-        } catch (e) {
-            log.error('[extractSplatPositions] Error in forEachSplat:', e);
-        }
-        log.debug(`[extractSplatPositions] Extracted ${positions.length} splat positions via forEachSplat (world space)`);
-    } else if (splatMeshObj.geometry && splatMeshObj.geometry.attributes.position) {
-        // Fallback: try to read from geometry
-        const posAttr = splatMeshObj.geometry.attributes.position;
-        log.debug('[extractSplatPositions] geometry.position.count:', posAttr.count);
-        const stride = Math.max(1, Math.floor(posAttr.count / maxPoints));
-        for (let i = 0; i < posAttr.count && positions.length < maxPoints; i += stride) {
-            const worldPos = new THREE.Vector3(
-                posAttr.getX(i),
-                posAttr.getY(i),
-                posAttr.getZ(i)
-            );
-            worldPos.applyMatrix4(worldMatrix);
-            positions.push({
-                x: worldPos.x,
-                y: worldPos.y,
-                z: worldPos.z,
-                index: i
-            });
-        }
-        log.debug(`[extractSplatPositions] Extracted ${positions.length} splat positions from geometry (world space)`);
-    } else {
-        log.warn('[extractSplatPositions] Could not find splat position data');
-        log.debug('[extractSplatPositions] Available splatMesh properties:', Object.keys(splatMeshObj));
-        if (splatMeshObj.packedSplats) {
-            log.debug('[extractSplatPositions] Available packedSplats properties:', Object.keys(splatMeshObj.packedSplats));
-        }
-    }
-
-    return positions;
-}
-
-// Extract vertex positions from model mesh
-function extractMeshVertices(modelGroupObj, maxPoints = 10000) {
-    const positions = [];
-    const allVertices = [];
-
-    // Collect all vertices from all meshes
-    modelGroupObj.traverse((child) => {
-        if (child.isMesh && child.geometry) {
-            const geo = child.geometry;
-            const posAttr = geo.attributes.position;
-            if (!posAttr) return;
-
-            // Get world matrix for this mesh
-            child.updateMatrixWorld(true);
-            const matrix = child.matrixWorld;
-
-            for (let i = 0; i < posAttr.count; i++) {
-                const v = new THREE.Vector3(
-                    posAttr.getX(i),
-                    posAttr.getY(i),
-                    posAttr.getZ(i)
-                );
-                v.applyMatrix4(matrix);
-                allVertices.push({ x: v.x, y: v.y, z: v.z, index: allVertices.length });
-            }
-        }
-    });
-
-    // Subsample if too many vertices
-    const stride = Math.max(1, Math.floor(allVertices.length / maxPoints));
-    for (let i = 0; i < allVertices.length && positions.length < maxPoints; i += stride) {
-        positions.push(allVertices[i]);
-    }
-
-    log.debug(`[ICP] Extracted ${positions.length} mesh vertices (from ${allVertices.length} total)`);
-    return positions;
-}
-
-// Compute centroid of points
-function computeCentroid(points) {
-    let cx = 0, cy = 0, cz = 0;
-    for (const p of points) {
-        cx += p.x;
-        cy += p.y;
-        cz += p.z;
-    }
-    const n = points.length;
-    return { x: cx / n, y: cy / n, z: cz / n };
-}
-
-// Compute optimal rotation using SVD-like approach (Kabsch algorithm simplified)
-// Returns a rotation matrix that best aligns source to target
-function computeOptimalRotation(sourcePoints, targetPoints, sourceCentroid, targetCentroid) {
-    // Build the covariance matrix H
-    // H = sum((source - sourceCentroid) * (target - targetCentroid)^T)
-    let h = [
-        [0, 0, 0],
-        [0, 0, 0],
-        [0, 0, 0]
-    ];
-
-    for (let i = 0; i < sourcePoints.length; i++) {
-        const s = sourcePoints[i];
-        const t = targetPoints[i];
-
-        const sx = s.x - sourceCentroid.x;
-        const sy = s.y - sourceCentroid.y;
-        const sz = s.z - sourceCentroid.z;
-
-        const tx = t.x - targetCentroid.x;
-        const ty = t.y - targetCentroid.y;
-        const tz = t.z - targetCentroid.z;
-
-        h[0][0] += sx * tx;
-        h[0][1] += sx * ty;
-        h[0][2] += sx * tz;
-        h[1][0] += sy * tx;
-        h[1][1] += sy * ty;
-        h[1][2] += sy * tz;
-        h[2][0] += sz * tx;
-        h[2][1] += sz * ty;
-        h[2][2] += sz * tz;
-    }
-
-    // Compute SVD of H using power iteration (simplified for 3x3)
-    // For robustness, we use a quaternion-based approach instead
-    // This is the Horn's method using quaternion
-    const n11 = h[0][0], n12 = h[0][1], n13 = h[0][2];
-    const n21 = h[1][0], n22 = h[1][1], n23 = h[1][2];
-    const n31 = h[2][0], n32 = h[2][1], n33 = h[2][2];
-
-    // Build the 4x4 matrix for quaternion-based solution
-    const n = [
-        [n11 + n22 + n33, n23 - n32, n31 - n13, n12 - n21],
-        [n23 - n32, n11 - n22 - n33, n12 + n21, n31 + n13],
-        [n31 - n13, n12 + n21, -n11 + n22 - n33, n23 + n32],
-        [n12 - n21, n31 + n13, n23 + n32, -n11 - n22 + n33]
-    ];
-
-    // Find largest eigenvalue/eigenvector using power iteration
-    let q = [1, 0, 0, 0]; // Initial quaternion guess
-    for (let iter = 0; iter < 50; iter++) {
-        // Multiply n * q
-        const newQ = [
-            n[0][0] * q[0] + n[0][1] * q[1] + n[0][2] * q[2] + n[0][3] * q[3],
-            n[1][0] * q[0] + n[1][1] * q[1] + n[1][2] * q[2] + n[1][3] * q[3],
-            n[2][0] * q[0] + n[2][1] * q[1] + n[2][2] * q[2] + n[2][3] * q[3],
-            n[3][0] * q[0] + n[3][1] * q[1] + n[3][2] * q[2] + n[3][3] * q[3]
-        ];
-
-        // Normalize
-        const len = Math.sqrt(newQ[0] * newQ[0] + newQ[1] * newQ[1] + newQ[2] * newQ[2] + newQ[3] * newQ[3]);
-        if (len < 1e-10) break;
-        q = [newQ[0] / len, newQ[1] / len, newQ[2] / len, newQ[3] / len];
-    }
-
-    // Convert quaternion to rotation matrix
-    const qw = q[0], qx = q[1], qy = q[2], qz = q[3];
-    const rotMatrix = new THREE.Matrix4();
-    rotMatrix.set(
-        1 - 2 * qy * qy - 2 * qz * qz, 2 * qx * qy - 2 * qz * qw, 2 * qx * qz + 2 * qy * qw, 0,
-        2 * qx * qy + 2 * qz * qw, 1 - 2 * qx * qx - 2 * qz * qz, 2 * qy * qz - 2 * qx * qw, 0,
-        2 * qx * qz - 2 * qy * qw, 2 * qy * qz + 2 * qx * qw, 1 - 2 * qx * qx - 2 * qy * qy, 0,
-        0, 0, 0, 1
-    );
-
-    return rotMatrix;
-}
 
 // ICP alignment function
 async function icpAlignObjects() {
