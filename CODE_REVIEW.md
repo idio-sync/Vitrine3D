@@ -291,41 +291,40 @@ const archiveUrl = validateUrl(params.get('archive'), 'archive');
 - ~~Open redirect if URLs are displayed to users~~
 - ~~Data exfiltration via malicious archive files~~
 
-### 3.2 Arbitrary File Loading via Archive (HIGH Priority)
+### ~~3.2 Arbitrary File Loading via Archive (HIGH Priority)~~ ✅ FIXED
 
-**Issue:** Archives can contain any file, and filenames from manifest are trusted without sanitization.
+> **Status:** Resolved on 2026-02-04
+>
+> **Fix implemented in:**
+> - `archive-loader.js:17-90` - Added `sanitizeArchiveFilename()` function
+> - `archive-loader.js:303-328` - Applied sanitization in `extractFile()` method
+> - `archive-loader.js:395-414` - Applied sanitization in `getEntryList()` for display
+>
+> **Changes made:**
+> - All filenames are sanitized before extraction
+> - Blocks path traversal attempts (`../`, encoded variants)
+> - Blocks null bytes (injection attacks)
+> - Validates character set (alphanumeric, underscore, hyphen, dot, slash)
+> - Rejects hidden files, overly long filenames
+> - Exported `sanitizeArchiveFilename` for use in other modules
 
-**Location:** `archive-loader.js:228-245`
+~~**Issue:** Archives can contain any file, and filenames from manifest are trusted without sanitization.~~
+
+~~**Location:** `archive-loader.js:228-245`~~
 
 ```javascript
-async extractFile(filename) {
-    // filename comes from untrusted manifest.json
-    const fileData = this.files[filename];
-    // ...
-    const blob = new Blob([fileData]);
-    const url = URL.createObjectURL(blob);
+// OLD (vulnerable):
+const fileData = this.files[filename];
+
+// NEW (secure):
+const sanitization = sanitizeArchiveFilename(filename);
+if (!sanitization.safe) {
+    throw new Error(`Invalid filename: ${sanitization.error}`);
 }
+const fileData = this.files[sanitization.sanitized];
 ```
 
-**Risk:** A malicious archive could contain files with path traversal (`../../../etc/passwd`) or executable filenames that might be mishandled.
-
-**Recommendation:**
-```javascript
-function sanitizeFilename(filename) {
-    // Remove path traversal attempts
-    const sanitized = filename
-        .replace(/\.\./g, '')
-        .replace(/^\/+/, '')
-        .replace(/\\/g, '/');
-
-    // Validate against allowed patterns
-    if (!/^[a-zA-Z0-9_\-\/\.]+$/.test(sanitized)) {
-        throw new Error('Invalid filename in archive');
-    }
-
-    return sanitized;
-}
-```
+~~**Risk:** A malicious archive could contain files with path traversal (`../../../etc/passwd`) or executable filenames that might be mishandled.~~
 
 ### 3.3 innerHTML Usage (MEDIUM Priority)
 
@@ -432,7 +431,7 @@ if (!CRYPTO_AVAILABLE) {
 ### Immediate (Before Production):
 
 1. ~~**Implement URL validation** for all externally-loaded resources~~ ✅ DONE
-2. **Sanitize archive filenames** before extraction
+2. ~~**Sanitize archive filenames** before extraction~~ ✅ DONE
 3. **Add file size limits** for uploaded/downloaded files
 4. **Replace `innerHTML`** with safe DOM methods where possible
 
@@ -454,23 +453,21 @@ if (!CRYPTO_AVAILABLE) {
 
 ## 6. Specific Code Changes Needed
 
-### archive-loader.js:228
+### ~~archive-loader.js:228~~ ✅ IMPLEMENTED
+
 ```javascript
-// Add filename sanitization
-async extractFile(filename) {
-    if (!this.files) {
-        throw new Error('No archive loaded');
-    }
+// Implemented in archive-loader.js:17-90 with comprehensive sanitization:
+// - Blocks null bytes, path traversal (../, encoded variants)
+// - Validates character set (alphanumeric, underscore, hyphen, dot, slash)
+// - Rejects hidden files, overly long filenames (>255 chars)
+// - Returns detailed error messages for debugging
+// - Applied to extractFile() and getEntryList()
 
-    // Sanitize filename
-    const sanitized = this.sanitizeFilename(filename);
-    const fileData = this.files[sanitized];
-    // ...
+const sanitization = sanitizeArchiveFilename(filename);
+if (!sanitization.safe) {
+    throw new Error(`Invalid filename: ${sanitization.error}`);
 }
-
-sanitizeFilename(filename) {
-    return filename.replace(/\.\./g, '').replace(/^\/+/, '');
-}
+const fileData = this.files[sanitization.sanitized];
 ```
 
 ### main.js - Add file size validation
@@ -505,7 +502,12 @@ const archiveUrl = validateUrl(params.get('archive'), 'archive');
 
 ## Conclusion
 
-The codebase shows solid foundational work with good 3D visualization capabilities. ~~Before production deployment, the security issues (particularly URL validation and archive filename sanitization) must be addressed.~~ URL validation has been implemented. Archive filename sanitization remains to be addressed. The application would also benefit from better modularization and the addition of a testing framework for long-term maintainability.
+The codebase shows solid foundational work with good 3D visualization capabilities. ~~Before production deployment, the security issues (particularly URL validation and archive filename sanitization) must be addressed.~~ **Both HIGH priority security issues have been resolved:**
 
-**Estimated Effort for Critical Fixes:** ~~2-3 developer days~~ 1-2 developer days (URL validation complete)
-**Estimated Effort for All Recommendations:** 2-3 developer weeks
+- ✅ URL validation implemented (config.js, main.js)
+- ✅ Archive filename sanitization implemented (archive-loader.js)
+
+Remaining items (file size limits, innerHTML replacement, CSP headers) are MEDIUM priority and can be addressed in subsequent sprints. The application would also benefit from better modularization and the addition of a testing framework for long-term maintainability.
+
+**Estimated Effort for Critical Fixes:** ~~2-3 developer days~~ ✅ Complete
+**Estimated Effort for Remaining Recommendations:** 2-3 developer weeks

@@ -14,6 +14,81 @@ const SUPPORTED_FORMATS = {
     thumbnail: ['.png', '.jpg', '.jpeg', '.webp']
 };
 
+// =============================================================================
+// FILENAME SANITIZATION - Security measure to prevent path traversal attacks
+// =============================================================================
+
+/**
+ * Sanitizes a filename from an archive to prevent path traversal attacks.
+ * This is critical because archive manifests are untrusted user data.
+ *
+ * @param {string} filename - The filename to sanitize
+ * @returns {{safe: boolean, sanitized: string, error: string}} Sanitization result
+ */
+function sanitizeArchiveFilename(filename) {
+    if (!filename || typeof filename !== 'string') {
+        return { safe: false, sanitized: '', error: 'Filename is empty or not a string' };
+    }
+
+    // Trim whitespace
+    let sanitized = filename.trim();
+
+    // Check for null bytes (can be used for path injection)
+    if (sanitized.includes('\0')) {
+        console.warn('[ArchiveLoader] Blocked filename with null byte:', filename);
+        return { safe: false, sanitized: '', error: 'Filename contains null bytes' };
+    }
+
+    // Normalize path separators (convert backslashes to forward slashes)
+    sanitized = sanitized.replace(/\\/g, '/');
+
+    // Remove any path traversal sequences
+    // Handle various encodings: .., %2e%2e, %252e%252e
+    const originalFilename = sanitized;
+    sanitized = sanitized
+        .replace(/%252e/gi, '.') // Double-encoded dots
+        .replace(/%2e/gi, '.')   // URL-encoded dots
+        .replace(/\.\.\//g, '')  // ../
+        .replace(/\.\./g, '')    // .. (catch remaining)
+        .replace(/\/\.\//g, '/') // /./
+        .replace(/^\.\//g, '');  // ./  at start
+
+    // Remove leading slashes (absolute path attempt)
+    sanitized = sanitized.replace(/^\/+/, '');
+
+    // Check if path traversal was attempted
+    if (originalFilename !== sanitized && originalFilename.includes('..')) {
+        console.warn('[ArchiveLoader] Blocked path traversal attempt:', filename);
+        return { safe: false, sanitized: '', error: 'Path traversal attempt detected' };
+    }
+
+    // Validate remaining characters - allow alphanumeric, underscore, hyphen, dot, forward slash
+    // This allows subdirectories within the archive (e.g., "assets/model.glb")
+    if (!/^[a-zA-Z0-9_\-\.\/]+$/.test(sanitized)) {
+        console.warn('[ArchiveLoader] Blocked filename with invalid characters:', filename);
+        return { safe: false, sanitized: '', error: 'Filename contains invalid characters' };
+    }
+
+    // Ensure filename doesn't start with a dot (hidden files) unless it's an extension
+    if (sanitized.startsWith('.') && !sanitized.startsWith('./')) {
+        console.warn('[ArchiveLoader] Blocked hidden file:', filename);
+        return { safe: false, sanitized: '', error: 'Hidden files are not allowed' };
+    }
+
+    // Check for empty result after sanitization
+    if (sanitized.length === 0) {
+        return { safe: false, sanitized: '', error: 'Filename is empty after sanitization' };
+    }
+
+    // Check for reasonable length (prevent DoS with extremely long filenames)
+    if (sanitized.length > 255) {
+        console.warn('[ArchiveLoader] Blocked overly long filename:', filename.substring(0, 50) + '...');
+        return { safe: false, sanitized: '', error: 'Filename exceeds maximum length (255 characters)' };
+    }
+
+    return { safe: true, sanitized, error: '' };
+}
+
 /**
  * Check if a filename is an archive file
  * @param {string} filename - The filename to check
@@ -230,9 +305,17 @@ export class ArchiveLoader {
             throw new Error('No archive loaded');
         }
 
-        const fileData = this.files[filename];
+        // SECURITY: Sanitize filename to prevent path traversal attacks
+        const sanitization = sanitizeArchiveFilename(filename);
+        if (!sanitization.safe) {
+            console.error(`[ArchiveLoader] Rejected unsafe filename: ${filename} - ${sanitization.error}`);
+            throw new Error(`Invalid filename in archive: ${sanitization.error}`);
+        }
+
+        const safeFilename = sanitization.sanitized;
+        const fileData = this.files[safeFilename];
         if (!fileData) {
-            console.warn(`[ArchiveLoader] File not found in archive: ${filename}`);
+            console.warn(`[ArchiveLoader] File not found in archive: ${safeFilename}`);
             return null;
         }
 
@@ -241,7 +324,7 @@ export class ArchiveLoader {
         const url = URL.createObjectURL(blob);
         this.blobUrls.push(url);
 
-        return { blob, url, name: filename };
+        return { blob, url, name: safeFilename };
     }
 
     /**
@@ -314,9 +397,13 @@ export class ArchiveLoader {
         const list = [];
 
         for (const [key, entry] of Object.entries(entries)) {
+            // Sanitize filename for safe display
+            const sanitization = sanitizeArchiveFilename(entry.file_name);
+            const displayName = sanitization.safe ? sanitization.sanitized : '[invalid filename]';
+
             list.push({
                 key,
-                fileName: entry.file_name,
+                fileName: displayName,
                 createdBy: entry.created_by || 'Unknown',
                 createdByVersion: entry._created_by_version || '',
                 parameters: entry._parameters || {}
@@ -361,5 +448,8 @@ export class ArchiveLoader {
         this.manifest = null;
     }
 }
+
+// Export sanitization function for use in other modules if needed
+export { sanitizeArchiveFilename };
 
 export default ArchiveLoader;
