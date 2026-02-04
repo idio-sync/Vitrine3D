@@ -349,6 +349,10 @@ function init() {
     // Start render loop
     animate();
 
+    // Ensure toolbar visibility is maintained after all initialization
+    // This safeguard addresses potential race conditions with async file loading
+    ensureToolbarVisibility();
+
     log.info(' init() completed successfully');
 }
 
@@ -2699,6 +2703,47 @@ function applyControlsMode() {
         if (controlsPanel) controlsPanel.style.width = '200px';
     }
     // 'full' mode shows everything (default)
+}
+
+// Ensure toolbar visibility is maintained (safeguard against race conditions)
+function ensureToolbarVisibility() {
+    // Only ensure visibility if toolbar should be shown
+    if (!config.showToolbar) {
+        return; // Toolbar intentionally hidden via URL parameter
+    }
+
+    const toolbar = document.getElementById('left-toolbar');
+    if (!toolbar) {
+        return;
+    }
+
+    // Ensure toolbar is visible
+    const computedDisplay = window.getComputedStyle(toolbar).display;
+    if (computedDisplay === 'none' || toolbar.style.display === 'none') {
+        log.info('Restoring toolbar visibility');
+        toolbar.style.display = 'flex';
+    }
+
+    // Re-check after file loading completes (delayed checks)
+    setTimeout(() => {
+        if (config.showToolbar) {
+            const tb = document.getElementById('left-toolbar');
+            if (tb && (window.getComputedStyle(tb).display === 'none' || tb.style.display === 'none')) {
+                log.info('Restoring toolbar visibility (after 1s)');
+                tb.style.display = 'flex';
+            }
+        }
+    }, 1000);
+
+    setTimeout(() => {
+        if (config.showToolbar) {
+            const tb = document.getElementById('left-toolbar');
+            if (tb && (window.getComputedStyle(tb).display === 'none' || tb.style.display === 'none')) {
+                log.info('Restoring toolbar visibility (after 3s)');
+                tb.style.display = 'flex';
+            }
+        }
+    }, 3000);
 }
 
 // Apply viewer mode settings (toolbar visibility, sidebar state)
