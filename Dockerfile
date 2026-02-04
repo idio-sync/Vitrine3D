@@ -22,6 +22,7 @@ COPY scene-manager.js /usr/share/nginx/html/
 COPY archive-loader.js /usr/share/nginx/html/
 COPY archive-creator.js /usr/share/nginx/html/
 COPY annotation-system.js /usr/share/nginx/html/
+COPY share-dialog.js /usr/share/nginx/html/
 
 # Copy the config template and entrypoint script
 COPY config.js.template /usr/share/nginx/html/config.js.template

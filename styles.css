@@ -2017,3 +2017,242 @@ input[type="range"]::-webkit-slider-thumb:hover {
         min-width: auto;
     }
 }
+
+/* =============================================================================
+   SHARE DIALOG
+   ============================================================================= */
+
+.share-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.share-dialog.hidden {
+    display: none;
+}
+
+.share-dialog-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+}
+
+.share-dialog-content {
+    position: relative;
+    background: #1a1a2e;
+    border: 1px solid #4a4a6a;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.share-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #333;
+}
+
+.share-dialog-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.share-dialog-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.share-dialog-close:hover {
+    color: #fff;
+}
+
+.share-dialog-body {
+    padding: 20px;
+}
+
+.share-section {
+    margin-bottom: 16px;
+}
+
+.share-section:last-child {
+    margin-bottom: 0;
+}
+
+.share-section-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+}
+
+.share-divider {
+    height: 1px;
+    background: #333;
+    margin: 16px 0;
+}
+
+/* Preset buttons */
+.share-presets {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.share-preset-btn {
+    flex: 1;
+    min-width: 100px;
+    padding: 10px 12px;
+    background: #2a2a4a;
+    border: 1px solid #4a4a6a;
+    border-radius: 6px;
+    color: #ccc;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.share-preset-btn:hover {
+    background: #3a3a5a;
+    color: #fff;
+}
+
+.share-preset-btn.active {
+    background: rgba(78, 205, 196, 0.2);
+    border-color: #4ecdc4;
+    color: #4ecdc4;
+}
+
+/* Options grid */
+.share-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.share-option {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.share-option label {
+    font-size: 12px;
+    color: #aaa;
+}
+
+.share-option select {
+    padding: 8px 10px;
+    background: #2a2a4a;
+    border: 1px solid #4a4a6a;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.share-option select:focus {
+    outline: none;
+    border-color: #4ecdc4;
+}
+
+/* Inline checkbox option */
+.share-option-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #ccc;
+}
+
+.share-option-inline input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+/* URL preview */
+.share-url-container {
+    display: flex;
+    gap: 8px;
+}
+
+.share-url-container input {
+    flex: 1;
+    padding: 10px 12px;
+    background: #0f0f1a;
+    border: 1px solid #4a4a6a;
+    border-radius: 6px;
+    color: #4ecdc4;
+    font-size: 12px;
+    font-family: monospace;
+}
+
+.share-url-container input:focus {
+    outline: none;
+    border-color: #4ecdc4;
+}
+
+.share-url-container .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    white-space: nowrap;
+}
+
+.share-url-container .action-btn.success {
+    background: #2a9d8f;
+    border-color: #2a9d8f;
+}
+
+/* Dialog footer */
+.share-dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 20px;
+    border-top: 1px solid #333;
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+    .share-options {
+        grid-template-columns: 1fr;
+    }
+
+    .share-presets {
+        flex-direction: column;
+    }
+
+    .share-preset-btn {
+        min-width: auto;
+    }
+}
