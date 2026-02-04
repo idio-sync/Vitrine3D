@@ -70,6 +70,7 @@ const config = window.APP_CONFIG || {
     defaultAlignmentUrl: '',
     inlineAlignment: null,
     showControls: true,
+    showToolbar: true, // Default to showing toolbar
     controlsMode: 'full', // full, minimal, none
     initialViewMode: 'both' // splat, model, both, split
 };
@@ -544,14 +545,11 @@ function setupUIEvents() {
     addListener('btn-sidebar-delete-anno', 'click', deleteSelectedAnnotation);
 
     // Export/archive creation controls
-    const exportBtn = addListener('btn-export-archive', 'click', showExportPanel);
-    const openExportBtn = addListener('btn-open-export', 'click', showExportPanel);
-    log.info(' Export buttons attached:', { exportBtn, openExportBtn });
+    addListener('btn-export-archive', 'click', showExportPanel);
     addListener('btn-export-cancel', 'click', hideExportPanel);
     addListener('btn-export-download', 'click', downloadArchive);
 
     // Metadata panel controls
-    addListener('btn-open-metadata', 'click', showMetadataPanel);
     addListener('btn-close-sidebar', 'click', hideMetadataPanel);
     addListener('btn-add-custom-field', 'click', addCustomField);
     setupMetadataTabs();
