@@ -17,15 +17,7 @@ import {
     extractMeshVertices,
     computeCentroid,
     computeOptimalRotation,
-    computeSplatBoundsFromPositions,
-    icpAlignObjects as icpAlignObjectsModule,
-    autoAlignObjects as autoAlignObjectsModule,
-    fitToView as fitToViewModule,
-    collectAlignmentData,
-    applyAlignmentData as applyAlignmentDataModule,
-    resetAlignment as resetAlignmentModule,
-    resetCamera as resetCameraModule,
-    generateShareParams
+    computeSplatBoundsFromPositions
 } from './alignment.js';
 import {
     showLoading,
