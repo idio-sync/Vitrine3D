@@ -422,6 +422,62 @@ export function collectMetadata() {
             location: document.getElementById('meta-location')?.value || '',
             conventions: document.getElementById('meta-conventions')?.value || ''
         },
+        qualityMetrics: {
+            tier: document.getElementById('meta-quality-tier')?.value || '',
+            accuracyGrade: document.getElementById('meta-quality-accuracy')?.value || '',
+            captureResolution: {
+                value: parseFloat(document.getElementById('meta-quality-res-value')?.value) || null,
+                unit: document.getElementById('meta-quality-res-unit')?.value || 'mm',
+                type: document.getElementById('meta-quality-res-type')?.value || 'GSD'
+            },
+            alignmentError: {
+                value: parseFloat(document.getElementById('meta-quality-align-value')?.value) || null,
+                unit: document.getElementById('meta-quality-align-unit')?.value || 'mm',
+                method: document.getElementById('meta-quality-align-method')?.value || 'RMSE'
+            },
+            scaleVerification: document.getElementById('meta-quality-scale-verify')?.value || ''
+        },
+        archivalRecord: {
+            standard: document.getElementById('meta-archival-standard')?.value || '',
+            title: document.getElementById('meta-archival-title')?.value || '',
+            alternateTitles: (document.getElementById('meta-archival-alt-titles')?.value || '')
+                .split(',').map(t => t.trim()).filter(t => t),
+            ids: {
+                accessionNumber: document.getElementById('meta-archival-accession')?.value || '',
+                sirisId: document.getElementById('meta-archival-siris')?.value || '',
+                uri: document.getElementById('meta-archival-uri')?.value || ''
+            },
+            creation: {
+                creator: document.getElementById('meta-archival-creator')?.value || '',
+                dateCreated: document.getElementById('meta-archival-date-created')?.value || '',
+                period: document.getElementById('meta-archival-period')?.value || '',
+                culture: document.getElementById('meta-archival-culture')?.value || ''
+            },
+            physicalDescription: {
+                medium: document.getElementById('meta-archival-medium')?.value || '',
+                dimensions: {
+                    height: document.getElementById('meta-archival-dim-height')?.value || '',
+                    width: document.getElementById('meta-archival-dim-width')?.value || '',
+                    depth: document.getElementById('meta-archival-dim-depth')?.value || ''
+                },
+                condition: document.getElementById('meta-archival-condition')?.value || ''
+            },
+            provenance: document.getElementById('meta-archival-provenance')?.value || '',
+            rights: {
+                copyrightStatus: document.getElementById('meta-archival-copyright')?.value || '',
+                creditLine: document.getElementById('meta-archival-credit')?.value || ''
+            },
+            context: {
+                description: document.getElementById('meta-archival-context-desc')?.value || '',
+                locationHistory: document.getElementById('meta-archival-location-history')?.value || ''
+            }
+        },
+        materialStandard: {
+            workflow: document.getElementById('meta-material-workflow')?.value || '',
+            occlusionPacked: document.getElementById('meta-material-occlusion-packed')?.checked || false,
+            colorSpace: document.getElementById('meta-material-colorspace')?.value || '',
+            normalSpace: document.getElementById('meta-material-normalspace')?.value || ''
+        },
         splatMetadata: {
             createdBy: document.getElementById('meta-splat-created-by')?.value || '',
             version: document.getElementById('meta-splat-version')?.value || '',
@@ -524,6 +580,112 @@ export function prefillMetadataFromArchive(manifest) {
                 conventionsEl.value = hints;
             }
         }
+    }
+
+    // Quality Metrics
+    if (manifest.quality_metrics) {
+        const qm = manifest.quality_metrics;
+
+        const tierEl = document.getElementById('meta-quality-tier');
+        if (tierEl && qm.tier) tierEl.value = qm.tier;
+
+        const accuracyEl = document.getElementById('meta-quality-accuracy');
+        if (accuracyEl && qm.accuracy_grade) accuracyEl.value = qm.accuracy_grade;
+
+        // Capture Resolution
+        if (qm.capture_resolution) {
+            const resValueEl = document.getElementById('meta-quality-res-value');
+            if (resValueEl && qm.capture_resolution.value != null) resValueEl.value = qm.capture_resolution.value;
+
+            const resUnitEl = document.getElementById('meta-quality-res-unit');
+            if (resUnitEl && qm.capture_resolution.unit) resUnitEl.value = qm.capture_resolution.unit;
+
+            const resTypeEl = document.getElementById('meta-quality-res-type');
+            if (resTypeEl && qm.capture_resolution.type) resTypeEl.value = qm.capture_resolution.type;
+        }
+
+        // Alignment Error
+        if (qm.alignment_error) {
+            const alignValueEl = document.getElementById('meta-quality-align-value');
+            if (alignValueEl && qm.alignment_error.value != null) alignValueEl.value = qm.alignment_error.value;
+
+            const alignUnitEl = document.getElementById('meta-quality-align-unit');
+            if (alignUnitEl && qm.alignment_error.unit) alignUnitEl.value = qm.alignment_error.unit;
+
+            const alignMethodEl = document.getElementById('meta-quality-align-method');
+            if (alignMethodEl && qm.alignment_error.method) alignMethodEl.value = qm.alignment_error.method;
+        }
+
+        const scaleVerifyEl = document.getElementById('meta-quality-scale-verify');
+        if (scaleVerifyEl && qm.scale_verification) scaleVerifyEl.value = qm.scale_verification;
+    }
+
+    // Archival Record (Dublin Core)
+    if (manifest.archival_record) {
+        const ar = manifest.archival_record;
+
+        const archivalFields = {
+            'meta-archival-standard': ar.standard,
+            'meta-archival-title': ar.title,
+            'meta-archival-condition': ar.physical_description?.condition,
+            'meta-archival-medium': ar.physical_description?.medium,
+            'meta-archival-dim-height': ar.physical_description?.dimensions?.height,
+            'meta-archival-dim-width': ar.physical_description?.dimensions?.width,
+            'meta-archival-dim-depth': ar.physical_description?.dimensions?.depth,
+            'meta-archival-accession': ar.ids?.accession_number,
+            'meta-archival-siris': ar.ids?.siris_id,
+            'meta-archival-uri': ar.ids?.uri,
+            'meta-archival-creator': ar.creation?.creator,
+            'meta-archival-date-created': ar.creation?.date_created,
+            'meta-archival-period': ar.creation?.period,
+            'meta-archival-culture': ar.creation?.culture,
+            'meta-archival-credit': ar.rights?.credit_line,
+            'meta-archival-location-history': ar.context?.location_history
+        };
+
+        for (const [id, value] of Object.entries(archivalFields)) {
+            const el = document.getElementById(id);
+            if (el && value) el.value = value;
+        }
+
+        // Alternate titles (array to comma-separated)
+        if (ar.alternate_titles) {
+            const altTitlesEl = document.getElementById('meta-archival-alt-titles');
+            if (altTitlesEl) {
+                const titles = Array.isArray(ar.alternate_titles)
+                    ? ar.alternate_titles.join(', ')
+                    : ar.alternate_titles;
+                altTitlesEl.value = titles;
+            }
+        }
+
+        // Textareas
+        const provenanceEl = document.getElementById('meta-archival-provenance');
+        if (provenanceEl && ar.provenance) provenanceEl.value = ar.provenance;
+
+        const contextDescEl = document.getElementById('meta-archival-context-desc');
+        if (contextDescEl && ar.context?.description) contextDescEl.value = ar.context.description;
+
+        // Copyright status (select)
+        const copyrightEl = document.getElementById('meta-archival-copyright');
+        if (copyrightEl && ar.rights?.copyright_status) copyrightEl.value = ar.rights.copyright_status;
+    }
+
+    // Material Standard
+    if (manifest.material_standard) {
+        const ms = manifest.material_standard;
+
+        const workflowEl = document.getElementById('meta-material-workflow');
+        if (workflowEl && ms.workflow) workflowEl.value = ms.workflow;
+
+        const occlusionEl = document.getElementById('meta-material-occlusion-packed');
+        if (occlusionEl) occlusionEl.checked = ms.occlusion_packed || false;
+
+        const colorSpaceEl = document.getElementById('meta-material-colorspace');
+        if (colorSpaceEl && ms.color_space) colorSpaceEl.value = ms.color_space;
+
+        const normalSpaceEl = document.getElementById('meta-material-normalspace');
+        if (normalSpaceEl && ms.normal_space) normalSpaceEl.value = ms.normal_space;
     }
 
     // Asset metadata from data_entries
