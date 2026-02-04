@@ -6,6 +6,8 @@
 //   ?alignment=URL   - Default alignment JSON file to load
 //   ?controls=MODE   - Control panel mode: full, minimal, none
 //   ?mode=VIEW       - Initial view mode: splat, model, both, split
+//   ?toolbar=STATE   - Toolbar visibility: show, hide
+//   ?sidebar=STATE   - Metadata sidebar state: closed, view, edit
 //
 // Inline alignment params (alternative to alignment JSON file):
 //   ?sp=x,y,z        - Splat position
@@ -25,6 +27,7 @@
 //   viewer.website.com?splat=https://example.com/file.ply&controls=none&mode=split
 //   viewer.website.com?splat=/scene.ply&model=/model.glb&alignment=/alignment.json
 //   viewer.website.com?splat=/scene.ply&sp=0,1,0&sr=0,3.14,0&ss=1.5
+//   viewer.website.com?archive=/scene.a3d&toolbar=hide&sidebar=view (viewer mode)
 
 (function() {
     // Parse URL parameters
@@ -116,6 +119,8 @@
     const alignmentUrl = validateUrl(params.get('alignment'), 'alignment');
     const controlsMode = params.get('controls') || 'full'; // full, minimal, none
     const viewMode = params.get('mode') || 'both'; // splat, model, both, split
+    const toolbarMode = params.get('toolbar') || 'show'; // show, hide
+    const sidebarMode = params.get('sidebar') || 'closed'; // closed, view, edit
 
     // Parse inline alignment params
     const splatPos = parseVec3(params.get('sp'));
@@ -158,6 +163,9 @@
         inlineAlignment: inlineAlignment,
         showControls: controlsMode !== 'none',
         controlsMode: controlsMode,
-        initialViewMode: viewMode
+        initialViewMode: viewMode,
+        // Viewer mode settings
+        showToolbar: toolbarMode !== 'hide',
+        sidebarMode: sidebarMode // closed, view, edit
     };
 })();

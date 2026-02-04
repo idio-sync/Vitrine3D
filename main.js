@@ -33,6 +33,10 @@ import {
     setupLicenseField,
     hideMetadataSidebar
 } from './metadata-manager.js';
+import {
+    initShareDialog,
+    showShareDialog
+} from './share-dialog.js';
 
 // Create logger for this module
 const log = Logger.getLogger('main.js');
@@ -44,6 +48,9 @@ log.info('Module loaded successfully, THREE:', !!THREE, 'SplatMesh:', !!SplatMes
 // Expose THREE globally for debugging and potential library compatibility
 window.THREE = THREE;
 log.debug('THREE.REVISION:', THREE.REVISION);
+
+// Expose notify for use by dynamically loaded modules (share dialog, etc.)
+window.notify = notify;
 
 // Global error handler for runtime errors
 window.onerror = function(message, source, lineno, colno, error) {
@@ -343,9 +350,15 @@ function init() {
     // Setup UI events
     setupUIEvents();
 
+    // Initialize share dialog
+    initShareDialog();
+
     // Apply initial controls visibility and mode
     applyControlsVisibility();
     applyControlsMode();
+
+    // Apply viewer mode settings (toolbar visibility, sidebar state)
+    applyViewerModeSettings();
 
     // Set initial display mode from config
     setDisplayMode(state.displayMode);
@@ -2718,110 +2731,38 @@ async function loadAlignmentFromUrl(url) {
     }
 }
 
-// Copy a shareable link to the clipboard
+// Open share dialog with current state
 function copyShareLink() {
-    // Check if at least one URL is present
-    if (!state.currentArchiveUrl && !state.currentSplatUrl && !state.currentModelUrl) {
-        notify.warning('Cannot share: No files loaded from URL. Share links only work for files loaded via URL, not local uploads.');
-        return;
-    }
+    // Gather current state for the share dialog
+    const shareState = {
+        archiveUrl: state.currentArchiveUrl,
+        splatUrl: state.currentSplatUrl,
+        modelUrl: state.currentModelUrl,
+        displayMode: state.displayMode,
+        splatTransform: null,
+        modelTransform: null
+    };
 
-    // Construct the base URL
-    const baseUrl = window.location.origin + window.location.pathname;
-    const params = new URLSearchParams();
-
-    // If archive URL is present, use it (takes priority)
-    if (state.currentArchiveUrl) {
-        params.set('archive', state.currentArchiveUrl);
-        // Archive includes alignment data, so we don't need to add splat/model/alignment params
-        // Just add display mode and controls
-        params.set('mode', state.displayMode);
-
-        if (!config.showControls) {
-            params.set('controls', 'none');
-        } else if (config.controlsMode && config.controlsMode !== 'full') {
-            params.set('controls', config.controlsMode);
-        }
-
-        const shareUrl = baseUrl + '?' + params.toString();
-
-        navigator.clipboard.writeText(shareUrl).then(() => {
-            notify.success('Share link copied to clipboard!');
-        }).catch((err) => {
-            log.error(' Failed to copy share link:', err);
-            notify.info('Share link: ' + shareUrl, { duration: 10000 });
-        });
-        return;
-    }
-
-    // Add splat URL if present
-    if (state.currentSplatUrl) {
-        params.set('splat', state.currentSplatUrl);
-    }
-
-    // Add model URL if present
-    if (state.currentModelUrl) {
-        params.set('model', state.currentModelUrl);
-    }
-
-    // Add display mode
-    params.set('mode', state.displayMode);
-
-    // Add controls mode
-    if (!config.showControls) {
-        params.set('controls', 'none');
-    } else if (config.controlsMode && config.controlsMode !== 'full') {
-        params.set('controls', config.controlsMode);
-    }
-
-    // Add inline alignment data (position, rotation, scale)
-    // Helper to format vec3 as comma-separated string with reasonable precision
-    const formatVec3 = (arr) => arr.map(n => parseFloat(n.toFixed(4))).join(',');
-
+    // Add splat transform if available
     if (splatMesh) {
-        const pos = splatMesh.position;
-        const rot = splatMesh.rotation;
-        const scale = splatMesh.scale.x;
-
-        // Only add non-default values to keep URL shorter
-        if (pos.x !== 0 || pos.y !== 0 || pos.z !== 0) {
-            params.set('sp', formatVec3([pos.x, pos.y, pos.z]));
-        }
-        if (rot.x !== 0 || rot.y !== 0 || rot.z !== 0) {
-            params.set('sr', formatVec3([rot.x, rot.y, rot.z]));
-        }
-        if (scale !== 1) {
-            params.set('ss', parseFloat(scale.toFixed(4)));
-        }
+        shareState.splatTransform = {
+            position: [splatMesh.position.x, splatMesh.position.y, splatMesh.position.z],
+            rotation: [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z],
+            scale: splatMesh.scale.x
+        };
     }
 
+    // Add model transform if available
     if (modelGroup) {
-        const pos = modelGroup.position;
-        const rot = modelGroup.rotation;
-        const scale = modelGroup.scale.x;
-
-        if (pos.x !== 0 || pos.y !== 0 || pos.z !== 0) {
-            params.set('mp', formatVec3([pos.x, pos.y, pos.z]));
-        }
-        if (rot.x !== 0 || rot.y !== 0 || rot.z !== 0) {
-            params.set('mr', formatVec3([rot.x, rot.y, rot.z]));
-        }
-        if (scale !== 1) {
-            params.set('ms', parseFloat(scale.toFixed(4)));
-        }
+        shareState.modelTransform = {
+            position: [modelGroup.position.x, modelGroup.position.y, modelGroup.position.z],
+            rotation: [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z],
+            scale: modelGroup.scale.x
+        };
     }
 
-    // Build the full URL
-    const shareUrl = baseUrl + '?' + params.toString();
-
-    // Copy to clipboard
-    navigator.clipboard.writeText(shareUrl).then(() => {
-        notify.success('Share link copied to clipboard!');
-    }).catch((err) => {
-        log.error(' Failed to copy share link:', err);
-        // Fallback: show the URL in a notification
-        notify.info('Share link: ' + shareUrl, { duration: 10000 });
-    });
+    // Show the share dialog
+    showShareDialog(shareState);
 }
 
 function resetAlignment() {
@@ -3054,6 +2995,54 @@ function applyControlsMode() {
         if (controlsPanel) controlsPanel.style.width = '200px';
     }
     // 'full' mode shows everything (default)
+}
+
+// Apply viewer mode settings (toolbar visibility, sidebar state)
+function applyViewerModeSettings() {
+    // Apply toolbar visibility
+    if (!config.showToolbar) {
+        const toolbar = document.getElementById('left-toolbar');
+        if (toolbar) {
+            toolbar.style.display = 'none';
+            log.info('Toolbar hidden via URL parameter');
+        }
+    }
+
+    // Apply sidebar state (after a short delay to ensure DOM is ready)
+    if (config.sidebarMode && config.sidebarMode !== 'closed') {
+        setTimeout(() => {
+            const sidebar = document.getElementById('metadata-sidebar');
+            if (sidebar) {
+                sidebar.classList.remove('hidden');
+                log.info('Metadata sidebar shown via URL parameter');
+
+                // If view-only mode, hide the Edit tab
+                if (config.sidebarMode === 'view') {
+                    const editTab = document.querySelector('.sidebar-mode-tab[data-mode="edit"]');
+                    if (editTab) {
+                        editTab.style.display = 'none';
+                        log.info('Edit tab hidden for view-only mode');
+                    }
+
+                    // Also hide the annotations tab if in pure view mode
+                    const annotationsTab = document.querySelector('.sidebar-mode-tab[data-mode="annotations"]');
+                    if (annotationsTab) {
+                        annotationsTab.style.display = 'none';
+                    }
+                }
+
+                // Activate View tab by default
+                const viewTab = document.querySelector('.sidebar-mode-tab[data-mode="view"]');
+                const viewContent = document.getElementById('sidebar-view');
+                if (viewTab && viewContent) {
+                    document.querySelectorAll('.sidebar-mode-tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.sidebar-mode-content').forEach(c => c.classList.remove('active'));
+                    viewTab.classList.add('active');
+                    viewContent.classList.add('active');
+                }
+            }
+        }, 100);
+    }
 }
 
 // Load default files from configuration
