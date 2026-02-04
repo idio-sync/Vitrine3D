@@ -34,8 +34,8 @@ jobs:
           IMAGE_NAME="${{ secrets.DOCKERHUB_USER }}/splat-mesh-compare"
           BRANCH_TAG="${{ steps.extract_branch.outputs.branch }}"
 
-          # Build the image with the specific branch tag
-          docker build "$GITHUB_WORKSPACE" -t $IMAGE_NAME:$BRANCH_TAG --label dockerfile-path="Dockerfile"
+          # Build the image with the specific branch tag (Dockerfile is in docker/ directory)
+          docker build -f docker/Dockerfile "$GITHUB_WORKSPACE" -t $IMAGE_NAME:$BRANCH_TAG --label dockerfile-path="docker/Dockerfile"
 
           # If the branch is 'main', add the 'latest' tag as well
           if [ "$BRANCH_TAG" == "main" ]; then
