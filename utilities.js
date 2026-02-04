@@ -2,12 +2,218 @@
  * Utility Functions Module
  *
  * Centralized utilities for the Gaussian Splat & Mesh Viewer:
+ * - Logging with configurable log levels
  * - Error handling and user notifications
  * - Mesh processing utilities
  */
 
 import * as THREE from 'three';
 import { COLORS, MATERIAL } from './constants.js';
+
+// =============================================================================
+// LOGGING SYSTEM
+// =============================================================================
+
+/**
+ * Log levels in order of verbosity (lower = more verbose)
+ */
+const LogLevel = {
+    DEBUG: 0,
+    INFO: 1,
+    WARN: 2,
+    ERROR: 3,
+    NONE: 4
+};
+
+/**
+ * Centralized logging system with configurable log levels.
+ *
+ * Features:
+ * - Configurable log levels (DEBUG, INFO, WARN, ERROR, NONE)
+ * - Module prefixes for easy filtering
+ * - URL parameter override (?log=debug)
+ * - Production-friendly defaults (WARN level)
+ * - Timestamp support for debugging
+ *
+ * Usage:
+ *   const log = Logger.getLogger('ModuleName');
+ *   log.debug('Detailed info for debugging');
+ *   log.info('General information');
+ *   log.warn('Warning message');
+ *   log.error('Error message', errorObject);
+ */
+class Logger {
+    static _level = LogLevel.WARN; // Default to WARN for production
+    static _showTimestamps = false;
+    static _initialized = false;
+    static _loggers = new Map();
+
+    /**
+     * Initialize the logging system.
+     * Checks URL parameters and sets appropriate log level.
+     */
+    static init() {
+        if (Logger._initialized) return;
+
+        // Check URL parameter for log level override
+        const params = new URLSearchParams(window.location.search);
+        const logParam = params.get('log')?.toLowerCase();
+
+        if (logParam) {
+            switch (logParam) {
+                case 'debug':
+                case 'all':
+                    Logger._level = LogLevel.DEBUG;
+                    Logger._showTimestamps = true;
+                    break;
+                case 'info':
+                    Logger._level = LogLevel.INFO;
+                    break;
+                case 'warn':
+                    Logger._level = LogLevel.WARN;
+                    break;
+                case 'error':
+                    Logger._level = LogLevel.ERROR;
+                    break;
+                case 'none':
+                case 'off':
+                    Logger._level = LogLevel.NONE;
+                    break;
+            }
+        }
+
+        // Check if we're in development (localhost or file://)
+        const isDev = window.location.hostname === 'localhost' ||
+                      window.location.hostname === '127.0.0.1' ||
+                      window.location.protocol === 'file:';
+
+        // In development without explicit setting, default to INFO
+        if (!logParam && isDev) {
+            Logger._level = LogLevel.INFO;
+        }
+
+        Logger._initialized = true;
+
+        // Log the current level if not NONE
+        if (Logger._level < LogLevel.NONE) {
+            const levelName = Object.keys(LogLevel).find(k => LogLevel[k] === Logger._level);
+            console.info(`[Logger] Log level: ${levelName}${logParam ? ' (from URL)' : isDev ? ' (dev default)' : ' (prod default)'}`);
+        }
+    }
+
+    /**
+     * Set the global log level programmatically
+     * @param {number} level - LogLevel value
+     */
+    static setLevel(level) {
+        Logger._level = level;
+    }
+
+    /**
+     * Get a logger instance for a specific module
+     * @param {string} moduleName - Name of the module (used as prefix)
+     * @returns {Object} Logger instance with debug, info, warn, error methods
+     */
+    static getLogger(moduleName) {
+        if (!Logger._initialized) {
+            Logger.init();
+        }
+
+        // Return cached logger if exists
+        if (Logger._loggers.has(moduleName)) {
+            return Logger._loggers.get(moduleName);
+        }
+
+        const prefix = `[${moduleName}]`;
+
+        const logger = {
+            /**
+             * Log debug message (most verbose, for development)
+             */
+            debug: (...args) => {
+                if (Logger._level <= LogLevel.DEBUG) {
+                    const timestamp = Logger._showTimestamps ? `[${new Date().toISOString().substr(11, 12)}] ` : '';
+                    console.debug(timestamp + prefix, ...args);
+                }
+            },
+
+            /**
+             * Log info message (general information)
+             */
+            info: (...args) => {
+                if (Logger._level <= LogLevel.INFO) {
+                    console.info(prefix, ...args);
+                }
+            },
+
+            /**
+             * Log warning message
+             */
+            warn: (...args) => {
+                if (Logger._level <= LogLevel.WARN) {
+                    console.warn(prefix, ...args);
+                }
+            },
+
+            /**
+             * Log error message (always shown unless NONE)
+             */
+            error: (...args) => {
+                if (Logger._level <= LogLevel.ERROR) {
+                    console.error(prefix, ...args);
+                }
+            },
+
+            /**
+             * Log a group of related messages (collapsible in console)
+             * @param {string} label - Group label
+             * @param {Function} fn - Function that logs the group contents
+             */
+            group: (label, fn) => {
+                if (Logger._level <= LogLevel.DEBUG) {
+                    console.groupCollapsed(prefix + ' ' + label);
+                    fn();
+                    console.groupEnd();
+                }
+            },
+
+            /**
+             * Log timing information
+             * @param {string} label - Timer label
+             */
+            time: (label) => {
+                if (Logger._level <= LogLevel.DEBUG) {
+                    console.time(prefix + ' ' + label);
+                }
+            },
+
+            /**
+             * End timing and log result
+             * @param {string} label - Timer label (must match time() call)
+             */
+            timeEnd: (label) => {
+                if (Logger._level <= LogLevel.DEBUG) {
+                    console.timeEnd(prefix + ' ' + label);
+                }
+            }
+        };
+
+        Logger._loggers.set(moduleName, logger);
+        return logger;
+    }
+
+    /**
+     * Check if a log level is enabled
+     * @param {number} level - LogLevel to check
+     * @returns {boolean}
+     */
+    static isEnabled(level) {
+        return Logger._level <= level;
+    }
+}
+
+// Initialize on module load
+Logger.init();
 
 // =============================================================================
 // ERROR HANDLING & NOTIFICATIONS
@@ -424,6 +630,10 @@ function disposeObject(object) {
 // =============================================================================
 
 export {
+    // Logging system
+    Logger,
+    LogLevel,
+
     // Notification system
     notify,
     NotificationType,

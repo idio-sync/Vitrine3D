@@ -78,24 +78,38 @@ function init(): void {
 - `alignment.js` - ICP and auto-alignment algorithms
 - `metadata-manager.js` - Metadata collection and display
 
-### 1.4 Debug Logging in Production (MEDIUM Priority)
+### ~~1.4 Debug Logging in Production (MEDIUM Priority)~~ ✅ FIXED
 
-**Issue:** Extensive `console.log` statements throughout the codebase, including diagnostic blocks.
+> **Status:** Resolved on 2026-02-04
+>
+> **Fix implemented in:**
+> - `utilities.js` - New `Logger` class with configurable log levels
+> - `main.js` - Replaced ~180 console.log/warn/error calls with Logger
+> - `archive-loader.js` - Updated to use Logger
+> - `archive-creator.js` - Updated to use Logger
+>
+> **Changes made:**
+> - Created centralized Logger utility with log levels (DEBUG, INFO, WARN, ERROR, NONE)
+> - Log level configurable via URL parameter: `?log=debug|info|warn|error|none`
+> - Defaults to WARN in production, INFO in development (localhost/127.0.0.1)
+> - Module-specific prefixes automatically added (e.g., `[main.js]`, `[ArchiveLoader]`)
+> - Diagnostic logs (`[DIAG]`, `[ICP]`, etc.) converted to debug level
+> - Timestamps shown in debug mode
+> - Note: `config.js` intentionally uses direct console calls for early-stage security logging
 
-**Location:** Multiple files, notably `main.js:3136-3224`
+~~**Issue:** Extensive `console.log` statements throughout the codebase, including diagnostic blocks.~~
 
 ```javascript
-// main.js:3136-3144
+// OLD:
+console.log('[main.js] Module loaded');
 console.log('[DIAG] === applyControlsVisibilityDirect ===');
-console.log('[DIAG] shouldShow:', shouldShow);
-console.log('[DIAG] BEFORE - classList:', controlsPanel.className);
-console.log('[DIAG] BEFORE - inline style:', controlsPanel.style.cssText);
-```
 
-**Recommendation:**
-- Implement a proper logging utility with log levels
-- Remove or guard diagnostic blocks with feature flags
-- Use source maps for production debugging instead
+// NEW:
+import { Logger } from './utilities.js';
+const log = Logger.getLogger('main.js');
+log.info('Module loaded');
+log.debug('[DIAG] === applyControlsVisibilityDirect ===');
+```
 
 ### 1.5 Missing Error Boundaries (MEDIUM Priority)
 
@@ -450,7 +464,7 @@ if (!CRYPTO_AVAILABLE) {
 1. **Split main.js** into focused modules
 2. **Add TypeScript** or comprehensive JSDoc
 3. **Implement testing** (start with critical paths)
-4. **Remove debug logging** or implement proper log levels
+4. ~~**Remove debug logging** or implement proper log levels~~ ✅ DONE
 
 ---
 
@@ -520,8 +534,12 @@ The codebase shows solid foundational work with good 3D visualization capabiliti
   - Mesh material processing consolidated
   - Face/vertex counting utilities added
   - Object disposal utility added
+- ✅ Proper logging system with configurable log levels (utilities.js)
+  - Logger class with DEBUG, INFO, WARN, ERROR, NONE levels
+  - URL parameter override (?log=debug)
+  - Module-specific prefixes
 
-The application is now ready for production from both a security and code quality standpoint. Remaining items are longer-term maintainability improvements: better modularization of main.js and the addition of a testing framework.
+The application is now ready for production from both a security and code quality standpoint. Remaining items are longer-term maintainability improvements: better modularization of main.js, the addition of a testing framework, and adding file size limits for uploads.
 
 **Estimated Effort for Security Fixes:** ~~2-3 developer days~~ ✅ Complete
 **Estimated Effort for Short-term Code Quality:** ~~1 developer week~~ ✅ Complete

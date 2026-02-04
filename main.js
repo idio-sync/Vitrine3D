@@ -10,19 +10,22 @@ import { ArchiveLoader, isArchiveFile } from './archive-loader.js';
 import { AnnotationSystem } from './annotation-system.js';
 import { ArchiveCreator, captureScreenshot } from './archive-creator.js';
 import { CAMERA, ORBIT_CONTROLS, RENDERER, LIGHTING, GRID, COLORS, TIMING, MATERIAL } from './constants.js';
-import { notify, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject } from './utilities.js';
+import { Logger, notify, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject } from './utilities.js';
+
+// Create logger for this module
+const log = Logger.getLogger('main.js');
 
 // Mark module as loaded (for pre-module error detection)
 window.moduleLoaded = true;
-console.log('[main.js] Module loaded successfully, THREE:', !!THREE, 'SplatMesh:', !!SplatMesh);
+log.info('Module loaded successfully, THREE:', !!THREE, 'SplatMesh:', !!SplatMesh);
 
 // Expose THREE globally for debugging and potential library compatibility
 window.THREE = THREE;
-console.log('[main.js] THREE.REVISION:', THREE.REVISION);
+log.debug('THREE.REVISION:', THREE.REVISION);
 
 // Global error handler for runtime errors
 window.onerror = function(message, source, lineno, colno, error) {
-    console.error('[main.js] Runtime error:', message, 'at', source, 'line', lineno);
+    log.error(' Runtime error:', message, 'at', source, 'line', lineno);
     return false;
 };
 
@@ -163,7 +166,7 @@ const canvasRight = document.getElementById('viewer-canvas-right');
 const loadingOverlay = document.getElementById('loading-overlay');
 const loadingText = document.getElementById('loading-text');
 
-console.log('[main.js] DOM elements found:', {
+log.info(' DOM elements found:', {
     canvas: !!canvas,
     canvasRight: !!canvasRight,
     loadingOverlay: !!loadingOverlay,
@@ -172,15 +175,15 @@ console.log('[main.js] DOM elements found:', {
 
 // Initialize the scene
 function init() {
-    console.log('[main.js] init() starting...');
+    log.info(' init() starting...');
 
     // Verify required DOM elements
     if (!canvas) {
-        console.error('[main.js] FATAL: viewer-canvas not found!');
+        log.error(' FATAL: viewer-canvas not found!');
         return;
     }
     if (!canvasRight) {
-        console.error('[main.js] FATAL: viewer-canvas-right not found!');
+        log.error(' FATAL: viewer-canvas-right not found!');
         return;
     }
 
@@ -247,20 +250,20 @@ function init() {
     });
 
     // Add TransformControls to scene with instance check
-    console.log('[main.js] TransformControls instanceof THREE.Object3D:', transformControls instanceof THREE.Object3D);
+    log.info(' TransformControls instanceof THREE.Object3D:', transformControls instanceof THREE.Object3D);
     if (!(transformControls instanceof THREE.Object3D)) {
-        console.error('[main.js] WARNING: TransformControls is NOT an instance of THREE.Object3D!');
-        console.error('[main.js] This indicates THREE.js is loaded multiple times (import map issue).');
-        console.error('[main.js] TransformControls constructor:', transformControls.constructor?.name);
-        console.error('[main.js] THREE.Object3D:', THREE.Object3D?.name);
+        log.error(' WARNING: TransformControls is NOT an instance of THREE.Object3D!');
+        log.error(' This indicates THREE.js is loaded multiple times (import map issue).');
+        log.error(' TransformControls constructor:', transformControls.constructor?.name);
+        log.error(' THREE.Object3D:', THREE.Object3D?.name);
         // Try to add anyway - it may work partially
     }
     try {
         scene.add(transformControls);
-        console.log('[main.js] TransformControls added to scene successfully');
+        log.info(' TransformControls added to scene successfully');
     } catch (tcError) {
-        console.error('[main.js] Failed to add TransformControls to scene:', tcError);
-        console.error('[main.js] Transform gizmos will not be visible, but app should still work');
+        log.error(' Failed to add TransformControls to scene:', tcError);
+        log.error(' Transform gizmos will not be visible, but app should still work');
     }
 
     // Lighting - Enhanced for better mesh visibility
@@ -304,7 +307,7 @@ function init() {
     annotationSystem.onAnnotationCreated = onAnnotationPlaced;
     annotationSystem.onAnnotationSelected = onAnnotationSelected;
     annotationSystem.onPlacementModeChanged = onPlacementModeChanged;
-    console.log('[main.js] Annotation system initialized:', !!annotationSystem);
+    log.info(' Annotation system initialized:', !!annotationSystem);
 
     // Initialize archive creator
     archiveCreator = new ArchiveCreator();
@@ -331,7 +334,7 @@ function init() {
     // Start render loop
     animate();
 
-    console.log('[main.js] init() completed successfully');
+    log.info(' init() completed successfully');
 }
 
 function onWindowResize() {
@@ -374,26 +377,26 @@ function addListener(id, event, handler) {
         el.addEventListener(event, handler);
         return true;
     } else {
-        console.warn(`[main.js] Element not found: ${id}`);
+        log.warn(`Element not found: ${id}`);
         return false;
     }
 }
 
 function setupUIEvents() {
-    console.log('[main.js] Setting up UI events...');
+    log.info(' Setting up UI events...');
 
     // Controls panel toggle
     const toggleBtn = document.getElementById('btn-toggle-controls');
-    console.log('[main.js] Toggle button found:', !!toggleBtn);
+    log.info(' Toggle button found:', !!toggleBtn);
     if (toggleBtn) {
         toggleBtn.onclick = function(e) {
-            console.log('[main.js] Toggle button clicked');
+            log.info(' Toggle button clicked');
             e.preventDefault();
             e.stopPropagation();
             try {
                 toggleControlsPanel();
             } catch (err) {
-                console.error('[main.js] Error in toggleControlsPanel:', err);
+                log.error(' Error in toggleControlsPanel:', err);
                 // Fallback: use class-based toggle (no inline display styles)
                 const panel = document.getElementById('controls-panel');
                 if (panel) {
@@ -435,7 +438,7 @@ function setupUIEvents() {
     // URL load buttons (using prompt)
     const splatUrlBtn = document.getElementById('btn-load-splat-url');
     const modelUrlBtn = document.getElementById('btn-load-model-url');
-    console.log('[main.js] URL buttons found - splat:', !!splatUrlBtn, 'model:', !!modelUrlBtn);
+    log.info(' URL buttons found - splat:', !!splatUrlBtn, 'model:', !!modelUrlBtn);
 
     if (splatUrlBtn) {
         splatUrlBtn.addEventListener('click', handleLoadSplatFromUrlPrompt);
@@ -558,7 +561,7 @@ function setupUIEvents() {
     // Annotation controls
     const annoBtn = addListener('btn-annotate', 'click', toggleAnnotationMode);
     const addAnnoBtn = addListener('btn-add-annotation', 'click', toggleAnnotationMode);
-    console.log('[main.js] Annotation buttons attached:', { annoBtn, addAnnoBtn });
+    log.info(' Annotation buttons attached:', { annoBtn, addAnnoBtn });
     addListener('btn-anno-save', 'click', saveAnnotation);
     addListener('btn-anno-cancel', 'click', cancelAnnotation);
     addListener('btn-update-anno-camera', 'click', updateSelectedAnnotationCamera);
@@ -567,7 +570,7 @@ function setupUIEvents() {
     // Export/archive creation controls
     const exportBtn = addListener('btn-export-archive', 'click', showExportPanel);
     const openExportBtn = addListener('btn-open-export', 'click', showExportPanel);
-    console.log('[main.js] Export buttons attached:', { exportBtn, openExportBtn });
+    log.info(' Export buttons attached:', { exportBtn, openExportBtn });
     addListener('btn-export-cancel', 'click', hideExportPanel);
     addListener('btn-export-download', 'click', downloadArchive);
 
@@ -646,7 +649,7 @@ function setupUIEvents() {
     // Metadata sidebar event handlers
     setupMetadataSidebar();
 
-    console.log('[main.js] UI events setup complete');
+    log.info(' UI events setup complete');
 }
 
 function setDisplayMode(mode) {
@@ -716,7 +719,7 @@ function setSelectedObject(selection) {
     try {
         transformControls.detach();
     } catch (e) {
-        console.warn('[main.js] Error detaching transform controls:', e);
+        log.warn(' Error detaching transform controls:', e);
     }
 
     try {
@@ -733,8 +736,8 @@ function setSelectedObject(selection) {
             }
         }
     } catch (attachError) {
-        console.error('[main.js] Error attaching transform controls:', attachError);
-        console.error('[main.js] This may be due to THREE.js instance mismatch.');
+        log.error(' Error attaching transform controls:', attachError);
+        log.error(' This may be due to THREE.js instance mismatch.');
         // Don't re-throw - allow the rest of the application to continue
     }
 }
@@ -931,9 +934,9 @@ function hideLoading() {
 
 // Handle loading splat from URL via prompt
 function handleLoadSplatFromUrlPrompt() {
-    console.log('[main.js] handleLoadSplatFromUrlPrompt called');
+    log.info(' handleLoadSplatFromUrlPrompt called');
     const url = prompt('Enter Gaussian Splat URL:');
-    console.log('[main.js] User entered:', url);
+    log.info(' User entered:', url);
     if (!url) return; // User cancelled or entered empty string
 
     // Validate URL before loading
@@ -948,9 +951,9 @@ function handleLoadSplatFromUrlPrompt() {
 
 // Handle loading model from URL via prompt
 function handleLoadModelFromUrlPrompt() {
-    console.log('[main.js] handleLoadModelFromUrlPrompt called');
+    log.info(' handleLoadModelFromUrlPrompt called');
     const url = prompt('Enter 3D Model URL (.glb, .gltf, .obj):');
-    console.log('[main.js] User entered:', url);
+    log.info(' User entered:', url);
     if (!url) return; // User cancelled or entered empty string
 
     // Validate URL before loading
@@ -965,9 +968,9 @@ function handleLoadModelFromUrlPrompt() {
 
 // Handle loading archive from URL via prompt
 function handleLoadArchiveFromUrlPrompt() {
-    console.log('[main.js] handleLoadArchiveFromUrlPrompt called');
+    log.info(' handleLoadArchiveFromUrlPrompt called');
     const url = prompt('Enter Archive URL (.a3d, .a3z):');
-    console.log('[main.js] User entered:', url);
+    log.info(' User entered:', url);
     if (!url) return;
 
     // Validate URL before loading
@@ -1000,7 +1003,7 @@ async function handleArchiveFile(event) {
 
         state.currentArchiveUrl = null; // Local files cannot be shared
     } catch (error) {
-        console.error('Error loading archive:', error);
+        log.error('Error loading archive:', error);
         hideLoading();
         notify.error('Error loading archive: ' + error.message);
     }
@@ -1027,7 +1030,7 @@ async function loadArchiveFromUrl(url) {
         state.currentArchiveUrl = url;
         await processArchive(archiveLoader, fileName);
     } catch (error) {
-        console.error('Error loading archive from URL:', error);
+        log.error('Error loading archive from URL:', error);
         hideLoading();
         notify.error('Error loading archive from URL: ' + error.message);
     }
@@ -1039,7 +1042,7 @@ async function processArchive(archiveLoader, archiveName) {
 
     try {
         const manifest = await archiveLoader.parseManifest();
-        console.log('[main.js] Archive manifest:', manifest);
+        log.info(' Archive manifest:', manifest);
 
         state.archiveLoader = archiveLoader;
         state.archiveManifest = manifest;
@@ -1076,7 +1079,7 @@ async function processArchive(archiveLoader, archiveName) {
                 }
             } catch (e) {
                 errors.push(`Failed to load splat: ${e.message}`);
-                console.error('[main.js] Error loading splat from archive:', e);
+                log.error(' Error loading splat from archive:', e);
             }
         }
 
@@ -1102,7 +1105,7 @@ async function processArchive(archiveLoader, archiveName) {
                 }
             } catch (e) {
                 errors.push(`Failed to load mesh: ${e.message}`);
-                console.error('[main.js] Error loading mesh from archive:', e);
+                log.error(' Error loading mesh from archive:', e);
             }
         }
 
@@ -1139,7 +1142,7 @@ async function processArchive(archiveLoader, archiveName) {
 
         // Show warning if there were partial errors
         if (errors.length > 0 && (loadedSplat || loadedMesh)) {
-            console.warn('[main.js] Archive loaded with warnings:', errors);
+            log.warn(' Archive loaded with warnings:', errors);
         }
 
         // Alert if no viewable content
@@ -1151,7 +1154,7 @@ async function processArchive(archiveLoader, archiveName) {
 
         hideLoading();
     } catch (error) {
-        console.error('[main.js] Error processing archive:', error);
+        log.error(' Error processing archive:', error);
         hideLoading();
         notify.error('Error processing archive: ' + error.message);
     }
@@ -1174,7 +1177,7 @@ async function loadSplatFromBlobUrl(blobUrl, fileName) {
 
     // Verify SplatMesh is a valid THREE.Object3D
     if (!(splatMesh instanceof THREE.Object3D)) {
-        console.warn('[main.js] WARNING: SplatMesh is not an instance of THREE.Object3D!');
+        log.warn(' WARNING: SplatMesh is not an instance of THREE.Object3D!');
     }
 
     // Wait for initialization
@@ -1183,7 +1186,7 @@ async function loadSplatFromBlobUrl(blobUrl, fileName) {
     try {
         scene.add(splatMesh);
     } catch (addError) {
-        console.error('[main.js] Error adding splatMesh to scene:', addError);
+        log.error(' Error adding splatMesh to scene:', addError);
         throw addError;
     }
 
@@ -1347,7 +1350,7 @@ function clearArchiveMetadata() {
 
 // Called when user places an annotation (clicks on model in placement mode)
 function onAnnotationPlaced(position, cameraState) {
-    console.log('[main.js] Annotation placed at:', position);
+    log.info(' Annotation placed at:', position);
 
     // Show annotation panel for details entry
     const panel = document.getElementById('annotation-panel');
@@ -1371,7 +1374,7 @@ function onAnnotationPlaced(position, cameraState) {
 
 // Called when an annotation is selected
 function onAnnotationSelected(annotation) {
-    console.log('[main.js] Annotation selected:', annotation.id);
+    log.info(' Annotation selected:', annotation.id);
 
     // Update annotations list highlighting
     const items = document.querySelectorAll('.annotation-item');
@@ -1411,7 +1414,7 @@ function onAnnotationSelected(annotation) {
 
 // Called when placement mode changes
 function onPlacementModeChanged(active) {
-    console.log('[main.js] Placement mode:', active);
+    log.info(' Placement mode:', active);
 
     const indicator = document.getElementById('annotation-mode-indicator');
     const btn = document.getElementById('btn-annotate');
@@ -1422,11 +1425,11 @@ function onPlacementModeChanged(active) {
 
 // Toggle annotation placement mode
 function toggleAnnotationMode() {
-    console.log('[main.js] toggleAnnotationMode called, annotationSystem:', !!annotationSystem);
+    log.info(' toggleAnnotationMode called, annotationSystem:', !!annotationSystem);
     if (annotationSystem) {
         annotationSystem.togglePlacementMode();
     } else {
-        console.error('[main.js] annotationSystem is not initialized!');
+        log.error(' annotationSystem is not initialized!');
     }
 }
 
@@ -1440,7 +1443,7 @@ function saveAnnotation() {
 
     const annotation = annotationSystem.confirmAnnotation(id, title, body);
     if (annotation) {
-        console.log('[main.js] Annotation saved:', annotation);
+        log.info(' Annotation saved:', annotation);
         updateAnnotationsUI();
     }
 
@@ -1475,7 +1478,7 @@ function updateSelectedAnnotationCamera() {
     if (!annotationSystem || !annotationSystem.selectedAnnotation) return;
 
     annotationSystem.updateAnnotationCamera(annotationSystem.selectedAnnotation.id);
-    console.log('[main.js] Updated camera for annotation:', annotationSystem.selectedAnnotation.id);
+    log.info(' Updated camera for annotation:', annotationSystem.selectedAnnotation.id);
 }
 
 // Delete selected annotation
@@ -1652,7 +1655,7 @@ function showSidebarAnnotationEditor(annotation) {
 function loadAnnotationsFromArchive(annotations) {
     if (!annotationSystem || !annotations || !Array.isArray(annotations)) return;
 
-    console.log('[main.js] Loading', annotations.length, 'annotations from archive');
+    log.info(' Loading', annotations.length, 'annotations from archive');
     annotationSystem.setAnnotations(annotations);
     updateAnnotationsUI();
     updateSidebarAnnotationsList();
@@ -1662,10 +1665,10 @@ function loadAnnotationsFromArchive(annotations) {
 
 // Show export panel
 function showExportPanel() {
-    console.log('[main.js] showExportPanel called');
+    log.info(' showExportPanel called');
     const panel = document.getElementById('export-panel');
     if (panel) {
-        console.log('[main.js] export-panel found, removing hidden class');
+        log.info(' export-panel found, removing hidden class');
         panel.classList.remove('hidden');
     }
 }
@@ -1678,20 +1681,20 @@ function hideExportPanel() {
 
 // Download archive
 async function downloadArchive() {
-    console.log('[main.js] downloadArchive called');
+    log.info(' downloadArchive called');
     if (!archiveCreator) {
-        console.error('[main.js] archiveCreator is null');
+        log.error(' archiveCreator is null');
         return;
     }
 
     // Reset creator
-    console.log('[main.js] Resetting archive creator');
+    log.info(' Resetting archive creator');
     archiveCreator.reset();
 
     // Get metadata from metadata panel
-    console.log('[main.js] Collecting metadata');
+    log.info(' Collecting metadata');
     const metadata = collectMetadata();
-    console.log('[main.js] Metadata collected:', metadata);
+    log.info(' Metadata collected:', metadata);
 
     // Get export options
     const formatRadio = document.querySelector('input[name="export-format"]:checked');
@@ -1699,39 +1702,39 @@ async function downloadArchive() {
     // Preview image and integrity hashes are always included
     const includePreview = true;
     const includeHashes = true;
-    console.log('[main.js] Export options:', { format, includePreview, includeHashes });
+    log.info(' Export options:', { format, includePreview, includeHashes });
 
     // Validate title is set
     if (!metadata.project.title) {
-        console.log('[main.js] No title set, showing metadata panel');
+        log.info(' No title set, showing metadata panel');
         notify.warning('Please enter a project title in the metadata panel before exporting.');
         showMetadataPanel();
         return;
     }
 
     // Apply project info
-    console.log('[main.js] Setting project info');
+    log.info(' Setting project info');
     archiveCreator.setProjectInfo(metadata.project);
 
     // Apply provenance
-    console.log('[main.js] Setting provenance');
+    log.info(' Setting provenance');
     archiveCreator.setProvenance(metadata.provenance);
 
     // Apply custom fields
     if (Object.keys(metadata.customFields).length > 0) {
-        console.log('[main.js] Setting custom fields');
+        log.info(' Setting custom fields');
         archiveCreator.setCustomFields(metadata.customFields);
     }
 
     // Add splat if loaded
-    console.log('[main.js] Checking splat:', { currentSplatBlob: !!currentSplatBlob, splatLoaded: state.splatLoaded });
+    log.info(' Checking splat:', { currentSplatBlob: !!currentSplatBlob, splatLoaded: state.splatLoaded });
     if (currentSplatBlob && state.splatLoaded) {
         const fileName = document.getElementById('splat-filename')?.textContent || 'scene.ply';
         const position = splatMesh ? [splatMesh.position.x, splatMesh.position.y, splatMesh.position.z] : [0, 0, 0];
         const rotation = splatMesh ? [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z] : [0, 0, 0];
         const scale = splatMesh ? splatMesh.scale.x : 1;
 
-        console.log('[main.js] Adding scene:', { fileName, position, rotation, scale });
+        log.info(' Adding scene:', { fileName, position, rotation, scale });
         archiveCreator.addScene(currentSplatBlob, fileName, {
             position, rotation, scale,
             created_by: metadata.splatMetadata.createdBy || 'unknown',
@@ -1741,14 +1744,14 @@ async function downloadArchive() {
     }
 
     // Add mesh if loaded
-    console.log('[main.js] Checking mesh:', { currentMeshBlob: !!currentMeshBlob, modelLoaded: state.modelLoaded });
+    log.info(' Checking mesh:', { currentMeshBlob: !!currentMeshBlob, modelLoaded: state.modelLoaded });
     if (currentMeshBlob && state.modelLoaded) {
         const fileName = document.getElementById('model-filename')?.textContent || 'mesh.glb';
         const position = modelGroup ? [modelGroup.position.x, modelGroup.position.y, modelGroup.position.z] : [0, 0, 0];
         const rotation = modelGroup ? [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z] : [0, 0, 0];
         const scale = modelGroup ? modelGroup.scale.x : 1;
 
-        console.log('[main.js] Adding mesh:', { fileName, position, rotation, scale });
+        log.info(' Adding mesh:', { fileName, position, rotation, scale });
         archiveCreator.addMesh(currentMeshBlob, fileName, {
             position, rotation, scale,
             created_by: metadata.meshMetadata.createdBy || 'unknown',
@@ -1759,12 +1762,12 @@ async function downloadArchive() {
 
     // Add annotations
     if (annotationSystem && annotationSystem.hasAnnotations()) {
-        console.log('[main.js] Adding annotations');
+        log.info(' Adding annotations');
         archiveCreator.setAnnotations(annotationSystem.toJSON());
     }
 
     // Set quality stats
-    console.log('[main.js] Setting quality stats');
+    log.info(' Setting quality stats');
     archiveCreator.setQualityStats({
         splatCount: state.splatLoaded ? parseInt(document.getElementById('splat-vertices')?.textContent) || 0 : 0,
         meshPolys: state.modelLoaded ? parseInt(document.getElementById('model-faces')?.textContent) || 0 : 0,
@@ -1775,7 +1778,7 @@ async function downloadArchive() {
 
     // Add preview/thumbnail
     if (includePreview && renderer) {
-        console.log('[main.js] Capturing preview screenshot');
+        log.info(' Capturing preview screenshot');
         try {
             // Force a render to ensure canvas has current content
             // WebGL canvases clear after each frame unless preserveDrawingBuffer is set
@@ -1784,28 +1787,28 @@ async function downloadArchive() {
             const canvas = renderer.domElement;
             const previewBlob = await captureScreenshot(canvas, { width: 512, height: 512 });
             if (previewBlob) {
-                console.log('[main.js] Preview captured, adding thumbnail');
+                log.info(' Preview captured, adding thumbnail');
                 archiveCreator.addThumbnail(previewBlob, 'preview.jpg');
             }
         } catch (e) {
-            console.warn('[main.js] Failed to capture preview:', e);
+            log.warn(' Failed to capture preview:', e);
         }
     }
 
     // Validate
-    console.log('[main.js] Validating archive');
+    log.info(' Validating archive');
     const validation = archiveCreator.validate();
-    console.log('[main.js] Validation result:', validation);
+    log.info(' Validation result:', validation);
     if (!validation.valid) {
         notify.error('Cannot create archive: ' + validation.errors.join('; '));
         return;
     }
 
     // Create and download with progress
-    console.log('[main.js] Starting archive creation');
+    log.info(' Starting archive creation');
     showLoading('Creating archive...', true); // Show with progress bar
     try {
-        console.log('[main.js] Calling archiveCreator.downloadArchive');
+        log.info(' Calling archiveCreator.downloadArchive');
         await archiveCreator.downloadArchive(
             {
                 filename: metadata.project.id || 'archive',
@@ -1817,12 +1820,12 @@ async function downloadArchive() {
                 updateProgress(percent, stage);
             }
         );
-        console.log('[main.js] Archive download complete');
+        log.info(' Archive download complete');
         hideLoading();
         hideExportPanel();
     } catch (e) {
         hideLoading();
-        console.error('[main.js] Error creating archive:', e);
+        log.error(' Error creating archive:', e);
         notify.error('Error creating archive: ' + e.message);
     }
 }
@@ -2589,9 +2592,9 @@ async function handleSplatFile(event) {
 
         // Verify SplatMesh is a valid THREE.Object3D (detect instance conflicts)
         if (!(splatMesh instanceof THREE.Object3D)) {
-            console.warn('[main.js] WARNING: SplatMesh is not an instance of THREE.Object3D!');
-            console.warn('[main.js] This may indicate multiple THREE.js instances are loaded.');
-            console.warn('[main.js] SplatMesh constructor:', splatMesh.constructor?.name);
+            log.warn(' WARNING: SplatMesh is not an instance of THREE.Object3D!');
+            log.warn(' This may indicate multiple THREE.js instances are loaded.');
+            log.warn(' SplatMesh constructor:', splatMesh.constructor?.name);
             // Try to proceed anyway - some operations may still work
         }
 
@@ -2602,8 +2605,8 @@ async function handleSplatFile(event) {
         try {
             scene.add(splatMesh);
         } catch (addError) {
-            console.error('[main.js] Error adding splatMesh to scene:', addError);
-            console.error('[main.js] This is likely due to THREE.js instance mismatch with Spark library.');
+            log.error(' Error adding splatMesh to scene:', addError);
+            log.error(' This is likely due to THREE.js instance mismatch with Spark library.');
             throw addError;
         }
 
@@ -2622,7 +2625,7 @@ async function handleSplatFile(event) {
         // Pre-compute hash in background for faster export later
         if (archiveCreator) {
             archiveCreator.precomputeHash(file).catch(e => {
-                console.warn('[main.js] Background hash precompute failed:', e);
+                log.warn(' Background hash precompute failed:', e);
             });
         }
 
@@ -2639,7 +2642,7 @@ async function handleSplatFile(event) {
 
         hideLoading();
     } catch (error) {
-        console.error('Error loading splat:', error);
+        log.error('Error loading splat:', error);
         hideLoading();
         notify.error('Error loading Gaussian Splat: ' + error.message);
     }
@@ -2693,7 +2696,7 @@ async function handleModelFile(event) {
             // Pre-compute hash in background for faster export later
             if (archiveCreator) {
                 archiveCreator.precomputeHash(mainFile).catch(e => {
-                    console.warn('[main.js] Background hash precompute failed:', e);
+                    log.warn(' Background hash precompute failed:', e);
                 });
             }
 
@@ -2712,7 +2715,7 @@ async function handleModelFile(event) {
 
         hideLoading();
     } catch (error) {
-        console.error('Error loading model:', error);
+        log.error('Error loading model:', error);
         hideLoading();
         notify.error('Error loading model: ' + error.message);
     }
@@ -2897,17 +2900,17 @@ function loadAlignment(event) {
 // Load alignment from a URL
 async function loadAlignmentFromUrl(url) {
     try {
-        console.log('[main.js] Loading alignment from URL:', url);
+        log.info(' Loading alignment from URL:', url);
         const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const alignment = await response.json();
         applyAlignmentData(alignment);
-        console.log('[main.js] Alignment loaded successfully from URL');
+        log.info(' Alignment loaded successfully from URL');
         return true;
     } catch (error) {
-        console.error('[main.js] Error loading alignment from URL:', error);
+        log.error(' Error loading alignment from URL:', error);
         return false;
     }
 }
@@ -2942,7 +2945,7 @@ function copyShareLink() {
         navigator.clipboard.writeText(shareUrl).then(() => {
             notify.success('Share link copied to clipboard!');
         }).catch((err) => {
-            console.error('[main.js] Failed to copy share link:', err);
+            log.error(' Failed to copy share link:', err);
             notify.info('Share link: ' + shareUrl, { duration: 10000 });
         });
         return;
@@ -3012,7 +3015,7 @@ function copyShareLink() {
     navigator.clipboard.writeText(shareUrl).then(() => {
         notify.success('Share link copied to clipboard!');
     }).catch((err) => {
-        console.error('[main.js] Failed to copy share link:', err);
+        log.error(' Failed to copy share link:', err);
         // Fallback: show the URL in a notification
         notify.info('Share link: ' + shareUrl, { duration: 10000 });
     });
@@ -3096,7 +3099,7 @@ function fitToView() {
 function toggleControlsPanel() {
     const controlsPanel = document.getElementById('controls-panel');
     if (!controlsPanel) {
-        console.error('[main.js] controls-panel not found!');
+        log.error(' controls-panel not found!');
         return;
     }
 
@@ -3115,23 +3118,23 @@ function applyControlsVisibilityDirect(controlsPanel, shouldShow) {
     const toggleBtn = document.getElementById('btn-toggle-controls');
 
     // DIAGNOSTIC: Log state before changes
-    console.log('[DIAG] === applyControlsVisibilityDirect ===');
-    console.log('[DIAG] shouldShow:', shouldShow);
-    console.log('[DIAG] BEFORE - classList:', controlsPanel.className);
-    console.log('[DIAG] BEFORE - inline style:', controlsPanel.style.cssText);
+    log.debug('[DIAG] === applyControlsVisibilityDirect ===');
+    log.debug('[DIAG] shouldShow:', shouldShow);
+    log.debug('[DIAG] BEFORE - classList:', controlsPanel.className);
+    log.debug('[DIAG] BEFORE - inline style:', controlsPanel.style.cssText);
     const beforeComputed = window.getComputedStyle(controlsPanel);
-    console.log('[DIAG] BEFORE - computed width:', beforeComputed.width);
-    console.log('[DIAG] BEFORE - computed minWidth:', beforeComputed.minWidth);
-    console.log('[DIAG] BEFORE - computed padding:', beforeComputed.padding);
+    log.debug('[DIAG] BEFORE - computed width:', beforeComputed.width);
+    log.debug('[DIAG] BEFORE - computed minWidth:', beforeComputed.minWidth);
+    log.debug('[DIAG] BEFORE - computed padding:', beforeComputed.padding);
 
     // Check controls mode
     let mode = 'full';
     try {
         mode = config.controlsMode || 'full';
     } catch (e) {
-        console.warn('[main.js] Could not read config.controlsMode:', e);
+        log.warn(' Could not read config.controlsMode:', e);
     }
-    console.log('[DIAG] mode:', mode);
+    log.debug('[DIAG] mode:', mode);
 
     if (mode === 'none') {
         controlsPanel.style.display = 'none';
@@ -3145,11 +3148,11 @@ function applyControlsVisibilityDirect(controlsPanel, shouldShow) {
     controlsPanel.style.opacity = '';
 
     if (shouldShow) {
-        console.log('[DIAG] Attempting to SHOW panel...');
+        log.debug('[DIAG] Attempting to SHOW panel...');
 
         // Remove hidden class
         controlsPanel.classList.remove('panel-hidden', 'hidden');
-        console.log('[DIAG] After classList.remove - className:', controlsPanel.className);
+        log.debug('[DIAG] After classList.remove - className:', controlsPanel.className);
 
         // Force explicit inline styles to override any CSS issues
         const targetWidth = (mode === 'minimal') ? '200px' : '280px';
@@ -3160,25 +3163,25 @@ function applyControlsVisibilityDirect(controlsPanel, shouldShow) {
         controlsPanel.style.overflowY = 'auto';
         controlsPanel.style.borderLeftWidth = '1px';
         controlsPanel.style.pointerEvents = 'auto';
-        console.log('[DIAG] After setting inline styles - style.cssText:', controlsPanel.style.cssText);
+        log.debug('[DIAG] After setting inline styles - style.cssText:', controlsPanel.style.cssText);
 
         if (toggleBtn) toggleBtn.classList.remove('controls-hidden');
     } else {
-        console.log('[DIAG] Attempting to HIDE panel...');
+        log.debug('[DIAG] Attempting to HIDE panel...');
         controlsPanel.classList.add('panel-hidden');
-        console.log('[DIAG] After classList.add - className:', controlsPanel.className);
+        log.debug('[DIAG] After classList.add - className:', controlsPanel.className);
 
         if (toggleBtn) toggleBtn.classList.add('controls-hidden');
     }
 
     // DIAGNOSTIC: Log state after changes (immediate)
-    console.log('[DIAG] AFTER (immediate) - classList:', controlsPanel.className);
-    console.log('[DIAG] AFTER (immediate) - inline style:', controlsPanel.style.cssText);
+    log.debug('[DIAG] AFTER (immediate) - classList:', controlsPanel.className);
+    log.debug('[DIAG] AFTER (immediate) - inline style:', controlsPanel.style.cssText);
     const afterComputed = window.getComputedStyle(controlsPanel);
-    console.log('[DIAG] AFTER (immediate) - computed width:', afterComputed.width);
-    console.log('[DIAG] AFTER (immediate) - computed minWidth:', afterComputed.minWidth);
-    console.log('[DIAG] AFTER (immediate) - computed padding:', afterComputed.padding);
-    console.log('[DIAG] AFTER (immediate) - offsetWidth:', controlsPanel.offsetWidth);
+    log.debug('[DIAG] AFTER (immediate) - computed width:', afterComputed.width);
+    log.debug('[DIAG] AFTER (immediate) - computed minWidth:', afterComputed.minWidth);
+    log.debug('[DIAG] AFTER (immediate) - computed padding:', afterComputed.padding);
+    log.debug('[DIAG] AFTER (immediate) - offsetWidth:', controlsPanel.offsetWidth);
 
     // Update annotation bar position based on panel visibility
     const annotationBar = document.getElementById('annotation-bar');
@@ -3195,10 +3198,10 @@ function applyControlsVisibilityDirect(controlsPanel, shouldShow) {
     // DIAGNOSTIC: Check again after a delay (after potential transition)
     setTimeout(() => {
         const delayedComputed = window.getComputedStyle(controlsPanel);
-        console.log('[DIAG] AFTER (200ms) - classList:', controlsPanel.className);
-        console.log('[DIAG] AFTER (200ms) - computed width:', delayedComputed.width);
-        console.log('[DIAG] AFTER (200ms) - offsetWidth:', controlsPanel.offsetWidth);
-        console.log('[DIAG] === END ===');
+        log.debug('[DIAG] AFTER (200ms) - classList:', controlsPanel.className);
+        log.debug('[DIAG] AFTER (200ms) - computed width:', delayedComputed.width);
+        log.debug('[DIAG] AFTER (200ms) - offsetWidth:', controlsPanel.offsetWidth);
+        log.debug('[DIAG] === END ===');
 
         try {
             if (typeof onWindowResize === 'function') onWindowResize();
@@ -3215,7 +3218,7 @@ function applyControlsVisibility() {
     try {
         shouldShow = state.controlsVisible;
     } catch (e) {
-        console.warn('[main.js] Could not read state.controlsVisible:', e);
+        log.warn(' Could not read state.controlsVisible:', e);
     }
 
     applyControlsVisibilityDirect(controlsPanel, shouldShow);
@@ -3260,7 +3263,7 @@ function applyControlsMode() {
 async function loadDefaultFiles() {
     // Archive URL takes priority over splat/model URLs
     if (config.defaultArchiveUrl) {
-        console.log('[main.js] Loading archive from URL:', config.defaultArchiveUrl);
+        log.info(' Loading archive from URL:', config.defaultArchiveUrl);
         await loadArchiveFromUrl(config.defaultArchiveUrl);
         return; // Archive handles everything including alignment
     }
@@ -3283,19 +3286,19 @@ async function loadDefaultFiles() {
 
         if (config.inlineAlignment) {
             // Apply inline alignment from URL params
-            console.log('[main.js] Applying inline alignment from URL params...');
+            log.info(' Applying inline alignment from URL params...');
             applyAlignmentData(config.inlineAlignment);
         } else if (config.defaultAlignmentUrl) {
             // Load alignment from URL file
             const alignmentLoaded = await loadAlignmentFromUrl(config.defaultAlignmentUrl);
             if (!alignmentLoaded && state.splatLoaded && state.modelLoaded) {
                 // Fallback to auto-align if alignment URL fetch failed
-                console.log('[main.js] Alignment URL failed, falling back to auto-align...');
+                log.info(' Alignment URL failed, falling back to auto-align...');
                 autoAlignObjects();
             }
         } else if (state.splatLoaded && state.modelLoaded) {
             // No alignment provided, run auto-align
-            console.log('Both files loaded from URL, running auto-align...');
+            log.info('Both files loaded from URL, running auto-align...');
             autoAlignObjects();
         }
     }
@@ -3306,19 +3309,19 @@ async function loadSplatFromUrl(url) {
 
     try {
         // Fetch the file as blob for archive creation
-        console.log('[main.js] Fetching splat from URL:', url);
+        log.info(' Fetching splat from URL:', url);
         const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
         }
         const blob = await response.blob();
         currentSplatBlob = blob;
-        console.log('[main.js] Splat blob stored, size:', blob.size);
+        log.info(' Splat blob stored, size:', blob.size);
 
         // Pre-compute hash in background for faster export later
         if (archiveCreator) {
             archiveCreator.precomputeHash(blob).catch(e => {
-                console.warn('[main.js] Background hash precompute failed:', e);
+                log.warn(' Background hash precompute failed:', e);
             });
         }
 
@@ -3341,8 +3344,8 @@ async function loadSplatFromUrl(url) {
 
         // Verify SplatMesh is a valid THREE.Object3D
         if (!(splatMesh instanceof THREE.Object3D)) {
-            console.warn('[main.js] WARNING: SplatMesh is not an instance of THREE.Object3D!');
-            console.warn('[main.js] This may indicate multiple THREE.js instances are loaded.');
+            log.warn(' WARNING: SplatMesh is not an instance of THREE.Object3D!');
+            log.warn(' This may indicate multiple THREE.js instances are loaded.');
         }
 
         // Wait a moment for initialization
@@ -3351,7 +3354,7 @@ async function loadSplatFromUrl(url) {
         try {
             scene.add(splatMesh);
         } catch (addError) {
-            console.error('[main.js] Error adding splatMesh to scene:', addError);
+            log.error(' Error adding splatMesh to scene:', addError);
             throw addError;
         }
 
@@ -3368,7 +3371,7 @@ async function loadSplatFromUrl(url) {
 
         hideLoading();
     } catch (error) {
-        console.error('Error loading splat from URL:', error);
+        log.error('Error loading splat from URL:', error);
         hideLoading();
     }
 }
@@ -3378,19 +3381,19 @@ async function loadModelFromUrl(url) {
 
     try {
         // Fetch the file as blob for archive creation
-        console.log('[main.js] Fetching model from URL:', url);
+        log.info(' Fetching model from URL:', url);
         const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
         }
         const blob = await response.blob();
         currentMeshBlob = blob;
-        console.log('[main.js] Mesh blob stored, size:', blob.size);
+        log.info(' Mesh blob stored, size:', blob.size);
 
         // Pre-compute hash in background for faster export later
         if (archiveCreator) {
             archiveCreator.precomputeHash(blob).catch(e => {
-                console.warn('[main.js] Background hash precompute failed:', e);
+                log.warn(' Background hash precompute failed:', e);
             });
         }
 
@@ -3435,7 +3438,7 @@ async function loadModelFromUrl(url) {
 
         hideLoading();
     } catch (error) {
-        console.error('Error loading model from URL:', error);
+        log.error('Error loading model from URL:', error);
         hideLoading();
     }
 }
@@ -3509,7 +3512,7 @@ function computeSplatBoundsFromPositions(splatMeshObj) {
             if (count > 0) {
                 bounds.center.addVectors(bounds.min, bounds.max).multiplyScalar(0.5);
                 bounds.found = true;
-                console.log(`[SplatBounds] Computed from ${count} sampled positions`);
+                log.debug(`[SplatBounds] Computed from ${count} sampled positions`);
             }
         }
     }
@@ -3595,18 +3598,18 @@ function extractSplatPositions(splatMeshObj, maxPoints = 5000) {
     const worldMatrix = splatMeshObj.matrixWorld;
 
     // Debug: log available properties
-    console.log('[extractSplatPositions] Checking available APIs...');
-    console.log('[extractSplatPositions] packedSplats:', !!splatMeshObj.packedSplats);
-    console.log('[extractSplatPositions] geometry:', !!splatMeshObj.geometry);
+    log.debug('[extractSplatPositions] Checking available APIs...');
+    log.debug('[extractSplatPositions] packedSplats:', !!splatMeshObj.packedSplats);
+    log.debug('[extractSplatPositions] geometry:', !!splatMeshObj.geometry);
 
     // Try to access splat positions via Spark library's packedSplats API
     if (splatMeshObj.packedSplats && typeof splatMeshObj.packedSplats.forEachSplat === 'function') {
         let count = 0;
         const splatCount = splatMeshObj.packedSplats.splatCount || 0;
-        console.log('[extractSplatPositions] splatCount:', splatCount);
+        log.debug('[extractSplatPositions] splatCount:', splatCount);
 
         if (splatCount === 0) {
-            console.warn('[extractSplatPositions] splatCount is 0, splat may still be loading');
+            log.warn('[extractSplatPositions] splatCount is 0, splat may still be loading');
         }
 
         const stride = Math.max(1, Math.floor(splatCount / maxPoints));
@@ -3627,13 +3630,13 @@ function extractSplatPositions(splatMeshObj, maxPoints = 5000) {
                 }
             });
         } catch (e) {
-            console.error('[extractSplatPositions] Error in forEachSplat:', e);
+            log.error('[extractSplatPositions] Error in forEachSplat:', e);
         }
-        console.log(`[extractSplatPositions] Extracted ${positions.length} splat positions via forEachSplat (world space)`);
+        log.debug(`[extractSplatPositions] Extracted ${positions.length} splat positions via forEachSplat (world space)`);
     } else if (splatMeshObj.geometry && splatMeshObj.geometry.attributes.position) {
         // Fallback: try to read from geometry
         const posAttr = splatMeshObj.geometry.attributes.position;
-        console.log('[extractSplatPositions] geometry.position.count:', posAttr.count);
+        log.debug('[extractSplatPositions] geometry.position.count:', posAttr.count);
         const stride = Math.max(1, Math.floor(posAttr.count / maxPoints));
         for (let i = 0; i < posAttr.count && positions.length < maxPoints; i += stride) {
             const worldPos = new THREE.Vector3(
@@ -3649,12 +3652,12 @@ function extractSplatPositions(splatMeshObj, maxPoints = 5000) {
                 index: i
             });
         }
-        console.log(`[extractSplatPositions] Extracted ${positions.length} splat positions from geometry (world space)`);
+        log.debug(`[extractSplatPositions] Extracted ${positions.length} splat positions from geometry (world space)`);
     } else {
-        console.warn('[extractSplatPositions] Could not find splat position data');
-        console.log('[extractSplatPositions] Available splatMesh properties:', Object.keys(splatMeshObj));
+        log.warn('[extractSplatPositions] Could not find splat position data');
+        log.debug('[extractSplatPositions] Available splatMesh properties:', Object.keys(splatMeshObj));
         if (splatMeshObj.packedSplats) {
-            console.log('[extractSplatPositions] Available packedSplats properties:', Object.keys(splatMeshObj.packedSplats));
+            log.debug('[extractSplatPositions] Available packedSplats properties:', Object.keys(splatMeshObj.packedSplats));
         }
     }
 
@@ -3695,7 +3698,7 @@ function extractMeshVertices(modelGroupObj, maxPoints = 10000) {
         positions.push(allVertices[i]);
     }
 
-    console.log(`[ICP] Extracted ${positions.length} mesh vertices (from ${allVertices.length} total)`);
+    log.debug(`[ICP] Extracted ${positions.length} mesh vertices (from ${allVertices.length} total)`);
     return positions;
 }
 
@@ -3792,7 +3795,7 @@ function computeOptimalRotation(sourcePoints, targetPoints, sourceCentroid, targ
 
 // ICP alignment function
 async function icpAlignObjects() {
-    console.log('[ICP] icpAlignObjects called');
+    log.debug('[ICP] icpAlignObjects called');
 
     if (!splatMesh || !modelGroup || modelGroup.children.length === 0) {
         notify.warning('Both splat and model must be loaded for ICP alignment');
@@ -3800,11 +3803,11 @@ async function icpAlignObjects() {
     }
 
     // Debug: Check splat state
-    console.log('[ICP] splatMesh exists:', !!splatMesh);
-    console.log('[ICP] splatMesh.packedSplats:', !!splatMesh.packedSplats);
+    log.debug('[ICP] splatMesh exists:', !!splatMesh);
+    log.debug('[ICP] splatMesh.packedSplats:', !!splatMesh.packedSplats);
     if (splatMesh.packedSplats) {
-        console.log('[ICP] packedSplats.splatCount:', splatMesh.packedSplats.splatCount);
-        console.log('[ICP] packedSplats.forEachSplat:', typeof splatMesh.packedSplats.forEachSplat);
+        log.debug('[ICP] packedSplats.splatCount:', splatMesh.packedSplats.splatCount);
+        log.debug('[ICP] packedSplats.forEachSplat:', typeof splatMesh.packedSplats.forEachSplat);
     }
 
     showLoading('Running ICP alignment...');
@@ -3814,29 +3817,29 @@ async function icpAlignObjects() {
 
     try {
         // Extract points
-        console.log('[ICP] Extracting splat positions...');
+        log.debug('[ICP] Extracting splat positions...');
         const splatPoints = extractSplatPositions(splatMesh, 3000);
-        console.log('[ICP] Extracted splat points:', splatPoints.length);
+        log.debug('[ICP] Extracted splat points:', splatPoints.length);
 
-        console.log('[ICP] Extracting mesh vertices...');
+        log.debug('[ICP] Extracting mesh vertices...');
         const meshPoints = extractMeshVertices(modelGroup, 8000);
-        console.log('[ICP] Extracted mesh points:', meshPoints.length);
+        log.debug('[ICP] Extracted mesh points:', meshPoints.length);
 
         if (splatPoints.length < 10) {
             hideLoading();
-            console.error('[ICP] Not enough splat points:', splatPoints.length);
+            log.error('[ICP] Not enough splat points:', splatPoints.length);
             notify.warning('Could not extract enough splat positions for ICP (' + splatPoints.length + ' found). The splat may not support position extraction or may still be loading.');
             return;
         }
 
         if (meshPoints.length < 10) {
             hideLoading();
-            console.error('[ICP] Not enough mesh points:', meshPoints.length);
+            log.error('[ICP] Not enough mesh points:', meshPoints.length);
             notify.warning('Could not extract enough mesh vertices for ICP (' + meshPoints.length + ' found).');
             return;
         }
 
-        console.log(`[ICP] Starting ICP with ${splatPoints.length} splat points and ${meshPoints.length} mesh points`);
+        log.debug(`[ICP] Starting ICP with ${splatPoints.length} splat points and ${meshPoints.length} mesh points`);
 
         // Build KD-tree from mesh points for fast nearest neighbor search
         const kdTree = new KDTree([...meshPoints]);
@@ -3870,11 +3873,11 @@ async function icpAlignObjects() {
             }
 
             const meanError = totalError / correspondences.length;
-            console.log(`[ICP] Iteration ${iter + 1}: Mean squared error = ${meanError.toFixed(6)}`);
+            log.debug(`[ICP] Iteration ${iter + 1}: Mean squared error = ${meanError.toFixed(6)}`);
 
             // Check convergence
             if (Math.abs(prevMeanError - meanError) < convergenceThreshold) {
-                console.log(`[ICP] Converged after ${iter + 1} iterations`);
+                log.debug(`[ICP] Converged after ${iter + 1} iterations`);
                 break;
             }
             prevMeanError = meanError;
@@ -3947,11 +3950,11 @@ async function icpAlignObjects() {
         updateTransformInputs();
         storeLastPositions();
 
-        console.log('[ICP] Alignment complete');
+        log.debug('[ICP] Alignment complete');
         hideLoading();
 
     } catch (error) {
-        console.error('[ICP] Error during ICP alignment:', error);
+        log.error('[ICP] Error during ICP alignment:', error);
         hideLoading();
         notify.error('Error during ICP alignment: ' + error.message);
     }
@@ -3993,7 +3996,7 @@ function autoAlignObjects() {
 
     if (splatBoundsFound) {
         splatBox.set(actualBounds.min, actualBounds.max);
-        console.log('[AutoAlign] Using bounds from actual splat positions:', {
+        log.debug('[AutoAlign] Using bounds from actual splat positions:', {
             min: actualBounds.min.toArray(),
             max: actualBounds.max.toArray()
         });
@@ -4021,7 +4024,7 @@ function autoAlignObjects() {
                     splatBoundsFound = true;
                 }
             } catch (e) {
-                console.log('Could not get splat bounds from geometry:', e);
+                log.debug('Could not get splat bounds from geometry:', e);
             }
         }
 
@@ -4034,13 +4037,13 @@ function autoAlignObjects() {
                     splatBoundsFound = true;
                 }
             } catch (e) {
-                console.log('Could not get splat bounds from setFromObject:', e);
+                log.debug('Could not get splat bounds from setFromObject:', e);
             }
         }
 
         // Final fallback
         if (!splatBoundsFound || splatBox.isEmpty()) {
-            console.log('[AutoAlign] Using fallback splat bounds estimation');
+            log.debug('[AutoAlign] Using fallback splat bounds estimation');
             const size = 2.0 * Math.max(splatMesh.scale.x, splatMesh.scale.y, splatMesh.scale.z);
             splatBox.setFromCenterAndSize(
                 splatMesh.position.clone(),
@@ -4051,10 +4054,10 @@ function autoAlignObjects() {
 
     // Underground auto-correction: detect if splat is upside down and underground
     // Check if splat is mostly below y=0 (max.y < 0.1 means entirely underground)
-    console.log('[AutoAlign] Splat bounds Y: min=' + splatBox.min.y.toFixed(2) + ', max=' + splatBox.max.y.toFixed(2));
+    log.debug('[AutoAlign] Splat bounds Y: min=' + splatBox.min.y.toFixed(2) + ', max=' + splatBox.max.y.toFixed(2));
 
     if (splatBox.max.y < 0.1) {
-        console.log('[AutoAlign] Detected splat is underground (max.y=' + splatBox.max.y.toFixed(2) + '). Flipping 180° on X axis...');
+        log.debug('[AutoAlign] Detected splat is underground (max.y=' + splatBox.max.y.toFixed(2) + '). Flipping 180° on X axis...');
         splatMesh.rotation.x += Math.PI;
         splatMesh.updateMatrixWorld(true);
 
@@ -4078,7 +4081,7 @@ function autoAlignObjects() {
                 }
             }
         }
-        console.log('[AutoAlign] After flip - Splat bounds Y: min=' + splatBox.min.y.toFixed(2) + ', max=' + splatBox.max.y.toFixed(2));
+        log.debug('[AutoAlign] After flip - Splat bounds Y: min=' + splatBox.min.y.toFixed(2) + ', max=' + splatBox.max.y.toFixed(2));
     }
 
     // Get model bounds with world transforms
@@ -4116,7 +4119,7 @@ function autoAlignObjects() {
     updateTransformInputs();
     storeLastPositions();
 
-    console.log('Auto-align complete:', {
+    log.debug('Auto-align complete:', {
         splatBounds: { min: splatBox.min.toArray(), max: splatBox.max.toArray(), center: splatCenter.toArray() },
         modelBounds: { min: modelBox.min.toArray(), max: modelBox.max.toArray(), center: modelCenter.toArray() },
         modelPosition: modelGroup.position.toArray(),
@@ -4187,32 +4190,32 @@ function animate() {
     } catch (e) {
         animationErrorCount++;
         if (animationErrorCount <= MAX_ANIMATION_ERRORS) {
-            console.error('[main.js] Animation loop error:', e);
+            log.error(' Animation loop error:', e);
         }
         if (animationErrorCount === MAX_ANIMATION_ERRORS) {
-            console.error('[main.js] Suppressing further animation errors...');
+            log.error(' Suppressing further animation errors...');
         }
     }
 }
 
 // Initialize when DOM is ready
-console.log('[main.js] Setting up initialization, readyState:', document.readyState);
+log.info(' Setting up initialization, readyState:', document.readyState);
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-        console.log('[main.js] DOMContentLoaded fired, calling init()');
+        log.info(' DOMContentLoaded fired, calling init()');
         try {
             init();
         } catch (e) {
-            console.error('[main.js] Init error:', e);
-            console.error('[main.js] Stack:', e.stack);
+            log.error(' Init error:', e);
+            log.error(' Stack:', e.stack);
         }
     });
 } else {
-    console.log('[main.js] DOM already ready, calling init()');
+    log.info(' DOM already ready, calling init()');
     try {
         init();
     } catch (e) {
-        console.error('[main.js] Init error:', e);
-        console.error('[main.js] Stack:', e.stack);
+        log.error(' Init error:', e);
+        log.error(' Stack:', e.stack);
     }
 }
