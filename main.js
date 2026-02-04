@@ -1323,7 +1323,11 @@ function updateArchiveMetadataUI(manifest, archiveLoader) {
 
     // Populate entries list
     const entriesList = document.getElementById('archive-entries-list');
-    entriesList.innerHTML = '<p class="entries-header">Contents:</p>';
+    entriesList.replaceChildren(); // Clear existing content safely
+    const header = document.createElement('p');
+    header.className = 'entries-header';
+    header.textContent = 'Contents:';
+    entriesList.appendChild(header);
 
     const entries = archiveLoader.getEntryList();
     for (const entry of entries) {
@@ -1544,10 +1548,13 @@ function updateAnnotationsUI() {
     // Update annotations list
     const list = document.getElementById('annotations-list');
     if (list) {
-        list.innerHTML = '';
+        list.replaceChildren(); // Clear safely without innerHTML
 
         if (count === 0) {
-            list.innerHTML = '<p class="no-annotations">No annotations yet. Click "Add Annotation" to create one.</p>';
+            const noAnno = document.createElement('p');
+            noAnno.className = 'no-annotations';
+            noAnno.textContent = 'No annotations yet. Click "Add Annotation" to create one.';
+            list.appendChild(noAnno);
         } else {
             annotations.forEach((anno, index) => {
                 const item = document.createElement('div');
@@ -1579,7 +1586,7 @@ function updateAnnotationsUI() {
     const chips = document.getElementById('annotation-chips');
     if (bar && chips) {
         bar.classList.toggle('hidden', count === 0);
-        chips.innerHTML = '';
+        chips.replaceChildren(); // Clear safely without innerHTML
 
         annotations.forEach((anno, index) => {
             const chip = document.createElement('button');
@@ -1611,10 +1618,13 @@ function updateSidebarAnnotationsList() {
 
     if (!list) return;
 
-    list.innerHTML = '';
+    list.replaceChildren(); // Clear safely without innerHTML
 
     if (annotations.length === 0) {
-        list.innerHTML = '<p class="no-annotations">No annotations yet. Click "Add Annotation" to place a new marker.</p>';
+        const noAnno = document.createElement('p');
+        noAnno.className = 'no-annotations';
+        noAnno.textContent = 'No annotations yet. Click "Add Annotation" to place a new marker.';
+        list.appendChild(noAnno);
         if (editor) editor.classList.add('hidden');
     } else {
         annotations.forEach((anno, index) => {
@@ -2141,15 +2151,27 @@ function addCustomField() {
 
     const row = document.createElement('div');
     row.className = 'custom-field-row';
-    row.innerHTML = `
-        <input type="text" class="custom-field-key" placeholder="Key">
-        <input type="text" class="custom-field-value" placeholder="Value">
-        <button class="custom-field-remove" title="Remove">&times;</button>
-    `;
 
-    const removeBtn = row.querySelector('.custom-field-remove');
+    // Create elements using safe DOM methods (avoid innerHTML for security)
+    const keyInput = document.createElement('input');
+    keyInput.type = 'text';
+    keyInput.className = 'custom-field-key';
+    keyInput.placeholder = 'Key';
+
+    const valueInput = document.createElement('input');
+    valueInput.type = 'text';
+    valueInput.className = 'custom-field-value';
+    valueInput.placeholder = 'Value';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'custom-field-remove';
+    removeBtn.title = 'Remove';
+    removeBtn.textContent = '\u00D7'; // × character
     removeBtn.addEventListener('click', () => row.remove());
 
+    row.appendChild(keyInput);
+    row.appendChild(valueInput);
+    row.appendChild(removeBtn);
     container.appendChild(row);
 }
 
@@ -2295,7 +2317,7 @@ function prefillMetadataFromArchive(manifest) {
     // Custom fields from _meta
     if (manifest._meta?.custom_fields) {
         const container = document.getElementById('custom-fields-list');
-        container.innerHTML = ''; // Clear existing
+        container.replaceChildren(); // Clear safely without innerHTML
         for (const [key, value] of Object.entries(manifest._meta.custom_fields)) {
             addCustomField();
             const rows = container.querySelectorAll('.custom-field-row');
