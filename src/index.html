@@ -179,6 +179,7 @@
                     <button class="edit-tab" data-tab="archival">Archival</button>
                     <button class="edit-tab" data-tab="quality">Quality</button>
                     <button class="edit-tab" data-tab="material">Material</button>
+                    <button class="edit-tab" data-tab="preservation">Preservation</button>
                     <button class="edit-tab" data-tab="assets">Assets</button>
                     <button class="edit-tab" data-tab="integrity">Integrity</button>
                 </div>
@@ -214,10 +215,33 @@
                         <label for="meta-custom-license">Custom License</label>
                         <input type="text" id="meta-custom-license" placeholder="Enter custom license">
                     </div>
+
+                    <div class="subsection-header">Relationships</div>
+                    <div class="metadata-field">
+                        <label for="meta-part-of">Part Of</label>
+                        <input type="text" id="meta-part-of" placeholder="Parent collection or project ID">
+                        <span class="field-hint">ID of collection this belongs to</span>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-derived-from">Derived From</label>
+                        <input type="text" id="meta-derived-from" placeholder="Source asset ID">
+                        <span class="field-hint">ID of asset this was derived from</span>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-replaces">Replaces</label>
+                        <input type="text" id="meta-replaces" placeholder="Previous version ID">
+                        <span class="field-hint">ID of asset this supersedes</span>
+                    </div>
+                    <div class="subsection-header">Related Objects</div>
+                    <div id="related-objects-list"></div>
+                    <button id="btn-add-related-object" class="action-btn secondary" style="width: 100%; margin-top: 10px;">
+                        + Add Related Object
+                    </button>
                 </div>
 
                 <!-- Provenance Tab -->
                 <div class="edit-tab-content" id="edit-tab-provenance">
+                    <div class="subsection-header">Capture Information</div>
                     <div class="metadata-field">
                         <label for="meta-capture-date">Capture Date</label>
                         <input type="date" id="meta-capture-date">
@@ -227,13 +251,36 @@
                         <input type="text" id="meta-capture-device" placeholder="e.g., iPhone 15 Pro, Faro Focus">
                     </div>
                     <div class="metadata-field">
+                        <label for="meta-device-serial">Device Serial Number</label>
+                        <input type="text" id="meta-device-serial" placeholder="e.g., AL-2024-0847">
+                    </div>
+                    <div class="metadata-field">
                         <label for="meta-operator">Operator / Creator</label>
                         <input type="text" id="meta-operator" placeholder="Name or organization">
                     </div>
                     <div class="metadata-field">
-                        <label for="meta-location">Location</label>
+                        <label for="meta-operator-orcid">Operator ORCID</label>
+                        <input type="text" id="meta-operator-orcid" placeholder="e.g., 0000-0002-1825-0097">
+                        <span class="field-hint">ORCID identifier for attribution</span>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-location">Capture Location</label>
                         <input type="text" id="meta-location" placeholder="Where the capture was made">
                     </div>
+
+                    <div class="subsection-header">Processing Software</div>
+                    <div id="processing-software-list"></div>
+                    <button id="btn-add-processing-software" class="action-btn secondary" style="width: 100%; margin-top: 10px;">
+                        + Add Processing Software
+                    </button>
+
+                    <div class="subsection-header" style="margin-top: 20px;">Processing Notes</div>
+                    <div class="metadata-field">
+                        <label for="meta-processing-notes">Notes</label>
+                        <textarea id="meta-processing-notes" rows="3" placeholder="e.g., Gap fill applied to underside, decimation from 50M to 5M polys"></textarea>
+                        <span class="field-hint">Document any significant processing steps or modifications</span>
+                    </div>
+
                     <div class="subsection-header">Convention Hints</div>
                     <div class="metadata-field">
                         <label for="meta-conventions">References</label>
@@ -344,6 +391,31 @@
                     <div class="metadata-field">
                         <label for="meta-archival-location-history">Location History</label>
                         <input type="text" id="meta-archival-location-history" placeholder="Previous locations/exhibitions">
+                    </div>
+
+                    <div class="subsection-header">Geographic Coverage</div>
+                    <div class="metadata-field">
+                        <label for="meta-coverage-location">Location Name</label>
+                        <input type="text" id="meta-coverage-location" placeholder="e.g., Lincoln Memorial, Washington DC">
+                    </div>
+                    <div class="metadata-field">
+                        <label>Coordinates</label>
+                        <div class="coordinate-inputs">
+                            <input type="number" id="meta-coverage-lat" step="0.000001" placeholder="Latitude">
+                            <input type="number" id="meta-coverage-lon" step="0.000001" placeholder="Longitude">
+                        </div>
+                        <span class="field-hint">WGS84 decimal degrees</span>
+                    </div>
+
+                    <div class="subsection-header">Temporal Coverage</div>
+                    <div class="metadata-field">
+                        <label for="meta-coverage-period">Subject Period</label>
+                        <input type="text" id="meta-coverage-period" placeholder="e.g., 1922-present, Ming Dynasty">
+                        <span class="field-hint">Time period the subject represents</span>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="meta-coverage-circa">
+                        <label for="meta-coverage-circa">Date is approximate (circa)</label>
                     </div>
                 </div>
 
@@ -491,6 +563,27 @@
                             <span class="stat-value" id="meta-archive-size">-</span>
                         </div>
                     </div>
+
+                    <div class="subsection-header">Data Quality / Known Limitations</div>
+                    <div class="metadata-field">
+                        <label for="meta-quality-coverage-gaps">Coverage Gaps</label>
+                        <textarea id="meta-quality-coverage-gaps" rows="2" placeholder="e.g., Underside of base not captured, rear of object occluded"></textarea>
+                        <span class="field-hint">Areas not captured or with missing data</span>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-quality-reconstruction">Reconstruction Areas</label>
+                        <textarea id="meta-quality-reconstruction" rows="2" placeholder="e.g., Left ear interpolated from symmetry, hole filled algorithmically"></textarea>
+                        <span class="field-hint">Areas that were reconstructed or interpolated</span>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-quality-color-calibration">Color Calibration</label>
+                        <input type="text" id="meta-quality-color-calibration" placeholder="e.g., X-Rite ColorChecker verified, uncalibrated">
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-quality-uncertainty">Measurement Uncertainty</label>
+                        <input type="text" id="meta-quality-uncertainty" placeholder="e.g., ±0.05mm at 95% confidence">
+                        <span class="field-hint">Statistical confidence interval for measurements</span>
+                    </div>
                 </div>
 
                 <!-- Material Standard Tab -->
@@ -524,6 +617,68 @@
                             <option value="OpenGL">OpenGL (+Y up)</option>
                             <option value="DirectX">DirectX (-Y up)</option>
                         </select>
+                    </div>
+                </div>
+
+                <!-- Preservation Tab -->
+                <div class="edit-tab-content" id="edit-tab-preservation">
+                    <div class="subsection-header">Format Registry (PRONOM)</div>
+                    <div class="metadata-field">
+                        <label for="meta-pres-format-glb">GLB Format ID</label>
+                        <input type="text" id="meta-pres-format-glb" value="fmt/861" placeholder="fmt/861">
+                        <span class="field-hint">PRONOM identifier for glTF Binary</span>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-pres-format-obj">OBJ Format ID</label>
+                        <input type="text" id="meta-pres-format-obj" value="fmt/831" placeholder="fmt/831">
+                        <span class="field-hint">PRONOM identifier for Wavefront OBJ</span>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-pres-format-ply">PLY Format ID</label>
+                        <input type="text" id="meta-pres-format-ply" value="fmt/831" placeholder="fmt/831">
+                        <span class="field-hint">PRONOM identifier for Stanford PLY</span>
+                    </div>
+
+                    <div class="subsection-header">Significant Properties</div>
+                    <span class="field-hint" style="display: block; margin-bottom: 10px;">Properties that must be preserved for the asset to remain meaningful</span>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="meta-pres-prop-geometry" checked>
+                        <label for="meta-pres-prop-geometry">Geometry / Mesh Structure</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="meta-pres-prop-vertex-color">
+                        <label for="meta-pres-prop-vertex-color">Vertex Colors</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="meta-pres-prop-uv">
+                        <label for="meta-pres-prop-uv">UV Mapping</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="meta-pres-prop-normals">
+                        <label for="meta-pres-prop-normals">Normal Maps</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="meta-pres-prop-pbr">
+                        <label for="meta-pres-prop-pbr">PBR Materials</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="meta-pres-prop-scale">
+                        <label for="meta-pres-prop-scale">Real-world Scale</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="meta-pres-prop-splat">
+                        <label for="meta-pres-prop-splat">Gaussian Splat Data</label>
+                    </div>
+
+                    <div class="subsection-header">Rendering Requirements</div>
+                    <div class="metadata-field">
+                        <label for="meta-pres-render-req">Minimum Requirements</label>
+                        <input type="text" id="meta-pres-render-req" value="WebGL 2.0" placeholder="e.g., WebGL 2.0, OpenGL ES 3.0">
+                        <span class="field-hint">Minimum graphics API required for rendering</span>
+                    </div>
+                    <div class="metadata-field">
+                        <label for="meta-pres-render-notes">Rendering Notes</label>
+                        <textarea id="meta-pres-render-notes" rows="2" placeholder="e.g., Requires compute shaders for splat rendering, best viewed in Chrome/Edge"></textarea>
                     </div>
                 </div>
 

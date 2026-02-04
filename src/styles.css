@@ -1324,6 +1324,89 @@ input[type="range"]::-webkit-slider-thumb:hover {
     color: #666;
 }
 
+/* Coordinate inputs (for Geographic Coverage) */
+.coordinate-inputs {
+    display: flex;
+    gap: 8px;
+}
+
+.coordinate-inputs input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    background: #2a2a3a;
+    border: 1px solid #3a3a5a;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 0.85rem;
+}
+
+.coordinate-inputs input:focus {
+    outline: none;
+    border-color: #4ecdc4;
+}
+
+.coordinate-inputs input::placeholder {
+    color: #666;
+}
+
+/* Processing software / Related objects rows */
+.software-row,
+.related-object-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    align-items: center;
+}
+
+.software-row input,
+.related-object-row input {
+    flex: 1;
+    padding: 8px 10px;
+    background: #2a2a3a;
+    border: 1px solid #3a3a5a;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 0.85rem;
+}
+
+.software-row input:first-child {
+    flex: 1.5;
+}
+
+.related-object-row input:first-child {
+    flex: 1.5;
+}
+
+.software-row input:focus,
+.related-object-row input:focus {
+    outline: none;
+    border-color: #4ecdc4;
+}
+
+.software-row .remove-btn,
+.related-object-row .remove-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid #3a3a5a;
+    border-radius: 4px;
+    color: #666;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.software-row .remove-btn:hover,
+.related-object-row .remove-btn:hover {
+    background: rgba(255, 107, 107, 0.2);
+    border-color: #ff6b6b;
+    color: #ff6b6b;
+}
+
 /* Asset Sections */
 .asset-section {
     margin-bottom: 20px;

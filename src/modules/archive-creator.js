@@ -140,12 +140,22 @@ export class ArchiveCreator {
                 license: "CC0",
                 description: ""
             },
+            relationships: {
+                part_of: "",
+                derived_from: "",
+                replaces: "",
+                related_objects: []
+            },
             provenance: {
                 capture_date: "",
                 capture_device: "",
+                device_serial: "",
                 operator: "",
+                operator_orcid: "",
                 location: "",
-                convention_hints: []
+                convention_hints: [],
+                processing_software: [],
+                processing_notes: ""
             },
             quality_metrics: {
                 tier: "",
@@ -160,7 +170,13 @@ export class ArchiveCreator {
                     unit: "mm",
                     method: "RMSE"
                 },
-                scale_verification: ""
+                scale_verification: "",
+                data_quality: {
+                    coverage_gaps: "",
+                    reconstruction_areas: "",
+                    color_calibration: "",
+                    measurement_uncertainty: ""
+                }
             },
             archival_record: {
                 standard: "",
@@ -194,6 +210,19 @@ export class ArchiveCreator {
                 context: {
                     description: "",
                     location_history: ""
+                },
+                coverage: {
+                    spatial: {
+                        location_name: "",
+                        coordinates: {
+                            latitude: "",
+                            longitude: ""
+                        }
+                    },
+                    temporal: {
+                        subject_period: "",
+                        subject_date_circa: false
+                    }
                 }
             },
             material_standard: {
@@ -201,6 +230,16 @@ export class ArchiveCreator {
                 occlusion_packed: false,
                 color_space: "",
                 normal_space: ""
+            },
+            preservation: {
+                format_registry: {
+                    glb: "fmt/861",
+                    obj: "fmt/935",
+                    ply: "fmt/831"
+                },
+                significant_properties: [],
+                rendering_requirements: "",
+                rendering_notes: ""
             },
             data_entries: {},
             annotations: [],
@@ -265,16 +304,24 @@ export class ArchiveCreator {
      * Set provenance information
      * @param {Object} info - Provenance info
      */
-    setProvenance({ captureDate, captureDevice, operator, location, conventions }) {
+    setProvenance({ captureDate, captureDevice, deviceSerial, operator, operatorOrcid, location, conventions, processingSoftware, processingNotes }) {
         if (captureDate !== undefined) this.manifest.provenance.capture_date = captureDate;
         if (captureDevice !== undefined) this.manifest.provenance.capture_device = captureDevice;
+        if (deviceSerial !== undefined) this.manifest.provenance.device_serial = deviceSerial;
         if (operator !== undefined) this.manifest.provenance.operator = operator;
+        if (operatorOrcid !== undefined) this.manifest.provenance.operator_orcid = operatorOrcid;
         if (location !== undefined) this.manifest.provenance.location = location;
         if (conventions !== undefined) {
             this.manifest.provenance.convention_hints = Array.isArray(conventions)
                 ? conventions
                 : conventions.split(',').map(c => c.trim()).filter(c => c);
         }
+        if (processingSoftware !== undefined) {
+            this.manifest.provenance.processing_software = Array.isArray(processingSoftware)
+                ? processingSoftware
+                : [];
+        }
+        if (processingNotes !== undefined) this.manifest.provenance.processing_notes = processingNotes;
     }
 
     /**
@@ -309,6 +356,22 @@ export class ArchiveCreator {
             }
             if (metrics.alignmentError.method !== undefined) {
                 this.manifest.quality_metrics.alignment_error.method = metrics.alignmentError.method;
+            }
+        }
+
+        // Data quality / known limitations
+        if (metrics.dataQuality) {
+            if (metrics.dataQuality.coverageGaps !== undefined) {
+                this.manifest.quality_metrics.data_quality.coverage_gaps = metrics.dataQuality.coverageGaps;
+            }
+            if (metrics.dataQuality.reconstructionAreas !== undefined) {
+                this.manifest.quality_metrics.data_quality.reconstruction_areas = metrics.dataQuality.reconstructionAreas;
+            }
+            if (metrics.dataQuality.colorCalibration !== undefined) {
+                this.manifest.quality_metrics.data_quality.color_calibration = metrics.dataQuality.colorCalibration;
+            }
+            if (metrics.dataQuality.measurementUncertainty !== undefined) {
+                this.manifest.quality_metrics.data_quality.measurement_uncertainty = metrics.dataQuality.measurementUncertainty;
             }
         }
     }
@@ -393,6 +456,31 @@ export class ArchiveCreator {
                 this.manifest.archival_record.context.location_history = record.context.locationHistory;
             }
         }
+
+        // Geographic/temporal coverage
+        if (record.coverage) {
+            if (record.coverage.spatial) {
+                if (record.coverage.spatial.locationName !== undefined) {
+                    this.manifest.archival_record.coverage.spatial.location_name = record.coverage.spatial.locationName;
+                }
+                if (record.coverage.spatial.coordinates) {
+                    if (record.coverage.spatial.coordinates.latitude !== undefined) {
+                        this.manifest.archival_record.coverage.spatial.coordinates.latitude = record.coverage.spatial.coordinates.latitude;
+                    }
+                    if (record.coverage.spatial.coordinates.longitude !== undefined) {
+                        this.manifest.archival_record.coverage.spatial.coordinates.longitude = record.coverage.spatial.coordinates.longitude;
+                    }
+                }
+            }
+            if (record.coverage.temporal) {
+                if (record.coverage.temporal.subjectPeriod !== undefined) {
+                    this.manifest.archival_record.coverage.temporal.subject_period = record.coverage.temporal.subjectPeriod;
+                }
+                if (record.coverage.temporal.subjectDateCirca !== undefined) {
+                    this.manifest.archival_record.coverage.temporal.subject_date_circa = record.coverage.temporal.subjectDateCirca;
+                }
+            }
+        }
     }
 
     /**
@@ -406,6 +494,56 @@ export class ArchiveCreator {
         if (material.occlusionPacked !== undefined) this.manifest.material_standard.occlusion_packed = material.occlusionPacked;
         if (material.colorSpace !== undefined) this.manifest.material_standard.color_space = material.colorSpace;
         if (material.normalSpace !== undefined) this.manifest.material_standard.normal_space = material.normalSpace;
+    }
+
+    /**
+     * Set relationship links
+     * @param {Object} relationships - Relationship data from form
+     */
+    setRelationships(relationships) {
+        if (!relationships) return;
+
+        if (relationships.partOf !== undefined) this.manifest.relationships.part_of = relationships.partOf;
+        if (relationships.derivedFrom !== undefined) this.manifest.relationships.derived_from = relationships.derivedFrom;
+        if (relationships.replaces !== undefined) this.manifest.relationships.replaces = relationships.replaces;
+        if (relationships.relatedObjects !== undefined) {
+            this.manifest.relationships.related_objects = Array.isArray(relationships.relatedObjects)
+                ? relationships.relatedObjects
+                : [];
+        }
+    }
+
+    /**
+     * Set preservation metadata (PREMIS-inspired)
+     * @param {Object} preservation - Preservation data from form
+     */
+    setPreservation(preservation) {
+        if (!preservation) return;
+
+        if (preservation.formatRegistry) {
+            if (preservation.formatRegistry.glb !== undefined) {
+                this.manifest.preservation.format_registry.glb = preservation.formatRegistry.glb;
+            }
+            if (preservation.formatRegistry.obj !== undefined) {
+                this.manifest.preservation.format_registry.obj = preservation.formatRegistry.obj;
+            }
+            if (preservation.formatRegistry.ply !== undefined) {
+                this.manifest.preservation.format_registry.ply = preservation.formatRegistry.ply;
+            }
+        }
+
+        if (preservation.significantProperties !== undefined) {
+            this.manifest.preservation.significant_properties = Array.isArray(preservation.significantProperties)
+                ? preservation.significantProperties
+                : [];
+        }
+
+        if (preservation.renderingRequirements !== undefined) {
+            this.manifest.preservation.rendering_requirements = preservation.renderingRequirements;
+        }
+        if (preservation.renderingNotes !== undefined) {
+            this.manifest.preservation.rendering_notes = preservation.renderingNotes;
+        }
     }
 
     /**
@@ -663,6 +801,11 @@ export class ArchiveCreator {
             this.setProjectInfo(metadata.project);
         }
 
+        // Relationships
+        if (metadata.relationships) {
+            this.setRelationships(metadata.relationships);
+        }
+
         // Provenance
         if (metadata.provenance) {
             this.setProvenance(metadata.provenance);
@@ -681,6 +824,11 @@ export class ArchiveCreator {
         // Material Standard (PBR)
         if (metadata.materialStandard) {
             this.setMaterialStandard(metadata.materialStandard);
+        }
+
+        // Preservation metadata
+        if (metadata.preservation) {
+            this.setPreservation(metadata.preservation);
         }
 
         // Asset metadata
