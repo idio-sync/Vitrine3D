@@ -225,6 +225,17 @@ export function setupMetadataSidebar(deps = {}) {
             }
         });
     }
+
+    // Dynamic list add buttons
+    const addSoftwareBtn = document.getElementById('btn-add-processing-software');
+    if (addSoftwareBtn) {
+        addSoftwareBtn.addEventListener('click', addProcessingSoftware);
+    }
+
+    const addRelatedBtn = document.getElementById('btn-add-related-object');
+    if (addRelatedBtn) {
+        addRelatedBtn.addEventListener('click', addRelatedObject);
+    }
 }
 
 /**
@@ -399,6 +410,70 @@ export function addCustomField() {
     container.appendChild(row);
 }
 
+/**
+ * Add a processing software row
+ */
+export function addProcessingSoftware() {
+    const container = document.getElementById('processing-software-list');
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'software-row';
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'software-name';
+    nameInput.placeholder = 'Software name (e.g., Blender)';
+
+    const versionInput = document.createElement('input');
+    versionInput.type = 'text';
+    versionInput.className = 'software-version';
+    versionInput.placeholder = 'Version';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-btn';
+    removeBtn.title = 'Remove';
+    removeBtn.textContent = '\u00D7';
+    removeBtn.addEventListener('click', () => row.remove());
+
+    row.appendChild(nameInput);
+    row.appendChild(versionInput);
+    row.appendChild(removeBtn);
+    container.appendChild(row);
+}
+
+/**
+ * Add a related object row
+ */
+export function addRelatedObject() {
+    const container = document.getElementById('related-objects-list');
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'related-object-row';
+
+    const idInput = document.createElement('input');
+    idInput.type = 'text';
+    idInput.className = 'related-object-id';
+    idInput.placeholder = 'Object ID';
+
+    const typeInput = document.createElement('input');
+    typeInput.type = 'text';
+    typeInput.className = 'related-object-type';
+    typeInput.placeholder = 'Relationship type';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-btn';
+    removeBtn.title = 'Remove';
+    removeBtn.textContent = '\u00D7';
+    removeBtn.addEventListener('click', () => row.remove());
+
+    row.appendChild(idInput);
+    row.appendChild(typeInput);
+    row.appendChild(removeBtn);
+    container.appendChild(row);
+}
+
 // =============================================================================
 // METADATA COLLECTION
 // =============================================================================
@@ -415,12 +490,22 @@ export function collectMetadata() {
             description: document.getElementById('meta-description')?.value || '',
             license: document.getElementById('meta-license')?.value || 'CC0'
         },
+        relationships: {
+            partOf: document.getElementById('meta-part-of')?.value || '',
+            derivedFrom: document.getElementById('meta-derived-from')?.value || '',
+            replaces: document.getElementById('meta-replaces')?.value || '',
+            relatedObjects: []
+        },
         provenance: {
             captureDate: document.getElementById('meta-capture-date')?.value || '',
             captureDevice: document.getElementById('meta-capture-device')?.value || '',
+            deviceSerial: document.getElementById('meta-device-serial')?.value || '',
             operator: document.getElementById('meta-operator')?.value || '',
+            operatorOrcid: document.getElementById('meta-operator-orcid')?.value || '',
             location: document.getElementById('meta-location')?.value || '',
-            conventions: document.getElementById('meta-conventions')?.value || ''
+            conventions: document.getElementById('meta-conventions')?.value || '',
+            processingSoftware: [],
+            processingNotes: document.getElementById('meta-processing-notes')?.value || ''
         },
         qualityMetrics: {
             tier: document.getElementById('meta-quality-tier')?.value || '',
@@ -435,7 +520,13 @@ export function collectMetadata() {
                 unit: document.getElementById('meta-quality-align-unit')?.value || 'mm',
                 method: document.getElementById('meta-quality-align-method')?.value || 'RMSE'
             },
-            scaleVerification: document.getElementById('meta-quality-scale-verify')?.value || ''
+            scaleVerification: document.getElementById('meta-quality-scale-verify')?.value || '',
+            dataQuality: {
+                coverageGaps: document.getElementById('meta-quality-coverage-gaps')?.value || '',
+                reconstructionAreas: document.getElementById('meta-quality-reconstruction')?.value || '',
+                colorCalibration: document.getElementById('meta-quality-color-calibration')?.value || '',
+                measurementUncertainty: document.getElementById('meta-quality-uncertainty')?.value || ''
+            }
         },
         archivalRecord: {
             standard: document.getElementById('meta-archival-standard')?.value || '',
@@ -470,6 +561,19 @@ export function collectMetadata() {
             context: {
                 description: document.getElementById('meta-archival-context-desc')?.value || '',
                 locationHistory: document.getElementById('meta-archival-location-history')?.value || ''
+            },
+            coverage: {
+                spatial: {
+                    locationName: document.getElementById('meta-coverage-location')?.value || '',
+                    coordinates: [
+                        parseFloat(document.getElementById('meta-coverage-lat')?.value) || null,
+                        parseFloat(document.getElementById('meta-coverage-lon')?.value) || null
+                    ]
+                },
+                temporal: {
+                    subjectPeriod: document.getElementById('meta-coverage-period')?.value || '',
+                    subjectDateCirca: document.getElementById('meta-coverage-circa')?.checked || false
+                }
             }
         },
         materialStandard: {
@@ -477,6 +581,16 @@ export function collectMetadata() {
             occlusionPacked: document.getElementById('meta-material-occlusion-packed')?.checked || false,
             colorSpace: document.getElementById('meta-material-colorspace')?.value || '',
             normalSpace: document.getElementById('meta-material-normalspace')?.value || ''
+        },
+        preservation: {
+            formatRegistry: {
+                glb: document.getElementById('meta-pres-format-glb')?.value || 'fmt/861',
+                obj: document.getElementById('meta-pres-format-obj')?.value || 'fmt/831',
+                ply: document.getElementById('meta-pres-format-ply')?.value || ''
+            },
+            significantProperties: [],
+            renderingRequirements: document.getElementById('meta-pres-render-req')?.value || '',
+            renderingNotes: document.getElementById('meta-pres-render-notes')?.value || ''
         },
         splatMetadata: {
             createdBy: document.getElementById('meta-splat-created-by')?.value || '',
@@ -504,6 +618,42 @@ export function collectMetadata() {
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-|-$/g, '');
     }
+
+    // Collect related objects
+    const relatedObjectRows = document.querySelectorAll('.related-object-row');
+    relatedObjectRows.forEach(row => {
+        const id = row.querySelector('.related-object-id')?.value?.trim();
+        const type = row.querySelector('.related-object-type')?.value?.trim();
+        if (id) {
+            metadata.relationships.relatedObjects.push({ id, type: type || 'related' });
+        }
+    });
+
+    // Collect processing software
+    const softwareRows = document.querySelectorAll('.software-row');
+    softwareRows.forEach(row => {
+        const name = row.querySelector('.software-name')?.value?.trim();
+        const version = row.querySelector('.software-version')?.value?.trim();
+        if (name) {
+            metadata.provenance.processingSoftware.push({ name, version: version || '' });
+        }
+    });
+
+    // Collect significant properties (checkboxes)
+    const propCheckboxes = [
+        { id: 'meta-pres-prop-geometry', value: 'geometry' },
+        { id: 'meta-pres-prop-vertex-color', value: 'vertex_color' },
+        { id: 'meta-pres-prop-uv', value: 'uv_mapping' },
+        { id: 'meta-pres-prop-normals', value: 'normal_maps' },
+        { id: 'meta-pres-prop-pbr', value: 'pbr_materials' },
+        { id: 'meta-pres-prop-scale', value: 'real_world_scale' },
+        { id: 'meta-pres-prop-splat', value: 'gaussian_splat_data' }
+    ];
+    propCheckboxes.forEach(({ id, value }) => {
+        if (document.getElementById(id)?.checked) {
+            metadata.preservation.significantProperties.push(value);
+        }
+    });
 
     // Collect custom fields
     const customFieldRows = document.querySelectorAll('.custom-field-row');
@@ -557,13 +707,46 @@ export function prefillMetadataFromArchive(manifest) {
         }
     }
 
+    // Relationships
+    if (manifest.relationships) {
+        const relFields = {
+            'meta-part-of': manifest.relationships.part_of,
+            'meta-derived-from': manifest.relationships.derived_from,
+            'meta-replaces': manifest.relationships.replaces
+        };
+        for (const [id, value] of Object.entries(relFields)) {
+            const el = document.getElementById(id);
+            if (el && value) el.value = value;
+        }
+
+        // Related objects
+        if (manifest.relationships.related_objects?.length) {
+            const container = document.getElementById('related-objects-list');
+            if (container) {
+                container.replaceChildren();
+                for (const obj of manifest.relationships.related_objects) {
+                    addRelatedObject();
+                    const rows = container.querySelectorAll('.related-object-row');
+                    const lastRow = rows[rows.length - 1];
+                    const idInput = lastRow.querySelector('.related-object-id');
+                    const typeInput = lastRow.querySelector('.related-object-type');
+                    if (idInput) idInput.value = obj.id || '';
+                    if (typeInput) typeInput.value = obj.type || '';
+                }
+            }
+        }
+    }
+
     // Provenance
     if (manifest.provenance) {
         const fields = {
             'meta-capture-date': manifest.provenance.capture_date,
             'meta-capture-device': manifest.provenance.capture_device,
+            'meta-device-serial': manifest.provenance.device_serial,
             'meta-operator': manifest.provenance.operator,
-            'meta-location': manifest.provenance.location
+            'meta-operator-orcid': manifest.provenance.operator_orcid,
+            'meta-location': manifest.provenance.location,
+            'meta-processing-notes': manifest.provenance.processing_notes
         };
 
         for (const [id, value] of Object.entries(fields)) {
@@ -578,6 +761,23 @@ export function prefillMetadataFromArchive(manifest) {
                     ? manifest.provenance.convention_hints.join(', ')
                     : manifest.provenance.convention_hints;
                 conventionsEl.value = hints;
+            }
+        }
+
+        // Processing software
+        if (manifest.provenance.processing_software?.length) {
+            const container = document.getElementById('processing-software-list');
+            if (container) {
+                container.replaceChildren();
+                for (const sw of manifest.provenance.processing_software) {
+                    addProcessingSoftware();
+                    const rows = container.querySelectorAll('.software-row');
+                    const lastRow = rows[rows.length - 1];
+                    const nameInput = lastRow.querySelector('.software-name');
+                    const versionInput = lastRow.querySelector('.software-version');
+                    if (nameInput) nameInput.value = sw.name || '';
+                    if (versionInput) versionInput.value = sw.version || '';
+                }
             }
         }
     }
@@ -618,6 +818,20 @@ export function prefillMetadataFromArchive(manifest) {
 
         const scaleVerifyEl = document.getElementById('meta-quality-scale-verify');
         if (scaleVerifyEl && qm.scale_verification) scaleVerifyEl.value = qm.scale_verification;
+
+        // Data Quality
+        if (qm.data_quality) {
+            const dqFields = {
+                'meta-quality-coverage-gaps': qm.data_quality.coverage_gaps,
+                'meta-quality-reconstruction': qm.data_quality.reconstruction_areas,
+                'meta-quality-color-calibration': qm.data_quality.color_calibration,
+                'meta-quality-uncertainty': qm.data_quality.measurement_uncertainty
+            };
+            for (const [id, value] of Object.entries(dqFields)) {
+                const el = document.getElementById(id);
+                if (el && value) el.value = value;
+            }
+        }
     }
 
     // Archival Record (Dublin Core)
@@ -669,6 +883,28 @@ export function prefillMetadataFromArchive(manifest) {
         // Copyright status (select)
         const copyrightEl = document.getElementById('meta-archival-copyright');
         if (copyrightEl && ar.rights?.copyright_status) copyrightEl.value = ar.rights.copyright_status;
+
+        // Coverage
+        if (ar.coverage) {
+            if (ar.coverage.spatial) {
+                const locNameEl = document.getElementById('meta-coverage-location');
+                if (locNameEl && ar.coverage.spatial.location_name) locNameEl.value = ar.coverage.spatial.location_name;
+
+                if (ar.coverage.spatial.coordinates?.length >= 2) {
+                    const latEl = document.getElementById('meta-coverage-lat');
+                    const lonEl = document.getElementById('meta-coverage-lon');
+                    if (latEl && ar.coverage.spatial.coordinates[0] != null) latEl.value = ar.coverage.spatial.coordinates[0];
+                    if (lonEl && ar.coverage.spatial.coordinates[1] != null) lonEl.value = ar.coverage.spatial.coordinates[1];
+                }
+            }
+            if (ar.coverage.temporal) {
+                const periodEl = document.getElementById('meta-coverage-period');
+                if (periodEl && ar.coverage.temporal.subject_period) periodEl.value = ar.coverage.temporal.subject_period;
+
+                const circaEl = document.getElementById('meta-coverage-circa');
+                if (circaEl) circaEl.checked = ar.coverage.temporal.subject_date_circa || false;
+            }
+        }
     }
 
     // Material Standard
@@ -686,6 +922,55 @@ export function prefillMetadataFromArchive(manifest) {
 
         const normalSpaceEl = document.getElementById('meta-material-normalspace');
         if (normalSpaceEl && ms.normal_space) normalSpaceEl.value = ms.normal_space;
+    }
+
+    // Preservation
+    if (manifest.preservation) {
+        const pres = manifest.preservation;
+
+        if (pres.format_registry) {
+            const formatFields = {
+                'meta-pres-format-glb': pres.format_registry.glb,
+                'meta-pres-format-obj': pres.format_registry.obj,
+                'meta-pres-format-ply': pres.format_registry.ply
+            };
+            for (const [id, value] of Object.entries(formatFields)) {
+                const el = document.getElementById(id);
+                if (el && value) el.value = value;
+            }
+        }
+
+        // Significant properties (checkboxes)
+        if (pres.significant_properties?.length) {
+            const propMap = {
+                'geometry': 'meta-pres-prop-geometry',
+                'vertex_color': 'meta-pres-prop-vertex-color',
+                'uv_mapping': 'meta-pres-prop-uv',
+                'normal_maps': 'meta-pres-prop-normals',
+                'pbr_materials': 'meta-pres-prop-pbr',
+                'real_world_scale': 'meta-pres-prop-scale',
+                'gaussian_splat_data': 'meta-pres-prop-splat'
+            };
+            // First uncheck all
+            for (const id of Object.values(propMap)) {
+                const el = document.getElementById(id);
+                if (el) el.checked = false;
+            }
+            // Then check the ones in the manifest
+            for (const prop of pres.significant_properties) {
+                const id = propMap[prop];
+                if (id) {
+                    const el = document.getElementById(id);
+                    if (el) el.checked = true;
+                }
+            }
+        }
+
+        const renderReqEl = document.getElementById('meta-pres-render-req');
+        if (renderReqEl && pres.rendering_requirements) renderReqEl.value = pres.rendering_requirements;
+
+        const renderNotesEl = document.getElementById('meta-pres-render-notes');
+        if (renderNotesEl && pres.rendering_notes) renderNotesEl.value = pres.rendering_notes;
     }
 
     // Asset metadata from data_entries
