@@ -277,11 +277,12 @@ body {
 
 .toggle-group {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 5px;
 }
 
 .toggle-btn {
-    flex: 1;
     padding: 8px 12px;
     border: 1px solid #4a4a6a;
     background: transparent;
