@@ -52,16 +52,13 @@ export class SceneManager {
         // Point cloud group
         this.pointcloudGroup = null;
 
-        // Animation state
-        this.animationErrorCount = 0;
-        this.maxAnimationErrors = 10;
+        // FPS tracking
         this.frameCount = 0;
         this.lastFpsTime = performance.now();
 
         // Callbacks
         this.onTransformChange = null;
         this.onDraggingChanged = null;
-        this.onAnimate = null;
     }
 
     /**
@@ -368,73 +365,35 @@ export class SceneManager {
      * @param {string} displayMode - Current display mode
      * @param {THREE.Object3D} splatMesh - Splat mesh object
      * @param {THREE.Group} modelGroup - Model group object
+     * @param {THREE.Group} pointcloudGroup - Point cloud group object
      */
     render(displayMode, splatMesh, modelGroup, pointcloudGroup) {
-        try {
-            this.controls.update();
-            this.controlsRight.update();
+        if (displayMode === 'split') {
+            // Split view - render splat on left, model + pointcloud on right
+            const splatVisible = splatMesh ? splatMesh.visible : false;
+            const modelVisible = modelGroup ? modelGroup.visible : false;
+            const pcVisible = pointcloudGroup ? pointcloudGroup.visible : false;
 
-            if (displayMode === 'split') {
-                // Split view - render splat on left, model + pointcloud on right
-                const splatVisible = splatMesh ? splatMesh.visible : false;
-                const modelVisible = modelGroup ? modelGroup.visible : false;
-                const pcVisible = pointcloudGroup ? pointcloudGroup.visible : false;
+            // Left view - splat only
+            if (splatMesh) splatMesh.visible = true;
+            if (modelGroup) modelGroup.visible = false;
+            if (pointcloudGroup) pointcloudGroup.visible = false;
+            this.renderer.render(this.scene, this.camera);
 
-                // Left view - splat only
-                if (splatMesh) splatMesh.visible = true;
-                if (modelGroup) modelGroup.visible = false;
-                if (pointcloudGroup) pointcloudGroup.visible = false;
-                this.renderer.render(this.scene, this.camera);
+            // Right view - model + pointcloud
+            if (splatMesh) splatMesh.visible = false;
+            if (modelGroup) modelGroup.visible = true;
+            if (pointcloudGroup) pointcloudGroup.visible = true;
+            this.rendererRight.render(this.scene, this.camera);
 
-                // Right view - model + pointcloud
-                if (splatMesh) splatMesh.visible = false;
-                if (modelGroup) modelGroup.visible = true;
-                if (pointcloudGroup) pointcloudGroup.visible = true;
-                this.rendererRight.render(this.scene, this.camera);
-
-                // Restore visibility
-                if (splatMesh) splatMesh.visible = splatVisible;
-                if (modelGroup) modelGroup.visible = modelVisible;
-                if (pointcloudGroup) pointcloudGroup.visible = pcVisible;
-            } else {
-                // Normal view
-                this.renderer.render(this.scene, this.camera);
-            }
-
-            // Reset error count on successful frame
-            this.animationErrorCount = 0;
-        } catch (e) {
-            this.animationErrorCount++;
-            if (this.animationErrorCount <= this.maxAnimationErrors) {
-                log.error('Animation loop error:', e);
-            }
-            if (this.animationErrorCount === this.maxAnimationErrors) {
-                log.error('Suppressing further animation errors...');
-            }
+            // Restore visibility
+            if (splatMesh) splatMesh.visible = splatVisible;
+            if (modelGroup) modelGroup.visible = modelVisible;
+            if (pointcloudGroup) pointcloudGroup.visible = pcVisible;
+        } else {
+            // Normal view
+            this.renderer.render(this.scene, this.camera);
         }
-    }
-
-    /**
-     * Start the animation loop
-     * @param {Function} onFrame - Callback called each frame before render
-     */
-    startAnimationLoop(onFrame) {
-        const animate = () => {
-            requestAnimationFrame(animate);
-
-            // Call the per-frame callback
-            if (onFrame) {
-                onFrame();
-            }
-
-            // Call the onAnimate callback if set
-            if (this.onAnimate) {
-                this.onAnimate();
-            }
-        };
-
-        animate();
-        log.info('Animation loop started');
     }
 
     /**

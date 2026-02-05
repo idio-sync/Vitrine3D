@@ -3435,23 +3435,10 @@ function autoAlignObjects() {
     autoAlignObjectsHandler(createAlignmentDeps());
 }
 
-// FPS counter
-let frameCount = 0;
-let lastTime = performance.now();
-
-function updateFPS() {
-    frameCount++;
-    const currentTime = performance.now();
-    if (currentTime - lastTime >= 1000) {
-        document.getElementById('fps-counter').textContent = frameCount;
-        frameCount = 0;
-        lastTime = currentTime;
-    }
-}
-
 // Animation loop
 let animationErrorCount = 0;
 const MAX_ANIMATION_ERRORS = 10;
+const fpsElement = document.getElementById('fps-counter');
 
 function animate() {
     requestAnimationFrame(animate);
@@ -3465,32 +3452,8 @@ function animate() {
             controlsRight.update();
         }
 
-        if (state.displayMode === 'split') {
-            // Split view - render splat on left, model + pointcloud on right
-            const splatVisible = splatMesh ? splatMesh.visible : false;
-            const modelVisible = modelGroup ? modelGroup.visible : false;
-            const pcVisible = pointcloudGroup ? pointcloudGroup.visible : false;
-
-            // Left view - splat only
-            if (splatMesh) splatMesh.visible = true;
-            if (modelGroup) modelGroup.visible = false;
-            if (pointcloudGroup) pointcloudGroup.visible = false;
-            renderer.render(scene, camera);
-
-            // Right view - model + pointcloud
-            if (splatMesh) splatMesh.visible = false;
-            if (modelGroup) modelGroup.visible = true;
-            if (pointcloudGroup) pointcloudGroup.visible = true;
-            rendererRight.render(scene, camera);
-
-            // Restore visibility
-            if (splatMesh) splatMesh.visible = splatVisible;
-            if (modelGroup) modelGroup.visible = modelVisible;
-            if (pointcloudGroup) pointcloudGroup.visible = pcVisible;
-        } else {
-            // Normal view
-            renderer.render(scene, camera);
-        }
+        // Render using scene manager (handles split view)
+        sceneManager.render(state.displayMode, splatMesh, modelGroup, pointcloudGroup);
 
         // Update annotation marker positions
         if (annotationSystem) {
@@ -3500,7 +3463,7 @@ function animate() {
         // Update annotation popup position to follow marker
         updateAnnotationPopupPosition();
 
-        updateFPS();
+        sceneManager.updateFPS(fpsElement);
 
         // Reset error count on successful frame
         animationErrorCount = 0;
