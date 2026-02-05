@@ -28,6 +28,8 @@ import {
     formatFileSize,
     switchEditTab,
     addCustomField,
+    addProcessingSoftware,
+    addRelatedObject,
     collectMetadata,
     setupLicenseField,
     hideMetadataSidebar
@@ -340,6 +342,9 @@ function init() {
     // Apply initial controls visibility and mode
     applyControlsVisibility();
     applyControlsMode();
+
+    // Show grid by default
+    toggleGridlines(true);
 
     // Apply viewer mode settings (toolbar visibility, sidebar state)
     applyViewerModeSettings();
@@ -1511,7 +1516,7 @@ function updateSidebarAnnotationsList() {
     const annotations = annotationSystem.getAnnotations();
     const list = document.getElementById('sidebar-annotations-list');
     const editor = document.getElementById('sidebar-annotation-editor');
-    const selectedAnno = annotationSystem.getSelectedAnnotation();
+    const selectedAnno = annotationSystem.selectedAnnotation;
 
     if (!list) return;
 
@@ -1783,6 +1788,9 @@ function showMetadataSidebar(mode = 'view') {
     // Update toolbar button state
     const btn = document.getElementById('btn-metadata');
     if (btn) btn.classList.add('active');
+
+    // Resize the 3D view after sidebar transition completes
+    setTimeout(onWindowResize, 300);
 }
 
 // Switch sidebar mode (view/edit/annotations)
@@ -1877,7 +1885,7 @@ function setupMetadataSidebar() {
 
     if (annoTitleInput) {
         annoTitleInput.addEventListener('change', () => {
-            const selectedAnno = annotationSystem?.getSelectedAnnotation();
+            const selectedAnno = annotationSystem?.selectedAnnotation;
             if (selectedAnno) {
                 annotationSystem.updateAnnotation(selectedAnno.id, {
                     title: annoTitleInput.value
@@ -1890,13 +1898,24 @@ function setupMetadataSidebar() {
 
     if (annoBodyInput) {
         annoBodyInput.addEventListener('change', () => {
-            const selectedAnno = annotationSystem?.getSelectedAnnotation();
+            const selectedAnno = annotationSystem?.selectedAnnotation;
             if (selectedAnno) {
                 annotationSystem.updateAnnotation(selectedAnno.id, {
                     body: annoBodyInput.value
                 });
             }
         });
+    }
+
+    // Dynamic list add buttons (Related Objects / Processing Software)
+    const addSoftwareBtn = document.getElementById('btn-add-processing-software');
+    if (addSoftwareBtn) {
+        addSoftwareBtn.addEventListener('click', addProcessingSoftware);
+    }
+
+    const addRelatedBtn = document.getElementById('btn-add-related-object');
+    if (addRelatedBtn) {
+        addRelatedBtn.addEventListener('click', addRelatedObject);
     }
 }
 
