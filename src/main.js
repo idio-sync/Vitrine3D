@@ -8,7 +8,7 @@ import { ArchiveLoader, isArchiveFile } from './modules/archive-loader.js';
 import { AnnotationSystem } from './modules/annotation-system.js';
 import { ArchiveCreator, captureScreenshot } from './modules/archive-creator.js';
 import { CAMERA, TIMING } from './modules/constants.js';
-import { Logger, notify, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject } from './modules/utilities.js';
+import { Logger, notify, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject, parseMarkdown } from './modules/utilities.js';
 import { SceneManager } from './modules/scene-manager.js';
 import {
     icpAlignObjects as icpAlignObjectsHandler,
@@ -2299,7 +2299,7 @@ function showAnnotationPopup(annotation) {
 
     if (numberEl) numberEl.textContent = number;
     if (titleEl) titleEl.textContent = annotation.title || 'Untitled';
-    if (bodyEl) bodyEl.textContent = annotation.body || '';
+    if (bodyEl) bodyEl.innerHTML = parseMarkdown(annotation.body || '');
 
     // Position popup near the marker
     updateAnnotationPopupPosition();

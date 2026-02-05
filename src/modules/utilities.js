@@ -626,6 +626,82 @@ function disposeObject(object) {
 }
 
 // =============================================================================
+// SIMPLE MARKDOWN PARSER
+// =============================================================================
+
+/**
+ * Simple markdown parser for annotation descriptions.
+ * Supports: links, images, bold, italic, code, and line breaks.
+ * Sanitizes output to prevent XSS attacks.
+ *
+ * @param {string} text - Markdown text to parse
+ * @returns {string} HTML string
+ */
+function parseMarkdown(text) {
+    if (!text) return '';
+
+    // Escape HTML entities first to prevent XSS
+    let html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+    // Images: ![alt](url) - must come before links
+    html = html.replace(
+        /!\[([^\]]*)\]\(([^)]+)\)/g,
+        '<img src="$2" alt="$1" class="md-image" loading="lazy">'
+    );
+
+    // Links: [text](url)
+    html = html.replace(
+        /\[([^\]]+)\]\(([^)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer" class="md-link">$1</a>'
+    );
+
+    // Auto-link URLs that aren't already in anchor tags
+    html = html.replace(
+        /(?<!href="|src=")(https?:\/\/[^\s<]+)/g,
+        '<a href="$1" target="_blank" rel="noopener noreferrer" class="md-link">$1</a>'
+    );
+
+    // Bold: **text** or __text__
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+
+    // Italic: *text* or _text_ (not inside words)
+    html = html.replace(/(?<![*\w])\*([^*]+)\*(?![*\w])/g, '<em>$1</em>');
+    html = html.replace(/(?<![_\w])_([^_]+)_(?![_\w])/g, '<em>$1</em>');
+
+    // Inline code: `code`
+    html = html.replace(/`([^`]+)`/g, '<code class="md-code">$1</code>');
+
+    // Line breaks: convert newlines to <br>
+    html = html.replace(/\n/g, '<br>');
+
+    return html;
+}
+
+/**
+ * Sanitize a URL for use in href/src attributes.
+ * Only allows http, https, and data URLs.
+ *
+ * @param {string} url - URL to sanitize
+ * @returns {string} Sanitized URL or empty string if unsafe
+ */
+function sanitizeUrl(url) {
+    if (!url) return '';
+    const trimmed = url.trim().toLowerCase();
+    if (trimmed.startsWith('http://') ||
+        trimmed.startsWith('https://') ||
+        trimmed.startsWith('data:image/')) {
+        return url;
+    }
+    return '';
+}
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
@@ -645,5 +721,9 @@ export {
     createDefaultMaterial,
     computeMeshFaceCount,
     computeMeshVertexCount,
-    disposeObject
+    disposeObject,
+
+    // Markdown parsing
+    parseMarkdown,
+    sanitizeUrl
 };
