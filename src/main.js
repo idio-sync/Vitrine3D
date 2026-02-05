@@ -8,7 +8,7 @@ import { ArchiveLoader, isArchiveFile } from './modules/archive-loader.js';
 import { AnnotationSystem } from './modules/annotation-system.js';
 import { ArchiveCreator, captureScreenshot } from './modules/archive-creator.js';
 import { CAMERA, TIMING } from './modules/constants.js';
-import { Logger, notify, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject, parseMarkdown } from './modules/utilities.js';
+import { Logger, notify, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject, parseMarkdown, fetchWithProgress } from './modules/utilities.js';
 import { SceneManager } from './modules/scene-manager.js';
 import {
     icpAlignObjects as icpAlignObjectsHandler,
@@ -2865,18 +2865,18 @@ async function loadDefaultFiles() {
 }
 
 async function loadSplatFromUrl(url) {
-    showLoading('Loading Gaussian Splat...');
+    showLoading('Downloading Gaussian Splat...', true);
 
     try {
-        // Fetch the file as blob for archive creation
+        // Fetch the file as blob with progress tracking
         log.info(' Fetching splat from URL:', url);
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
-        }
-        const blob = await response.blob();
+        const blob = await fetchWithProgress(url, (received, total) => {
+            const percent = Math.round((received / total) * 90); // 0-90% for download
+            updateProgress(percent, `Downloading Gaussian Splat... ${formatFileSize(received)} / ${formatFileSize(total)}`);
+        });
         currentSplatBlob = blob;
         log.info(' Splat blob stored, size:', blob.size);
+        updateProgress(90, 'Processing Gaussian Splat...');
 
         // Pre-compute hash in background for faster export later
         if (archiveCreator) {
@@ -2937,18 +2937,18 @@ async function loadSplatFromUrl(url) {
 }
 
 async function loadModelFromUrl(url) {
-    showLoading('Loading 3D Model...');
+    showLoading('Downloading 3D Model...', true);
 
     try {
-        // Fetch the file as blob for archive creation
+        // Fetch the file as blob with progress tracking
         log.info(' Fetching model from URL:', url);
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
-        }
-        const blob = await response.blob();
+        const blob = await fetchWithProgress(url, (received, total) => {
+            const percent = Math.round((received / total) * 90); // 0-90% for download
+            updateProgress(percent, `Downloading 3D Model... ${formatFileSize(received)} / ${formatFileSize(total)}`);
+        });
         currentMeshBlob = blob;
         log.info(' Mesh blob stored, size:', blob.size);
+        updateProgress(90, 'Processing 3D Model...');
 
         // Pre-compute hash in background for faster export later
         if (archiveCreator) {
