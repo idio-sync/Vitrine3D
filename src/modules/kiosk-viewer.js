@@ -15,7 +15,9 @@
  * - fflate is used to extract the appended ZIP data containing 3D assets
  */
 
-import { log } from './utilities.js';
+import { Logger } from './utilities.js';
+
+const log = Logger.getLogger('kiosk-viewer');
 
 // CDN URLs for dependencies to fetch and inline.
 // Three.js core uses ?bundle to produce a standalone module.

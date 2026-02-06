@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gaussian Splat & Mesh Viewer</title>
+    <title>3D Viewer</title>
 
     <!-- Content Security Policy - Defense in depth against XSS -->
     <!-- Note: frame-ancestors must be set via HTTP headers (see nginx.conf), not meta tags -->
@@ -780,20 +780,24 @@
 
         <div id="export-panel" class="hidden">
             <h3>Export Archive</h3>
-            <p class="hint-text" style="margin-bottom: 15px;">Configure metadata before exporting for a complete archive.</p>
-            <label for="export-format">Format</label>
-            <div class="radio-group">
-                <label><input type="radio" name="export-format" value="a3d" checked> .a3d (Standard)</label>
-                <label><input type="radio" name="export-format" value="a3z"> .a3z (Compressed)</label>
+            <p class="export-description">Configure metadata before exporting for a complete archive.</p>
+
+            <div class="export-section">
+                <label class="export-section-label">Format</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="export-format" value="a3d" checked> .a3d (Standard)</label>
+                    <label><input type="radio" name="export-format" value="a3z"> .a3z (Compressed)</label>
+                </div>
             </div>
-            <div class="kiosk-option">
+
+            <div class="export-section">
                 <div class="checkbox-group">
                     <input type="checkbox" id="export-kiosk-viewer" />
                     <label for="export-kiosk-viewer">Include Offline Viewer</label>
                 </div>
-                <p class="hint-text" style="margin-top: 4px; text-align: left;">Saves assets and viewer as a single .html file that can be opened offline.</p>
+                <p class="export-hint">Saves assets and viewer as a single .html file that can be opened offline.</p>
                 <div id="kiosk-viewer-options" class="kiosk-submenu hidden">
-                    <label style="margin-bottom: 8px; display: block;">Include in viewer:</label>
+                    <label class="export-section-label">Include in viewer:</label>
                     <div class="checkbox-group">
                         <input type="checkbox" id="kiosk-include-splat" checked disabled />
                         <label for="kiosk-include-splat">Gaussian Splat</label>
@@ -812,7 +816,8 @@
                     </div>
                 </div>
             </div>
-            <div class="btn-group">
+
+            <div class="export-actions">
                 <button id="btn-export-cancel" class="action-btn secondary">Cancel</button>
                 <button id="btn-export-download" class="action-btn">Download</button>
             </div>
@@ -836,15 +841,6 @@
                 <h3 class="collapsible-header">Load Files <span class="collapse-icon">▶</span></h3>
                 <div class="collapsible-content">
                     <div class="load-subsection">
-                        <h4>Gaussian Splat (.ply, .splat, .ksplat, .spz)</h4>
-                        <input type="file" id="splat-input" accept=".ply,.splat,.ksplat,.spz,.sog" />
-                        <div class="button-row">
-                            <label for="splat-input" class="file-label">From File</label>
-                            <button id="btn-load-splat-url" class="action-btn">From URL</button>
-                        </div>
-                        <span id="splat-filename" class="filename">No file loaded</span>
-                    </div>
-                    <div class="load-subsection">
                         <h4>3D Model (.glb, .gltf, .obj)</h4>
                         <input type="file" id="model-input" accept=".glb,.gltf,.obj" multiple />
                         <div class="button-row">
@@ -861,6 +857,15 @@
                             <button id="btn-load-pointcloud-url" class="action-btn">From URL</button>
                         </div>
                         <span id="pointcloud-filename" class="filename">No file loaded</span>
+                    </div>
+                    <div class="load-subsection">
+                        <h4>Gaussian Splat (.ply, .splat, .ksplat, .spz)</h4>
+                        <input type="file" id="splat-input" accept=".ply,.splat,.ksplat,.spz,.sog" />
+                        <div class="button-row">
+                            <label for="splat-input" class="file-label">From File</label>
+                            <button id="btn-load-splat-url" class="action-btn">From URL</button>
+                        </div>
+                        <span id="splat-filename" class="filename">No file loaded</span>
                     </div>
                     <div class="load-subsection">
                         <h4>Archive (.a3d/.a3z)</h4>
