@@ -1008,27 +1008,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
     flex: 1;
 }
 
-.kiosk-submenu {
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid #2a2a4a;
-}
-
-.kiosk-submenu .export-section-label {
-    margin-bottom: 6px;
-}
-
-.kiosk-submenu .checkbox-group {
-    margin-top: 6px;
-}
-
-.kiosk-submenu .checkbox-group input:disabled {
-    opacity: 0.4;
-}
-
-.kiosk-submenu .checkbox-group input:disabled + label {
-    opacity: 0.4;
-}
 
 .radio-group {
     display: flex;

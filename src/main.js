@@ -50,7 +50,7 @@ import {
     initShareDialog,
     showShareDialog
 } from './modules/share-dialog.js';
-// kiosk-viewer.js is loaded dynamically in downloadKioskViewer() to avoid
+// kiosk-viewer.js is loaded dynamically in downloadGenericViewer() to avoid
 // blocking the main application if the module fails to load.
 
 // Create logger for this module
@@ -673,13 +673,8 @@ function setupUIEvents() {
     addListener('btn-export-cancel', 'click', hideExportPanel);
     addListener('btn-export-download', 'click', downloadArchive);
 
-    // Kiosk viewer checkbox toggle
-    addListener('export-kiosk-viewer', 'change', (e) => {
-        const submenu = document.getElementById('kiosk-viewer-options');
-        if (submenu) {
-            submenu.classList.toggle('hidden', !e.target.checked);
-        }
-    });
+    // Generic viewer download button
+    addListener('btn-download-viewer', 'click', downloadGenericViewer);
 
     // Metadata panel controls
     addListener('btn-close-sidebar', 'click', hideMetadataPanel);
@@ -1850,7 +1845,7 @@ function showExportPanel() {
         log.info(' export-panel found, removing hidden class');
         panel.classList.remove('hidden');
     }
-    updateKioskAssetCheckboxes();
+    updateArchiveAssetCheckboxes();
 }
 
 // Hide export panel
@@ -1859,13 +1854,13 @@ function hideExportPanel() {
     if (panel) panel.classList.add('hidden');
 }
 
-// Update kiosk viewer asset checkboxes based on loaded state
-function updateKioskAssetCheckboxes() {
+// Update archive asset checkboxes based on loaded state
+function updateArchiveAssetCheckboxes() {
     const assets = [
-        { id: 'kiosk-include-splat', loaded: state.splatLoaded },
-        { id: 'kiosk-include-model', loaded: state.modelLoaded },
-        { id: 'kiosk-include-pointcloud', loaded: state.pointcloudLoaded },
-        { id: 'kiosk-include-annotations', loaded: annotationSystem && annotationSystem.hasAnnotations() }
+        { id: 'archive-include-splat', loaded: state.splatLoaded },
+        { id: 'archive-include-model', loaded: state.modelLoaded },
+        { id: 'archive-include-pointcloud', loaded: state.pointcloudLoaded },
+        { id: 'archive-include-annotations', loaded: annotationSystem && annotationSystem.hasAnnotations() }
     ];
     assets.forEach(({ id, loaded }) => {
         const el = document.getElementById(id);
@@ -1943,9 +1938,15 @@ async function downloadArchive() {
         archiveCreator.setCustomFields(metadata.customFields);
     }
 
-    // Add splat if loaded
+    // Read which assets the user wants to include
+    const includeSplat = document.getElementById('archive-include-splat')?.checked;
+    const includeModel = document.getElementById('archive-include-model')?.checked;
+    const includePointcloud = document.getElementById('archive-include-pointcloud')?.checked;
+    const includeAnnotations = document.getElementById('archive-include-annotations')?.checked;
+
+    // Add splat if loaded and selected
     log.info(' Checking splat:', { currentSplatBlob: !!currentSplatBlob, splatLoaded: state.splatLoaded });
-    if (currentSplatBlob && state.splatLoaded) {
+    if (includeSplat && currentSplatBlob && state.splatLoaded) {
         const fileName = document.getElementById('splat-filename')?.textContent || 'scene.ply';
         const position = splatMesh ? [splatMesh.position.x, splatMesh.position.y, splatMesh.position.z] : [0, 0, 0];
         const rotation = splatMesh ? [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z] : [0, 0, 0];
@@ -1960,9 +1961,9 @@ async function downloadArchive() {
         });
     }
 
-    // Add mesh if loaded
+    // Add mesh if loaded and selected
     log.info(' Checking mesh:', { currentMeshBlob: !!currentMeshBlob, modelLoaded: state.modelLoaded });
-    if (currentMeshBlob && state.modelLoaded) {
+    if (includeModel && currentMeshBlob && state.modelLoaded) {
         const fileName = document.getElementById('model-filename')?.textContent || 'mesh.glb';
         const position = modelGroup ? [modelGroup.position.x, modelGroup.position.y, modelGroup.position.z] : [0, 0, 0];
         const rotation = modelGroup ? [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z] : [0, 0, 0];
@@ -1977,9 +1978,9 @@ async function downloadArchive() {
         });
     }
 
-    // Add point cloud if loaded
+    // Add point cloud if loaded and selected
     log.info(' Checking pointcloud:', { currentPointcloudBlob: !!currentPointcloudBlob, pointcloudLoaded: state.pointcloudLoaded });
-    if (currentPointcloudBlob && state.pointcloudLoaded) {
+    if (includePointcloud && currentPointcloudBlob && state.pointcloudLoaded) {
         const fileName = document.getElementById('pointcloud-filename')?.textContent || 'pointcloud.e57';
         const position = pointcloudGroup ? [pointcloudGroup.position.x, pointcloudGroup.position.y, pointcloudGroup.position.z] : [0, 0, 0];
         const rotation = pointcloudGroup ? [pointcloudGroup.rotation.x, pointcloudGroup.rotation.y, pointcloudGroup.rotation.z] : [0, 0, 0];
@@ -1994,8 +1995,8 @@ async function downloadArchive() {
         });
     }
 
-    // Add annotations
-    if (annotationSystem && annotationSystem.hasAnnotations()) {
+    // Add annotations if selected
+    if (includeAnnotations && annotationSystem && annotationSystem.hasAnnotations()) {
         log.info(' Adding annotations');
         archiveCreator.setAnnotations(annotationSystem.toJSON());
     }
@@ -2003,13 +2004,13 @@ async function downloadArchive() {
     // Set quality stats
     log.info(' Setting quality stats');
     archiveCreator.setQualityStats({
-        splatCount: state.splatLoaded ? parseInt(document.getElementById('splat-vertices')?.textContent) || 0 : 0,
-        meshPolys: state.modelLoaded ? parseInt(document.getElementById('model-faces')?.textContent) || 0 : 0,
-        meshVerts: state.modelLoaded ? (state.meshVertexCount || 0) : 0,
-        splatFileSize: currentSplatBlob?.size || 0,
-        meshFileSize: currentMeshBlob?.size || 0,
-        pointcloudPoints: state.pointcloudLoaded ? parseInt(document.getElementById('pointcloud-points')?.textContent?.replace(/,/g, '')) || 0 : 0,
-        pointcloudFileSize: currentPointcloudBlob?.size || 0
+        splatCount: (includeSplat && state.splatLoaded) ? parseInt(document.getElementById('splat-vertices')?.textContent) || 0 : 0,
+        meshPolys: (includeModel && state.modelLoaded) ? parseInt(document.getElementById('model-faces')?.textContent) || 0 : 0,
+        meshVerts: (includeModel && state.modelLoaded) ? (state.meshVertexCount || 0) : 0,
+        splatFileSize: (includeSplat && currentSplatBlob) ? currentSplatBlob.size : 0,
+        meshFileSize: (includeModel && currentMeshBlob) ? currentMeshBlob.size : 0,
+        pointcloudPoints: (includePointcloud && state.pointcloudLoaded) ? parseInt(document.getElementById('pointcloud-points')?.textContent?.replace(/,/g, '')) || 0 : 0,
+        pointcloudFileSize: (includePointcloud && currentPointcloudBlob) ? currentPointcloudBlob.size : 0
     });
 
     // Add preview/thumbnail
@@ -2040,13 +2041,6 @@ async function downloadArchive() {
         return;
     }
 
-    // Check if kiosk viewer export is requested
-    const kioskChecked = document.getElementById('export-kiosk-viewer')?.checked;
-    if (kioskChecked) {
-        await downloadKioskViewer(metadata, includeHashes);
-        return;
-    }
-
     // Create and download with progress
     log.info(' Starting archive creation');
     showLoading('Creating archive...', true); // Show with progress bar
@@ -2073,148 +2067,42 @@ async function downloadArchive() {
     }
 }
 
-// Download kiosk viewer (polyglot HTML+ZIP)
-async function downloadKioskViewer(metadata, includeHashes) {
-    log.info(' downloadKioskViewer called');
-
-    // Read which assets the user wants to include
-    const includeSplat = document.getElementById('kiosk-include-splat')?.checked;
-    const includeModel = document.getElementById('kiosk-include-model')?.checked;
-    const includePointcloud = document.getElementById('kiosk-include-pointcloud')?.checked;
-    const includeAnnotations = document.getElementById('kiosk-include-annotations')?.checked;
-
-    // Build a kiosk-specific archive creator with only selected assets
-    const kioskArchive = new ArchiveCreator();
-    kioskArchive.setProjectInfo(metadata.project);
-    kioskArchive.setProvenance(metadata.provenance);
-    kioskArchive.setRelationships(metadata.relationships);
-    kioskArchive.setQualityMetrics(metadata.qualityMetrics);
-    kioskArchive.setArchivalRecord(metadata.archivalRecord);
-    kioskArchive.setMaterialStandard(metadata.materialStandard);
-    kioskArchive.setPreservation(metadata.preservation);
-    if (Object.keys(metadata.customFields).length > 0) {
-        kioskArchive.setCustomFields(metadata.customFields);
-    }
-
-    // Add selected assets
-    if (includeSplat && currentSplatBlob && state.splatLoaded) {
-        const fileName = document.getElementById('splat-filename')?.textContent || 'scene.ply';
-        const position = splatMesh ? [splatMesh.position.x, splatMesh.position.y, splatMesh.position.z] : [0, 0, 0];
-        const rotation = splatMesh ? [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z] : [0, 0, 0];
-        const scale = splatMesh ? splatMesh.scale.x : 1;
-        kioskArchive.addScene(currentSplatBlob, fileName, {
-            position, rotation, scale,
-            created_by: metadata.splatMetadata.createdBy || 'unknown',
-            created_by_version: metadata.splatMetadata.version || '',
-            source_notes: metadata.splatMetadata.sourceNotes || ''
-        });
-    }
-
-    if (includeModel && currentMeshBlob && state.modelLoaded) {
-        const fileName = document.getElementById('model-filename')?.textContent || 'mesh.glb';
-        const position = modelGroup ? [modelGroup.position.x, modelGroup.position.y, modelGroup.position.z] : [0, 0, 0];
-        const rotation = modelGroup ? [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z] : [0, 0, 0];
-        const scale = modelGroup ? modelGroup.scale.x : 1;
-        kioskArchive.addMesh(currentMeshBlob, fileName, {
-            position, rotation, scale,
-            created_by: metadata.meshMetadata.createdBy || 'unknown',
-            created_by_version: metadata.meshMetadata.version || '',
-            source_notes: metadata.meshMetadata.sourceNotes || ''
-        });
-    }
-
-    if (includePointcloud && currentPointcloudBlob && state.pointcloudLoaded) {
-        const fileName = document.getElementById('pointcloud-filename')?.textContent || 'pointcloud.e57';
-        const position = pointcloudGroup ? [pointcloudGroup.position.x, pointcloudGroup.position.y, pointcloudGroup.position.z] : [0, 0, 0];
-        const rotation = pointcloudGroup ? [pointcloudGroup.rotation.x, pointcloudGroup.rotation.y, pointcloudGroup.rotation.z] : [0, 0, 0];
-        const scale = pointcloudGroup ? pointcloudGroup.scale.x : 1;
-        kioskArchive.addPointcloud(currentPointcloudBlob, fileName, {
-            position, rotation, scale,
-            created_by: metadata.pointcloudMetadata?.createdBy || 'unknown',
-            created_by_version: metadata.pointcloudMetadata?.version || '',
-            source_notes: metadata.pointcloudMetadata?.sourceNotes || ''
-        });
-    }
-
-    if (includeAnnotations && annotationSystem && annotationSystem.hasAnnotations()) {
-        kioskArchive.setAnnotations(annotationSystem.toJSON());
-    }
-
-    // Quality stats
-    kioskArchive.setQualityStats({
-        splatCount: (includeSplat && state.splatLoaded) ? parseInt(document.getElementById('splat-vertices')?.textContent) || 0 : 0,
-        meshPolys: (includeModel && state.modelLoaded) ? parseInt(document.getElementById('model-faces')?.textContent) || 0 : 0,
-        meshVerts: (includeModel && state.modelLoaded) ? (state.meshVertexCount || 0) : 0,
-        splatFileSize: (includeSplat && currentSplatBlob) ? currentSplatBlob.size : 0,
-        meshFileSize: (includeModel && currentMeshBlob) ? currentMeshBlob.size : 0,
-        pointcloudPoints: (includePointcloud && state.pointcloudLoaded) ? parseInt(document.getElementById('pointcloud-points')?.textContent?.replace(/,/g, '')) || 0 : 0,
-        pointcloudFileSize: (includePointcloud && currentPointcloudBlob) ? currentPointcloudBlob.size : 0
-    });
-
-    // Validate
-    const validation = kioskArchive.validate();
-    if (!validation.valid) {
-        notify.error('Cannot create kiosk viewer: ' + validation.errors.join('; '));
-        return;
-    }
-
-    showLoading('Creating offline viewer...', true);
+// Download generic offline viewer (standalone HTML that opens any .a3d/.a3z)
+async function downloadGenericViewer() {
+    log.info(' downloadGenericViewer called');
+    showLoading('Building offline viewer...', true);
 
     try {
-        // Phase 0: Dynamically load the kiosk viewer module
-        updateProgress(1, 'Loading kiosk module...');
-        const { fetchDependencies: fetchKioskDeps, generateKioskHTML, buildViewerPackage } =
+        updateProgress(1, 'Loading viewer module...');
+        const { fetchDependencies: fetchViewerDeps, generateGenericViewer } =
             await import('./modules/kiosk-viewer.js');
 
-        // Phase 1: Fetch CDN dependencies
         updateProgress(5, 'Fetching viewer libraries...');
-        const deps = await fetchKioskDeps((msg) => {
+        const deps = await fetchViewerDeps((msg) => {
             updateProgress(15, msg);
         });
 
-        // Phase 2: Create the archive ZIP blob
-        updateProgress(30, 'Building archive...');
-        const archiveBlob = await kioskArchive.createArchive(
-            { format: 'a3z', includeHashes },
-            (percent, stage) => {
-                updateProgress(30 + Math.round(percent * 0.5), stage);
-            }
-        );
+        updateProgress(90, 'Assembling viewer...');
+        const html = generateGenericViewer(deps);
 
-        // Phase 3: Generate viewer HTML
-        updateProgress(85, 'Assembling viewer...');
-        const manifest = kioskArchive.previewManifest();
-        const html = generateKioskHTML({
-            deps,
-            manifest,
-            title: metadata.project.title
-        });
-
-        // Phase 4: Package viewer.html + data.a3z into a ZIP
-        updateProgress(90, 'Packaging viewer...');
-        const archiveBytes = new Uint8Array(await archiveBlob.arrayBuffer());
-        const packageBlob = await buildViewerPackage(html, archiveBytes);
-
-        // Phase 5: Trigger download
         updateProgress(95, 'Starting download...');
-        const filename = (metadata.project.id || 'viewer') + '-viewer.zip';
-        const url = URL.createObjectURL(packageBlob);
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.download = 'archive-viewer.html';
         a.click();
         URL.revokeObjectURL(url);
 
-        log.info(`[Kiosk] Viewer package exported: ${filename} (${(packageBlob.size / 1024 / 1024).toFixed(1)} MB)`);
+        log.info(`[Viewer] Generic viewer exported (${(blob.size / 1024).toFixed(0)} KB)`);
         updateProgress(100, 'Complete');
         hideLoading();
-        hideExportPanel();
-        notify.success(`Offline viewer exported: ${filename}`);
+        notify.success('Offline viewer downloaded: archive-viewer.html');
 
     } catch (e) {
         hideLoading();
-        log.error(' Error creating kiosk viewer:', e);
-        notify.error('Error creating offline viewer: ' + e.message);
+        log.error(' Error creating generic viewer:', e);
+        notify.error('Error creating viewer: ' + e.message);
     }
 }
 

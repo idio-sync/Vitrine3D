@@ -1,29 +1,23 @@
 /**
- * Kiosk Viewer Generator
+ * Generic Offline Viewer Generator
  *
- * Generates a lightweight offline HTML viewer packaged alongside a separate
- * .a3z archive. The export produces a ZIP containing:
- *   - viewer.html (~1MB) with all JS dependencies inlined as base64
- *   - data.a3z — the compressed 3D archive
- *
- * When served via HTTP, the viewer auto-loads data.a3z from the same directory.
- * When opened from file://, it shows a file picker to select the archive.
+ * Generates a self-contained HTML viewer (~1MB) that can open any .a3d/.a3z
+ * archive. The viewer is not project-specific — it reads the manifest and
+ * assets from whatever archive the user provides via file picker or drag-drop.
  *
  * Architecture:
- * - Dependencies are fetched from CDN at export time as ES module source text
+ * - Dependencies are fetched from CDN at build time as ES module source text
  * - Sources are base64-encoded and embedded in the HTML
  * - At runtime, the viewer decodes sources, creates blob URLs, rewrites
  *   internal `from "three"` imports to use the Three.js blob URL, then
  *   dynamically imports everything — ensuring a single shared Three.js instance
- * - fflate is used to decompress the .a3z archive
+ * - User opens an .a3d/.a3z archive via file picker or drag-and-drop
+ * - fflate decompresses the archive and assets are loaded into a Three.js scene
  */
 
-import { zip, strToU8 } from 'fflate';
 import { Logger } from './utilities.js';
 
 const log = Logger.getLogger('kiosk-viewer');
-
-const ARCHIVE_FILENAME = 'data.a3z';
 
 // CDN URLs for dependencies to fetch and inline.
 // Three.js core uses ?bundle to produce a standalone module.
@@ -75,24 +69,16 @@ export async function fetchDependencies(onProgress) {
 }
 
 /**
- * Generate the kiosk viewer HTML string.
+ * Generate a generic offline viewer HTML string.
  *
- * The viewer loads its 3D data from a separate archive file (data.a3z)
- * rather than self-reading a polyglot file.
+ * This viewer is not tied to any specific project. It can open any .a3d/.a3z
+ * archive via file picker or drag-and-drop. Dependencies are inlined so it
+ * works fully offline.
  *
- * @param {Object} options
- * @param {Object} options.deps - Base64-encoded dependency sources (from fetchDependencies)
- * @param {Object} options.manifest - The archive manifest.json object
- * @param {string} options.title - Project title for the page
- * @returns {string} Complete HTML string for the kiosk viewer
+ * @param {Object} deps - Base64-encoded dependency sources (from fetchDependencies)
+ * @returns {string} Complete HTML string for the generic viewer
  */
-export function generateKioskHTML({ deps, manifest, title }) {
-    const safeTitle = (title || 'Offline Viewer').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-    // Safely embed manifest JSON — escape </script> sequences
-    const manifestJSON = JSON.stringify(manifest).replace(/<\//g, '<\\/');
-
-    // Build the base64 deps object literal for embedding
+export function generateGenericViewer(deps) {
     const depsLiteral = JSON.stringify(deps);
 
     return `<!DOCTYPE html>
@@ -100,26 +86,25 @@ export function generateKioskHTML({ deps, manifest, title }) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${safeTitle} - Offline Viewer</title>
+<title>3D Archive Viewer</title>
 <style>
 ${KIOSK_CSS}
 </style>
 </head>
 <body>
-<div id="loading">
+<div id="loading" class="hidden">
     <div class="spinner"></div>
     <div id="loading-text">Initializing viewer...</div>
 </div>
-<div id="file-picker" class="hidden">
+<div id="file-picker">
     <div class="picker-content">
-        <h1 id="picker-title">${safeTitle}</h1>
-        <p id="picker-desc"></p>
+        <h1 id="picker-title">3D Archive Viewer</h1>
+        <p id="picker-desc">Open an .a3d or .a3z archive to view its 3D content.</p>
         <div class="picker-box" id="picker-drop-zone">
             <div class="picker-icon">&#128194;</div>
-            <p>Select <strong>${ARCHIVE_FILENAME}</strong> from the same folder</p>
+            <p>Select an <strong>.a3d</strong> or <strong>.a3z</strong> archive</p>
             <button id="picker-btn" type="button">Select Archive File</button>
             <p class="picker-hint">or drag and drop it here</p>
-            <p class="picker-hint">Accepts .a3z or .a3d archive files</p>
         </div>
         <input type="file" id="picker-input" accept=".a3z,.a3d" style="display:none">
     </div>
@@ -134,42 +119,12 @@ ${KIOSK_CSS}
     <div id="controls-hint">Click and drag to rotate &middot; Scroll to zoom &middot; Right-click to pan</div>
 </div>
 <script>
-// Embedded data
 var __KIOSK_DEPS__ = ${depsLiteral};
-var __KIOSK_MANIFEST__ = ${manifestJSON};
-var __ARCHIVE_FILENAME__ = '${ARCHIVE_FILENAME}';
 
 ${KIOSK_BOOTSTRAP_JS}
 <\/script>
 </body>
 </html>`;
-}
-
-/**
- * Build the viewer package as a ZIP containing viewer.html + data.a3z.
- *
- * @param {string} html - The viewer HTML string (from generateKioskHTML)
- * @param {Uint8Array} archiveBytes - The .a3z archive binary data
- * @returns {Promise<Blob>} The package ZIP as a Blob
- */
-export async function buildViewerPackage(html, archiveBytes) {
-    const htmlBytes = strToU8(html);
-
-    // Both files stored without additional compression:
-    // - HTML is small (~1MB) and compresses poorly (base64 content)
-    // - Archive is already compressed (.a3z)
-    const zipData = {};
-    zipData['viewer.html'] = [htmlBytes, { level: 0 }];
-    zipData[ARCHIVE_FILENAME] = [archiveBytes, { level: 0 }];
-
-    const result = await new Promise((resolve, reject) => {
-        zip(zipData, (err, data) => {
-            if (err) reject(err);
-            else resolve(data);
-        });
-    });
-
-    return new Blob([result], { type: 'application/zip' });
 }
 
 // =============================================================================
@@ -338,36 +293,12 @@ console.log('[Kiosk] Script executing');
         console.log('[Kiosk] fflate loaded');
 
         // =====================================================================
-        // PHASE 2: Load the archive file
+        // PHASE 2: Wait for user to select an archive file
         // =====================================================================
-        setStatus('Loading archive...');
-        var archiveBytes = null;
-
-        // Try fetching the archive from the same directory (works when served via HTTP)
-        try {
-            var resp = await fetch('./' + __ARCHIVE_FILENAME__);
-            if (resp.ok) {
-                archiveBytes = new Uint8Array(await resp.arrayBuffer());
-                console.log('[Kiosk] Archive loaded via fetch: ' + archiveBytes.length + ' bytes');
-            }
-        } catch (e) {
-            console.log('[Kiosk] Could not fetch ' + __ARCHIVE_FILENAME__ + ' (expected on file://): ' + e.message);
-        }
-
-        // If fetch failed (file:// protocol), show file picker
-        if (!archiveBytes) {
-            document.getElementById('loading').style.display = 'none';
-
-            // Populate picker with project info from embedded manifest
-            var pickerDesc = document.getElementById('picker-desc');
-            if (pickerDesc && __KIOSK_MANIFEST__ && __KIOSK_MANIFEST__.project) {
-                var desc = __KIOSK_MANIFEST__.project.description || '';
-                if (desc) pickerDesc.textContent = desc;
-            }
-
-            archiveBytes = await waitForArchiveFile();
-            document.getElementById('loading').style.display = '';
-        }
+        var archiveBytes = await waitForArchiveFile();
+        document.getElementById('file-picker').classList.add('hidden');
+        document.getElementById('loading').classList.remove('hidden');
+        setStatus('Reading archive...');
 
         // =====================================================================
         // PHASE 3: Extract archive contents
@@ -392,13 +323,10 @@ console.log('[Kiosk] Script executing');
         console.log('[Kiosk] Extracted ' + fileNames.length + ' files: ' + fileNames.join(', '));
         var decoder = new TextDecoder();
 
-        // Parse manifest (prefer from archive, fall back to embedded)
-        var manifest = __KIOSK_MANIFEST__;
-        if (files['manifest.json']) {
-            manifest = JSON.parse(decoder.decode(files['manifest.json']));
-            console.log('[Kiosk] Using manifest from archive');
-        }
-        if (!manifest) throw new Error('No manifest found.');
+        // Parse manifest from archive
+        if (!files['manifest.json']) throw new Error('No manifest.json found in archive.');
+        var manifest = JSON.parse(decoder.decode(files['manifest.json']));
+        console.log('[Kiosk] Manifest loaded from archive');
 
         // =====================================================================
         // PHASE 4: Initialize viewer and load assets
