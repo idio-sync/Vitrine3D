@@ -50,6 +50,11 @@ import {
     initShareDialog,
     showShareDialog
 } from './modules/share-dialog.js';
+import {
+    fetchDependencies as fetchKioskDeps,
+    generateKioskHTML,
+    buildPolyglotFile
+} from './modules/kiosk-viewer.js';
 
 // Create logger for this module
 const log = Logger.getLogger('main.js');
@@ -670,6 +675,14 @@ function setupUIEvents() {
     addListener('btn-export-archive', 'click', showExportPanel);
     addListener('btn-export-cancel', 'click', hideExportPanel);
     addListener('btn-export-download', 'click', downloadArchive);
+
+    // Kiosk viewer checkbox toggle
+    addListener('export-kiosk-viewer', 'change', (e) => {
+        const submenu = document.getElementById('kiosk-viewer-options');
+        if (submenu) {
+            submenu.classList.toggle('hidden', !e.target.checked);
+        }
+    });
 
     // Metadata panel controls
     addListener('btn-close-sidebar', 'click', hideMetadataPanel);
@@ -1840,12 +1853,30 @@ function showExportPanel() {
         log.info(' export-panel found, removing hidden class');
         panel.classList.remove('hidden');
     }
+    updateKioskAssetCheckboxes();
 }
 
 // Hide export panel
 function hideExportPanel() {
     const panel = document.getElementById('export-panel');
     if (panel) panel.classList.add('hidden');
+}
+
+// Update kiosk viewer asset checkboxes based on loaded state
+function updateKioskAssetCheckboxes() {
+    const assets = [
+        { id: 'kiosk-include-splat', loaded: state.splatLoaded },
+        { id: 'kiosk-include-model', loaded: state.modelLoaded },
+        { id: 'kiosk-include-pointcloud', loaded: state.pointcloudLoaded },
+        { id: 'kiosk-include-annotations', loaded: annotationSystem && annotationSystem.hasAnnotations() }
+    ];
+    assets.forEach(({ id, loaded }) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.checked = !!loaded;
+            el.disabled = !loaded;
+        }
+    });
 }
 
 // Download archive
@@ -2012,6 +2043,13 @@ async function downloadArchive() {
         return;
     }
 
+    // Check if kiosk viewer export is requested
+    const kioskChecked = document.getElementById('export-kiosk-viewer')?.checked;
+    if (kioskChecked) {
+        await downloadKioskViewer(metadata, includeHashes);
+        return;
+    }
+
     // Create and download with progress
     log.info(' Starting archive creation');
     showLoading('Creating archive...', true); // Show with progress bar
@@ -2035,6 +2073,146 @@ async function downloadArchive() {
         hideLoading();
         log.error(' Error creating archive:', e);
         notify.error('Error creating archive: ' + e.message);
+    }
+}
+
+// Download kiosk viewer (polyglot HTML+ZIP)
+async function downloadKioskViewer(metadata, includeHashes) {
+    log.info(' downloadKioskViewer called');
+
+    // Read which assets the user wants to include
+    const includeSplat = document.getElementById('kiosk-include-splat')?.checked;
+    const includeModel = document.getElementById('kiosk-include-model')?.checked;
+    const includePointcloud = document.getElementById('kiosk-include-pointcloud')?.checked;
+    const includeAnnotations = document.getElementById('kiosk-include-annotations')?.checked;
+
+    // Build a kiosk-specific archive creator with only selected assets
+    const kioskArchive = new ArchiveCreator();
+    kioskArchive.setProjectInfo(metadata.project);
+    kioskArchive.setProvenance(metadata.provenance);
+    kioskArchive.setRelationships(metadata.relationships);
+    kioskArchive.setQualityMetrics(metadata.qualityMetrics);
+    kioskArchive.setArchivalRecord(metadata.archivalRecord);
+    kioskArchive.setMaterialStandard(metadata.materialStandard);
+    kioskArchive.setPreservation(metadata.preservation);
+    if (Object.keys(metadata.customFields).length > 0) {
+        kioskArchive.setCustomFields(metadata.customFields);
+    }
+
+    // Add selected assets
+    if (includeSplat && currentSplatBlob && state.splatLoaded) {
+        const fileName = document.getElementById('splat-filename')?.textContent || 'scene.ply';
+        const position = splatMesh ? [splatMesh.position.x, splatMesh.position.y, splatMesh.position.z] : [0, 0, 0];
+        const rotation = splatMesh ? [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z] : [0, 0, 0];
+        const scale = splatMesh ? splatMesh.scale.x : 1;
+        kioskArchive.addScene(currentSplatBlob, fileName, {
+            position, rotation, scale,
+            created_by: metadata.splatMetadata.createdBy || 'unknown',
+            created_by_version: metadata.splatMetadata.version || '',
+            source_notes: metadata.splatMetadata.sourceNotes || ''
+        });
+    }
+
+    if (includeModel && currentMeshBlob && state.modelLoaded) {
+        const fileName = document.getElementById('model-filename')?.textContent || 'mesh.glb';
+        const position = modelGroup ? [modelGroup.position.x, modelGroup.position.y, modelGroup.position.z] : [0, 0, 0];
+        const rotation = modelGroup ? [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z] : [0, 0, 0];
+        const scale = modelGroup ? modelGroup.scale.x : 1;
+        kioskArchive.addMesh(currentMeshBlob, fileName, {
+            position, rotation, scale,
+            created_by: metadata.meshMetadata.createdBy || 'unknown',
+            created_by_version: metadata.meshMetadata.version || '',
+            source_notes: metadata.meshMetadata.sourceNotes || ''
+        });
+    }
+
+    if (includePointcloud && currentPointcloudBlob && state.pointcloudLoaded) {
+        const fileName = document.getElementById('pointcloud-filename')?.textContent || 'pointcloud.e57';
+        const position = pointcloudGroup ? [pointcloudGroup.position.x, pointcloudGroup.position.y, pointcloudGroup.position.z] : [0, 0, 0];
+        const rotation = pointcloudGroup ? [pointcloudGroup.rotation.x, pointcloudGroup.rotation.y, pointcloudGroup.rotation.z] : [0, 0, 0];
+        const scale = pointcloudGroup ? pointcloudGroup.scale.x : 1;
+        kioskArchive.addPointcloud(currentPointcloudBlob, fileName, {
+            position, rotation, scale,
+            created_by: metadata.pointcloudMetadata?.createdBy || 'unknown',
+            created_by_version: metadata.pointcloudMetadata?.version || '',
+            source_notes: metadata.pointcloudMetadata?.sourceNotes || ''
+        });
+    }
+
+    if (includeAnnotations && annotationSystem && annotationSystem.hasAnnotations()) {
+        kioskArchive.setAnnotations(annotationSystem.toJSON());
+    }
+
+    // Quality stats
+    kioskArchive.setQualityStats({
+        splatCount: (includeSplat && state.splatLoaded) ? parseInt(document.getElementById('splat-vertices')?.textContent) || 0 : 0,
+        meshPolys: (includeModel && state.modelLoaded) ? parseInt(document.getElementById('model-faces')?.textContent) || 0 : 0,
+        meshVerts: (includeModel && state.modelLoaded) ? (state.meshVertexCount || 0) : 0,
+        splatFileSize: (includeSplat && currentSplatBlob) ? currentSplatBlob.size : 0,
+        meshFileSize: (includeModel && currentMeshBlob) ? currentMeshBlob.size : 0,
+        pointcloudPoints: (includePointcloud && state.pointcloudLoaded) ? parseInt(document.getElementById('pointcloud-points')?.textContent?.replace(/,/g, '')) || 0 : 0,
+        pointcloudFileSize: (includePointcloud && currentPointcloudBlob) ? currentPointcloudBlob.size : 0
+    });
+
+    // Validate
+    const validation = kioskArchive.validate();
+    if (!validation.valid) {
+        notify.error('Cannot create kiosk viewer: ' + validation.errors.join('; '));
+        return;
+    }
+
+    showLoading('Creating offline viewer...', true);
+
+    try {
+        // Phase 1: Fetch CDN dependencies
+        updateProgress(5, 'Fetching viewer libraries...');
+        const deps = await fetchKioskDeps((msg) => {
+            updateProgress(15, msg);
+        });
+
+        // Phase 2: Create the archive ZIP blob
+        updateProgress(30, 'Building archive...');
+        const archiveBlob = await kioskArchive.createArchive(
+            { format: 'a3z', includeHashes },
+            (percent, stage) => {
+                updateProgress(30 + Math.round(percent * 0.5), stage);
+            }
+        );
+
+        // Phase 3: Generate kiosk HTML
+        updateProgress(85, 'Assembling viewer...');
+        const manifest = kioskArchive.getManifest();
+        const html = generateKioskHTML({
+            deps,
+            manifest,
+            title: metadata.project.title
+        });
+
+        // Phase 4: Build polyglot (HTML + ZIP)
+        updateProgress(90, 'Creating file...');
+        const zipBytes = new Uint8Array(await archiveBlob.arrayBuffer());
+        const polyglotBlob = buildPolyglotFile(html, zipBytes);
+
+        // Phase 5: Trigger download
+        updateProgress(95, 'Starting download...');
+        const filename = (metadata.project.id || 'viewer') + '-viewer.html';
+        const url = URL.createObjectURL(polyglotBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        log.info(`[Kiosk] Viewer exported: ${filename} (${(polyglotBlob.size / 1024 / 1024).toFixed(1)} MB)`);
+        updateProgress(100, 'Complete');
+        hideLoading();
+        hideExportPanel();
+        notify.success(`Offline viewer exported: ${filename}`);
+
+    } catch (e) {
+        hideLoading();
+        log.error(' Error creating kiosk viewer:', e);
+        notify.error('Error creating offline viewer: ' + e.message);
     }
 }
 
