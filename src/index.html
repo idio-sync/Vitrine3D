@@ -791,35 +791,32 @@
             </div>
 
             <div class="export-section">
+                <label class="export-section-label">Include in archive:</label>
                 <div class="checkbox-group">
-                    <input type="checkbox" id="export-kiosk-viewer" />
-                    <label for="export-kiosk-viewer">Include Offline Viewer</label>
+                    <input type="checkbox" id="archive-include-splat" checked disabled />
+                    <label for="archive-include-splat">Gaussian Splat</label>
                 </div>
-                <p class="export-hint">Saves assets and viewer as a single .html file that can be opened offline.</p>
-                <div id="kiosk-viewer-options" class="kiosk-submenu hidden">
-                    <label class="export-section-label">Include in viewer:</label>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="kiosk-include-splat" checked disabled />
-                        <label for="kiosk-include-splat">Gaussian Splat</label>
-                    </div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="kiosk-include-model" checked disabled />
-                        <label for="kiosk-include-model">3D Model</label>
-                    </div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="kiosk-include-pointcloud" checked disabled />
-                        <label for="kiosk-include-pointcloud">Point Cloud</label>
-                    </div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="kiosk-include-annotations" checked disabled />
-                        <label for="kiosk-include-annotations">Annotations</label>
-                    </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="archive-include-model" checked disabled />
+                    <label for="archive-include-model">3D Model</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="archive-include-pointcloud" checked disabled />
+                    <label for="archive-include-pointcloud">Point Cloud</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="archive-include-annotations" checked disabled />
+                    <label for="archive-include-annotations">Annotations</label>
                 </div>
             </div>
 
             <div class="export-actions">
                 <button id="btn-export-cancel" class="action-btn secondary">Cancel</button>
-                <button id="btn-export-download" class="action-btn">Download</button>
+                <button id="btn-export-download" class="action-btn">Download Archive</button>
+            </div>
+            <div class="export-section" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #3a3a5a;">
+                <button id="btn-download-viewer" class="action-btn secondary" style="width: 100%;">Download Offline Viewer</button>
+                <p class="export-hint">One-time download. Opens any .a3d/.a3z archive offline.</p>
             </div>
         </div>
 
