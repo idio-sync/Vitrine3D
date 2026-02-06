@@ -1,23 +1,29 @@
 /**
  * Kiosk Viewer Generator
  *
- * Generates a self-contained HTML file that embeds a read-only 3D viewer.
- * The generated file is a polyglot: valid HTML that also contains ZIP data
- * appended after </html>. The viewer reads itself, extracts the ZIP portion,
- * and renders the 3D assets offline.
+ * Generates a lightweight offline HTML viewer packaged alongside a separate
+ * .a3z archive. The export produces a ZIP containing:
+ *   - viewer.html (~1MB) with all JS dependencies inlined as base64
+ *   - data.a3z — the compressed 3D archive
+ *
+ * When served via HTTP, the viewer auto-loads data.a3z from the same directory.
+ * When opened from file://, it shows a file picker to select the archive.
  *
  * Architecture:
  * - Dependencies are fetched from CDN at export time as ES module source text
  * - Sources are base64-encoded and embedded in the HTML
- * - At runtime, the kiosk HTML decodes sources, creates blob URLs, rewrites
+ * - At runtime, the viewer decodes sources, creates blob URLs, rewrites
  *   internal `from "three"` imports to use the Three.js blob URL, then
  *   dynamically imports everything — ensuring a single shared Three.js instance
- * - fflate is used to extract the appended ZIP data containing 3D assets
+ * - fflate is used to decompress the .a3z archive
  */
 
+import { zip, strToU8 } from 'fflate';
 import { Logger } from './utilities.js';
 
 const log = Logger.getLogger('kiosk-viewer');
+
+const ARCHIVE_FILENAME = 'data.a3z';
 
 // CDN URLs for dependencies to fetch and inline.
 // Three.js core uses ?bundle to produce a standalone module.
@@ -51,7 +57,7 @@ async function fetchDep(url) {
 /**
  * Fetch all CDN dependencies and return as base64-encoded strings.
  * @param {Function} onProgress - Progress callback (message string)
- * @returns {Object} Map of dependency name → base64-encoded source
+ * @returns {Object} Map of dependency name -> base64-encoded source
  */
 export async function fetchDependencies(onProgress) {
     const deps = {};
@@ -63,13 +69,16 @@ export async function fetchDependencies(onProgress) {
         const src = await fetchDep(url);
         // Base64-encode to safely embed in HTML without escaping issues
         deps[name] = btoa(unescape(encodeURIComponent(src)));
-        log.info(`[Kiosk] Fetched ${name}: ${(src.length / 1024).toFixed(1)} KB source → ${(deps[name].length / 1024).toFixed(1)} KB base64`);
+        log.info(`[Kiosk] Fetched ${name}: ${(src.length / 1024).toFixed(1)} KB source -> ${(deps[name].length / 1024).toFixed(1)} KB base64`);
     }
     return deps;
 }
 
 /**
- * Generate the self-contained kiosk viewer HTML string.
+ * Generate the kiosk viewer HTML string.
+ *
+ * The viewer loads its 3D data from a separate archive file (data.a3z)
+ * rather than self-reading a polyglot file.
  *
  * @param {Object} options
  * @param {Object} options.deps - Base64-encoded dependency sources (from fetchDependencies)
@@ -101,12 +110,18 @@ ${KIOSK_CSS}
     <div class="spinner"></div>
     <div id="loading-text">Initializing viewer...</div>
 </div>
-<div id="drop-overlay" class="hidden">
-    <div class="drop-content">
-        <div class="drop-icon">&#128194;</div>
-        <p>Drop this file here to view</p>
-        <p class="drop-hint">Your browser requires drag-and-drop for local files.</p>
-        <p class="drop-hint">Drag this same .html file onto this page.</p>
+<div id="file-picker" class="hidden">
+    <div class="picker-content">
+        <h1 id="picker-title">${safeTitle}</h1>
+        <p id="picker-desc"></p>
+        <div class="picker-box" id="picker-drop-zone">
+            <div class="picker-icon">&#128194;</div>
+            <p>Select <strong>${ARCHIVE_FILENAME}</strong> from the same folder</p>
+            <button id="picker-btn" type="button">Select Archive File</button>
+            <p class="picker-hint">or drag and drop it here</p>
+            <p class="picker-hint">Accepts .a3z or .a3d archive files</p>
+        </div>
+        <input type="file" id="picker-input" accept=".a3z,.a3d" style="display:none">
     </div>
 </div>
 <div id="viewer" class="hidden">
@@ -122,30 +137,39 @@ ${KIOSK_CSS}
 // Embedded data
 var __KIOSK_DEPS__ = ${depsLiteral};
 var __KIOSK_MANIFEST__ = ${manifestJSON};
+var __ARCHIVE_FILENAME__ = '${ARCHIVE_FILENAME}';
 
 ${KIOSK_BOOTSTRAP_JS}
 <\/script>
 </body>
-</html>
-<!-- KIOSK_ZIP_BOUNDARY -->`;
+</html>`;
 }
 
 /**
- * Build the complete polyglot file (HTML + ZIP).
+ * Build the viewer package as a ZIP containing viewer.html + data.a3z.
  *
- * @param {string} html - The kiosk HTML string (from generateKioskHTML)
- * @param {Uint8Array} zipData - The ZIP archive binary data
- * @returns {Blob} The polyglot file as a Blob
+ * @param {string} html - The viewer HTML string (from generateKioskHTML)
+ * @param {Uint8Array} archiveBytes - The .a3z archive binary data
+ * @returns {Promise<Blob>} The package ZIP as a Blob
  */
-export function buildPolyglotFile(html, zipData) {
-    const encoder = new TextEncoder();
-    const htmlBytes = encoder.encode(html);
+export async function buildViewerPackage(html, archiveBytes) {
+    const htmlBytes = strToU8(html);
 
-    const combined = new Uint8Array(htmlBytes.length + zipData.length);
-    combined.set(htmlBytes, 0);
-    combined.set(zipData, htmlBytes.length);
+    // Both files stored without additional compression:
+    // - HTML is small (~1MB) and compresses poorly (base64 content)
+    // - Archive is already compressed (.a3z)
+    const zipData = {};
+    zipData['viewer.html'] = [htmlBytes, { level: 0 }];
+    zipData[ARCHIVE_FILENAME] = [archiveBytes, { level: 0 }];
 
-    return new Blob([combined], { type: 'text/html' });
+    const result = await new Promise((resolve, reject) => {
+        zip(zipData, (err, data) => {
+            if (err) reject(err);
+            else resolve(data);
+        });
+    });
+
+    return new Blob([result], { type: 'application/zip' });
 }
 
 // =============================================================================
@@ -168,15 +192,29 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1a2e; c
 @keyframes spin { to { transform: rotate(360deg); } }
 #loading-text { margin-top: 16px; color: #888; font-size: 14px; }
 
-#drop-overlay {
+#file-picker {
     position: fixed; inset: 0; display: flex; align-items: center;
-    justify-content: center; background: rgba(26, 26, 46, 0.95); z-index: 200;
+    justify-content: center; background: #1a1a2e; z-index: 200;
 }
-#drop-overlay.hidden { display: none; }
-.drop-content { text-align: center; padding: 40px; }
-.drop-icon { font-size: 64px; margin-bottom: 16px; }
-.drop-content p { font-size: 18px; margin-bottom: 8px; }
-.drop-content .drop-hint { font-size: 13px; color: #888; }
+#file-picker.hidden { display: none; }
+.picker-content { text-align: center; max-width: 480px; padding: 40px; }
+.picker-content h1 { color: #4ecdc4; font-size: 22px; margin-bottom: 8px; }
+.picker-content > p { color: #888; font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
+.picker-box {
+    border: 2px dashed #3a3a5a; border-radius: 12px; padding: 32px 24px;
+    transition: border-color 0.2s, background 0.2s;
+}
+.picker-box.drag-over { border-color: #4ecdc4; background: rgba(78, 205, 196, 0.05); }
+.picker-icon { font-size: 48px; margin-bottom: 12px; }
+.picker-box p { font-size: 15px; margin-bottom: 8px; color: #ccc; }
+.picker-box p strong { color: #4ecdc4; }
+.picker-hint { font-size: 12px; color: #666; margin-top: 4px; }
+#picker-btn {
+    margin: 16px auto 8px; padding: 10px 28px; border: none; border-radius: 8px;
+    background: #4ecdc4; color: #1a1a2e; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: background 0.2s;
+}
+#picker-btn:hover { background: #45b7af; }
 
 #viewer { width: 100%; height: 100%; position: relative; }
 #viewer.hidden { display: none; }
@@ -220,11 +258,11 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1a2e; c
 // =============================================================================
 // KIOSK BOOTSTRAP JS
 //
-// This is the module script embedded in the generated HTML. It:
+// This is the script embedded in the generated HTML. It:
 // 1. Decodes base64 dependency sources
 // 2. Creates blob URLs, rewriting internal `from "three"` to the Three.js blob
 // 3. Dynamically imports all deps (single Three.js instance)
-// 4. Reads itself to extract the appended ZIP data
+// 4. Loads the separate .a3z archive file (auto-fetch or file picker)
 // 5. Extracts assets and renders in a read-only viewer
 // =============================================================================
 
@@ -300,53 +338,70 @@ console.log('[Kiosk] Script executing');
         console.log('[Kiosk] fflate loaded');
 
         // =====================================================================
-        // PHASE 2: Read ourselves and extract ZIP data
+        // PHASE 2: Load the archive file
         // =====================================================================
-        setStatus('Reading archive data...');
-        var fileBytes = null;
+        setStatus('Loading archive...');
+        var archiveBytes = null;
 
+        // Try fetching the archive from the same directory (works when served via HTTP)
         try {
-            var resp = await fetch(window.location.href);
+            var resp = await fetch('./' + __ARCHIVE_FILENAME__);
             if (resp.ok) {
-                fileBytes = new Uint8Array(await resp.arrayBuffer());
-                console.log('[Kiosk] Self-read complete: ' + fileBytes.length + ' bytes');
+                archiveBytes = new Uint8Array(await resp.arrayBuffer());
+                console.log('[Kiosk] Archive loaded via fetch: ' + archiveBytes.length + ' bytes');
             }
         } catch (e) {
-            console.warn('[Kiosk] fetch(self) failed (expected on file://):', e.message);
+            console.log('[Kiosk] Could not fetch ' + __ARCHIVE_FILENAME__ + ' (expected on file://): ' + e.message);
         }
 
-        if (!fileBytes) {
-            setStatus('Waiting for file...');
+        // If fetch failed (file:// protocol), show file picker
+        if (!archiveBytes) {
             document.getElementById('loading').style.display = 'none';
-            fileBytes = await waitForFileDrop();
+
+            // Populate picker with project info from embedded manifest
+            var pickerDesc = document.getElementById('picker-desc');
+            if (pickerDesc && __KIOSK_MANIFEST__ && __KIOSK_MANIFEST__.project) {
+                var desc = __KIOSK_MANIFEST__.project.description || '';
+                if (desc) pickerDesc.textContent = desc;
+            }
+
+            archiveBytes = await waitForArchiveFile();
             document.getElementById('loading').style.display = '';
-            setStatus('Extracting assets...');
         }
 
-        // Find the ZIP boundary
-        var zipStart = findZipBoundary(fileBytes);
-        console.log('[Kiosk] ZIP boundary at byte: ' + zipStart);
-        if (zipStart === -1) {
-            throw new Error('No archive data found in this file. File size: ' + fileBytes.length);
+        // =====================================================================
+        // PHASE 3: Extract archive contents
+        // =====================================================================
+        setStatus('Extracting assets...');
+
+        // Use async unzip to avoid blocking the main thread
+        var files;
+        try {
+            files = await new Promise(function(resolve, reject) {
+                fflate.unzip(archiveBytes, function(err, data) {
+                    if (err) reject(err);
+                    else resolve(data);
+                });
+            });
+        } catch (e) {
+            console.warn('[Kiosk] Async unzip failed, trying sync:', e.message);
+            files = fflate.unzipSync(archiveBytes);
         }
 
-        var zipData = fileBytes.slice(zipStart);
-        console.log('[Kiosk] ZIP data size: ' + zipData.length + ' bytes');
-        var files = fflate.unzipSync(zipData);
         var fileNames = Object.keys(files);
         console.log('[Kiosk] Extracted ' + fileNames.length + ' files: ' + fileNames.join(', '));
         var decoder = new TextDecoder();
 
-        // Parse manifest (prefer embedded in ZIP, fall back to inline)
+        // Parse manifest (prefer from archive, fall back to embedded)
         var manifest = __KIOSK_MANIFEST__;
         if (files['manifest.json']) {
             manifest = JSON.parse(decoder.decode(files['manifest.json']));
-            console.log('[Kiosk] Using manifest from ZIP');
+            console.log('[Kiosk] Using manifest from archive');
         }
-        if (!manifest) throw new Error('No manifest found in archive.');
+        if (!manifest) throw new Error('No manifest found.');
 
         // =====================================================================
-        // PHASE 3: Initialize viewer and load assets
+        // PHASE 4: Initialize viewer and load assets
         // =====================================================================
         setStatus('Loading 3D content...');
 
@@ -511,62 +566,53 @@ console.log('[Kiosk] Script executing');
 // Helper functions
 // =========================================================================
 
-function findZipBoundary(bytes) {
-    // Search for the boundary marker comment
-    var marker = [60,33,45,45,32,75,73,79,83,75,95,90,73,80,95,66,79,85,78,68,65,82,89,32,45,45,62];
-    var pos = -1;
-
-    for (var i = 0; i < bytes.length - marker.length; i++) {
-        var match = true;
-        for (var j = 0; j < marker.length; j++) {
-            if (bytes[i + j] !== marker[j]) { match = false; break; }
-        }
-        if (match) { pos = i + marker.length; break; }
-    }
-
-    if (pos !== -1) {
-        // Skip whitespace after marker
-        while (pos < bytes.length && (bytes[pos] === 10 || bytes[pos] === 13 || bytes[pos] === 32)) pos++;
-        // Verify ZIP local file header magic (PK 03 04)
-        if (pos + 3 < bytes.length && bytes[pos] === 0x50 && bytes[pos+1] === 0x4B && bytes[pos+2] === 0x03 && bytes[pos+3] === 0x04) {
-            return pos;
-        }
-        console.warn('[Kiosk] Found boundary marker but no ZIP magic after it at offset ' + pos);
-    }
-
-    // Fallback: scan for first PK local file header after end-of-central-directory
-    console.log('[Kiosk] Boundary marker not found, scanning for ZIP signatures...');
-    for (var i2 = bytes.length - 22; i2 >= 0; i2--) {
-        if (bytes[i2] === 0x50 && bytes[i2+1] === 0x4B && bytes[i2+2] === 0x05 && bytes[i2+3] === 0x06) {
-            console.log('[Kiosk] Found EOCD at offset ' + i2);
-            for (var j2 = 0; j2 < i2; j2++) {
-                if (bytes[j2] === 0x50 && bytes[j2+1] === 0x4B && bytes[j2+2] === 0x03 && bytes[j2+3] === 0x04) {
-                    console.log('[Kiosk] Found first local file header at offset ' + j2);
-                    return j2;
-                }
-            }
-        }
-    }
-    return -1;
-}
-
-function waitForFileDrop() {
+function waitForArchiveFile() {
     return new Promise(function(resolve) {
-        var overlay = document.getElementById('drop-overlay');
-        overlay.classList.remove('hidden');
+        var picker = document.getElementById('file-picker');
+        var btn = document.getElementById('picker-btn');
+        var input = document.getElementById('picker-input');
+        var dropZone = document.getElementById('picker-drop-zone');
 
-        function handleDrop(e) {
-            e.preventDefault();
-            overlay.classList.add('hidden');
-            var file = e.dataTransfer.files[0];
+        picker.classList.remove('hidden');
+
+        function handleFile(file) {
             if (!file) return;
+            picker.classList.add('hidden');
             var reader = new FileReader();
             reader.onload = function() { resolve(new Uint8Array(reader.result)); };
             reader.readAsArrayBuffer(file);
         }
 
+        // Button click opens native file picker
+        btn.addEventListener('click', function() { input.click(); });
+        input.addEventListener('change', function() {
+            if (input.files && input.files[0]) handleFile(input.files[0]);
+        });
+
+        // Drag-and-drop
+        dropZone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+        dropZone.addEventListener('dragleave', function() {
+            dropZone.classList.remove('drag-over');
+        });
+        dropZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        // Also allow drop anywhere on the page
         document.addEventListener('dragover', function(e) { e.preventDefault(); });
-        document.addEventListener('drop', handleDrop);
+        document.addEventListener('drop', function(e) {
+            e.preventDefault();
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
     });
 }
 

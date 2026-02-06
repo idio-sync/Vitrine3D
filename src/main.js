@@ -2163,7 +2163,7 @@ async function downloadKioskViewer(metadata, includeHashes) {
     try {
         // Phase 0: Dynamically load the kiosk viewer module
         updateProgress(1, 'Loading kiosk module...');
-        const { fetchDependencies: fetchKioskDeps, generateKioskHTML, buildPolyglotFile } =
+        const { fetchDependencies: fetchKioskDeps, generateKioskHTML, buildViewerPackage } =
             await import('./modules/kiosk-viewer.js');
 
         // Phase 1: Fetch CDN dependencies
@@ -2181,7 +2181,7 @@ async function downloadKioskViewer(metadata, includeHashes) {
             }
         );
 
-        // Phase 3: Generate kiosk HTML
+        // Phase 3: Generate viewer HTML
         updateProgress(85, 'Assembling viewer...');
         const manifest = kioskArchive.previewManifest();
         const html = generateKioskHTML({
@@ -2190,22 +2190,22 @@ async function downloadKioskViewer(metadata, includeHashes) {
             title: metadata.project.title
         });
 
-        // Phase 4: Build polyglot (HTML + ZIP)
-        updateProgress(90, 'Creating file...');
-        const zipBytes = new Uint8Array(await archiveBlob.arrayBuffer());
-        const polyglotBlob = buildPolyglotFile(html, zipBytes);
+        // Phase 4: Package viewer.html + data.a3z into a ZIP
+        updateProgress(90, 'Packaging viewer...');
+        const archiveBytes = new Uint8Array(await archiveBlob.arrayBuffer());
+        const packageBlob = await buildViewerPackage(html, archiveBytes);
 
         // Phase 5: Trigger download
         updateProgress(95, 'Starting download...');
-        const filename = (metadata.project.id || 'viewer') + '-viewer.html';
-        const url = URL.createObjectURL(polyglotBlob);
+        const filename = (metadata.project.id || 'viewer') + '-viewer.zip';
+        const url = URL.createObjectURL(packageBlob);
         const a = document.createElement('a');
         a.href = url;
         a.download = filename;
         a.click();
         URL.revokeObjectURL(url);
 
-        log.info(`[Kiosk] Viewer exported: ${filename} (${(polyglotBlob.size / 1024 / 1024).toFixed(1)} MB)`);
+        log.info(`[Kiosk] Viewer package exported: ${filename} (${(packageBlob.size / 1024 / 1024).toFixed(1)} MB)`);
         updateProgress(100, 'Complete');
         hideLoading();
         hideExportPanel();
