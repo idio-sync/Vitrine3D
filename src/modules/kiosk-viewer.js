@@ -244,6 +244,14 @@ console.log('[Kiosk] Script executing');
         var deps = __KIOSK_DEPS__;
         if (!deps || !deps.three) throw new Error('Embedded dependency data is missing');
 
+        // Validate that all required dependencies are present. Older generated
+        // viewers may be missing deps added in later versions (e.g. threeBufferGeomUtils).
+        var requiredDeps = ['three', 'threeGLTFLoader', 'threeOBJLoader', 'threeOrbitControls', 'threeBufferGeomUtils', 'fflate'];
+        var missingDeps = requiredDeps.filter(function(d) { return !deps[d]; });
+        if (missingDeps.length > 0) {
+            throw new Error('This viewer is missing dependencies: ' + missingDeps.join(', ') + '. Please regenerate it from the main application.');
+        }
+
         function decode(b64) { return decodeURIComponent(escape(atob(b64))); }
         function makeBlob(src) { return URL.createObjectURL(new Blob([src], { type: 'application/javascript' })); }
 
@@ -251,6 +259,18 @@ console.log('[Kiosk] Script executing');
         // jsDelivr npm files only contain bare "three" specifiers -- no CDN paths.
         function rewriteThreeImports(src, threeUrl) {
             return src.replace(/from\\s*["']three["']/g, 'from "' + threeUrl + '"');
+        }
+
+        // Rewrite relative imports (e.g. '../utils/Foo.js') to blob URLs.
+        // Blob URLs have no directory structure, so relative paths cannot resolve.
+        function rewriteRelativeImports(src, importMap) {
+            for (var path in importMap) {
+                if (src.indexOf(path) !== -1) {
+                    console.log('[Kiosk] Rewriting relative import: ' + path);
+                    src = src.split(path).join(importMap[path]);
+                }
+            }
+            return src;
         }
 
         // 1. Three.js core — standalone build from jsDelivr, no imports to rewrite.
@@ -262,19 +282,25 @@ console.log('[Kiosk] Script executing');
         console.log('[Kiosk] Three.js loaded, exports: ' + Object.keys(THREE).length + ' symbols');
 
         // 2. Addons — jsDelivr serves raw npm files with bare "three" imports.
-        //    GLTFLoader also has a relative import to BufferGeometryUtils that
-        //    we resolve to a blob URL (relative paths fail from blob context).
+        //    Some addons have relative imports to other utils (e.g. GLTFLoader
+        //    imports ../utils/BufferGeometryUtils.js). We pre-load those utils
+        //    and build an import map so relative paths are replaced with blob URLs.
         setStatus('Loading controls and loaders...');
+
+        // Pre-load utility modules that addons reference via relative imports
+        var bufGeomSrc = rewriteThreeImports(decode(deps.threeBufferGeomUtils), threeUrl);
+        var relativeImportMap = {
+            '../utils/BufferGeometryUtils.js': makeBlob(bufGeomSrc)
+        };
+        console.log('[Kiosk] Utility modules prepared for relative import resolution');
+
         var orbitSrc = rewriteThreeImports(decode(deps.threeOrbitControls), threeUrl);
         var OrbitControls = (await import(makeBlob(orbitSrc))).OrbitControls;
         console.log('[Kiosk] OrbitControls loaded');
 
-        var bufGeomSrc = rewriteThreeImports(decode(deps.threeBufferGeomUtils), threeUrl);
-        var bufGeomUrl = makeBlob(bufGeomSrc);
-
         var gltfSrc = decode(deps.threeGLTFLoader);
         gltfSrc = rewriteThreeImports(gltfSrc, threeUrl);
-        gltfSrc = gltfSrc.split('../utils/BufferGeometryUtils.js').join(bufGeomUrl);
+        gltfSrc = rewriteRelativeImports(gltfSrc, relativeImportMap);
         var GLTFLoader = (await import(makeBlob(gltfSrc))).GLTFLoader;
         console.log('[Kiosk] GLTFLoader loaded');
 
