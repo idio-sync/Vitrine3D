@@ -1,14 +1,14 @@
-# Gaussian Splat, Mesh & Point Cloud Viewer
+# Proof of Concept 3D viewer
 
-A web-based viewer for comparing Gaussian splats, 3D models, and E57 point clouds, powered by [Spark](https://sparkjs.dev/) and Three.js. Designed for cultural heritage, surveying, and digital preservation workflows, with a standards-based archive container format for long-term archival of real-world 3D captures.
+A web-based viewer for viewing Gaussian splats, 3D models, and E57 point clouds, powered by [Three.js](https://github.com/mrdoob/three.js/) and [Spark](https://sparkjs.dev/). Designed for cultural heritage, surveying, and digital preservation workflows, with a standards-based archive container format for long-term archival of real-world 3D captures.
 
 ## Features
 
-- Load and display **Gaussian splat** files (.ply, .splat, .ksplat, .spz, .sog)
 - Load and display **3D models** (.glb, .gltf, .obj)
 - Load and display **E57 point clouds** (.e57) via [three-e57-loader](https://www.npmjs.com/package/three-e57-loader)
+- Load and display **Gaussian splat** files (.ply, .splat, .ksplat, .spz, .sog)
 - **Archive container support** (.a3d, .a3z) — bundle all assets, metadata, and alignment into a single file
-- **Four display modes**: Splat only, Model only, Both overlaid, or Split side-by-side
+- **Four display modes**: Model only, Splat only, Both overlaid, or Split side-by-side, and Point Cloud
 - **Transform controls** for positioning, rotating, and scaling each object independently
 - **Auto-alignment** and **ICP alignment** for registering splats and models
 - **Fly camera mode** for first-person navigation (WASD + mouse look)
@@ -57,7 +57,7 @@ docker run -p 8080:80 \
 
 ### Archive Containers
 - `.a3d` — Archive 3D container (ZIP-based, uncompressed)
-- `.a3z` — Archive 3D container (ZIP-based, compressed)
+- `.a3z` — Archive 3D container (ZIP-based, compressed) - experimental 
 
 ### Gaussian Splats (via Spark)
 - `.ply` — Standard PLY format with Gaussian splat data
@@ -110,19 +110,6 @@ docker run -p 8080:80 \
 - **Ctrl** — Slow movement (0.25x speed)
 - **Scroll wheel** — Adjust movement speed
 - **Escape** — Exit fly mode
-
-### Transform Controls
-
-Select which object to transform: **Splat**, **Model**, **Both** (synchronized movement), or **None** to disable the gizmo.
-
-| Mode | Keyboard | Description |
-|------|----------|-------------|
-| Translate | `W` | Move objects along X, Y, Z axes |
-| Rotate | `E` | Rotate objects in 3D space |
-| Scale | `R` | Resize objects uniformly |
-| Deselect | `Escape` | Remove the transform gizmo |
-
-Manual numeric inputs for position (X, Y, Z) and rotation (degrees) are available in each asset's settings section.
 
 ### Alignment
 
