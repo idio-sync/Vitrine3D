@@ -2895,6 +2895,7 @@ body.kiosk-mode #sidebar-view .display-stat {
     -webkit-backdrop-filter: blur(8px);
     border: 1px solid rgba(78, 205, 196, 0.08);
     border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     transition: all 0.3s ease;
 }
 
@@ -3158,16 +3159,145 @@ body.kiosk-mode #annotation-info-popup {
     border-radius: 14px;
 }
 
-/* --- Annotation Markers: Subtle Glow --- */
+/* --- Annotation Markers: Semi-transparent with glow --- */
 
 body.kiosk-mode .annotation-marker {
+    opacity: 0.3;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4),
                 0 0 20px rgba(78, 205, 196, 0.15);
+    transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
 }
 
 body.kiosk-mode .annotation-marker:hover {
+    opacity: 0.85;
     box-shadow: 0 4px 20px rgba(78, 205, 196, 0.4),
                 0 0 30px rgba(78, 205, 196, 0.2);
+}
+
+body.kiosk-mode .annotation-marker.selected {
+    opacity: 0.8;
+}
+
+/* Intro glow animation — applied on load, removed after ~6s */
+@keyframes kiosk-marker-glow-intro {
+    0%, 100% {
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4),
+                    0 0 20px rgba(78, 205, 196, 0.15);
+    }
+    50% {
+        box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4),
+                    0 0 35px rgba(78, 205, 196, 0.45),
+                    0 0 60px rgba(78, 205, 196, 0.15);
+    }
+}
+
+body.kiosk-mode .annotation-marker.glow-intro {
+    animation: kiosk-marker-glow-intro 2s ease-in-out 3;
+}
+
+/* --- Button Press Feedback --- */
+
+body.kiosk-mode #left-toolbar .toolbar-btn:active {
+    transform: scale(0.90);
+    transition: transform 0.08s ease-in;
+}
+
+body.kiosk-mode .sidebar-mode-tab:active {
+    transform: scale(0.96);
+    transition: transform 0.08s ease-in;
+}
+
+/* --- Sidebar Edge Shadow (viewport side) --- */
+
+body.kiosk-mode #metadata-sidebar:not(.hidden)::before {
+    content: '';
+    position: absolute;
+    left: -60px;
+    top: 0;
+    bottom: 0;
+    width: 60px;
+    pointer-events: none;
+    background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.15));
+}
+
+/* --- Loading Overlay Fade-Out --- */
+
+body.kiosk-mode #loading-overlay.fade-out {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.8s ease-in-out;
+}
+
+/* --- Branded Loading Screen --- */
+
+body.kiosk-mode #loading-overlay {
+    background: rgba(10, 10, 20, 0.95);
+}
+
+#loading-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-bottom: 28px;
+    animation: kiosk-fadeIn 0.5s ease-out;
+}
+
+#loading-brand.hidden {
+    display: none !important;
+}
+
+#loading-thumbnail {
+    max-width: 280px;
+    max-height: 180px;
+    border-radius: 12px;
+    object-fit: cover;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(78, 205, 196, 0.15);
+    margin-bottom: 20px;
+}
+
+#loading-thumbnail[src=""] {
+    display: none;
+}
+
+#loading-title {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.4rem;
+    font-weight: 400;
+    color: rgba(240, 240, 250, 0.95);
+    letter-spacing: 0.02em;
+    margin: 0 0 8px 0;
+    max-width: 350px;
+    line-height: 1.3;
+}
+
+#loading-content-types {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #4ecdc4;
+    margin: 0;
+    font-weight: 500;
+}
+
+/* --- Annotation Connecting Line --- */
+
+#annotation-line-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 55;
+}
+
+#annotation-line-overlay line {
+    stroke: #4ecdc4;
+    stroke-opacity: 0.3;
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
 }
 
 /* --- Sidebar Scrollbar --- */

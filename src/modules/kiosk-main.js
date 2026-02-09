@@ -44,6 +44,8 @@ let annotationSystem = null;
 let splatMesh = null;
 let fpsElement = null;
 let currentPopupAnnotationId = null;
+let annotationLineEl = null;
+let entryTransitionActive = false;
 
 const state = {
     displayMode: 'both',
@@ -58,7 +60,8 @@ const state = {
     currentArchiveUrl: null,
     currentSplatUrl: null,
     currentModelUrl: null,
-    flyModeActive: false
+    flyModeActive: false,
+    annotationsVisible: true
 };
 
 // =============================================================================
@@ -102,6 +105,7 @@ export async function init() {
             annotationSystem.selectedAnnotation = null;
             document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
             document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
+            hideAnnotationLine();
             return;
         }
         // Highlight the corresponding sidebar item
@@ -199,6 +203,9 @@ async function handleArchiveFile(file) {
         updateProgress(10, 'Extracting archive...');
         const archiveLoader = await loadArchiveFromFile(file, { state });
 
+        // Show branded loading screen with thumbnail, title, and content types
+        await showBrandedLoading(archiveLoader);
+
         updateProgress(30, 'Loading 3D assets...');
         const result = await processArchive(archiveLoader, file.name, createArchiveDeps());
 
@@ -253,11 +260,24 @@ async function handleArchiveFile(file) {
         }
 
         updateProgress(100, 'Complete');
-        hideLoading();
+
+        // Smooth entry transition: fade overlay + camera ease-in
+        smoothTransitionIn();
 
         // Show toolbar now that archive is loaded
         const toolbar = document.getElementById('left-toolbar');
         if (toolbar) toolbar.style.display = '';
+
+        // Show annotation toggle button if annotations exist, active by default
+        if (annotationSystem.hasAnnotations()) {
+            const annoBtn = document.getElementById('btn-toggle-annotations');
+            if (annoBtn) {
+                annoBtn.style.display = '';
+                annoBtn.classList.add('active');
+            }
+            // Trigger intro glow on markers
+            triggerMarkerGlowIntro();
+        }
 
         // Open metadata sidebar by default
         showMetadataSidebar('view');
@@ -453,6 +473,33 @@ function setupViewerUI() {
         if (state.flyModeActive) toggleFlyMode();
     });
     addListener('btn-fit-view', 'click', fitCameraToScene);
+
+    // Annotation visibility toggle
+    addListener('btn-toggle-annotations', 'click', () => {
+        state.annotationsVisible = !state.annotationsVisible;
+        const btn = document.getElementById('btn-toggle-annotations');
+        const markersContainer = document.getElementById('annotation-markers');
+        if (btn) btn.classList.toggle('active', state.annotationsVisible);
+        if (markersContainer) {
+            markersContainer.style.display = state.annotationsVisible ? '' : 'none';
+        }
+        // Hide popup when hiding all markers
+        if (!state.annotationsVisible && currentPopupAnnotationId) {
+            hideAnnotationPopup();
+            currentPopupAnnotationId = null;
+            annotationSystem.selectedAnnotation = null;
+            hideAnnotationLine();
+        }
+    });
+
+    // Create SVG overlay for annotation connecting lines
+    const svgOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svgOverlay.id = 'annotation-line-overlay';
+    const svgLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    svgLine.style.display = 'none';
+    svgOverlay.appendChild(svgLine);
+    document.body.appendChild(svgOverlay);
+    annotationLineEl = svgLine;
 }
 
 function setupViewerKeyboardShortcuts() {
@@ -531,11 +578,23 @@ function fitCameraToScene() {
 
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const distance = maxDim * 1.5;
 
-    camera.position.copy(center);
-    camera.position.z += distance;
+    // FOV-aware distance calculation to fill 90% of viewport
+    const targetFill = 0.90;
+    const fov = camera.fov * (Math.PI / 180);
+    const aspect = camera.aspect;
+
+    const verticalDist = (size.y / 2) / Math.tan(fov / 2) / targetFill;
+    const horizontalDist = (size.x / 2) / Math.tan((fov * aspect) / 2) / targetFill;
+    const distance = Math.max(verticalDist, horizontalDist, (size.z / 2) + 0.5);
+
+    // Slight angle for a more interesting default view
+    camera.position.set(
+        center.x + distance * 0.3,
+        center.y + distance * 0.2,
+        center.z + distance * 0.9
+    );
+    camera.lookAt(center);
     controls.target.copy(center);
     controls.update();
 }
@@ -609,9 +668,18 @@ function populateAnnotationList() {
                 annotationSystem.selectedAnnotation = null;
                 document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
                 document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
+                hideAnnotationLine();
+                // If annotations hidden globally, re-hide the single marker
+                if (!state.annotationsVisible) {
+                    hideSingleMarker();
+                }
             } else {
                 document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
                 item.classList.add('active');
+                // If annotations hidden globally, show only this marker
+                if (!state.annotationsVisible) {
+                    showSingleMarker(anno.id);
+                }
                 annotationSystem.goToAnnotation(anno.id);
                 currentPopupAnnotationId = showAnnotationPopup(anno);
             }
@@ -1052,6 +1120,204 @@ function onWindowResize() {
 }
 
 // =============================================================================
+// VISUAL POLISH HELPERS
+// =============================================================================
+
+/**
+ * Show branded loading screen with thumbnail, title, and content types.
+ * Called after archive extraction but before 3D asset loading.
+ */
+async function showBrandedLoading(archiveLoader) {
+    try {
+        const manifest = await archiveLoader.parseManifest();
+        const contentInfo = archiveLoader.getContentInfo();
+
+        const brandEl = document.getElementById('loading-brand');
+        const thumbEl = document.getElementById('loading-thumbnail');
+        const titleEl = document.getElementById('loading-title');
+        const typesEl = document.getElementById('loading-content-types');
+
+        if (!brandEl) return;
+
+        // Set title from manifest
+        const title = manifest?.project?.title || manifest?._meta?.title || '';
+        if (titleEl && title) {
+            titleEl.textContent = title;
+        } else if (titleEl) {
+            titleEl.style.display = 'none';
+        }
+
+        // Set thumbnail from archive
+        const thumbEntry = archiveLoader.getThumbnailEntry();
+        if (thumbEntry && thumbEl) {
+            const thumbData = await archiveLoader.extractFile(thumbEntry.file_name);
+            if (thumbData) {
+                thumbEl.src = thumbData.url;
+            }
+        }
+
+        // Build content type labels
+        const types = [];
+        if (contentInfo.hasSplat) types.push('Gaussian Splat');
+        if (contentInfo.hasMesh) types.push('Mesh');
+        if (contentInfo.hasPointcloud) types.push('Point Cloud');
+        if (typesEl && types.length > 0) {
+            typesEl.textContent = types.join(' + ');
+        } else if (typesEl) {
+            typesEl.style.display = 'none';
+        }
+
+        // Show the branded section
+        brandEl.classList.remove('hidden');
+
+        updateProgress(20, 'Preparing scene...');
+    } catch (e) {
+        log.warn('Could not show branded loading:', e.message);
+    }
+}
+
+/**
+ * Smooth entry transition: fade out loading overlay while easing camera in.
+ * Camera starts 15% further back than the fit position and eases to target.
+ */
+function smoothTransitionIn() {
+    const overlay = document.getElementById('loading-overlay');
+    const targetPos = camera.position.clone();
+    const targetTarget = controls.target.clone();
+
+    // Pull camera back 15% further for the ease-in start
+    const direction = new THREE.Vector3().subVectors(targetPos, targetTarget).normalize();
+    const pullback = targetPos.distanceTo(targetTarget) * 0.15;
+    camera.position.add(direction.multiplyScalar(pullback));
+
+    const startPos = camera.position.clone();
+    const startTime = performance.now();
+    const duration = 1200;
+    entryTransitionActive = true;
+
+    // Fade out the loading overlay with CSS transition
+    if (overlay) {
+        overlay.classList.add('fade-out');
+        overlay.addEventListener('transitionend', () => {
+            overlay.classList.add('hidden');
+            overlay.classList.remove('fade-out');
+        }, { once: true });
+    }
+
+    function easeOutCubic(t) {
+        return 1 - Math.pow(1 - t, 3);
+    }
+
+    function animateEntry() {
+        const elapsed = performance.now() - startTime;
+        const t = Math.min(elapsed / duration, 1);
+        const eased = easeOutCubic(t);
+
+        camera.position.lerpVectors(startPos, targetPos, eased);
+        controls.update();
+
+        if (t < 1) {
+            requestAnimationFrame(animateEntry);
+        } else {
+            entryTransitionActive = false;
+        }
+    }
+
+    requestAnimationFrame(animateEntry);
+}
+
+/**
+ * Trigger the intro glow animation on all annotation markers.
+ * Adds glow-intro class, removes it after the animation completes (~6s).
+ */
+function triggerMarkerGlowIntro() {
+    const markers = document.querySelectorAll('.annotation-marker');
+    markers.forEach(m => m.classList.add('glow-intro'));
+    setTimeout(() => {
+        markers.forEach(m => m.classList.remove('glow-intro'));
+    }, 6500);
+}
+
+/**
+ * Show only the marker for a specific annotation ID when annotations are globally hidden.
+ */
+function showSingleMarker(annotationId) {
+    const markersContainer = document.getElementById('annotation-markers');
+    if (!markersContainer) return;
+    // Temporarily show the container
+    markersContainer.style.display = '';
+    // Hide all markers, then show only the target
+    markersContainer.querySelectorAll('.annotation-marker').forEach(m => {
+        m.style.display = 'none';
+    });
+    const target = markersContainer.querySelector(`.annotation-marker[data-annotation-id="${annotationId}"]`);
+    if (target) target.style.display = 'flex';
+}
+
+/**
+ * Re-hide markers container when in globally-hidden mode.
+ */
+function hideSingleMarker() {
+    const markersContainer = document.getElementById('annotation-markers');
+    if (markersContainer) {
+        // Restore all markers to default display so toggle-on works correctly
+        markersContainer.querySelectorAll('.annotation-marker').forEach(m => {
+            m.style.display = '';
+        });
+        markersContainer.style.display = 'none';
+    }
+}
+
+/**
+ * Update the SVG connecting line from marker to popup.
+ */
+function updateAnnotationLine(annotationId) {
+    if (!annotationLineEl || !annotationId) {
+        hideAnnotationLine();
+        return;
+    }
+
+    const marker = document.querySelector(`.annotation-marker[data-annotation-id="${annotationId}"]`);
+    const popup = document.getElementById('annotation-info-popup');
+
+    if (!marker || !popup || popup.classList.contains('hidden') ||
+        marker.style.display === 'none') {
+        hideAnnotationLine();
+        return;
+    }
+
+    const markerRect = marker.getBoundingClientRect();
+    const popupRect = popup.getBoundingClientRect();
+
+    const mx = markerRect.left + markerRect.width / 2;
+    const my = markerRect.top + markerRect.height / 2;
+
+    // Connect to the nearest edge of the popup
+    let px, py;
+    if (popupRect.left > mx) {
+        // Popup is to the right of marker
+        px = popupRect.left;
+        py = Math.max(popupRect.top, Math.min(my, popupRect.bottom));
+    } else {
+        // Popup is to the left of marker
+        px = popupRect.right;
+        py = Math.max(popupRect.top, Math.min(my, popupRect.bottom));
+    }
+
+    annotationLineEl.setAttribute('x1', mx);
+    annotationLineEl.setAttribute('y1', my);
+    annotationLineEl.setAttribute('x2', px);
+    annotationLineEl.setAttribute('y2', py);
+    annotationLineEl.style.display = '';
+}
+
+function hideAnnotationLine() {
+    if (annotationLineEl) {
+        annotationLineEl.style.display = 'none';
+    }
+}
+
+// =============================================================================
 // ANIMATION LOOP
 // =============================================================================
 
@@ -1067,10 +1333,15 @@ function animate() {
 
         sceneManager.render(state.displayMode, splatMesh, modelGroup, pointcloudGroup);
 
-        // Update annotation marker screen positions
+        // Update annotation marker screen positions (skip when globally hidden, unless single-marker is shown)
         if (annotationSystem.hasAnnotations()) {
-            annotationSystem.updateMarkerPositions();
+            const markersContainer = document.getElementById('annotation-markers');
+            const markersShown = !markersContainer || markersContainer.style.display !== 'none';
+            if (markersShown) {
+                annotationSystem.updateMarkerPositions();
+            }
             updateAnnotationPopupPosition(currentPopupAnnotationId);
+            updateAnnotationLine(currentPopupAnnotationId);
         }
 
         sceneManager.updateFPS(fpsElement);
