@@ -17,7 +17,7 @@ import { Logger, notify } from './utilities.js';
 import {
     showLoading, hideLoading, updateProgress,
     setDisplayMode, setupCollapsibles, addListener,
-    setupKeyboardShortcuts, applyControlsVisibility
+    setupKeyboardShortcuts
 } from './ui-controller.js';
 import {
     loadArchiveFromFile, processArchive,
@@ -25,7 +25,7 @@ import {
     updatePointcloudPointSize, updatePointcloudOpacity
 } from './file-handlers.js';
 import {
-    showMetadataSidebar, hideMetadataSidebar,
+    showMetadataSidebar, hideMetadataSidebar, switchSidebarMode,
     setupMetadataSidebar, prefillMetadataFromArchive,
     populateMetadataDisplay, updateArchiveMetadataUI,
     showAnnotationPopup, hideAnnotationPopup, updateAnnotationPopupPosition
@@ -67,6 +67,7 @@ const state = {
 
 export async function init() {
     log.info('Kiosk viewer initializing...');
+    document.body.classList.add('kiosk-mode');
 
     const canvas = document.getElementById('viewer-canvas');
     const canvasRight = document.getElementById('viewer-canvas-right');
@@ -100,9 +101,13 @@ export async function init() {
             currentPopupAnnotationId = null;
             annotationSystem.selectedAnnotation = null;
             document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
-            document.querySelectorAll('.annotation-chip.active').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
             return;
         }
+        // Highlight the corresponding sidebar item
+        document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
+        const item = document.querySelector(`.kiosk-anno-item[data-anno-id="${annotation.id}"]`);
+        if (item) item.classList.add('active');
         currentPopupAnnotationId = showAnnotationPopup(annotation);
     };
 
@@ -118,11 +123,6 @@ export async function init() {
         state.displayMode = config.initialViewMode;
     }
     setDisplayMode(state.displayMode, createDisplayModeDeps());
-
-    // Show controls toggle button, start with panel hidden
-    const toggleBtn = document.getElementById('btn-toggle-controls');
-    if (toggleBtn) toggleBtn.style.display = '';
-    applyControlsVisibility(false);
 
     // Hide editor-only UI
     hideEditorOnlyUI();
@@ -210,7 +210,7 @@ async function handleArchiveFile(file) {
         // Load annotations
         if (result.annotations && result.annotations.length > 0) {
             annotationSystem.fromJSON(result.annotations);
-            populateAnnotationBar();
+            populateAnnotationList();
             log.info(`Loaded ${result.annotations.length} annotations`);
         }
 
@@ -219,6 +219,7 @@ async function handleArchiveFile(file) {
         updateArchiveMetadataUI(result.manifest, archiveLoader);
         prefillMetadataFromArchive(result.manifest);
         populateMetadataDisplay({ state, annotationSystem });
+        populateDetailedMetadata(result.manifest);
 
         // Set display mode based on what was loaded
         updateProgress(90, 'Finalizing...');
@@ -336,12 +337,6 @@ function createDisplayModeDeps() {
 // =============================================================================
 
 function setupViewerUI() {
-    // Toggle controls panel
-    addListener('btn-toggle-controls', 'click', () => {
-        state.controlsVisible = !state.controlsVisible;
-        applyControlsVisibility(state.controlsVisible);
-    });
-
     // Display mode buttons
     ['model', 'splat', 'pointcloud', 'both', 'split'].forEach(mode => {
         addListener(`btn-${mode}`, 'click', () => {
@@ -557,35 +552,330 @@ function applyGlobalAlignment(alignment) {
     controls.update();
 }
 
-function populateAnnotationBar() {
-    const bar = document.getElementById('annotation-bar');
-    const chips = document.getElementById('annotation-chips');
-    if (!bar || !chips) return;
-
+function populateAnnotationList() {
     const annotations = annotationSystem.getAnnotations();
     if (annotations.length === 0) return;
 
-    chips.innerHTML = '';
+    const viewContent = document.querySelector('#sidebar-view .display-content');
+    if (!viewContent) return;
+
+    // Create annotation section in sidebar
+    const divider = document.createElement('div');
+    divider.className = 'display-divider';
+    viewContent.appendChild(divider);
+
+    const header = document.createElement('div');
+    header.className = 'kiosk-anno-header';
+    header.textContent = 'Annotations';
+    viewContent.appendChild(header);
+
+    const listContainer = document.createElement('div');
+    listContainer.id = 'kiosk-annotation-list';
+    viewContent.appendChild(listContainer);
+
     annotations.forEach((anno, i) => {
-        const chip = document.createElement('button');
-        chip.className = 'annotation-chip';
-        chip.textContent = `${i + 1}. ${anno.title}`;
-        chip.addEventListener('click', () => {
+        const item = document.createElement('div');
+        item.className = 'kiosk-anno-item';
+        item.dataset.annoId = anno.id;
+
+        const badge = document.createElement('span');
+        badge.className = 'kiosk-anno-badge';
+        badge.textContent = i + 1;
+        item.appendChild(badge);
+
+        const info = document.createElement('div');
+        info.className = 'kiosk-anno-info';
+
+        const title = document.createElement('span');
+        title.className = 'kiosk-anno-title';
+        title.textContent = anno.title || 'Untitled';
+        info.appendChild(title);
+
+        if (anno.body) {
+            const preview = document.createElement('span');
+            preview.className = 'kiosk-anno-preview';
+            // Strip markdown-like formatting for preview
+            const plainText = anno.body.replace(/[*_#\[\]()]/g, '');
+            preview.textContent = plainText.substring(0, 80) + (plainText.length > 80 ? '...' : '');
+            info.appendChild(preview);
+        }
+
+        item.appendChild(info);
+
+        item.addEventListener('click', () => {
             if (currentPopupAnnotationId === anno.id) {
                 hideAnnotationPopup();
                 currentPopupAnnotationId = null;
                 annotationSystem.selectedAnnotation = null;
                 document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
-                document.querySelectorAll('.annotation-chip.active').forEach(c => c.classList.remove('active'));
+                document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
             } else {
+                document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
+                item.classList.add('active');
                 annotationSystem.goToAnnotation(anno.id);
                 currentPopupAnnotationId = showAnnotationPopup(anno);
             }
         });
-        chips.appendChild(chip);
+
+        listContainer.appendChild(item);
+    });
+}
+
+// --- Detailed metadata helpers ---
+
+function hasValue(val) {
+    if (val === null || val === undefined || val === '') return false;
+    if (Array.isArray(val)) return val.length > 0;
+    if (typeof val === 'object') {
+        return Object.keys(val).filter(k => !k.startsWith('_')).some(k => hasValue(val[k]));
+    }
+    return true;
+}
+
+function escapeHtml(str) {
+    if (typeof str !== 'string') str = String(str);
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function createDetailSection(title) {
+    const section = document.createElement('div');
+    section.className = 'kiosk-detail-section';
+
+    const header = document.createElement('div');
+    header.className = 'kiosk-detail-header';
+    header.innerHTML = `<span class="kiosk-detail-title">${escapeHtml(title)}</span><span class="kiosk-detail-chevron">&#9654;</span>`;
+
+    const content = document.createElement('div');
+    content.className = 'kiosk-detail-content';
+    content.style.display = 'none';
+
+    header.addEventListener('click', () => {
+        const isOpen = header.classList.toggle('open');
+        content.style.display = isOpen ? '' : 'none';
     });
 
-    bar.classList.remove('hidden');
+    section.appendChild(header);
+    section.appendChild(content);
+    return { section, content };
+}
+
+function addDetailRow(container, label, value) {
+    if (!hasValue(value)) return;
+    const row = document.createElement('div');
+    row.className = 'display-detail';
+    const displayVal = typeof value === 'object' ? JSON.stringify(value) : String(value);
+    row.innerHTML = `<span class="display-label">${escapeHtml(label)}</span><span class="display-value">${escapeHtml(displayVal)}</span>`;
+    container.appendChild(row);
+}
+
+function populateDetailedMetadata(manifest) {
+    if (!manifest) return;
+
+    const viewContent = document.querySelector('#sidebar-view .display-content');
+    if (!viewContent) return;
+
+    const sections = [];
+
+    // 1. Quality & Accuracy
+    const qm = manifest.quality_metrics;
+    if (hasValue(qm)) {
+        const { section, content } = createDetailSection('Quality & Accuracy');
+        addDetailRow(content, 'Tier', qm.tier);
+        addDetailRow(content, 'Accuracy Grade', qm.accuracy_grade);
+        if (hasValue(qm.capture_resolution)) {
+            const cr = qm.capture_resolution;
+            addDetailRow(content, 'Capture Resolution', cr.value != null ? `${cr.value} ${cr.unit || ''}`.trim() : cr);
+        }
+        if (hasValue(qm.alignment_error)) {
+            const ae = qm.alignment_error;
+            addDetailRow(content, 'Alignment Error', ae.value != null ? `${ae.value} ${ae.unit || ''} (${ae.method || 'unknown'})`.trim() : ae);
+        }
+        addDetailRow(content, 'Scale Verification', qm.scale_verification);
+        if (hasValue(qm.data_quality)) {
+            const dq = qm.data_quality;
+            Object.keys(dq).forEach(k => addDetailRow(content, k.replace(/_/g, ' '), dq[k]));
+        }
+        if (content.children.length > 0) sections.push(section);
+    }
+
+    // 2. Processing Details
+    const prov = manifest.provenance;
+    if (hasValue(prov)) {
+        const { section, content } = createDetailSection('Processing Details');
+        addDetailRow(content, 'Device Serial', prov.device_serial);
+        addDetailRow(content, 'Operator ORCID', prov.operator_orcid);
+        if (Array.isArray(prov.processing_software)) {
+            prov.processing_software.forEach(sw => {
+                addDetailRow(content, 'Software', typeof sw === 'object' ? `${sw.name || ''} ${sw.version || ''}`.trim() : sw);
+            });
+        }
+        addDetailRow(content, 'Processing Notes', prov.processing_notes);
+        addDetailRow(content, 'Convention Hints', prov.convention_hints);
+        if (content.children.length > 0) sections.push(section);
+    }
+
+    // 3. Data Assets
+    const entries = manifest.data_entries;
+    if (Array.isArray(entries) && entries.length > 0) {
+        const { section, content } = createDetailSection('Data Assets');
+        entries.forEach((entry, i) => {
+            if (i > 0) {
+                const sep = document.createElement('div');
+                sep.style.borderTop = '1px solid rgba(78,205,196,0.06)';
+                sep.style.margin = '6px 0';
+                content.appendChild(sep);
+            }
+            addDetailRow(content, 'File', entry.file_name || entry.filename);
+            addDetailRow(content, 'Role', entry.role);
+            addDetailRow(content, 'Created By', entry.created_by);
+            addDetailRow(content, 'Notes', entry._source_notes);
+        });
+        if (content.children.length > 0) sections.push(section);
+    }
+
+    // 4. Archival Record
+    const ar = manifest.archival_record;
+    if (hasValue(ar)) {
+        const { section, content } = createDetailSection('Archival Record');
+        addDetailRow(content, 'Standard', ar.standard);
+        addDetailRow(content, 'Title', ar.title);
+        if (Array.isArray(ar.alternate_titles) && ar.alternate_titles.length > 0) {
+            addDetailRow(content, 'Alternate Titles', ar.alternate_titles.join(', '));
+        }
+        if (hasValue(ar.ids)) {
+            Object.keys(ar.ids).forEach(k => addDetailRow(content, `ID (${k})`, ar.ids[k]));
+        }
+        if (hasValue(ar.creation)) {
+            const c = ar.creation;
+            addDetailRow(content, 'Creator', c.creator);
+            addDetailRow(content, 'Date', c.date);
+            addDetailRow(content, 'Place', c.place);
+        }
+        if (hasValue(ar.physical_description)) {
+            const pd = ar.physical_description;
+            Object.keys(pd).forEach(k => addDetailRow(content, k.replace(/_/g, ' '), pd[k]));
+        }
+        addDetailRow(content, 'Provenance', ar.provenance);
+        if (hasValue(ar.rights)) {
+            const r = ar.rights;
+            addDetailRow(content, 'Rights', r.statement || r.license);
+            addDetailRow(content, 'Holder', r.holder);
+        }
+        if (hasValue(ar.context)) {
+            const ctx = ar.context;
+            Object.keys(ctx).forEach(k => addDetailRow(content, k.replace(/_/g, ' '), ctx[k]));
+        }
+        if (hasValue(ar.coverage)) {
+            if (hasValue(ar.coverage.spatial)) {
+                const sp = ar.coverage.spatial;
+                Object.keys(sp).forEach(k => addDetailRow(content, `Spatial ${k}`, sp[k]));
+            }
+            if (hasValue(ar.coverage.temporal)) {
+                const t = ar.coverage.temporal;
+                Object.keys(t).forEach(k => addDetailRow(content, `Temporal ${k}`, t[k]));
+            }
+        }
+        if (content.children.length > 0) sections.push(section);
+    }
+
+    // 5. Material Properties
+    const ms = manifest.material_standard;
+    if (hasValue(ms)) {
+        const { section, content } = createDetailSection('Material Properties');
+        addDetailRow(content, 'Workflow', ms.workflow);
+        addDetailRow(content, 'Color Space', ms.color_space);
+        addDetailRow(content, 'Normal Space', ms.normal_space);
+        addDetailRow(content, 'Occlusion Packed', ms.occlusion_packed);
+        if (content.children.length > 0) sections.push(section);
+    }
+
+    // 6. Relationships
+    const rel = manifest.relationships;
+    if (hasValue(rel)) {
+        const { section, content } = createDetailSection('Relationships');
+        addDetailRow(content, 'Part Of', rel.part_of);
+        addDetailRow(content, 'Derived From', rel.derived_from);
+        addDetailRow(content, 'Replaces', rel.replaces);
+        if (Array.isArray(rel.related_objects)) {
+            rel.related_objects.forEach(obj => {
+                addDetailRow(content, obj.relation || 'Related', obj.id || obj.title || JSON.stringify(obj));
+            });
+        }
+        if (content.children.length > 0) sections.push(section);
+    }
+
+    // 7. Preservation
+    const pres = manifest.preservation;
+    if (hasValue(pres)) {
+        const { section, content } = createDetailSection('Preservation');
+        if (Array.isArray(pres.format_registry)) {
+            pres.format_registry.forEach(fr => {
+                addDetailRow(content, 'Format', typeof fr === 'object' ? `${fr.name || ''} (${fr.id || ''})`.trim() : fr);
+            });
+        }
+        if (Array.isArray(pres.significant_properties)) {
+            pres.significant_properties.forEach(sp => addDetailRow(content, 'Property', sp));
+        }
+        addDetailRow(content, 'Rendering Requirements', pres.rendering_requirements);
+        addDetailRow(content, 'Rendering Notes', pres.rendering_notes);
+        if (content.children.length > 0) sections.push(section);
+    }
+
+    // 8. Version History
+    const vh = manifest.version_history;
+    if (Array.isArray(vh) && vh.length > 0) {
+        const { section, content } = createDetailSection('Version History');
+        vh.forEach(entry => {
+            const parts = [];
+            if (entry.version) parts.push(`v${entry.version}`);
+            if (entry.date) parts.push(entry.date);
+            addDetailRow(content, parts.join(' — ') || 'Entry', entry.description || entry.notes || '');
+        });
+        if (content.children.length > 0) sections.push(section);
+    }
+
+    // 9. Custom Fields
+    const cf = manifest._meta && manifest._meta.custom_fields;
+    if (hasValue(cf)) {
+        const { section, content } = createDetailSection('Custom Fields');
+        Object.keys(cf).forEach(k => addDetailRow(content, k, cf[k]));
+        if (content.children.length > 0) sections.push(section);
+    }
+
+    // 10. Integrity
+    const integ = manifest.integrity;
+    if (hasValue(integ)) {
+        const { section, content } = createDetailSection('Integrity');
+        addDetailRow(content, 'Algorithm', integ.algorithm);
+        addDetailRow(content, 'Manifest Hash', integ.manifest_hash);
+        if (hasValue(integ.assets)) {
+            Object.keys(integ.assets).forEach(filename => {
+                addDetailRow(content, filename, integ.assets[filename]);
+            });
+        }
+        if (content.children.length > 0) sections.push(section);
+    }
+
+    if (sections.length === 0) return;
+
+    // Insert before annotation section if it exists, otherwise append
+    const annoHeader = viewContent.querySelector('.kiosk-anno-header');
+    const annoDivider = annoHeader ? annoHeader.previousElementSibling : null;
+    const insertBefore = (annoDivider && annoDivider.classList.contains('display-divider')) ? annoDivider : annoHeader;
+
+    // Add a divider before the detail sections
+    const divider = document.createElement('div');
+    divider.className = 'display-divider';
+
+    if (insertBefore) {
+        viewContent.insertBefore(divider, insertBefore);
+        sections.forEach(s => viewContent.insertBefore(s, insertBefore));
+    } else {
+        viewContent.appendChild(divider);
+        sections.forEach(s => viewContent.appendChild(s));
+    }
+
+    log.info(`Populated ${sections.length} detailed metadata sections`);
 }
 
 function updateInfoPanel() {
@@ -627,9 +917,13 @@ function hideEditorOnlyUI() {
     // Hide entire toolbar until archive is loaded
     hideEl('left-toolbar');
 
+    // Hide bottom annotation bar (annotations shown in sidebar instead)
+    hideEl('annotation-bar');
+
     // Hide editor-only toolbar buttons (stay hidden even after toolbar is shown)
     hideEl('btn-annotate');
     hideEl('btn-export-archive');
+    hideEl('btn-toggle-controls'); // Settings now live in sidebar tab
 
     // Hide editor-only control sections
     hideEl('load-files-section');
@@ -650,9 +944,12 @@ function hideEditorOnlyUI() {
     const annoTab = document.querySelector('.sidebar-mode-tab[data-mode="annotations"]');
     if (annoTab) annoTab.style.display = 'none';
 
-    // Rename View tab to Information
+    // Rename View tab to Info
     const viewTab = document.querySelector('.sidebar-mode-tab[data-mode="view"]');
-    if (viewTab) viewTab.textContent = 'Information';
+    if (viewTab) viewTab.textContent = 'Info';
+
+    // Move settings controls into sidebar as a tab
+    moveSettingsToSidebar();
 }
 
 function hideEl(id) {
@@ -661,11 +958,66 @@ function hideEl(id) {
 }
 
 /**
+ * Move controls panel content into the metadata sidebar as a "Settings" tab.
+ * Uses DOM appendChild which preserves all event listeners attached by
+ * setupViewerUI() and setupCollapsibles().
+ */
+function moveSettingsToSidebar() {
+    const sidebar = document.getElementById('metadata-sidebar');
+    const controlsPanel = document.getElementById('controls-panel');
+    if (!sidebar || !controlsPanel) return;
+
+    // 1. Add "Settings" tab button
+    const tabBar = sidebar.querySelector('.sidebar-mode-tabs');
+    if (tabBar) {
+        const settingsTab = document.createElement('button');
+        settingsTab.className = 'sidebar-mode-tab';
+        settingsTab.dataset.mode = 'settings';
+        settingsTab.textContent = 'Settings';
+        tabBar.appendChild(settingsTab);
+        settingsTab.addEventListener('click', () => {
+            switchSidebarMode('settings', {});
+        });
+    }
+
+    // 2. Create sidebar content div for settings
+    const settingsContent = document.createElement('div');
+    settingsContent.className = 'sidebar-mode-content';
+    settingsContent.id = 'sidebar-settings';
+
+    // 3. Move .control-section elements from controls panel (preserves event listeners)
+    const controlSections = Array.from(controlsPanel.querySelectorAll('.control-section'));
+    controlSections.forEach(section => {
+        settingsContent.appendChild(section);
+    });
+
+    // 4. Hide position/rotation inputs (editor-only repositioning)
+    settingsContent.querySelectorAll('.position-inputs').forEach(el => {
+        el.style.display = 'none';
+    });
+
+    // 5. Insert into sidebar before footer
+    const footer = sidebar.querySelector('.sidebar-footer');
+    if (footer) {
+        sidebar.insertBefore(settingsContent, footer);
+    } else {
+        sidebar.appendChild(settingsContent);
+    }
+
+    // 6. Hide the now-empty controls panel
+    controlsPanel.style.display = 'none';
+    log.info('Settings controls moved into sidebar');
+}
+
+/**
  * Show only settings sections and display mode buttons relevant to the loaded data.
  */
 function showRelevantSettings(hasSplat, hasMesh, hasPointcloud) {
-    // Hide settings sections for absent data types (found by header text)
-    const sections = document.querySelectorAll('#controls-panel .control-section.collapsible');
+    // After DOM move, sections live in #sidebar-settings
+    const container = document.getElementById('sidebar-settings')
+                   || document.getElementById('controls-panel');
+
+    const sections = container.querySelectorAll('.control-section.collapsible');
     sections.forEach(section => {
         const header = section.querySelector('h3');
         const text = header?.textContent?.trim().toLowerCase() || '';
@@ -681,7 +1033,7 @@ function showRelevantSettings(hasSplat, hasMesh, hasPointcloud) {
     if (!hasMesh || !hasSplat) { hideEl('btn-both'); hideEl('btn-split'); }
 
     // Hide entire Display Mode section if 0 or 1 button visible
-    const displaySection = [...document.querySelectorAll('#controls-panel .control-section')]
+    const displaySection = [...container.querySelectorAll('.control-section')]
         .find(s => s.querySelector('h3')?.textContent?.trim() === 'Display Mode');
     if (displaySection) {
         const visibleButtons = displaySection.querySelectorAll('.toggle-btn:not([style*="display: none"])');

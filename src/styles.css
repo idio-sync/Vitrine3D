@@ -2744,3 +2744,447 @@ input[type="range"]::-webkit-slider-thumb:hover {
 #kiosk-picker-btn:hover {
     background: #45b7af;
 }
+
+/* =============================================================================
+   KIOSK MODE — PROFESSIONAL VIEWER LAYOUT
+   All rules scoped under body.kiosk-mode — no effect on editor mode.
+
+   Layout:
+   - Sidebar has two tabs: Info (metadata + annotations) and Settings (controls)
+   - Settings controls moved from left panel into sidebar via JS DOM move
+   - Bottom annotation bar is hidden; annotations are a navigable list in sidebar
+   - Controls panel is display:none (content moved to sidebar)
+   ============================================================================= */
+
+/* --- Animations --- */
+
+@keyframes kiosk-slideInRight {
+    from { opacity: 0; transform: translateX(40px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes kiosk-fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* --- Bottom Annotation Bar: Hidden --- */
+
+body.kiosk-mode #annotation-bar {
+    display: none !important;
+}
+
+/* --- Metadata Sidebar --- */
+
+body.kiosk-mode #metadata-sidebar {
+    background: rgba(15, 15, 26, 0.75);
+    backdrop-filter: blur(24px) saturate(1.3);
+    -webkit-backdrop-filter: blur(24px) saturate(1.3);
+    border-left: 1px solid rgba(78, 205, 196, 0.1);
+    box-shadow: -8px 0 40px rgba(0, 0, 0, 0.3);
+}
+
+body.kiosk-mode #metadata-sidebar:not(.hidden) {
+    animation: kiosk-slideInRight 0.4s ease-out;
+}
+
+/* --- Sidebar Tab Bar --- */
+
+body.kiosk-mode .sidebar-mode-tabs {
+    display: flex;
+    background: rgba(15, 15, 26, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(78, 205, 196, 0.1);
+    padding: 0;
+    gap: 0;
+}
+
+body.kiosk-mode .sidebar-mode-tab {
+    flex: 1;
+    text-align: center;
+    font-size: 0.82rem;
+    padding: 14px 16px;
+    color: rgba(180, 180, 200, 0.7);
+    border-bottom: 2px solid transparent;
+    transition: all 0.25s ease;
+    letter-spacing: 0.03em;
+}
+
+body.kiosk-mode .sidebar-mode-tab:hover {
+    color: rgba(220, 220, 235, 0.9);
+    background: rgba(78, 205, 196, 0.04);
+}
+
+body.kiosk-mode .sidebar-mode-tab.active {
+    color: #4ecdc4;
+    border-bottom-color: #4ecdc4;
+    background: rgba(78, 205, 196, 0.06);
+}
+
+body.kiosk-mode #sidebar-view {
+    padding: 32px 28px;
+}
+
+body.kiosk-mode #sidebar-view .display-content {
+    animation: kiosk-fadeIn 0.6s ease-out 0.15s both;
+}
+
+body.kiosk-mode #sidebar-view .display-title {
+    font-size: 1.6rem;
+    font-weight: 400;
+    font-family: Georgia, 'Times New Roman', serif;
+    letter-spacing: 0.01em;
+    line-height: 1.25;
+    margin-bottom: 14px;
+}
+
+body.kiosk-mode #sidebar-view .display-description {
+    font-size: 0.92rem;
+    line-height: 1.7;
+    color: rgba(180, 180, 200, 0.9);
+    margin-bottom: 24px;
+}
+
+body.kiosk-mode #sidebar-view .display-divider {
+    margin: 24px 0;
+    background: linear-gradient(90deg, rgba(78, 205, 196, 0.5) 0%, rgba(78, 205, 196, 0.15) 40%, transparent 100%);
+}
+
+body.kiosk-mode #sidebar-view .display-details {
+    gap: 14px;
+    margin-bottom: 24px;
+}
+
+body.kiosk-mode #sidebar-view .display-label {
+    font-size: 0.68rem;
+    color: rgba(150, 150, 170, 0.7);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 500;
+}
+
+body.kiosk-mode #sidebar-view .display-value {
+    font-size: 0.88rem;
+    color: rgba(220, 220, 235, 0.95);
+}
+
+body.kiosk-mode #sidebar-view .display-license {
+    font-size: 0.75rem;
+    margin-bottom: 24px;
+    padding: 10px 16px;
+    background: rgba(78, 205, 196, 0.06);
+    border: 1px solid rgba(78, 205, 196, 0.15);
+    border-radius: 8px;
+    letter-spacing: 0.03em;
+}
+
+body.kiosk-mode #sidebar-view .display-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+    gap: 12px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+body.kiosk-mode #sidebar-view .display-stat {
+    text-align: center;
+    padding: 16px 8px;
+    background: rgba(42, 42, 74, 0.35);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(78, 205, 196, 0.08);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+body.kiosk-mode #sidebar-view .display-stat:hover {
+    background: rgba(42, 42, 74, 0.55);
+    border-color: rgba(78, 205, 196, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+body.kiosk-mode #sidebar-view .display-stat .stat-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+body.kiosk-mode #sidebar-view .display-stat .stat-label {
+    font-size: 0.6rem;
+    color: rgba(150, 150, 170, 0.65);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+}
+
+/* --- Annotation List in Sidebar --- */
+
+body.kiosk-mode .kiosk-anno-header {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(150, 150, 170, 0.7);
+    margin-bottom: 12px;
+    font-weight: 500;
+}
+
+body.kiosk-mode .kiosk-anno-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    border-left: 3px solid transparent;
+    margin-bottom: 4px;
+}
+
+body.kiosk-mode .kiosk-anno-item:hover {
+    background: rgba(42, 42, 74, 0.4);
+}
+
+body.kiosk-mode .kiosk-anno-item.active {
+    background: rgba(78, 205, 196, 0.08);
+    border-left-color: #4ecdc4;
+}
+
+body.kiosk-mode .kiosk-anno-badge {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    background: rgba(78, 205, 196, 0.2);
+    color: #4ecdc4;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.25s ease;
+    margin-top: 2px;
+}
+
+body.kiosk-mode .kiosk-anno-item.active .kiosk-anno-badge {
+    background: #4ecdc4;
+    color: #0f0f1a;
+}
+
+body.kiosk-mode .kiosk-anno-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+body.kiosk-mode .kiosk-anno-title {
+    font-size: 0.85rem;
+    color: #ddd;
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+body.kiosk-mode .kiosk-anno-preview {
+    font-size: 0.75rem;
+    color: rgba(150, 150, 170, 0.7);
+    line-height: 1.4;
+    margin-top: 2px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* --- Collapsible Detail Sections (Progressive Disclosure) --- */
+
+body.kiosk-mode .kiosk-detail-section {
+    margin-bottom: 4px;
+}
+
+body.kiosk-mode .kiosk-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+body.kiosk-mode .kiosk-detail-header:hover {
+    background: rgba(42, 42, 74, 0.3);
+}
+
+body.kiosk-mode .kiosk-detail-header.open {
+    background: rgba(42, 42, 74, 0.2);
+}
+
+body.kiosk-mode .kiosk-detail-title {
+    font-size: 0.78rem;
+    color: rgba(180, 180, 200, 0.8);
+    font-weight: 500;
+    letter-spacing: 0.03em;
+}
+
+body.kiosk-mode .kiosk-detail-chevron {
+    font-size: 0.7rem;
+    color: rgba(150, 150, 170, 0.5);
+    transition: transform 0.2s ease;
+}
+
+body.kiosk-mode .kiosk-detail-header.open .kiosk-detail-chevron {
+    transform: rotate(90deg);
+    color: #4ecdc4;
+}
+
+body.kiosk-mode .kiosk-detail-content {
+    padding: 8px 14px 12px;
+}
+
+body.kiosk-mode #sidebar-view .kiosk-detail-content .display-detail {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 6px 0;
+    gap: 2px;
+}
+
+body.kiosk-mode #sidebar-view .kiosk-detail-content .display-label {
+    font-size: 0.65rem;
+    text-align: left;
+}
+
+body.kiosk-mode #sidebar-view .kiosk-detail-content .display-value {
+    font-size: 0.82rem;
+    text-align: left;
+    word-break: break-word;
+    line-height: 1.45;
+    white-space: pre-wrap;
+}
+
+/* --- Settings Tab in Sidebar --- */
+
+body.kiosk-mode #sidebar-settings {
+    padding: 20px 24px;
+    overflow-y: auto;
+}
+
+body.kiosk-mode #sidebar-settings .control-section {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(78, 205, 196, 0.08);
+}
+
+body.kiosk-mode #sidebar-settings .control-section:last-child {
+    border-bottom: none;
+}
+
+body.kiosk-mode #sidebar-settings h3 {
+    font-size: 0.78rem;
+    color: rgba(150, 150, 170, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 500;
+}
+
+body.kiosk-mode #sidebar-settings .collapsible-header:hover h3 {
+    color: rgba(220, 220, 235, 0.9);
+}
+
+body.kiosk-mode #sidebar-settings .toggle-btn {
+    padding: 8px 14px;
+    font-size: 0.82rem;
+    border-color: rgba(78, 205, 196, 0.15);
+    border-radius: 6px;
+}
+
+body.kiosk-mode #sidebar-settings .toggle-btn:hover {
+    background: rgba(42, 42, 74, 0.5);
+}
+
+body.kiosk-mode #sidebar-settings .toggle-btn.active {
+    background: rgba(78, 205, 196, 0.15);
+    border-color: rgba(78, 205, 196, 0.4);
+    color: #4ecdc4;
+}
+
+body.kiosk-mode #sidebar-settings .action-btn {
+    background: rgba(42, 42, 74, 0.4);
+    border: 1px solid rgba(78, 205, 196, 0.12);
+    border-radius: 8px;
+    color: rgba(220, 220, 235, 0.9);
+    transition: all 0.25s ease;
+}
+
+body.kiosk-mode #sidebar-settings .action-btn:hover {
+    background: rgba(42, 42, 74, 0.6);
+    border-color: rgba(78, 205, 196, 0.3);
+}
+
+body.kiosk-mode #sidebar-settings .color-preset {
+    border-color: rgba(78, 205, 196, 0.15);
+    border-radius: 6px;
+}
+
+body.kiosk-mode #sidebar-settings .color-preset.active {
+    border-color: #4ecdc4;
+    box-shadow: 0 0 0 2px rgba(78, 205, 196, 0.2);
+}
+
+body.kiosk-mode #sidebar-settings .slider-group label {
+    color: rgba(180, 180, 200, 0.8);
+    font-size: 0.8rem;
+}
+
+body.kiosk-mode #sidebar-settings .slider-group label span {
+    color: #4ecdc4;
+}
+
+body.kiosk-mode #sidebar-settings .checkbox-group label {
+    color: rgba(180, 180, 200, 0.8);
+}
+
+/* --- Annotation Popup: Glassmorphism --- */
+
+body.kiosk-mode #annotation-info-popup {
+    background: rgba(15, 15, 26, 0.7);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    border: 1px solid rgba(78, 205, 196, 0.25);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4),
+                inset 0 0 0 1px rgba(78, 205, 196, 0.05);
+    border-radius: 14px;
+}
+
+/* --- Annotation Markers: Subtle Glow --- */
+
+body.kiosk-mode .annotation-marker {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4),
+                0 0 20px rgba(78, 205, 196, 0.15);
+}
+
+body.kiosk-mode .annotation-marker:hover {
+    box-shadow: 0 4px 20px rgba(78, 205, 196, 0.4),
+                0 0 30px rgba(78, 205, 196, 0.2);
+}
+
+/* --- Sidebar Scrollbar --- */
+
+body.kiosk-mode #metadata-sidebar ::-webkit-scrollbar {
+    width: 4px;
+}
+
+body.kiosk-mode #metadata-sidebar ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+body.kiosk-mode #metadata-sidebar ::-webkit-scrollbar-thumb {
+    background: rgba(78, 205, 196, 0.2);
+    border-radius: 2px;
+}
+
+body.kiosk-mode #metadata-sidebar ::-webkit-scrollbar-thumb:hover {
+    background: rgba(78, 205, 196, 0.4);
+}
