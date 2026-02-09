@@ -559,6 +559,45 @@ export function copyShareLink(deps) {
     });
 }
 
+// =============================================================================
+// INLINE ASSET LOADING INDICATOR
+// =============================================================================
+
+/**
+ * Asset type → display mode button ID mapping
+ */
+const ASSET_BUTTON_MAP = {
+    splat: 'btn-splat',
+    mesh: 'btn-model',
+    pointcloud: 'btn-pointcloud'
+};
+
+/**
+ * Show an inline loading spinner on the button for a given asset type.
+ * @param {string} assetType - 'splat' | 'mesh' | 'pointcloud'
+ */
+export function showInlineLoading(assetType) {
+    const btnId = ASSET_BUTTON_MAP[assetType];
+    if (!btnId) return;
+    const btn = document.getElementById(btnId);
+    if (btn) {
+        btn.classList.add('asset-loading');
+    }
+}
+
+/**
+ * Hide the inline loading spinner on the button for a given asset type.
+ * @param {string} assetType - 'splat' | 'mesh' | 'pointcloud'
+ */
+export function hideInlineLoading(assetType) {
+    const btnId = ASSET_BUTTON_MAP[assetType];
+    if (!btnId) return;
+    const btn = document.getElementById(btnId);
+    if (btn) {
+        btn.classList.remove('asset-loading');
+    }
+}
+
 export default {
     setDisplayMode,
     updateVisibility,
@@ -579,5 +618,7 @@ export default {
     setTransformModeButtonState,
     showExportPanel,
     hideExportPanel,
-    copyShareLink
+    copyShareLink,
+    showInlineLoading,
+    hideInlineLoading
 };

@@ -26,6 +26,7 @@
     <script src="config.js"></script>
 </head>
 <body>
+    <script>if(window.APP_CONFIG&&window.APP_CONFIG.kiosk)document.body.classList.add('kiosk-mode');</script>
     <!-- Kiosk file picker overlay (hidden by default, shown by kiosk-main.js) -->
     <div id="kiosk-file-picker" class="hidden">
         <div class="kiosk-picker-content">

@@ -1,6 +1,9 @@
 // Archive Loader Module
 // Handles loading and parsing of .a3d/.a3z archive containers
 // These are ZIP-based containers with a manifest.json for 3D gaussian splats and meshes
+//
+// Uses lazy extraction: only the manifest is decompressed on load.
+// 3D assets are decompressed on demand via extractFile().
 
 import { unzip } from 'fflate';
 import { Logger } from './utilities.js';
@@ -126,13 +129,33 @@ function isFormatSupported(filename, type) {
 }
 
 /**
- * Archive Loader class for handling .a3d/.a3z archive containers
+ * Archive Loader class for handling .a3d/.a3z archive containers.
+ *
+ * Uses lazy extraction: the raw ZIP bytes are retained in memory and files
+ * are decompressed individually on demand via fflate's filter option.
+ * Decompressed files are cached so subsequent accesses are instant.
  */
 export class ArchiveLoader {
     constructor() {
-        this.files = null; // Object with path -> Uint8Array from fflate
+        this._rawData = null;       // Uint8Array - raw ZIP bytes (retained for on-demand extraction)
+        this._fileCache = new Map(); // Map<string, Uint8Array> - decompressed file cache
+        this._fileIndex = [];       // Array<{name, originalSize}> - from central directory scan
         this.manifest = null;
-        this.blobUrls = []; // Track blob URLs for cleanup
+        this.blobUrls = [];         // Track blob URLs for cleanup
+    }
+
+    /**
+     * Backward-compatible getter: returns cached files as a plain object.
+     * Returns null if no files have been cached yet.
+     */
+    get files() {
+        if (this._fileCache.size === 0 && !this._rawData) return null;
+        // Return a truthy object so existing `if (!this.files)` checks pass
+        // when we have raw data but haven't cached anything yet
+        if (this._rawData) {
+            return this._fileCache.size > 0 ? Object.fromEntries(this._fileCache) : {};
+        }
+        return null;
     }
 
     /**
@@ -186,7 +209,8 @@ export class ArchiveLoader {
     }
 
     /**
-     * Load archive from an ArrayBuffer
+     * Load archive from an ArrayBuffer.
+     * Only scans the central directory — no files are decompressed.
      * @param {ArrayBuffer} arrayBuffer - The archive data
      * @returns {Promise<void>}
      */
@@ -197,17 +221,65 @@ export class ArchiveLoader {
             throw new Error('Invalid archive: Not a valid ZIP file');
         }
 
-        // Use fflate to unzip - returns object with path -> Uint8Array
-        const uint8Array = new Uint8Array(arrayBuffer);
-        this.files = await new Promise((resolve, reject) => {
-            unzip(uint8Array, (err, data) => {
-                if (err) {
-                    reject(new Error(`Failed to unzip archive: ${err.message}`));
-                } else {
-                    resolve(data);
+        // Store raw data for on-demand extraction
+        this._rawData = new Uint8Array(arrayBuffer);
+        this._fileCache = new Map();
+
+        // Build file index by scanning central directory (no decompression).
+        // The filter rejects all files, so nothing is actually decompressed.
+        this._fileIndex = [];
+        await new Promise((resolve, reject) => {
+            unzip(this._rawData, {
+                filter: (file) => {
+                    this._fileIndex.push({
+                        name: file.name,
+                        originalSize: file.originalSize
+                    });
+                    return false; // Don't decompress anything
                 }
+            }, (err) => {
+                if (err) reject(new Error(`Failed to scan archive: ${err.message}`));
+                else resolve();
             });
         });
+
+        log.info(`Archive indexed: ${this._fileIndex.length} files`);
+    }
+
+    /**
+     * Extract a single file from the archive, using the cache if available.
+     * @param {string} filename - The exact filename within the ZIP
+     * @returns {Promise<Uint8Array|null>} The decompressed file data, or null if not found
+     * @private
+     */
+    async _extractSingle(filename) {
+        // Check cache first
+        if (this._fileCache.has(filename)) {
+            return this._fileCache.get(filename);
+        }
+
+        if (!this._rawData) {
+            throw new Error('No archive loaded');
+        }
+
+        // Use unzip with filter to decompress only the target file
+        const result = await new Promise((resolve, reject) => {
+            unzip(this._rawData, {
+                filter: (file) => file.name === filename
+            }, (err, data) => {
+                if (err) reject(new Error(`Failed to extract ${filename}: ${err.message}`));
+                else resolve(data);
+            });
+        });
+
+        const fileData = result[filename];
+        if (!fileData) {
+            return null;
+        }
+
+        // Cache for future access
+        this._fileCache.set(filename, fileData);
+        return fileData;
     }
 
     /**
@@ -215,11 +287,11 @@ export class ArchiveLoader {
      * @returns {Promise<Object>} The parsed manifest
      */
     async parseManifest() {
-        if (!this.files) {
+        if (!this._rawData) {
             throw new Error('No archive loaded');
         }
 
-        const manifestData = this.files['manifest.json'];
+        const manifestData = await this._extractSingle('manifest.json');
         if (!manifestData) {
             throw new Error('Invalid archive: manifest.json not found');
         }
@@ -310,12 +382,13 @@ export class ArchiveLoader {
     }
 
     /**
-     * Extract a file from the archive as a blob URL
+     * Extract a file from the archive as a blob URL.
+     * Decompresses on demand and caches the result.
      * @param {string} filename - The filename within the archive
      * @returns {Promise<{blob: Blob, url: string, name: string}|null>}
      */
     async extractFile(filename) {
-        if (!this.files) {
+        if (!this._rawData) {
             throw new Error('No archive loaded');
         }
 
@@ -327,7 +400,7 @@ export class ArchiveLoader {
         }
 
         const safeFilename = sanitization.sanitized;
-        const fileData = this.files[safeFilename];
+        const fileData = await this._extractSingle(safeFilename);
         if (!fileData) {
             log.warn(` File not found in archive: ${safeFilename}`);
             return null;
@@ -429,7 +502,7 @@ export class ArchiveLoader {
 
     /**
      * Check if the archive contains viewable content
-     * @returns {{hasSplat: boolean, hasMesh: boolean, hasThumbnail: boolean}}
+     * @returns {{hasSplat: boolean, hasMesh: boolean, hasPointcloud: boolean, hasThumbnail: boolean}}
      */
     getContentInfo() {
         const scene = this.getSceneEntry();
@@ -445,6 +518,68 @@ export class ArchiveLoader {
         };
     }
 
+    // =========================================================================
+    // LOD-READY & LAZY LOADING HELPERS
+    // =========================================================================
+
+    /**
+     * Get the file index (names and sizes) without decompressing anything.
+     * @returns {Array<{name: string, originalSize: number}>}
+     */
+    getFileIndex() {
+        return this._fileIndex ? [...this._fileIndex] : [];
+    }
+
+    /**
+     * Check if a specific file has already been extracted and cached.
+     * @param {string} filename
+     * @returns {boolean}
+     */
+    isFileCached(filename) {
+        return this._fileCache.has(filename);
+    }
+
+    /**
+     * Find entries by prefix with their cached/uncached status.
+     * Useful for LOD: returns all scene_0, scene_1, etc. with their parameters and readiness.
+     * @param {string} prefix - e.g., 'scene_', 'mesh_', 'pointcloud_'
+     * @returns {Array<{key: string, entry: Object, cached: boolean}>}
+     */
+    findEntriesWithStatus(prefix) {
+        const entries = this.findEntriesByPrefix(prefix);
+        return entries.map(({ key, entry }) => ({
+            key,
+            entry,
+            cached: this.isFileCached(entry.file_name)
+        }));
+    }
+
+    /**
+     * Pre-extract specific files into the cache (for background loading).
+     * @param {Array<string>} filenames
+     * @returns {Promise<void>}
+     */
+    async preExtract(filenames) {
+        for (const filename of filenames) {
+            if (!this._fileCache.has(filename)) {
+                await this._extractSingle(filename);
+            }
+        }
+    }
+
+    /**
+     * Release the raw ZIP data to free memory.
+     * Call this after all needed assets have been extracted and cached.
+     * After calling this, no new files can be extracted.
+     */
+    releaseRawData() {
+        const hadData = !!this._rawData;
+        this._rawData = null;
+        if (hadData) {
+            log.info('Raw archive data released to free memory');
+        }
+    }
+
     /**
      * Clean up all created blob URLs
      */
@@ -456,11 +591,14 @@ export class ArchiveLoader {
     }
 
     /**
-     * Full cleanup including files reference
+     * Full cleanup including raw data and file cache
      */
     dispose() {
         this.cleanup();
-        this.files = null;
+        this._rawData = null;
+        this._fileCache?.clear();
+        this._fileCache = null;
+        this._fileIndex = null;
         this.manifest = null;
     }
 }

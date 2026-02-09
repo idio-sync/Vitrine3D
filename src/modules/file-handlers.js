@@ -15,7 +15,7 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { SplatMesh } from '@sparkjsdev/spark';
 import { ArchiveLoader } from './archive-loader.js';
-import { TIMING } from './constants.js';
+import { TIMING, ASSET_STATE } from './constants.js';
 // E57Loader is loaded lazily via dynamic import to allow graceful degradation
 // when the three-e57-loader CDN module is unavailable (e.g., offline kiosk viewer).
 import { Logger, notify, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject, fetchWithProgress } from './utilities.js';
@@ -705,6 +705,209 @@ export async function processArchive(archiveLoader, archiveName, deps) {
 }
 
 // =============================================================================
+// PHASED ARCHIVE PROCESSING (Lazy Loading)
+// =============================================================================
+
+/**
+ * Phase 1: Fast archive processing — manifest + metadata only, no 3D asset decompression.
+ * Typically completes in ~50ms. Extracts thumbnail if present.
+ * @param {ArchiveLoader} archiveLoader - The archive loader (already loaded)
+ * @param {string} archiveName - Archive filename
+ * @param {Object} deps - Dependencies { state }
+ * @returns {Promise<Object>} { manifest, contentInfo, thumbnailUrl }
+ */
+export async function processArchivePhase1(archiveLoader, archiveName, deps) {
+    const { state } = deps;
+
+    const manifest = await archiveLoader.parseManifest();
+    log.info('Phase 1 — manifest parsed:', manifest);
+
+    state.archiveLoader = archiveLoader;
+    state.archiveManifest = manifest;
+    state.archiveFileName = archiveName;
+    state.archiveLoaded = true;
+
+    const contentInfo = archiveLoader.getContentInfo();
+
+    // Extract thumbnail (small file, fast)
+    let thumbnailUrl = null;
+    const thumbnailEntry = archiveLoader.getThumbnailEntry();
+    if (thumbnailEntry) {
+        try {
+            const thumbData = await archiveLoader.extractFile(thumbnailEntry.file_name);
+            if (thumbData) {
+                thumbnailUrl = thumbData.url;
+            }
+        } catch (e) {
+            log.warn('Failed to extract thumbnail:', e.message);
+        }
+    }
+
+    return { manifest, contentInfo, thumbnailUrl };
+}
+
+/**
+ * Load a single archive asset type on demand.
+ * @param {ArchiveLoader} archiveLoader - The archive loader
+ * @param {'splat'|'mesh'|'pointcloud'} assetType - Which asset to load
+ * @param {Object} deps - Dependencies { state, scene, getSplatMesh, setSplatMesh, modelGroup, pointcloudGroup, callbacks }
+ * @returns {Promise<Object>} { loaded, blob, error, faceCount?, pointCount? }
+ */
+export async function loadArchiveAsset(archiveLoader, assetType, deps) {
+    const { state, callbacks = {} } = deps;
+
+    // Initialize assetStates if not present
+    if (!state.assetStates) {
+        state.assetStates = { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED };
+    }
+
+    // Guard against duplicate loads
+    if (state.assetStates[assetType] === ASSET_STATE.LOADING) {
+        log.warn(`Asset "${assetType}" is already loading, skipping duplicate request`);
+        return { loaded: false, blob: null, error: 'Already loading' };
+    }
+    if (state.assetStates[assetType] === ASSET_STATE.LOADED) {
+        log.info(`Asset "${assetType}" already loaded`);
+        return { loaded: true, blob: null, error: null };
+    }
+
+    state.assetStates[assetType] = ASSET_STATE.LOADING;
+
+    try {
+        if (assetType === 'splat') {
+            const sceneEntry = archiveLoader.getSceneEntry();
+            const contentInfo = archiveLoader.getContentInfo();
+            if (!sceneEntry || !contentInfo.hasSplat) {
+                state.assetStates[assetType] = ASSET_STATE.UNLOADED;
+                return { loaded: false, blob: null, error: 'No splat in archive' };
+            }
+
+            const splatData = await archiveLoader.extractFile(sceneEntry.file_name);
+            if (!splatData) {
+                state.assetStates[assetType] = ASSET_STATE.ERROR;
+                return { loaded: false, blob: null, error: 'Failed to extract splat file' };
+            }
+
+            await loadSplatFromBlobUrl(splatData.url, sceneEntry.file_name, deps);
+
+            // Apply transform from manifest
+            const transform = archiveLoader.getEntryTransform(sceneEntry);
+            if (callbacks.onApplySplatTransform) {
+                callbacks.onApplySplatTransform(transform);
+            }
+
+            state.assetStates[assetType] = ASSET_STATE.LOADED;
+            return { loaded: true, blob: splatData.blob, error: null };
+
+        } else if (assetType === 'mesh') {
+            const meshEntry = archiveLoader.getMeshEntry();
+            const contentInfo = archiveLoader.getContentInfo();
+            if (!meshEntry || !contentInfo.hasMesh) {
+                state.assetStates[assetType] = ASSET_STATE.UNLOADED;
+                return { loaded: false, blob: null, error: 'No mesh in archive' };
+            }
+
+            const meshData = await archiveLoader.extractFile(meshEntry.file_name);
+            if (!meshData) {
+                state.assetStates[assetType] = ASSET_STATE.ERROR;
+                return { loaded: false, blob: null, error: 'Failed to extract mesh file' };
+            }
+
+            const result = await loadModelFromBlobUrl(meshData.url, meshEntry.file_name, deps);
+
+            // Apply transform from manifest
+            const transform = archiveLoader.getEntryTransform(meshEntry);
+            if (callbacks.onApplyModelTransform) {
+                callbacks.onApplyModelTransform(transform);
+            }
+
+            state.assetStates[assetType] = ASSET_STATE.LOADED;
+            return { loaded: true, blob: meshData.blob, error: null, faceCount: result?.faceCount || 0 };
+
+        } else if (assetType === 'pointcloud') {
+            const contentInfo = archiveLoader.getContentInfo();
+            if (!contentInfo.hasPointcloud) {
+                state.assetStates[assetType] = ASSET_STATE.UNLOADED;
+                return { loaded: false, blob: null, error: 'No pointcloud in archive' };
+            }
+
+            // Find pointcloud entry
+            const pcEntries = archiveLoader.findEntriesByPrefix('pointcloud');
+            if (pcEntries.length === 0) {
+                state.assetStates[assetType] = ASSET_STATE.UNLOADED;
+                return { loaded: false, blob: null, error: 'No pointcloud entries found' };
+            }
+
+            const pcEntry = pcEntries[0];
+            const pcData = await archiveLoader.extractFile(pcEntry.file_name);
+            if (!pcData) {
+                state.assetStates[assetType] = ASSET_STATE.ERROR;
+                return { loaded: false, blob: null, error: 'Failed to extract pointcloud file' };
+            }
+
+            const result = await loadPointcloudFromBlobUrl(pcData.url, pcEntry.file_name, deps);
+
+            // Apply transform if present
+            const transform = archiveLoader.getEntryTransform(pcEntry);
+            if (callbacks.onApplyPointcloudTransform) {
+                callbacks.onApplyPointcloudTransform(transform);
+            }
+
+            state.assetStates[assetType] = ASSET_STATE.LOADED;
+            return { loaded: true, blob: pcData.blob, error: null, pointCount: result?.pointCount || 0 };
+        }
+
+        return { loaded: false, blob: null, error: `Unknown asset type: ${assetType}` };
+
+    } catch (e) {
+        state.assetStates[assetType] = ASSET_STATE.ERROR;
+        log.error(`Error loading ${assetType} from archive:`, e);
+        return { loaded: false, blob: null, error: e.message };
+    }
+}
+
+/**
+ * Determine which asset types are needed for a given display mode.
+ * @param {string} mode - Display mode ('splat', 'model', 'both', 'split', 'pointcloud')
+ * @returns {string[]} Array of asset type strings
+ */
+export function getAssetTypesForMode(mode) {
+    switch (mode) {
+        case 'splat': return ['splat'];
+        case 'model': return ['mesh'];
+        case 'both': return ['splat', 'mesh'];
+        case 'split': return ['splat', 'mesh'];
+        case 'pointcloud': return ['pointcloud'];
+        default: return ['splat', 'mesh'];
+    }
+}
+
+/**
+ * Determine the primary asset type to load first based on display mode and available content.
+ * Priority: splat > mesh > pointcloud (splat gives fastest visual feedback).
+ * @param {string} displayMode - Current display mode
+ * @param {Object} contentInfo - Content info from archiveLoader.getContentInfo()
+ * @returns {string} Primary asset type
+ */
+export function getPrimaryAssetType(displayMode, contentInfo) {
+    const modeTypes = getAssetTypesForMode(displayMode);
+
+    // Try mode-preferred types first
+    for (const type of modeTypes) {
+        if (type === 'splat' && contentInfo.hasSplat) return 'splat';
+        if (type === 'mesh' && contentInfo.hasMesh) return 'mesh';
+        if (type === 'pointcloud' && contentInfo.hasPointcloud) return 'pointcloud';
+    }
+
+    // Fallback: whatever is available
+    if (contentInfo.hasSplat) return 'splat';
+    if (contentInfo.hasMesh) return 'mesh';
+    if (contentInfo.hasPointcloud) return 'pointcloud';
+
+    return 'splat'; // Default
+}
+
+// =============================================================================
 // MODEL MATERIAL UPDATES
 // =============================================================================
 
@@ -1100,6 +1303,10 @@ export default {
     loadArchiveFromFile,
     loadArchiveFromUrl,
     processArchive,
+    processArchivePhase1,
+    loadArchiveAsset,
+    getAssetTypesForMode,
+    getPrimaryAssetType,
     updateModelOpacity,
     updateModelWireframe,
     saveAlignmentToFile,

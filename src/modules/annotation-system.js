@@ -56,6 +56,10 @@ export class AnnotationSystem {
         this.onAnnotationSelected = null;
         this.onPlacementModeChanged = null;
 
+        // Reusable vectors for occlusion checks
+        this._surfaceNormal = new THREE.Vector3();
+        this._viewDir = new THREE.Vector3();
+
         // Bind methods
         this._onClick = this._onClick.bind(this);
 
@@ -286,6 +290,28 @@ export class AnnotationSystem {
                 marker.element.style.display = 'flex';
                 marker.element.style.left = x + 'px';
                 marker.element.style.top = y + 'px';
+
+                // Surface-normal occlusion using stored annotation camera position.
+                // The direction from annotation point toward the camera that placed it
+                // approximates the surface normal at that point.
+                const anno = marker.annotation;
+                if (anno.camera_position) {
+                    this._surfaceNormal.set(
+                        anno.camera_position.x - anno.position.x,
+                        anno.camera_position.y - anno.position.y,
+                        anno.camera_position.z - anno.position.z
+                    ).normalize();
+
+                    this._viewDir.set(
+                        this.camera.position.x - anno.position.x,
+                        this.camera.position.y - anno.position.y,
+                        this.camera.position.z - anno.position.z
+                    ).normalize();
+
+                    // Dot < 0 means camera is on the opposite side of the surface
+                    const dot = this._surfaceNormal.dot(this._viewDir);
+                    marker.element.classList.toggle('occluded', dot < 0.05);
+                }
             }
         });
     }

@@ -7,7 +7,7 @@ import { SplatMesh } from '@sparkjsdev/spark';
 import { ArchiveLoader, isArchiveFile } from './modules/archive-loader.js';
 import { AnnotationSystem } from './modules/annotation-system.js';
 import { ArchiveCreator, captureScreenshot, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
-import { CAMERA, TIMING } from './modules/constants.js';
+import { CAMERA, TIMING, ASSET_STATE } from './modules/constants.js';
 import { Logger, notify, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject, parseMarkdown, fetchWithProgress } from './modules/utilities.js';
 import { FlyControls } from './modules/fly-controls.js';
 import { SceneManager } from './modules/scene-manager.js';
@@ -23,7 +23,9 @@ import {
     showLoading,
     hideLoading,
     updateProgress,
-    addListener
+    addListener,
+    showInlineLoading,
+    hideInlineLoading
 } from './modules/ui-controller.js';
 import {
     formatFileSize,
@@ -190,7 +192,9 @@ const state = {
     archiveManifest: null,
     archiveFileName: null,
     currentArchiveUrl: config.defaultArchiveUrl || null,
-    archiveLoader: null
+    archiveLoader: null,
+    // Per-asset loading state for lazy archive extraction
+    assetStates: { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED }
 };
 
 // Scene manager instance (handles scene, camera, renderer, controls, lighting)
@@ -799,6 +803,21 @@ function setDisplayMode(mode) {
     });
 
     updateVisibility();
+
+    // Lazy-load any archive assets needed for this mode that aren't loaded yet
+    if (state.archiveLoaded && state.archiveLoader) {
+        const neededTypes = getAssetTypesForMode(mode);
+        for (const type of neededTypes) {
+            if (state.assetStates[type] === ASSET_STATE.UNLOADED) {
+                ensureAssetLoaded(type).then(loaded => {
+                    if (loaded) {
+                        updateVisibility();
+                        updateTransformInputs();
+                    }
+                });
+            }
+        }
+    }
 }
 
 // Toggle gridlines visibility
@@ -1180,11 +1199,142 @@ async function loadArchiveFromUrl(url) {
     }
 }
 
-// Process loaded archive - extract and load splat/mesh
+// Ensure a single archive asset type is loaded on demand.
+// Returns true if the asset is loaded (or was already loaded), false otherwise.
+async function ensureAssetLoaded(assetType) {
+    if (!state.archiveLoader) return false;
+    const archiveLoader = state.archiveLoader;
+
+    // Already loaded
+    if (state.assetStates[assetType] === ASSET_STATE.LOADED) return true;
+    // Already errored — don't retry automatically
+    if (state.assetStates[assetType] === ASSET_STATE.ERROR) return false;
+    // Already loading — wait for it
+    if (state.assetStates[assetType] === ASSET_STATE.LOADING) {
+        return new Promise(resolve => {
+            const check = () => {
+                if (state.assetStates[assetType] === ASSET_STATE.LOADED) resolve(true);
+                else if (state.assetStates[assetType] === ASSET_STATE.ERROR) resolve(false);
+                else setTimeout(check, 50);
+            };
+            check();
+        });
+    }
+
+    state.assetStates[assetType] = ASSET_STATE.LOADING;
+    showInlineLoading(assetType);
+
+    try {
+        if (assetType === 'splat') {
+            const sceneEntry = archiveLoader.getSceneEntry();
+            const contentInfo = archiveLoader.getContentInfo();
+            if (!sceneEntry || !contentInfo.hasSplat) {
+                state.assetStates[assetType] = ASSET_STATE.UNLOADED;
+                return false;
+            }
+            const splatData = await archiveLoader.extractFile(sceneEntry.file_name);
+            if (!splatData) { state.assetStates[assetType] = ASSET_STATE.ERROR; return false; }
+            await loadSplatFromBlobUrl(splatData.url, sceneEntry.file_name);
+            // Apply transform
+            const transform = archiveLoader.getEntryTransform(sceneEntry);
+            if (splatMesh && (transform.position.some(v => v !== 0) || transform.rotation.some(v => v !== 0) || transform.scale !== 1)) {
+                splatMesh.position.fromArray(transform.position);
+                splatMesh.rotation.set(...transform.rotation);
+                splatMesh.scale.setScalar(transform.scale);
+            }
+            currentSplatBlob = splatData.blob;
+            state.assetStates[assetType] = ASSET_STATE.LOADED;
+            return true;
+
+        } else if (assetType === 'mesh') {
+            const meshEntry = archiveLoader.getMeshEntry();
+            const contentInfo = archiveLoader.getContentInfo();
+            if (!meshEntry || !contentInfo.hasMesh) {
+                state.assetStates[assetType] = ASSET_STATE.UNLOADED;
+                return false;
+            }
+            const meshData = await archiveLoader.extractFile(meshEntry.file_name);
+            if (!meshData) { state.assetStates[assetType] = ASSET_STATE.ERROR; return false; }
+            await loadModelFromBlobUrl(meshData.url, meshEntry.file_name);
+            // Apply transform
+            const transform = archiveLoader.getEntryTransform(meshEntry);
+            if (modelGroup && (transform.position.some(v => v !== 0) || transform.rotation.some(v => v !== 0) || transform.scale !== 1)) {
+                modelGroup.position.fromArray(transform.position);
+                modelGroup.rotation.set(...transform.rotation);
+                modelGroup.scale.setScalar(transform.scale);
+            }
+            currentMeshBlob = meshData.blob;
+            state.assetStates[assetType] = ASSET_STATE.LOADED;
+            return true;
+
+        } else if (assetType === 'pointcloud') {
+            const contentInfo = archiveLoader.getContentInfo();
+            if (!contentInfo.hasPointcloud) {
+                state.assetStates[assetType] = ASSET_STATE.UNLOADED;
+                return false;
+            }
+            const pointcloudEntry = archiveLoader.getPointcloudEntry();
+            if (!pointcloudEntry) { state.assetStates[assetType] = ASSET_STATE.UNLOADED; return false; }
+            const pcData = await archiveLoader.extractFile(pointcloudEntry.file_name);
+            if (!pcData) { state.assetStates[assetType] = ASSET_STATE.ERROR; return false; }
+            const result = await loadPointcloudFromBlobUrlHandler(pcData.url, pointcloudEntry.file_name, { pointcloudGroup });
+            state.pointcloudLoaded = true;
+            // Apply transform
+            const transform = archiveLoader.getEntryTransform(pointcloudEntry);
+            if (pointcloudGroup && (transform.position.some(v => v !== 0) || transform.rotation.some(v => v !== 0) || transform.scale !== 1)) {
+                pointcloudGroup.position.fromArray(transform.position);
+                pointcloudGroup.rotation.set(...transform.rotation);
+                pointcloudGroup.scale.setScalar(transform.scale);
+            }
+            document.getElementById('pointcloud-filename').textContent = pointcloudEntry.file_name.split('/').pop();
+            document.getElementById('pointcloud-points').textContent = result.pointCount.toLocaleString();
+            currentPointcloudBlob = pcData.blob;
+            state.assetStates[assetType] = ASSET_STATE.LOADED;
+            return true;
+        }
+
+        return false;
+    } catch (e) {
+        log.error(`Error loading ${assetType} from archive:`, e);
+        state.assetStates[assetType] = ASSET_STATE.ERROR;
+        return false;
+    } finally {
+        hideInlineLoading(assetType);
+    }
+}
+
+// Get which asset types are needed for a display mode
+function getAssetTypesForMode(mode) {
+    switch (mode) {
+        case 'splat': return ['splat'];
+        case 'model': return ['mesh'];
+        case 'pointcloud': return ['pointcloud'];
+        case 'both': return ['splat', 'mesh'];
+        case 'split': return ['splat', 'mesh'];
+        default: return ['splat', 'mesh'];
+    }
+}
+
+// Determine which asset type to load first based on display mode and what's available
+function getPrimaryAssetType(displayMode, contentInfo) {
+    const modeTypes = getAssetTypesForMode(displayMode);
+    for (const type of modeTypes) {
+        if (type === 'splat' && contentInfo.hasSplat) return 'splat';
+        if (type === 'mesh' && contentInfo.hasMesh) return 'mesh';
+        if (type === 'pointcloud' && contentInfo.hasPointcloud) return 'pointcloud';
+    }
+    if (contentInfo.hasSplat) return 'splat';
+    if (contentInfo.hasMesh) return 'mesh';
+    if (contentInfo.hasPointcloud) return 'pointcloud';
+    return 'splat';
+}
+
+// Process loaded archive - phased lazy loading
 async function processArchive(archiveLoader, archiveName) {
     showLoading('Parsing manifest...');
 
     try {
+        // === Phase 1: Manifest + metadata (fast, no 3D decompression) ===
         const manifest = await archiveLoader.parseManifest();
         log.info(' Archive manifest:', manifest);
 
@@ -1192,99 +1342,47 @@ async function processArchive(archiveLoader, archiveName) {
         state.archiveManifest = manifest;
         state.archiveFileName = archiveName;
         state.archiveLoaded = true;
+        // Reset asset states for new archive
+        state.assetStates = { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED };
 
         // Prefill metadata panel from loaded archive
         prefillMetadataFromArchive(manifest);
 
         const contentInfo = archiveLoader.getContentInfo();
-        const errors = [];
-        let loadedSplat = false;
-        let loadedMesh = false;
 
-        // Load splat (scene_0) if present
-        const sceneEntry = archiveLoader.getSceneEntry();
-        if (sceneEntry && contentInfo.hasSplat) {
-            try {
-                showLoading('Loading splat from archive...');
-                const splatData = await archiveLoader.extractFile(sceneEntry.file_name);
-                if (splatData) {
-                    await loadSplatFromBlobUrl(splatData.url, sceneEntry.file_name);
-                    loadedSplat = true;
-
-                    // Apply transform from entry parameters if present
-                    const transform = archiveLoader.getEntryTransform(sceneEntry);
-                    if (splatMesh && (transform.position.some(v => v !== 0) ||
-                                      transform.rotation.some(v => v !== 0) ||
-                                      transform.scale !== 1)) {
-                        splatMesh.position.fromArray(transform.position);
-                        splatMesh.rotation.set(...transform.rotation);
-                        splatMesh.scale.setScalar(transform.scale);
-                    }
-                }
-            } catch (e) {
-                errors.push(`Failed to load splat: ${e.message}`);
-                log.error(' Error loading splat from archive:', e);
-            }
-        }
-
-        // Load mesh (mesh_0) if present
-        const meshEntry = archiveLoader.getMeshEntry();
-        if (meshEntry && contentInfo.hasMesh) {
-            try {
-                showLoading('Loading mesh from archive...');
-                const meshData = await archiveLoader.extractFile(meshEntry.file_name);
-                if (meshData) {
-                    await loadModelFromBlobUrl(meshData.url, meshEntry.file_name);
-                    loadedMesh = true;
-
-                    // Apply transform from entry parameters if present
-                    const transform = archiveLoader.getEntryTransform(meshEntry);
-                    if (modelGroup && (transform.position.some(v => v !== 0) ||
-                                       transform.rotation.some(v => v !== 0) ||
-                                       transform.scale !== 1)) {
-                        modelGroup.position.fromArray(transform.position);
-                        modelGroup.rotation.set(...transform.rotation);
-                        modelGroup.scale.setScalar(transform.scale);
-                    }
-                }
-            } catch (e) {
-                errors.push(`Failed to load mesh: ${e.message}`);
-                log.error(' Error loading mesh from archive:', e);
-            }
-        }
-
-        // Load point cloud (pointcloud_0) if present
-        const pointcloudEntry = archiveLoader.getPointcloudEntry();
-        if (pointcloudEntry && contentInfo.hasPointcloud) {
-            try {
-                showLoading('Loading point cloud from archive...');
-                const pcData = await archiveLoader.extractFile(pointcloudEntry.file_name);
-                if (pcData) {
-                    const result = await loadPointcloudFromBlobUrlHandler(pcData.url, pointcloudEntry.file_name, { pointcloudGroup });
-                    state.pointcloudLoaded = true;
-
-                    // Apply transform from entry parameters if present
-                    const transform = archiveLoader.getEntryTransform(pointcloudEntry);
-                    if (pointcloudGroup && (transform.position.some(v => v !== 0) ||
-                                            transform.rotation.some(v => v !== 0) ||
-                                            transform.scale !== 1)) {
-                        pointcloudGroup.position.fromArray(transform.position);
-                        pointcloudGroup.rotation.set(...transform.rotation);
-                        pointcloudGroup.scale.setScalar(transform.scale);
-                    }
-
-                    // Update UI
-                    document.getElementById('pointcloud-filename').textContent = pointcloudEntry.file_name.split('/').pop();
-                    document.getElementById('pointcloud-points').textContent = result.pointCount.toLocaleString();
-                }
-            } catch (e) {
-                errors.push(`Failed to load point cloud: ${e.message}`);
-                log.error(' Error loading point cloud from archive:', e);
-            }
-        }
+        // Update archive metadata UI
+        updateArchiveMetadataUI(manifest, archiveLoader);
 
         // Check for global alignment data
         const globalAlignment = archiveLoader.getGlobalAlignment();
+
+        // Load annotations from archive
+        const annotations = archiveLoader.getAnnotations();
+
+        // === Phase 2: Load primary asset for current display mode ===
+        const primaryType = getPrimaryAssetType(state.displayMode, contentInfo);
+        showLoading(`Loading ${primaryType} from archive...`);
+        const primaryLoaded = await ensureAssetLoaded(primaryType);
+
+        if (!primaryLoaded) {
+            // Try loading any available asset
+            const fallbackTypes = ['splat', 'mesh', 'pointcloud'].filter(t => t !== primaryType);
+            let anyLoaded = false;
+            for (const type of fallbackTypes) {
+                showLoading(`Loading ${type} from archive...`);
+                if (await ensureAssetLoaded(type)) {
+                    anyLoaded = true;
+                    break;
+                }
+            }
+            if (!anyLoaded) {
+                hideLoading();
+                notify.warning('Archive does not contain any viewable splat, mesh, or point cloud files.');
+                return;
+            }
+        }
+
+        // Apply global alignment after primary asset is loaded
         if (globalAlignment) {
             applyAlignmentData(globalAlignment);
         }
@@ -1292,47 +1390,38 @@ async function processArchive(archiveLoader, archiveName) {
         // Update UI
         updateTransformInputs();
         storeLastPositions();
-        updateArchiveMetadataUI(manifest, archiveLoader);
 
-        // Load annotations from archive
-        const annotations = archiveLoader.getAnnotations();
+        // Load annotations
         if (annotations && annotations.length > 0) {
             loadAnnotationsFromArchive(annotations);
         }
 
-        // Store blobs for potential export
-        if (loadedSplat && sceneEntry) {
-            const splatData = await archiveLoader.extractFile(sceneEntry.file_name);
-            if (splatData) {
-                currentSplatBlob = splatData.blob;
-            }
-        }
-        if (loadedMesh && meshEntry) {
-            const meshData = await archiveLoader.extractFile(meshEntry.file_name);
-            if (meshData) {
-                currentMeshBlob = meshData.blob;
-            }
-        }
-        if (state.pointcloudLoaded && pointcloudEntry) {
-            const pcData = await archiveLoader.extractFile(pointcloudEntry.file_name);
-            if (pcData) {
-                currentPointcloudBlob = pcData.blob;
-            }
-        }
-
-        // Show warning if there were partial errors
-        if (errors.length > 0 && (loadedSplat || loadedMesh || state.pointcloudLoaded)) {
-            log.warn(' Archive loaded with warnings:', errors);
-        }
-
-        // Alert if no viewable content
-        if (!loadedSplat && !loadedMesh && !state.pointcloudLoaded) {
-            hideLoading();
-            notify.warning('Archive does not contain any viewable splat, mesh, or point cloud files.');
-            return;
-        }
-
         hideLoading();
+
+        // === Phase 3: Background-load remaining assets ===
+        const remainingTypes = ['splat', 'mesh', 'pointcloud'].filter(
+            t => t !== primaryType && state.assetStates[t] === ASSET_STATE.UNLOADED
+        );
+        if (remainingTypes.length > 0) {
+            setTimeout(async () => {
+                for (const type of remainingTypes) {
+                    const typeContentCheck = (type === 'splat' && contentInfo.hasSplat) ||
+                                             (type === 'mesh' && contentInfo.hasMesh) ||
+                                             (type === 'pointcloud' && contentInfo.hasPointcloud);
+                    if (typeContentCheck) {
+                        log.info(`Background loading: ${type}`);
+                        await ensureAssetLoaded(type);
+                        updateTransformInputs();
+                    }
+                }
+                // Release raw ZIP data after all assets are extracted
+                archiveLoader.releaseRawData();
+                log.info('All archive assets loaded, raw data released');
+            }, 100);
+        } else {
+            // All assets already loaded, release raw data
+            archiveLoader.releaseRawData();
+        }
     } catch (error) {
         log.error(' Error processing archive:', error);
         hideLoading();

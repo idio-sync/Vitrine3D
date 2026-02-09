@@ -12,15 +12,17 @@ import * as THREE from 'three';
 import { SceneManager } from './scene-manager.js';
 import { FlyControls } from './fly-controls.js';
 import { AnnotationSystem } from './annotation-system.js';
-import { CAMERA } from './constants.js';
+import { CAMERA, ASSET_STATE } from './constants.js';
 import { Logger, notify } from './utilities.js';
 import {
     showLoading, hideLoading, updateProgress,
     setDisplayMode, setupCollapsibles, addListener,
-    setupKeyboardShortcuts
+    setupKeyboardShortcuts,
+    showInlineLoading, hideInlineLoading
 } from './ui-controller.js';
 import {
     loadArchiveFromFile, processArchive,
+    processArchivePhase1, loadArchiveAsset,
     updateModelOpacity, updateModelWireframe, updateModelTextures,
     updatePointcloudPointSize, updatePointcloudOpacity
 } from './file-handlers.js';
@@ -61,7 +63,8 @@ const state = {
     currentSplatUrl: null,
     currentModelUrl: null,
     flyModeActive: false,
-    annotationsVisible: true
+    annotationsVisible: true,
+    assetStates: { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED }
 };
 
 // =============================================================================
@@ -195,54 +198,152 @@ function setupFilePicker() {
 // ARCHIVE PROCESSING
 // =============================================================================
 
+// Ensure a single archive asset type is loaded on demand (kiosk version).
+async function ensureAssetLoaded(assetType) {
+    if (!state.archiveLoader) return false;
+
+    if (state.assetStates[assetType] === ASSET_STATE.LOADED) return true;
+    if (state.assetStates[assetType] === ASSET_STATE.ERROR) return false;
+    if (state.assetStates[assetType] === ASSET_STATE.LOADING) {
+        return new Promise(resolve => {
+            const check = () => {
+                if (state.assetStates[assetType] === ASSET_STATE.LOADED) resolve(true);
+                else if (state.assetStates[assetType] === ASSET_STATE.ERROR) resolve(false);
+                else setTimeout(check, 50);
+            };
+            check();
+        });
+    }
+
+    showInlineLoading(assetType);
+    try {
+        const result = await loadArchiveAsset(state.archiveLoader, assetType, createArchiveDeps());
+        if (result.loaded) {
+            if (assetType === 'splat') state.splatLoaded = true;
+            else if (assetType === 'mesh') state.modelLoaded = true;
+            else if (assetType === 'pointcloud') state.pointcloudLoaded = true;
+        }
+        return result.loaded;
+    } catch (e) {
+        log.error(`Error loading ${assetType}:`, e);
+        state.assetStates[assetType] = ASSET_STATE.ERROR;
+        return false;
+    } finally {
+        hideInlineLoading(assetType);
+    }
+}
+
+function getAssetTypesForMode(mode) {
+    switch (mode) {
+        case 'splat': return ['splat'];
+        case 'model': return ['mesh'];
+        case 'pointcloud': return ['pointcloud'];
+        case 'both': return ['splat', 'mesh'];
+        case 'split': return ['splat', 'mesh'];
+        default: return ['splat', 'mesh'];
+    }
+}
+
+function getPrimaryAssetType(displayMode, contentInfo) {
+    const modeTypes = getAssetTypesForMode(displayMode);
+    for (const type of modeTypes) {
+        if (type === 'splat' && contentInfo.hasSplat) return 'splat';
+        if (type === 'mesh' && contentInfo.hasMesh) return 'mesh';
+        if (type === 'pointcloud' && contentInfo.hasPointcloud) return 'pointcloud';
+    }
+    if (contentInfo.hasSplat) return 'splat';
+    if (contentInfo.hasMesh) return 'mesh';
+    if (contentInfo.hasPointcloud) return 'pointcloud';
+    return 'splat';
+}
+
+// Trigger lazy loading of assets needed for a display mode
+function triggerLazyLoad(mode) {
+    if (!state.archiveLoaded || !state.archiveLoader) return;
+    const neededTypes = getAssetTypesForMode(mode);
+    for (const type of neededTypes) {
+        if (state.assetStates[type] === ASSET_STATE.UNLOADED) {
+            ensureAssetLoaded(type).then(loaded => {
+                if (loaded) {
+                    const deps = createDisplayModeDeps();
+                    if (deps.updateVisibility) deps.updateVisibility();
+                }
+            });
+        }
+    }
+}
+
 async function handleArchiveFile(file) {
     log.info('Loading archive:', file.name);
     showLoading('Loading archive...', true);
 
     try {
+        // === Phase 1: Extract archive + parse manifest (fast, no 3D decompression) ===
         updateProgress(10, 'Extracting archive...');
         const archiveLoader = await loadArchiveFromFile(file, { state });
+
+        // Reset asset states for new archive
+        state.assetStates = { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED };
+
+        // Phase 1: manifest + metadata
+        const phase1 = await processArchivePhase1(archiveLoader, file.name, { state });
+        const { manifest, contentInfo } = phase1;
 
         // Show branded loading screen with thumbnail, title, and content types
         await showBrandedLoading(archiveLoader);
 
+        // === Phase 2: Load primary asset for initial display ===
         updateProgress(30, 'Loading 3D assets...');
-        const result = await processArchive(archiveLoader, file.name, createArchiveDeps());
+        const primaryType = getPrimaryAssetType(state.displayMode, contentInfo);
+        const primaryLoaded = await ensureAssetLoaded(primaryType);
+
+        if (!primaryLoaded) {
+            // Try any available type as fallback
+            const fallbackTypes = ['splat', 'mesh', 'pointcloud'].filter(t => t !== primaryType);
+            let anyLoaded = false;
+            for (const type of fallbackTypes) {
+                if (await ensureAssetLoaded(type)) { anyLoaded = true; break; }
+            }
+            if (!anyLoaded) {
+                hideLoading();
+                notify.warning('Archive does not contain any viewable content.');
+                return;
+            }
+        }
 
         // Apply global alignment if present
-        if (result.globalAlignment) {
-            applyGlobalAlignment(result.globalAlignment);
+        const globalAlignment = archiveLoader.getGlobalAlignment();
+        if (globalAlignment) {
+            applyGlobalAlignment(globalAlignment);
         }
 
         // Load annotations
-        if (result.annotations && result.annotations.length > 0) {
-            annotationSystem.fromJSON(result.annotations);
+        const annotations = archiveLoader.getAnnotations();
+        if (annotations && annotations.length > 0) {
+            annotationSystem.fromJSON(annotations);
             populateAnnotationList();
-            log.info(`Loaded ${result.annotations.length} annotations`);
+            log.info(`Loaded ${annotations.length} annotations`);
         }
 
         // Update metadata display
         updateProgress(80, 'Loading metadata...');
-        updateArchiveMetadataUI(result.manifest, archiveLoader);
-        prefillMetadataFromArchive(result.manifest);
+        updateArchiveMetadataUI(manifest, archiveLoader);
+        prefillMetadataFromArchive(manifest);
         populateMetadataDisplay({ state, annotationSystem });
-        populateDetailedMetadata(result.manifest);
+        populateDetailedMetadata(manifest);
 
         // Set display mode based on what was loaded
         updateProgress(90, 'Finalizing...');
-        if (result.loadedSplat && result.loadedMesh) {
+        if (state.splatLoaded && state.modelLoaded) {
             state.displayMode = 'both';
-        } else if (result.loadedSplat) {
+        } else if (state.splatLoaded) {
             state.displayMode = 'splat';
-        } else if (result.loadedMesh) {
+        } else if (state.modelLoaded) {
             state.displayMode = 'model';
         }
         setDisplayMode(state.displayMode, createDisplayModeDeps());
 
-        // Update state flags and show only relevant settings
-        state.splatLoaded = !!result.loadedSplat;
-        state.modelLoaded = !!result.loadedMesh;
-        state.pointcloudLoaded = pointcloudGroup && pointcloudGroup.children.length > 0;
+        // Show only relevant settings
         showRelevantSettings(state.splatLoaded, state.modelLoaded, state.pointcloudLoaded);
 
         // Fit camera to loaded content
@@ -254,10 +355,6 @@ async function handleArchiveFile(file) {
         // Show archive info section
         const archiveSection = document.getElementById('archive-metadata-section');
         if (archiveSection) archiveSection.style.display = '';
-
-        if (result.errors.length > 0) {
-            result.errors.forEach(err => notify.warning(err));
-        }
 
         updateProgress(100, 'Complete');
 
@@ -284,6 +381,31 @@ async function handleArchiveFile(file) {
 
         log.info('Archive loaded successfully:', file.name);
         notify.success(`Loaded: ${file.name}`);
+
+        // === Phase 3: Background-load remaining assets ===
+        const remainingTypes = ['splat', 'mesh', 'pointcloud'].filter(
+            t => state.assetStates[t] === ASSET_STATE.UNLOADED
+        );
+        if (remainingTypes.length > 0) {
+            setTimeout(async () => {
+                for (const type of remainingTypes) {
+                    const typeAvailable = (type === 'splat' && contentInfo.hasSplat) ||
+                                          (type === 'mesh' && contentInfo.hasMesh) ||
+                                          (type === 'pointcloud' && contentInfo.hasPointcloud);
+                    if (typeAvailable) {
+                        log.info(`Background loading: ${type}`);
+                        await ensureAssetLoaded(type);
+                        // Update settings visibility after background load
+                        showRelevantSettings(state.splatLoaded, state.modelLoaded, state.pointcloudLoaded);
+                    }
+                }
+                // Release raw ZIP data after all assets extracted
+                archiveLoader.releaseRawData();
+                log.info('All archive assets loaded, raw data released');
+            }, 100);
+        } else {
+            archiveLoader.releaseRawData();
+        }
 
     } catch (e) {
         log.error('Error loading archive:', e);
@@ -357,11 +479,25 @@ function createDisplayModeDeps() {
 // =============================================================================
 
 function setupViewerUI() {
-    // Display mode buttons
+    // Display mode buttons (with lazy loading trigger)
     ['model', 'splat', 'pointcloud', 'both', 'split'].forEach(mode => {
         addListener(`btn-${mode}`, 'click', () => {
             state.displayMode = mode;
             setDisplayMode(mode, createDisplayModeDeps());
+            // Lazy-load any needed assets not yet loaded
+            if (state.archiveLoaded && state.archiveLoader) {
+                const neededTypes = getAssetTypesForMode(mode);
+                for (const type of neededTypes) {
+                    if (state.assetStates[type] === ASSET_STATE.UNLOADED) {
+                        ensureAssetLoaded(type).then(loaded => {
+                            if (loaded) {
+                                const deps = createDisplayModeDeps();
+                                if (deps.updateVisibility) deps.updateVisibility();
+                            }
+                        });
+                    }
+                }
+            }
         });
     });
 
@@ -513,10 +649,10 @@ function setupViewerKeyboardShortcuts() {
                 showMetadataSidebar('view', { state, annotationSystem });
             }
         },
-        '1': () => { state.displayMode = 'model'; setDisplayMode('model', createDisplayModeDeps()); },
-        '2': () => { state.displayMode = 'splat'; setDisplayMode('splat', createDisplayModeDeps()); },
-        '3': () => { state.displayMode = 'both'; setDisplayMode('both', createDisplayModeDeps()); },
-        '4': () => { state.displayMode = 'split'; setDisplayMode('split', createDisplayModeDeps()); },
+        '1': () => { state.displayMode = 'model'; setDisplayMode('model', createDisplayModeDeps()); triggerLazyLoad('model'); },
+        '2': () => { state.displayMode = 'splat'; setDisplayMode('splat', createDisplayModeDeps()); triggerLazyLoad('splat'); },
+        '3': () => { state.displayMode = 'both'; setDisplayMode('both', createDisplayModeDeps()); triggerLazyLoad('both'); },
+        '4': () => { state.displayMode = 'split'; setDisplayMode('split', createDisplayModeDeps()); triggerLazyLoad('split'); },
         'g': () => {
             const cb = document.getElementById('toggle-gridlines');
             if (cb) { cb.checked = !cb.checked; sceneManager.toggleGrid(cb.checked); }
