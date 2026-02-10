@@ -648,6 +648,13 @@ function setupUIEvents() {
     // Share button
     addListener('btn-share', 'click', copyShareLink);
 
+    // Preview kiosk mode in new tab
+    addListener('btn-preview-kiosk', 'click', () => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('kiosk', 'true');
+        window.open(url.toString(), '_blank');
+    });
+
     // Camera buttons
     addListener('btn-reset-camera', 'click', resetCamera);
     addListener('btn-fit-view', 'click', fitToView);
@@ -3277,22 +3284,32 @@ function updateAnnotationPopupPosition() {
     popup.style.visibility = 'visible';
 
     const markerRect = marker.getBoundingClientRect();
-    const popupWidth = 320;
+    const popupWidth = popup.getBoundingClientRect().width || 320;
+    const popupHeight = popup.getBoundingClientRect().height || 200;
+    const edgeMargin = 40;
     const padding = 15;
+    const markerCenterX = markerRect.left + markerRect.width / 2;
 
-    // Try to position to the right of the marker
-    let left = markerRect.right + padding;
-    let top = markerRect.top - 10;
+    // Use the viewer container to determine the visible midpoint
+    const viewer = document.getElementById('viewer-container');
+    const viewerRect = viewer ? viewer.getBoundingClientRect() : { left: 0, right: window.innerWidth };
+    const viewerMidX = (viewerRect.left + viewerRect.right) / 2;
 
-    // If it would go off the right edge, position to the left instead
-    if (left + popupWidth > window.innerWidth - padding) {
-        left = markerRect.left - popupWidth - padding;
+    // Snap popup toward the nearest horizontal edge of the viewer
+    let left;
+    if (markerCenterX < viewerMidX) {
+        // Marker on left half → popup to the left edge
+        left = viewerRect.left + edgeMargin;
+    } else {
+        // Marker on right half → popup to the right edge
+        left = viewerRect.right - popupWidth - edgeMargin;
     }
 
-    // Keep it on screen vertically
+    // Vertical: align with marker center, clamped to viewport
+    let top = markerRect.top + markerRect.height / 2 - popupHeight / 2;
     if (top < padding) top = padding;
-    if (top + 200 > window.innerHeight) {
-        top = window.innerHeight - 200 - padding;
+    if (top + popupHeight > window.innerHeight - padding) {
+        top = window.innerHeight - popupHeight - padding;
     }
 
     popup.style.left = left + 'px';
