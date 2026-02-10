@@ -169,6 +169,15 @@ export async function init() {
 
 function setupFilePicker() {
     const picker = document.getElementById('kiosk-file-picker');
+
+    // Check for URL-based archive loading (e.g. ?kiosk=true&archive=URL)
+    const config = window.APP_CONFIG || {};
+    if (config.defaultArchiveUrl) {
+        log.info('Loading archive from URL:', config.defaultArchiveUrl);
+        loadArchiveFromUrl(config.defaultArchiveUrl);
+        return;
+    }
+
     if (picker) picker.classList.remove('hidden');
 
     const btn = document.getElementById('kiosk-picker-btn');
@@ -208,6 +217,25 @@ function setupFilePicker() {
 
     function hidePicker() {
         if (picker) picker.classList.add('hidden');
+    }
+}
+
+async function loadArchiveFromUrl(url) {
+    showLoading('Downloading archive...', true);
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        const fileName = url.split('/').pop() || 'archive.a3d';
+        const file = new File([blob], fileName, { type: blob.type });
+        handleArchiveFile(file);
+    } catch (err) {
+        log.error('Failed to load archive from URL:', err);
+        hideLoading();
+        notify.error(`Failed to load archive: ${err.message}`);
+        // Fall back to showing file picker
+        const picker = document.getElementById('kiosk-file-picker');
+        if (picker) picker.classList.remove('hidden');
     }
 }
 
