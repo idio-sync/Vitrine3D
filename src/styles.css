@@ -2908,9 +2908,17 @@ input[type="range"]::-webkit-slider-thumb:hover {
     to   { opacity: 1; }
 }
 
-/* --- Bottom Annotation Bar: Hidden --- */
+/* --- Editor-Only UI: Hidden Immediately via CSS --- */
 
 body.kiosk-mode #annotation-bar {
+    display: none !important;
+}
+
+body.kiosk-mode #controls-panel {
+    display: none !important;
+}
+
+body.kiosk-mode #left-toolbar {
     display: none !important;
 }
 
