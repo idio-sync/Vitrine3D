@@ -960,6 +960,30 @@
                         </div>
                         <span id="archive-filename" class="filename">No archive loaded</span>
                     </div>
+
+                    <div class="load-subsection" id="source-files-subsection">
+                        <h4>Source Files <span class="optional-label">optional</span></h4>
+                        <input type="file" id="source-files-input" multiple style="display:none" />
+                        <div class="button-row">
+                            <label for="source-files-input" class="file-label">Add Files</label>
+                        </div>
+                        <div id="source-files-list" class="source-files-list"></div>
+                        <div id="source-files-summary" class="source-files-summary" style="display:none">
+                            <span id="source-files-count">0</span> files
+                            (<span id="source-files-size">0 MB</span>)
+                        </div>
+                        <select id="source-files-category" class="source-files-category">
+                            <option value="">Category (optional)</option>
+                            <option value="raw_photography">Raw Photography</option>
+                            <option value="processing_report">Processing Report</option>
+                            <option value="ground_control">Ground Control Points</option>
+                            <option value="calibration">Calibration Data</option>
+                            <option value="project_file">Project File</option>
+                            <option value="reference">Reference Material</option>
+                            <option value="other">Other</option>
+                        </select>
+                        <p class="field-hint">Files archived alongside 3D data for preservation. Not loaded into the viewer.</p>
+                    </div>
                 </div>
             </div>
 

@@ -224,6 +224,7 @@ let currentMeshBlob = null;
 let currentProxyMeshBlob = null;
 let currentPointcloudBlob = null;
 let currentPopupAnnotationId = null; // Track which annotation's popup is shown
+let sourceFiles = []; // Array of { file: File|null, name: string, size: number, category: string, fromArchive: boolean }
 
 // Three.js objects - Split view (right side)
 let rendererRight = null;
@@ -523,6 +524,7 @@ function setupUIEvents() {
     addListener('archive-input', 'change', handleArchiveFile);
     addListener('pointcloud-input', 'change', handlePointcloudFile);
     addListener('proxy-mesh-input', 'change', handleProxyMeshFile);
+    addListener('source-files-input', 'change', handleSourceFilesInput);
     addListener('btn-load-pointcloud-url', 'click', handleLoadPointcloudFromUrlPrompt);
     addListener('btn-load-archive-url', 'click', handleLoadArchiveFromUrlPrompt);
     addListener('btn-load-full-res', 'click', handleLoadFullResMesh);
@@ -1418,6 +1420,22 @@ async function processArchive(archiveLoader, archiveName) {
             log.info(` Extracted ${state.imageAssets.size} embedded images`);
         }
 
+        // Populate source files list from archive manifest (metadata only, no extraction)
+        const archiveSourceEntries = archiveLoader.getSourceFileEntries();
+        if (archiveSourceEntries.length > 0) {
+            for (const { entry } of archiveSourceEntries) {
+                sourceFiles.push({
+                    file: null,
+                    name: entry.original_name || entry.file_name.split('/').pop(),
+                    size: entry.size_bytes || 0,
+                    category: entry.source_category || '',
+                    fromArchive: true
+                });
+            }
+            updateSourceFilesUI();
+            log.info(` Found ${archiveSourceEntries.length} source files in archive manifest`);
+        }
+
         // === Phase 2: Load primary asset for current display mode ===
         const primaryType = getPrimaryAssetType(state.displayMode, contentInfo);
         showLoading(`Loading ${primaryType} from archive...`);
@@ -1678,6 +1696,10 @@ function clearArchiveMetadata() {
     if (section) section.style.display = 'none';
 
     document.getElementById('archive-filename').textContent = 'No archive loaded';
+
+    // Clear source files from previous archive
+    sourceFiles = [];
+    updateSourceFilesUI();
 }
 
 // ==================== Annotation Functions ====================
@@ -2213,6 +2235,37 @@ async function downloadArchive() {
         log.info(` Adding ${state.imageAssets.size} embedded images`);
         for (const [path, asset] of state.imageAssets) {
             archiveCreator.addImage(asset.blob, path);
+        }
+    }
+
+    // Add source files
+    const sourceFilesWithBlobs = sourceFiles.filter(sf => sf.file && !sf.fromArchive);
+    if (sourceFilesWithBlobs.length > 0) {
+        const totalSourceSize = sourceFilesWithBlobs.reduce((sum, sf) => sum + sf.size, 0);
+        if (totalSourceSize > 2 * 1024 * 1024 * 1024) {
+            notify.warning(`Source files total ${formatFileSize(totalSourceSize)}. Very large archives may fail in the browser. Consider adding files to the ZIP after export using external tools.`);
+        }
+        log.info(` Adding ${sourceFilesWithBlobs.length} source files (${formatFileSize(totalSourceSize)})`);
+        for (const sf of sourceFilesWithBlobs) {
+            archiveCreator.addSourceFile(sf.file, sf.name, { category: sf.category });
+        }
+    }
+
+    // Re-add source file manifest entries from loaded archive (metadata only, blobs re-extracted)
+    if (state.archiveLoader && state.archiveLoader.hasSourceFiles()) {
+        const archiveSourceEntries = state.archiveLoader.getSourceFileEntries();
+        for (const { entry } of archiveSourceEntries) {
+            // Only re-add if we have the actual file data in the archive
+            try {
+                const data = await state.archiveLoader.extractFile(entry.file_name);
+                if (data) {
+                    archiveCreator.addSourceFile(data.blob, entry.original_name || entry.file_name.split('/').pop(), {
+                        category: entry.source_category || ''
+                    });
+                }
+            } catch (e) {
+                log.warn('Failed to re-extract source file:', entry.file_name, e.message);
+            }
         }
     }
 
@@ -3367,6 +3420,63 @@ async function handleProxyMeshFile(event) {
     currentProxyMeshBlob = file;
     document.getElementById('proxy-mesh-filename').textContent = file.name;
     notify.info(`Display proxy "${file.name}" ready — will be included in archive exports.`);
+}
+
+// ==================== Source Files ====================
+
+function handleSourceFilesInput(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const category = document.getElementById('source-files-category')?.value || '';
+
+    for (const file of files) {
+        sourceFiles.push({ file, name: file.name, size: file.size, category, fromArchive: false });
+    }
+
+    updateSourceFilesUI();
+    notify.info(`Added ${files.length} source file(s) for archival.`);
+
+    // Reset input so the same files can be re-added if needed
+    event.target.value = '';
+}
+
+function removeSourceFile(index) {
+    sourceFiles.splice(index, 1);
+    updateSourceFilesUI();
+}
+
+function updateSourceFilesUI() {
+    const listEl = document.getElementById('source-files-list');
+    const summaryEl = document.getElementById('source-files-summary');
+    const countEl = document.getElementById('source-files-count');
+    const sizeEl = document.getElementById('source-files-size');
+
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+
+    sourceFiles.forEach((sf, i) => {
+        const item = document.createElement('div');
+        item.className = 'source-file-item';
+        item.innerHTML = `<span class="source-file-name" title="${sf.name}">${sf.name}</span>` +
+            `<span class="source-file-size">${formatFileSize(sf.size)}</span>` +
+            (sf.fromArchive ? '' : `<span class="source-file-remove" data-index="${i}" title="Remove">\u00d7</span>`);
+        listEl.appendChild(item);
+    });
+
+    // Wire up remove buttons
+    listEl.querySelectorAll('.source-file-remove').forEach(btn => {
+        btn.addEventListener('click', () => removeSourceFile(parseInt(btn.dataset.index)));
+    });
+
+    const totalSize = sourceFiles.reduce((sum, sf) => sum + sf.size, 0);
+
+    if (summaryEl) {
+        summaryEl.style.display = sourceFiles.length > 0 ? '' : 'none';
+    }
+    if (countEl) countEl.textContent = sourceFiles.length;
+    if (sizeEl) sizeEl.textContent = formatFileSize(totalSize);
 }
 
 async function handleLoadFullResMesh() {

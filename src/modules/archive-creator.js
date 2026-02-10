@@ -353,6 +353,42 @@ export class ArchiveCreator {
             lines.push('');
         }
 
+        // -- Source files --
+        const sourceEntries = Object.entries(m.data_entries)
+            .filter(([key]) => key.startsWith('source_'));
+        if (sourceEntries.length > 0) {
+            lines.push('SOURCE FILES');
+            lines.push(subsep);
+            lines.push(`This archive contains ${sourceEntries.length} source file(s) preserved for archival:`);
+            let totalSourceBytes = 0;
+            const categoryLabels = {
+                raw_photography: 'Raw Photography',
+                processing_report: 'Processing Report',
+                ground_control: 'Ground Control Points',
+                calibration: 'Calibration Data',
+                project_file: 'Project File',
+                reference: 'Reference Material',
+                other: 'Other'
+            };
+            for (const [, entry] of sourceEntries) {
+                const bytes = entry.size_bytes || 0;
+                totalSourceBytes += bytes;
+                let sizeStr = '';
+                if (bytes >= 1024 * 1024) {
+                    sizeStr = `(${(bytes / (1024 * 1024)).toFixed(1)} MB)`;
+                } else if (bytes >= 1024) {
+                    sizeStr = `(${(bytes / 1024).toFixed(0)} KB)`;
+                }
+                const cat = entry.source_category ? `  [${categoryLabels[entry.source_category] || entry.source_category}]` : '';
+                const name = entry.file_name || entry.original_name || 'unknown';
+                lines.push(`  ${name}  ${sizeStr}${cat}`);
+            }
+            if (totalSourceBytes >= 1024 * 1024) {
+                lines.push(`Total: ${(totalSourceBytes / (1024 * 1024)).toFixed(1)} MB`);
+            }
+            lines.push('');
+        }
+
         // -- Technology Guide --
         lines.push('TECHNOLOGY GUIDE');
         lines.push(subsep);
@@ -970,6 +1006,42 @@ export class ArchiveCreator {
         if (sourceNotes !== undefined) this.manifest.data_entries[entryKey]._source_notes = sourceNotes;
         if (role !== undefined) this.manifest.data_entries[entryKey].role = role;
         return true;
+    }
+
+    /**
+     * Add a source file for archival preservation (not rendered in viewer)
+     * @param {Blob} blob - The file data
+     * @param {string} fileName - Original filename
+     * @param {Object} options - Additional options (category, etc.)
+     * @returns {string} The entry key
+     */
+    addSourceFile(blob, fileName, options = {}) {
+        const index = this._countEntriesOfType('source_');
+        const entryKey = `source_${index}`;
+
+        // Sanitize filename, preserving extension
+        const sanitized = fileName.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_{2,}/g, '_');
+        let archivePath = `sources/${sanitized}`;
+
+        // Handle duplicate filenames
+        if (this.files.has(archivePath)) {
+            const dotIdx = sanitized.lastIndexOf('.');
+            const base = dotIdx > 0 ? sanitized.slice(0, dotIdx) : sanitized;
+            const ext = dotIdx > 0 ? sanitized.slice(dotIdx) : '';
+            archivePath = `sources/${base}_${index}${ext}`;
+        }
+
+        this.files.set(archivePath, { blob, originalName: fileName });
+
+        this.manifest.data_entries[entryKey] = {
+            file_name: archivePath,
+            original_name: fileName,
+            role: "source",
+            source_category: options.category || "",
+            size_bytes: blob.size
+        };
+
+        return entryKey;
     }
 
     /**

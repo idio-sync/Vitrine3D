@@ -121,7 +121,7 @@ export async function init() {
 
     // Wire up UI
     setupViewerUI();
-    setupMetadataSidebar({});
+    setupMetadataSidebar({ state, annotationSystem, imageAssets: state.imageAssets });
     setupCollapsibles();
     setupViewerKeyboardShortcuts();
 
@@ -349,6 +349,7 @@ async function handleArchiveFile(file) {
         prefillMetadataFromArchive(manifest);
         populateMetadataDisplay({ state, annotationSystem, imageAssets: state.imageAssets });
         populateDetailedMetadata(manifest);
+        populateSourceFilesList(archiveLoader);
         reorderKioskSidebar();
 
         // Set display mode based on what was loaded
@@ -1162,6 +1163,66 @@ function populateDetailedMetadata(manifest) {
     }
 
     log.info(`Populated ${sections.length} detailed metadata sections`);
+}
+
+function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+}
+
+function populateSourceFilesList(archiveLoader) {
+    const sourceEntries = archiveLoader.getSourceFileEntries();
+    if (sourceEntries.length === 0) return;
+
+    const viewContent = document.querySelector('#sidebar-view .display-content');
+    if (!viewContent) return;
+
+    const categoryLabels = {
+        raw_photography: 'Raw Photography',
+        processing_report: 'Processing Report',
+        ground_control: 'Ground Control Points',
+        calibration: 'Calibration Data',
+        project_file: 'Project File',
+        reference: 'Reference Material',
+        other: 'Other'
+    };
+
+    const { section, content } = createDetailSection(`Source Files (${sourceEntries.length})`);
+
+    let totalSize = 0;
+    sourceEntries.forEach(({ entry }) => {
+        const name = entry.original_name || entry.file_name || 'Unknown';
+        const size = entry.size_bytes || 0;
+        totalSize += size;
+        const cat = entry.source_category || '';
+        const catLabel = cat ? categoryLabels[cat] || cat.replace(/_/g, ' ') : '';
+
+        const row = document.createElement('div');
+        row.className = 'display-detail';
+        row.innerHTML =
+            `<span class="display-label" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(name)}">${escapeHtml(name)}</span>` +
+            `<span class="display-value">${escapeHtml(formatBytes(size))}${catLabel ? ' · ' + escapeHtml(catLabel) : ''}</span>`;
+        content.appendChild(row);
+    });
+
+    // Total size summary
+    if (sourceEntries.length > 1) {
+        const summary = document.createElement('div');
+        summary.style.cssText = 'font-size:0.75em;opacity:0.6;margin-top:6px;text-align:right;';
+        summary.textContent = `Total: ${formatBytes(totalSize)}`;
+        content.appendChild(summary);
+    }
+
+    // Guidance note
+    const note = document.createElement('div');
+    note.style.cssText = 'font-size:0.75em;opacity:0.5;margin-top:8px;font-style:italic;';
+    note.textContent = 'Source files are included in the .a3d archive. Unpack to access.';
+    content.appendChild(note);
+
+    viewContent.appendChild(section);
+    log.info(`Populated source files list: ${sourceEntries.length} files, ${formatBytes(totalSize)}`);
 }
 
 function updateInfoPanel() {

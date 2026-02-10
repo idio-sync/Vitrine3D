@@ -213,6 +213,57 @@ body {
     font-style: italic;
 }
 
+/* Source file list */
+.source-files-list {
+    max-height: 150px;
+    overflow-y: auto;
+    margin: 6px 0;
+}
+.source-file-item {
+    display: flex;
+    align-items: center;
+    padding: 3px 0;
+    font-size: 0.8em;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.source-file-item .source-file-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.source-file-item .source-file-size {
+    opacity: 0.6;
+    margin: 0 8px;
+    flex-shrink: 0;
+    font-size: 0.9em;
+}
+.source-file-item .source-file-remove {
+    cursor: pointer;
+    opacity: 0.4;
+    flex-shrink: 0;
+    font-size: 0.9em;
+}
+.source-file-item .source-file-remove:hover {
+    opacity: 1;
+    color: #ff6b6b;
+}
+.source-files-summary {
+    font-size: 0.8em;
+    opacity: 0.7;
+    margin: 4px 0;
+}
+.source-files-category {
+    width: 100%;
+    margin-top: 6px;
+    padding: 4px 8px;
+    background: #2a2a3a;
+    color: #ccc;
+    border: 1px solid #3a3a5a;
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+
 /* Scene Settings */
 .setting-group {
     margin-top: 12px;

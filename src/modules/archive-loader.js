@@ -414,6 +414,22 @@ export class ArchiveLoader {
     }
 
     /**
+     * Get all source file entries (archived for preservation, not rendered)
+     * @returns {Array<{key: string, entry: Object}>} Source file entries
+     */
+    getSourceFileEntries() {
+        return this.findEntriesByPrefix('source_');
+    }
+
+    /**
+     * Check if the archive contains source files
+     * @returns {boolean}
+     */
+    hasSourceFiles() {
+        return this.getSourceFileEntries().length > 0;
+    }
+
+    /**
      * Extract a file from the archive as a blob URL.
      * Decompresses on demand and caches the result.
      * @param {string} filename - The filename within the archive
@@ -543,12 +559,16 @@ export class ArchiveLoader {
         const pointcloud = this.getPointcloudEntry();
         const thumbnail = this.getThumbnailEntry();
 
+        const sourceFiles = this.getSourceFileEntries();
+
         return {
             hasSplat: scene !== null && isFormatSupported(scene.file_name, 'splat'),
             hasMesh: mesh !== null && isFormatSupported(mesh.file_name, 'mesh'),
             hasMeshProxy: meshProxy !== null && isFormatSupported(meshProxy.file_name, 'mesh'),
             hasPointcloud: pointcloud !== null && isFormatSupported(pointcloud.file_name, 'pointcloud'),
-            hasThumbnail: thumbnail !== null && isFormatSupported(thumbnail.file_name, 'thumbnail')
+            hasThumbnail: thumbnail !== null && isFormatSupported(thumbnail.file_name, 'thumbnail'),
+            hasSourceFiles: sourceFiles.length > 0,
+            sourceFileCount: sourceFiles.length
         };
     }
 
