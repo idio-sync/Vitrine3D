@@ -126,6 +126,11 @@ export class SceneManager {
             MIDDLE: THREE.MOUSE.DOLLY,
             RIGHT: THREE.MOUSE.PAN
         };
+        // Touch: one finger orbits, two fingers pinch-zoom + pan
+        this.controls.touches = {
+            ONE: THREE.TOUCH.ROTATE,
+            TWO: THREE.TOUCH.DOLLY_PAN
+        };
         this.controls.rotateSpeed = 1.0;
 
         // Orbit Controls - Right

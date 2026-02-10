@@ -3463,3 +3463,440 @@ body.kiosk-mode #metadata-sidebar ::-webkit-scrollbar-thumb {
 body.kiosk-mode #metadata-sidebar ::-webkit-scrollbar-thumb:hover {
     background: rgba(78, 205, 196, 0.4);
 }
+
+/* =============================================================================
+   KIOSK MODE — MOBILE BOTTOM SHEET LAYOUT
+   Transforms the right sidebar into a bottom sheet on small viewports.
+   Three snap points: peek (handle+title), half (metadata visible), full (all).
+   ============================================================================= */
+
+/* --- Drag Handle: Hidden on Desktop --- */
+
+#sidebar-drag-handle {
+    display: none;
+}
+
+@media (max-width: 768px) {
+
+    /* --- Drag Handle: Visible on Mobile Kiosk --- */
+
+    body.kiosk-mode #sidebar-drag-handle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 44px;
+        cursor: grab;
+        touch-action: none;
+        flex-shrink: 0;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
+    body.kiosk-mode #sidebar-drag-handle:active {
+        cursor: grabbing;
+    }
+
+    body.kiosk-mode .drag-handle-bar {
+        width: 40px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+        transition: background 0.2s;
+    }
+
+    body.kiosk-mode #sidebar-drag-handle:hover .drag-handle-bar {
+        background: rgba(255, 255, 255, 0.5);
+    }
+
+    /* --- Bottom Sheet Positioning --- */
+
+    body.kiosk-mode #metadata-sidebar {
+        position: fixed;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        min-width: 100%;
+        height: 90dvh;
+        max-height: 90dvh;
+        border-left: none;
+        border-top: 1px solid rgba(78, 205, 196, 0.15);
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.4);
+        display: flex;
+        flex-direction: column;
+        transform: translateY(calc(90dvh - 70px));
+        transition: transform 0.3s cubic-bezier(0.33, 1, 0.68, 1);
+        will-change: transform;
+    }
+
+    body.kiosk-mode #metadata-sidebar.hidden {
+        transform: translateY(100%) !important;
+        pointer-events: none;
+    }
+
+    /* Snap point classes */
+    body.kiosk-mode #metadata-sidebar.sheet-peek {
+        transform: translateY(calc(90dvh - 70px));
+    }
+
+    body.kiosk-mode #metadata-sidebar.sheet-half {
+        transform: translateY(50%);
+    }
+
+    body.kiosk-mode #metadata-sidebar.sheet-full {
+        transform: translateY(0);
+    }
+
+    /* Disable desktop slide-in animation on mobile */
+    body.kiosk-mode #metadata-sidebar:not(.hidden) {
+        animation: none;
+    }
+
+    /* Edge shadow: top instead of left */
+    body.kiosk-mode #metadata-sidebar:not(.hidden)::before {
+        left: 0;
+        right: 0;
+        top: -40px;
+        bottom: auto;
+        width: 100%;
+        height: 40px;
+        background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.15));
+    }
+
+    /* Scrollable content area */
+    body.kiosk-mode #sidebar-view {
+        padding: 20px 16px;
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.kiosk-mode #sidebar-settings {
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+        padding: 16px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* --- Content Adjustments --- */
+
+    body.kiosk-mode #sidebar-view .display-title {
+        font-size: 1.3rem;
+    }
+
+    body.kiosk-mode #sidebar-view .display-description {
+        font-size: 0.88rem;
+        margin-bottom: 16px;
+    }
+
+    body.kiosk-mode #sidebar-view .display-divider {
+        margin: 16px 0;
+    }
+
+    body.kiosk-mode #sidebar-view .display-details {
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    body.kiosk-mode #sidebar-view .display-stats {
+        gap: 8px;
+        padding-top: 16px;
+    }
+
+    body.kiosk-mode #sidebar-view .display-stat {
+        padding: 12px 6px;
+    }
+
+    body.kiosk-mode #sidebar-view .display-stat .stat-number {
+        font-size: 1.25rem;
+    }
+
+    /* Annotation list: touch-sized items */
+    body.kiosk-mode .kiosk-anno-item {
+        padding: 14px 16px;
+        gap: 14px;
+    }
+
+    body.kiosk-mode .kiosk-anno-badge {
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+        font-size: 12px;
+    }
+
+    /* Detail sections: more compact */
+    body.kiosk-mode .kiosk-detail-header {
+        padding: 12px 14px;
+    }
+
+    /* Tab bar */
+    body.kiosk-mode .sidebar-mode-tabs {
+        flex-shrink: 0;
+    }
+
+    body.kiosk-mode .sidebar-mode-tab {
+        padding: 12px 14px;
+        font-size: 0.78rem;
+    }
+
+    /* --- Toolbar Relocation: Bottom Center --- */
+
+    body.kiosk-mode #left-toolbar {
+        display: none !important;
+    }
+
+    /* Annotation toggle: top-left corner (moved to document.body by JS) */
+    body.kiosk-mode #btn-toggle-annotations {
+        position: fixed;
+        top: 15px;
+        left: 15px;
+        z-index: 1001;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 15, 26, 0.7);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(78, 205, 196, 0.1);
+        border-radius: 10px;
+        color: #aaa;
+        font-size: 16px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    body.kiosk-mode #btn-toggle-annotations:hover {
+        background: rgba(74, 74, 138, 0.6);
+        color: #fff;
+    }
+
+    body.kiosk-mode #btn-toggle-annotations.active {
+        background: rgba(78, 205, 196, 0.3);
+        border-color: #4ecdc4;
+        color: #4ecdc4;
+    }
+
+    body.kiosk-mode #btn-toggle-annotations:active {
+        transform: scale(0.90);
+        transition: transform 0.08s ease-in;
+    }
+
+    /* --- Annotation Markers: Bigger Touch Targets --- */
+
+    body.kiosk-mode .annotation-marker {
+        min-width: 36px;
+        min-height: 36px;
+        opacity: 0.4;
+    }
+
+    body.kiosk-mode .annotation-marker:hover {
+        opacity: 0.9;
+    }
+
+    body.kiosk-mode .annotation-marker.selected {
+        opacity: 0.85;
+    }
+
+    /* --- Annotation Popup: Hidden on Mobile (content in sheet instead) --- */
+
+    body.kiosk-mode #annotation-info-popup {
+        display: none !important;
+    }
+
+    body.kiosk-mode #annotation-line-overlay {
+        display: none;
+    }
+
+    /* --- Sidebar Footer: Compact --- */
+
+    body.kiosk-mode .sidebar-footer {
+        padding: 8px 16px;
+        flex-shrink: 0;
+    }
+
+    /* --- Loading Screen: Mobile Adjustments --- */
+
+    #loading-thumbnail {
+        max-width: 200px;
+        max-height: 130px;
+    }
+
+    #loading-title {
+        font-size: 1.15rem;
+        max-width: 280px;
+    }
+
+    /* --- Mobile Annotation Detail View --- */
+
+    body.kiosk-mode #mobile-anno-detail {
+        display: none;
+        flex-direction: column;
+        min-height: 0;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    /* Constrain detail height to visible sheet area at each snap point */
+    /* Overhead: drag-handle(44px) + tab-bar(~37px) + sidebar-view padding(40px) ≈ 120px */
+    body.kiosk-mode #metadata-sidebar.sheet-half #mobile-anno-detail {
+        max-height: calc(45dvh - 120px);
+    }
+
+    body.kiosk-mode #metadata-sidebar.sheet-full #mobile-anno-detail {
+        max-height: calc(90dvh - 120px);
+    }
+
+    body.kiosk-mode .mobile-anno-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+        gap: 8px;
+        margin-bottom: 16px;
+        padding: 8px 0;
+    }
+
+    body.kiosk-mode .mobile-anno-nav-btn {
+        background: rgba(78, 205, 196, 0.1);
+        border: 1px solid rgba(78, 205, 196, 0.2);
+        color: #4ecdc4;
+        font-size: 0.8rem;
+        padding: 8px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        transition: all 0.15s;
+    }
+
+    body.kiosk-mode .mobile-anno-nav-btn:active {
+        transform: scale(0.93);
+    }
+
+    body.kiosk-mode .mobile-anno-nav-btn:disabled {
+        opacity: 0.3;
+        cursor: default;
+    }
+
+    body.kiosk-mode .mobile-anno-nav-btn:disabled:active {
+        transform: none;
+    }
+
+    body.kiosk-mode .mobile-anno-return {
+        background: rgba(78, 205, 196, 0.15);
+        border-color: rgba(78, 205, 196, 0.3);
+        font-weight: 600;
+    }
+
+    body.kiosk-mode .mobile-anno-header {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    body.kiosk-mode .mobile-anno-number {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        background: #4ecdc4;
+        color: #0f0f1a;
+        border-radius: 50%;
+        font-size: 14px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    body.kiosk-mode .mobile-anno-title {
+        font-size: 1.3rem;
+        font-weight: 400;
+        font-family: Georgia, 'Times New Roman', serif;
+        color: rgba(240, 240, 250, 0.95);
+        margin: 0;
+        line-height: 1.3;
+    }
+
+    body.kiosk-mode .mobile-anno-body {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+        -webkit-overflow-scrolling: touch;
+        font-size: 0.9rem;
+        line-height: 1.7;
+        color: rgba(180, 180, 200, 0.9);
+        word-break: break-word;
+    }
+
+    body.kiosk-mode .mobile-anno-body p {
+        margin: 0 0 12px 0;
+    }
+
+    body.kiosk-mode .mobile-anno-body img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        margin: 8px 0;
+        border: 1px solid rgba(78, 205, 196, 0.15);
+    }
+
+    body.kiosk-mode .mobile-anno-body h1,
+    body.kiosk-mode .mobile-anno-body h2,
+    body.kiosk-mode .mobile-anno-body h3 {
+        color: rgba(220, 220, 235, 0.95);
+        margin: 16px 0 8px 0;
+    }
+
+    body.kiosk-mode .mobile-anno-body a {
+        color: #4ecdc4;
+    }
+
+    body.kiosk-mode .mobile-anno-body code {
+        background: rgba(42, 42, 74, 0.5);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.85em;
+    }
+
+    body.kiosk-mode .mobile-anno-body ul,
+    body.kiosk-mode .mobile-anno-body ol {
+        padding-left: 20px;
+        margin: 8px 0;
+    }
+}
+
+/* --- Landscape: Shorter Sheet --- */
+
+@media (max-width: 768px) and (orientation: landscape) {
+
+    body.kiosk-mode #metadata-sidebar {
+        height: 70dvh;
+        max-height: 70dvh;
+    }
+
+    body.kiosk-mode #metadata-sidebar.sheet-peek {
+        transform: translateY(calc(70dvh - 60px));
+    }
+
+    body.kiosk-mode #metadata-sidebar.sheet-half {
+        transform: translateY(35%);
+    }
+
+    body.kiosk-mode #metadata-sidebar.sheet-full {
+        transform: translateY(0);
+    }
+
+}
+
+/* --- Dragging State: No Transition (immediate tracking) --- */
+
+body.kiosk-mode #metadata-sidebar.sheet-dragging {
+    transition: none !important;
+}

@@ -13,7 +13,7 @@ import { SceneManager } from './scene-manager.js';
 import { FlyControls } from './fly-controls.js';
 import { AnnotationSystem } from './annotation-system.js';
 import { CAMERA, ASSET_STATE } from './constants.js';
-import { Logger, notify } from './utilities.js';
+import { Logger, notify, parseMarkdown, resolveAssetRefs } from './utilities.js';
 import {
     showLoading, hideLoading, updateProgress,
     setDisplayMode, setupCollapsibles, addListener,
@@ -48,6 +48,7 @@ let fpsElement = null;
 let currentPopupAnnotationId = null;
 let annotationLineEl = null;
 let entryTransitionActive = false;
+let currentSheetSnap = 'peek'; // 'peek' | 'half' | 'full'
 
 const state = {
     displayMode: 'both',
@@ -104,19 +105,30 @@ export async function init() {
     annotationSystem = new AnnotationSystem(scene, camera, renderer, controls);
     annotationSystem.onAnnotationSelected = (annotation) => {
         if (currentPopupAnnotationId === annotation.id) {
-            hideAnnotationPopup();
+            if (isMobileKiosk()) {
+                hideMobileAnnotationDetail();
+                setSheetSnap('peek');
+            } else {
+                hideAnnotationPopup();
+                hideAnnotationLine();
+            }
             currentPopupAnnotationId = null;
             annotationSystem.selectedAnnotation = null;
             document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
             document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
-            hideAnnotationLine();
             return;
         }
         // Highlight the corresponding sidebar item
         document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
         const item = document.querySelector(`.kiosk-anno-item[data-anno-id="${annotation.id}"]`);
         if (item) item.classList.add('active');
-        currentPopupAnnotationId = showAnnotationPopup(annotation, state.imageAssets);
+
+        if (isMobileKiosk()) {
+            currentPopupAnnotationId = annotation.id;
+            showMobileAnnotationInSheet(annotation.id);
+        } else {
+            currentPopupAnnotationId = showAnnotationPopup(annotation, state.imageAssets);
+        }
     };
 
     // Wire up UI
@@ -137,6 +149,10 @@ export async function init() {
 
     // Handle window resize
     window.addEventListener('resize', onWindowResize);
+
+    // Setup mobile bottom sheet drag
+    setupBottomSheetDrag();
+    if (isMobileKiosk()) setSheetSnap('peek');
 
     // Start render loop
     animate();
@@ -532,6 +548,7 @@ function setupViewerUI() {
             hideMetadataSidebar();
         } else {
             showMetadataSidebar('view', { state, annotationSystem, imageAssets: state.imageAssets });
+            if (isMobileKiosk()) setSheetSnap('half');
         }
     });
 
@@ -657,6 +674,10 @@ function setupViewerUI() {
     svgOverlay.appendChild(svgLine);
     document.body.appendChild(svgOverlay);
     annotationLineEl = svgLine;
+
+    // On mobile, move annotation toggle out of toolbar so position:fixed works
+    // (backdrop-filter on toolbar creates a containing block that breaks fixed positioning)
+    repositionAnnotationToggle();
 }
 
 function setupViewerKeyboardShortcuts() {
@@ -883,12 +904,17 @@ function populateAnnotationList() {
 
         item.addEventListener('click', () => {
             if (currentPopupAnnotationId === anno.id) {
-                hideAnnotationPopup();
+                if (isMobileKiosk()) {
+                    hideMobileAnnotationDetail();
+                    setSheetSnap('peek');
+                } else {
+                    hideAnnotationPopup();
+                    hideAnnotationLine();
+                }
                 currentPopupAnnotationId = null;
                 annotationSystem.selectedAnnotation = null;
                 document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
                 document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
-                hideAnnotationLine();
                 // If annotations hidden globally, re-hide the single marker
                 if (!state.annotationsVisible) {
                     hideSingleMarker();
@@ -901,7 +927,12 @@ function populateAnnotationList() {
                     showSingleMarker(anno.id);
                 }
                 annotationSystem.goToAnnotation(anno.id);
-                currentPopupAnnotationId = showAnnotationPopup(anno, state.imageAssets);
+                if (isMobileKiosk()) {
+                    currentPopupAnnotationId = anno.id;
+                    showMobileAnnotationDetail(anno);
+                } else {
+                    currentPopupAnnotationId = showAnnotationPopup(anno, state.imageAssets);
+                }
             }
         });
 
@@ -1419,10 +1450,281 @@ function showRelevantSettings(hasSplat, hasMesh, hasPointcloud) {
 // WINDOW RESIZE
 // =============================================================================
 
+function isMobileKiosk() {
+    return window.innerWidth <= 768 && document.body.classList.contains('kiosk-mode');
+}
+
+function setSheetSnap(snap) {
+    const sidebar = document.getElementById('metadata-sidebar');
+    if (!sidebar) return;
+    sidebar.classList.remove('sheet-peek', 'sheet-half', 'sheet-full');
+    sidebar.classList.add('sheet-' + snap);
+    currentSheetSnap = snap;
+}
+
+function setupBottomSheetDrag() {
+    const handle = document.getElementById('sidebar-drag-handle');
+    const sidebar = document.getElementById('metadata-sidebar');
+    if (!handle || !sidebar) return;
+
+    let isDragging = false;
+    let startY = 0;
+    let startTranslateY = 0;
+    let lastY = 0;
+    let lastTime = 0;
+    let velocity = 0;
+
+    const VELOCITY_THRESHOLD = 0.4; // px/ms
+
+    function getCurrentTranslateY() {
+        const style = getComputedStyle(sidebar);
+        const matrix = new DOMMatrix(style.transform);
+        return matrix.m42;
+    }
+
+    handle.addEventListener('pointerdown', (e) => {
+        if (!isMobileKiosk()) return;
+        isDragging = true;
+        startY = e.clientY;
+        startTranslateY = getCurrentTranslateY();
+        lastY = e.clientY;
+        lastTime = Date.now();
+        velocity = 0;
+        sidebar.classList.add('sheet-dragging');
+        handle.setPointerCapture(e.pointerId);
+        e.preventDefault();
+    });
+
+    handle.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        const deltaY = e.clientY - startY;
+        const newTranslateY = Math.max(0, startTranslateY + deltaY);
+        sidebar.style.transform = `translateY(${newTranslateY}px)`;
+
+        // Track velocity
+        const now = Date.now();
+        const dt = now - lastTime;
+        if (dt > 0) {
+            velocity = (e.clientY - lastY) / dt;
+        }
+        lastY = e.clientY;
+        lastTime = now;
+    });
+
+    const onPointerUp = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        sidebar.classList.remove('sheet-dragging');
+        sidebar.style.transform = '';
+
+        // Determine snap based on velocity or position
+        if (Math.abs(velocity) > VELOCITY_THRESHOLD) {
+            // Swipe direction: positive velocity = swipe down
+            if (velocity > 0) {
+                // Swiping down: go to next lower snap
+                if (currentSheetSnap === 'full') setSheetSnap('half');
+                else setSheetSnap('peek');
+            } else {
+                // Swiping up: go to next higher snap
+                if (currentSheetSnap === 'peek') setSheetSnap('half');
+                else setSheetSnap('full');
+            }
+        } else {
+            // Snap to nearest based on current position
+            const sidebarHeight = sidebar.offsetHeight;
+            const currentY = getCurrentTranslateY();
+            const visibleFraction = 1 - (currentY / sidebarHeight);
+
+            if (visibleFraction < 0.2) setSheetSnap('peek');
+            else if (visibleFraction < 0.65) setSheetSnap('half');
+            else setSheetSnap('full');
+        }
+    };
+
+    handle.addEventListener('pointerup', onPointerUp);
+    handle.addEventListener('pointercancel', onPointerUp);
+
+    // Prevent touch scroll on the handle
+    handle.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+}
+
+function showMobileAnnotationInSheet(annotationId) {
+    const sidebar = document.getElementById('metadata-sidebar');
+    if (!sidebar) return;
+
+    // Ensure sidebar is visible
+    if (sidebar.classList.contains('hidden')) {
+        showMetadataSidebar();
+    }
+
+    // Switch to Info tab
+    switchSidebarMode('view');
+
+    // Find the full annotation object
+    const annotation = annotationSystem.getAnnotations().find(a => a.id === annotationId);
+    if (annotation) {
+        showMobileAnnotationDetail(annotation);
+    }
+
+    // Highlight the matching list item
+    document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
+    const item = document.querySelector(`.kiosk-anno-item[data-anno-id="${annotationId}"]`);
+    if (item) item.classList.add('active');
+}
+
+function showMobileAnnotationDetail(annotation) {
+    const sidebarView = document.getElementById('sidebar-view');
+    if (!sidebarView) return;
+
+    // Hide normal sidebar content
+    const displayContent = sidebarView.querySelector('.display-content');
+    if (displayContent) displayContent.style.display = 'none';
+
+    // Create or reuse detail container
+    let detail = document.getElementById('mobile-anno-detail');
+    if (!detail) {
+        detail = document.createElement('div');
+        detail.id = 'mobile-anno-detail';
+        sidebarView.appendChild(detail);
+    }
+
+    // Find annotation number from marker
+    const marker = document.querySelector(`.annotation-marker[data-annotation-id="${annotation.id}"]`);
+    const number = marker ? marker.textContent.trim() : '?';
+
+    // Render full content
+    const bodyHtml = parseMarkdown(resolveAssetRefs(annotation.body || '', state.imageAssets));
+
+    // Determine prev/next availability
+    const annotations = annotationSystem.getAnnotations();
+    const currentIndex = annotations.findIndex(a => a.id === annotation.id);
+    const hasPrev = currentIndex > 0;
+    const hasNext = currentIndex < annotations.length - 1;
+
+    detail.innerHTML = `
+        <div class="mobile-anno-nav">
+            <button class="mobile-anno-nav-btn" id="mobile-anno-prev" ${hasPrev ? '' : 'disabled'}>&#8592; Prev</button>
+            <button class="mobile-anno-nav-btn mobile-anno-return" id="mobile-anno-back">Return</button>
+            <button class="mobile-anno-nav-btn" id="mobile-anno-next" ${hasNext ? '' : 'disabled'}>Next &#8594;</button>
+        </div>
+        <div class="mobile-anno-header">
+            <span class="mobile-anno-number">${number}</span>
+            <h2 class="mobile-anno-title">${annotation.title || 'Untitled'}</h2>
+        </div>
+        <div class="mobile-anno-body">${bodyHtml}</div>
+    `;
+
+    detail.style.display = 'flex';
+
+    // Wire up nav buttons
+    const backBtn = document.getElementById('mobile-anno-back');
+    if (backBtn) {
+        backBtn.addEventListener('click', () => {
+            hideMobileAnnotationDetail();
+        });
+    }
+    const prevBtn = document.getElementById('mobile-anno-prev');
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => navigateAnnotation(-1));
+    }
+    const nextBtn = document.getElementById('mobile-anno-next');
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => navigateAnnotation(1));
+    }
+
+    // Expand sheet to see content
+    if (currentSheetSnap === 'peek') {
+        setSheetSnap('half');
+    }
+
+    // Scroll to top of detail
+    sidebarView.scrollTop = 0;
+}
+
+function hideMobileAnnotationDetail() {
+    const detail = document.getElementById('mobile-anno-detail');
+    if (detail) detail.style.display = 'none';
+
+    // Show normal sidebar content again
+    const displayContent = document.querySelector('#sidebar-view .display-content');
+    if (displayContent) displayContent.style.display = '';
+
+    // Re-render metadata to restore asset images (blob URLs may need re-resolving)
+    populateMetadataDisplay({ state, annotationSystem, imageAssets: state.imageAssets });
+
+    // Clear active annotation state
+    currentPopupAnnotationId = null;
+    annotationSystem.selectedAnnotation = null;
+    document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
+    document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
+}
+
+function navigateAnnotation(direction) {
+    const annotations = annotationSystem.getAnnotations();
+    if (!annotations || annotations.length === 0) return;
+
+    const currentIndex = annotations.findIndex(a => a.id === currentPopupAnnotationId);
+    if (currentIndex === -1) return;
+
+    const newIndex = currentIndex + direction;
+    if (newIndex < 0 || newIndex >= annotations.length) return;
+
+    const newAnno = annotations[newIndex];
+
+    // Update sidebar list active state
+    document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
+    const item = document.querySelector(`.kiosk-anno-item[data-anno-id="${newAnno.id}"]`);
+    if (item) item.classList.add('active');
+
+    // Show single marker if annotations are globally hidden
+    if (!state.annotationsVisible) {
+        showSingleMarker(newAnno.id);
+    }
+
+    // Navigate camera and update detail view
+    annotationSystem.goToAnnotation(newAnno.id);
+    currentPopupAnnotationId = newAnno.id;
+    showMobileAnnotationDetail(newAnno);
+}
+
+function repositionAnnotationToggle() {
+    const annoBtn = document.getElementById('btn-toggle-annotations');
+    if (!annoBtn) return;
+    if (isMobileKiosk()) {
+        // Move to body so position:fixed works (toolbar backdrop-filter creates containing block)
+        if (annoBtn.parentElement !== document.body) {
+            document.body.appendChild(annoBtn);
+        }
+    } else {
+        // Return to toolbar on desktop
+        const toolbar = document.getElementById('left-toolbar');
+        if (toolbar && annoBtn.parentElement !== toolbar) {
+            toolbar.appendChild(annoBtn);
+        }
+    }
+}
+
 function onWindowResize() {
     const container = document.getElementById('viewer-container');
     if (!container) return;
     sceneManager.onWindowResize(state.displayMode, container);
+
+    // Move annotation toggle based on viewport
+    repositionAnnotationToggle();
+
+    // Reset sheet state when crossing mobile/desktop boundary
+    const sidebar = document.getElementById('metadata-sidebar');
+    if (!sidebar) return;
+    if (isMobileKiosk()) {
+        if (!sidebar.classList.contains('sheet-peek') &&
+            !sidebar.classList.contains('sheet-half') &&
+            !sidebar.classList.contains('sheet-full')) {
+            setSheetSnap('peek');
+        }
+    } else {
+        sidebar.classList.remove('sheet-peek', 'sheet-half', 'sheet-full', 'sheet-dragging');
+        sidebar.style.transform = '';
+    }
 }
 
 // =============================================================================

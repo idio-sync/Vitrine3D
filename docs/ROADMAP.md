@@ -22,7 +22,7 @@ Prioritized list of future work, drawn from the [code review](CODE_REVIEW.md), [
 ## High Priority
 
 ## Mobile Support
-- [ ] Add mobile friendly layout and view for kiosk mode
+- [x] **Done** — Add mobile friendly layout and view for kiosk mode
 - [x] **Done** — Display proxy (LOD) mesh support in archives — upload a pre-simplified mesh, kiosk viewer loads it automatically
 - [ ] Auto-detect mobile devices in kiosk viewer and warn if no proxy mesh available
 
