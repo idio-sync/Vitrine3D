@@ -436,7 +436,7 @@ async function handleArchiveFile(file) {
 
         // Show toolbar now that archive is loaded
         const toolbar = document.getElementById('left-toolbar');
-        if (toolbar) toolbar.style.display = '';
+        if (toolbar) toolbar.style.display = 'flex';
 
         // Show annotation toggle button if annotations exist, active by default
         if (annotationSystem.hasAnnotations()) {

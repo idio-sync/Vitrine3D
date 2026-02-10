@@ -2919,7 +2919,7 @@ body.kiosk-mode #controls-panel {
 }
 
 body.kiosk-mode #left-toolbar {
-    display: none !important;
+    display: none;
 }
 
 /* --- Metadata Sidebar --- */
