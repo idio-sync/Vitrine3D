@@ -13,7 +13,7 @@ import { SceneManager } from './scene-manager.js';
 import { FlyControls } from './fly-controls.js';
 import { AnnotationSystem } from './annotation-system.js';
 import { CAMERA, ASSET_STATE } from './constants.js';
-import { Logger, notify, parseMarkdown, resolveAssetRefs } from './utilities.js';
+import { Logger, notify, parseMarkdown, resolveAssetRefs, fetchWithProgress } from './utilities.js';
 import {
     showLoading, hideLoading, updateProgress,
     setDisplayMode, setupCollapsibles, addListener,
@@ -223,10 +223,18 @@ function setupFilePicker() {
 async function loadArchiveFromUrl(url) {
     showLoading('Downloading archive...', true);
     try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const blob = await response.blob();
-        const fileName = url.split('/').pop() || 'archive.a3d';
+        const blob = await fetchWithProgress(url, (received, total) => {
+            if (total > 0) {
+                const pct = Math.round((received / total) * 100);
+                const mb = (received / (1024 * 1024)).toFixed(1);
+                const totalMb = (total / (1024 * 1024)).toFixed(1);
+                updateProgress(pct, `Downloading... ${mb} / ${totalMb} MB`);
+            } else {
+                const mb = (received / (1024 * 1024)).toFixed(1);
+                updateProgress(0, `Downloading... ${mb} MB`);
+            }
+        });
+        const fileName = url.split('/').pop().split('?')[0] || 'archive.a3d';
         const file = new File([blob], fileName, { type: blob.type });
         handleArchiveFile(file);
     } catch (err) {

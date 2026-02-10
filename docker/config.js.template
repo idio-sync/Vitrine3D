@@ -8,6 +8,8 @@
 //   DEFAULT_POINTCLOUD_URL - Default E57 point cloud file to load
 //   DEFAULT_ALIGNMENT_URL  - Default alignment JSON file to load
 //   SHOW_CONTROLS          - Show (true) or hide (false) the controls panel
+//   ALLOWED_DOMAINS        - Comma-separated list of trusted external domains
+//                            Supports wildcards: *.cdn.example.com
 //
 // URL parameters can override environment defaults:
 //   ?archive=URL     - Archive container file (.a3d, .a3z) - takes priority
@@ -39,10 +41,14 @@
 
     // Add trusted external domains here (e.g., CDN hosts, trusted APIs)
     // Same-origin URLs are always allowed
+    // Additional domains can be added at deploy time via ALLOWED_DOMAINS env var
+    const envAllowedDomains = "${ALLOWED_DOMAINS}";
     const ALLOWED_EXTERNAL_DOMAINS = [
         // 'trusted-cdn.example.com',
         // 'assets.mycompany.com',
-    ];
+    ].concat(
+        envAllowedDomains ? envAllowedDomains.split(',').map(d => d.trim()).filter(Boolean) : []
+    );
 
     /**
      * Validates a URL parameter to prevent SSRF and malicious URL injection.
