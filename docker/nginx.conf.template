@@ -1,0 +1,57 @@
+server {
+    listen 80;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Serve static files
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Enable gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+        expires 1d;
+        add_header Cache-Control "public";
+    }
+
+    # Serve archive files (.a3d, .a3z) with proper headers
+    location ~* \.(a3d|a3z)$ {
+        expires 1d;
+        add_header Cache-Control "public";
+        add_header Access-Control-Allow-Origin *;
+        add_header Access-Control-Allow-Methods "GET, OPTIONS";
+        add_header Access-Control-Allow-Headers "Origin, Content-Type, Accept, Range";
+        # Serve as application/zip for proper handling
+        types {
+            application/zip a3d a3z;
+        }
+    }
+
+    # Serve E57 point cloud files with proper headers
+    location ~* \.e57$ {
+        expires 1d;
+        add_header Cache-Control "public";
+        add_header Access-Control-Allow-Origin *;
+        add_header Access-Control-Allow-Methods "GET, OPTIONS";
+        add_header Access-Control-Allow-Headers "Origin, Content-Type, Accept, Range";
+        types {
+            application/octet-stream e57;
+        }
+    }
+
+    # CORS headers for loading external splat/model files
+    add_header Access-Control-Allow-Origin *;
+    add_header Access-Control-Allow-Methods "GET, OPTIONS";
+    add_header Access-Control-Allow-Headers "Origin, Content-Type, Accept";
+
+    # CSP frame-ancestors (prevents clickjacking) - configurable via FRAME_ANCESTORS env var
+    add_header Content-Security-Policy "frame-ancestors ${FRAME_ANCESTORS}" always;
+
+    # Additional security headers
+    add_header X-Content-Type-Options "nosniff" always;
+}

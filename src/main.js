@@ -97,12 +97,9 @@ const config = window.APP_CONFIG || {
 // URL VALIDATION - Security measure for user-provided URLs
 // =============================================================================
 
-// Allowed external domains for URL loading (same as config.js)
-// Add trusted CDN/API domains here
-const ALLOWED_EXTERNAL_DOMAINS = [
-    // 'trusted-cdn.example.com',
-    // 'assets.mycompany.com',
-];
+// Allowed external domains — reads from APP_CONFIG (set by config.js / Docker env var)
+// Falls back to empty array for local dev without config.js
+const ALLOWED_EXTERNAL_DOMAINS = window.APP_CONFIG?.allowedDomains || [];
 
 /**
  * Validates a URL to prevent loading from untrusted sources.

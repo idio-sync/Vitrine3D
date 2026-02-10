@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  viewer:
+    image: ${DOCKERHUB_USER:-splat-mesh-viewer}/splat-mesh-compare:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${PORT:-80}:80"
+    environment:
+      - DEFAULT_ARCHIVE_URL=${DEFAULT_ARCHIVE_URL:-}
+      - DEFAULT_SPLAT_URL=${DEFAULT_SPLAT_URL:-}
+      - DEFAULT_MODEL_URL=${DEFAULT_MODEL_URL:-}
+      - DEFAULT_POINTCLOUD_URL=${DEFAULT_POINTCLOUD_URL:-}
+      - DEFAULT_ALIGNMENT_URL=${DEFAULT_ALIGNMENT_URL:-}
+      - SHOW_CONTROLS=${SHOW_CONTROLS:-true}
+      - ALLOWED_DOMAINS=${ALLOWED_DOMAINS:-}
+      - FRAME_ANCESTORS=${FRAME_ANCESTORS:-'self'}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

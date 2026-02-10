@@ -184,6 +184,9 @@
         initialViewMode: viewMode,
         // Viewer mode settings
         showToolbar: toolbarMode !== 'hide',
-        sidebarMode: sidebarMode // closed, view, edit
+        sidebarMode: sidebarMode, // closed, view, edit
+
+        // Allowed external domains (shared with main.js URL validation)
+        allowedDomains: ALLOWED_EXTERNAL_DOMAINS
     };
 })();

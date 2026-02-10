@@ -6,8 +6,8 @@ RUN apk add --no-cache gettext
 # Create modules directory
 RUN mkdir -p /usr/share/nginx/html/modules
 
-# Copy nginx configuration
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+# Copy nginx configuration template (processed by entrypoint)
+COPY docker/nginx.conf.template /etc/nginx/templates/nginx.conf.template
 
 # Copy main application files from src/
 COPY src/index.html /usr/share/nginx/html/
@@ -44,6 +44,8 @@ ENV DEFAULT_MODEL_URL=""
 ENV DEFAULT_POINTCLOUD_URL=""
 ENV DEFAULT_ALIGNMENT_URL=""
 ENV SHOW_CONTROLS="true"
+ENV ALLOWED_DOMAINS=""
+ENV FRAME_ANCESTORS="'self'"
 
 EXPOSE 80
 
