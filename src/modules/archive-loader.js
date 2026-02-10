@@ -2,10 +2,11 @@
 // Handles loading and parsing of .a3d/.a3z archive containers
 // These are ZIP-based containers with a manifest.json for 3D gaussian splats and meshes
 //
-// Uses lazy extraction: only the manifest is decompressed on load.
-// 3D assets are decompressed on demand via extractFile().
+// Uses slice-based random access: only the ZIP central directory is read on load.
+// Individual files are decompressed on demand via File.slice() + fflate inflateSync().
+// For File objects, the entire file is never read into memory at once.
 
-import { unzip } from 'fflate';
+import { inflateSync } from 'fflate';
 import { Logger } from './utilities.js';
 
 // Create logger for this module
@@ -131,17 +132,28 @@ function isFormatSupported(filename, type) {
 /**
  * Archive Loader class for handling .a3d/.a3z archive containers.
  *
- * Uses lazy extraction: the raw ZIP bytes are retained in memory and files
- * are decompressed individually on demand via fflate's filter option.
- * Decompressed files are cached so subsequent accesses are instant.
+ * Uses slice-based random access: when loaded from a File, only the ZIP
+ * central directory is read (~64KB). Individual files are decompressed on
+ * demand by reading their specific byte ranges via File.slice().
+ * When loaded from an ArrayBuffer (URL fetch), the buffer is retained and
+ * sliced in-memory. Decompressed files are cached for instant re-access.
  */
 export class ArchiveLoader {
     constructor() {
-        this._rawData = null;       // Uint8Array - raw ZIP bytes (retained for on-demand extraction)
+        this._file = null;          // File/Blob reference for slice-based reading (from loadFromFile)
+        this._rawData = null;       // Uint8Array - raw ZIP bytes (from loadFromArrayBuffer/loadFromUrl)
         this._fileCache = new Map(); // Map<string, Uint8Array> - decompressed file cache
         this._fileIndex = [];       // Array<{name, originalSize}> - from central directory scan
+        this._centralDir = null;    // Map<string, {offset, compressedSize, uncompressedSize, method}>
         this.manifest = null;
         this.blobUrls = [];         // Track blob URLs for cleanup
+    }
+
+    /**
+     * Check if archive data is available (either File reference or raw buffer).
+     */
+    get _hasData() {
+        return !!(this._file || this._rawData);
     }
 
     /**
@@ -149,23 +161,33 @@ export class ArchiveLoader {
      * Returns null if no files have been cached yet.
      */
     get files() {
-        if (this._fileCache.size === 0 && !this._rawData) return null;
+        if (this._fileCache.size === 0 && !this._hasData) return null;
         // Return a truthy object so existing `if (!this.files)` checks pass
-        // when we have raw data but haven't cached anything yet
-        if (this._rawData) {
+        // when we have data but haven't cached anything yet
+        if (this._hasData) {
             return this._fileCache.size > 0 ? Object.fromEntries(this._fileCache) : {};
         }
         return null;
     }
 
     /**
-     * Load archive from a File object
+     * Load archive from a File object.
+     * Only reads the ZIP central directory (~64KB) — does not read the full file.
      * @param {File} file - The archive file
      * @returns {Promise<void>}
      */
     async loadFromFile(file) {
-        const arrayBuffer = await file.arrayBuffer();
-        await this.loadFromArrayBuffer(arrayBuffer);
+        // Validate ZIP magic bytes by reading first 4 bytes
+        const header = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+        if (header[0] !== 0x50 || header[1] !== 0x4B) {
+            throw new Error('Invalid archive: Not a valid ZIP file');
+        }
+
+        // Store File reference — the full file is never read into memory
+        this._file = file;
+        this._rawData = null;
+        this._fileCache = new Map();
+        await this._parseCentralDirectory();
     }
 
     /**
@@ -221,33 +243,173 @@ export class ArchiveLoader {
             throw new Error('Invalid archive: Not a valid ZIP file');
         }
 
-        // Store raw data for on-demand extraction
+        // Store raw data for on-demand extraction (used when loaded via URL)
         this._rawData = new Uint8Array(arrayBuffer);
+        this._file = null;
         this._fileCache = new Map();
+        await this._parseCentralDirectory();
+    }
 
-        // Build file index by scanning central directory (no decompression).
-        // The filter rejects all files, so nothing is actually decompressed.
-        this._fileIndex = [];
-        await new Promise((resolve, reject) => {
-            unzip(this._rawData, {
-                filter: (file) => {
-                    this._fileIndex.push({
-                        name: file.name,
-                        originalSize: file.originalSize
-                    });
-                    return false; // Don't decompress anything
+    // =========================================================================
+    // INTERNAL ZIP PARSING
+    // =========================================================================
+
+    /**
+     * Read bytes from the archive source (File or raw buffer).
+     * For File sources, only the requested range is read from disk.
+     * For ArrayBuffer sources, returns a zero-copy subarray view.
+     * @param {number} offset - Byte offset from start of archive
+     * @param {number} length - Number of bytes to read
+     * @returns {Promise<Uint8Array>} The requested bytes
+     * @private
+     */
+    async _readBytes(offset, length) {
+        if (length === 0) return new Uint8Array(0);
+        if (this._file) {
+            const slice = this._file.slice(offset, offset + length);
+            return new Uint8Array(await slice.arrayBuffer());
+        }
+        if (this._rawData) {
+            return this._rawData.subarray(offset, offset + length);
+        }
+        throw new Error('No archive data available');
+    }
+
+    /**
+     * Parse the ZIP central directory to build a file index with byte offsets.
+     * Supports ZIP64 for archives > 4GB or with > 65535 entries.
+     * Only reads the end of the archive (central directory) — file data is not touched.
+     * @private
+     */
+    async _parseCentralDirectory() {
+        const fileSize = this._file ? this._file.size : this._rawData.length;
+
+        // Read last ~65KB to find End of Central Directory record.
+        // EOCD is 22 bytes minimum; with a ZIP comment it can be up to 22 + 65535 bytes.
+        const tailSize = Math.min(fileSize, 65557);
+        const tailOffset = fileSize - tailSize;
+        const tail = await this._readBytes(tailOffset, tailSize);
+
+        // Scan backwards for EOCD signature (0x06054b50)
+        let eocdPos = -1;
+        for (let i = tail.length - 22; i >= 0; i--) {
+            if (tail[i] === 0x50 && tail[i + 1] === 0x4B &&
+                tail[i + 2] === 0x05 && tail[i + 3] === 0x06) {
+                eocdPos = i;
+                break;
+            }
+        }
+        if (eocdPos === -1) {
+            throw new Error('Invalid archive: End of Central Directory not found');
+        }
+
+        const eocdView = new DataView(tail.buffer, tail.byteOffset + eocdPos, 22);
+        let entryCount = eocdView.getUint16(10, true);
+        let cdSize = eocdView.getUint32(12, true);
+        let cdOffset = eocdView.getUint32(16, true);
+
+        // Check for ZIP64 (values at their 32-bit max indicate ZIP64 is in use)
+        if (cdOffset === 0xFFFFFFFF || entryCount === 0xFFFF) {
+            // ZIP64 EOCD Locator is 20 bytes immediately before the EOCD
+            const locPos = eocdPos - 20;
+            if (locPos >= 0 &&
+                tail[locPos] === 0x50 && tail[locPos + 1] === 0x4B &&
+                tail[locPos + 2] === 0x06 && tail[locPos + 3] === 0x07) {
+                const locView = new DataView(tail.buffer, tail.byteOffset + locPos, 20);
+                const zip64EocdAbsOffset = Number(locView.getBigUint64(8, true));
+
+                // Read ZIP64 EOCD Record (56 bytes minimum)
+                const z64Eocd = await this._readBytes(zip64EocdAbsOffset, 56);
+                const z64View = new DataView(z64Eocd.buffer, z64Eocd.byteOffset, 56);
+                if (z64View.getUint32(0, true) !== 0x06064b50) {
+                    throw new Error('Invalid ZIP64 End of Central Directory record');
                 }
-            }, (err) => {
-                if (err) reject(new Error(`Failed to scan archive: ${err.message}`));
-                else resolve();
+
+                entryCount = Number(z64View.getBigUint64(32, true));
+                cdSize = Number(z64View.getBigUint64(40, true));
+                cdOffset = Number(z64View.getBigUint64(48, true));
+            }
+        }
+
+        // Read the central directory
+        const cdData = await this._readBytes(cdOffset, cdSize);
+
+        // Parse central directory entries
+        this._centralDir = new Map();
+        this._fileIndex = [];
+        let pos = 0;
+        const decoder = new TextDecoder();
+
+        for (let i = 0; i < entryCount && pos + 46 <= cdData.length; i++) {
+            const cdView = new DataView(cdData.buffer, cdData.byteOffset + pos);
+
+            // Verify central directory file header signature (0x02014b50)
+            if (cdView.getUint32(0, true) !== 0x02014b50) {
+                log.warn(`Unexpected central directory entry at position ${pos}, stopping`);
+                break;
+            }
+
+            const method = cdView.getUint16(10, true);
+            let compressedSize = cdView.getUint32(20, true);
+            let uncompressedSize = cdView.getUint32(24, true);
+            const nameLen = cdView.getUint16(28, true);
+            const extraLen = cdView.getUint16(30, true);
+            const commentLen = cdView.getUint16(32, true);
+            let localHeaderOffset = cdView.getUint32(42, true);
+
+            const name = decoder.decode(cdData.subarray(pos + 46, pos + 46 + nameLen));
+
+            // Parse ZIP64 extended info if any sizes/offset are at 32-bit max
+            if (compressedSize === 0xFFFFFFFF || uncompressedSize === 0xFFFFFFFF ||
+                localHeaderOffset === 0xFFFFFFFF) {
+                const extraStart = pos + 46 + nameLen;
+                const extraEnd = extraStart + extraLen;
+                let ePos = extraStart;
+                while (ePos + 4 <= extraEnd) {
+                    const tag = cdData[ePos] | (cdData[ePos + 1] << 8);
+                    const fieldSize = cdData[ePos + 2] | (cdData[ePos + 3] << 8);
+                    if (tag === 0x0001) { // ZIP64 extended information
+                        const eView = new DataView(cdData.buffer, cdData.byteOffset + ePos + 4, fieldSize);
+                        let eOff = 0;
+                        if (uncompressedSize === 0xFFFFFFFF && eOff + 8 <= fieldSize) {
+                            uncompressedSize = Number(eView.getBigUint64(eOff, true));
+                            eOff += 8;
+                        }
+                        if (compressedSize === 0xFFFFFFFF && eOff + 8 <= fieldSize) {
+                            compressedSize = Number(eView.getBigUint64(eOff, true));
+                            eOff += 8;
+                        }
+                        if (localHeaderOffset === 0xFFFFFFFF && eOff + 8 <= fieldSize) {
+                            localHeaderOffset = Number(eView.getBigUint64(eOff, true));
+                            eOff += 8;
+                        }
+                        break;
+                    }
+                    ePos += 4 + fieldSize;
+                }
+            }
+
+            this._centralDir.set(name, {
+                offset: localHeaderOffset,
+                compressedSize,
+                uncompressedSize,
+                method
             });
-        });
+
+            this._fileIndex.push({
+                name,
+                originalSize: uncompressedSize
+            });
+
+            pos += 46 + nameLen + extraLen + commentLen;
+        }
 
         log.info(`Archive indexed: ${this._fileIndex.length} files`);
     }
 
     /**
      * Extract a single file from the archive, using the cache if available.
+     * Reads only the specific byte range for the requested file.
      * @param {string} filename - The exact filename within the ZIP
      * @returns {Promise<Uint8Array|null>} The decompressed file data, or null if not found
      * @private
@@ -258,23 +420,42 @@ export class ArchiveLoader {
             return this._fileCache.get(filename);
         }
 
-        if (!this._rawData) {
+        if (!this._hasData) {
             throw new Error('No archive loaded');
         }
 
-        // Use unzip with filter to decompress only the target file
-        const result = await new Promise((resolve, reject) => {
-            unzip(this._rawData, {
-                filter: (file) => file.name === filename
-            }, (err, data) => {
-                if (err) reject(new Error(`Failed to extract ${filename}: ${err.message}`));
-                else resolve(data);
-            });
-        });
-
-        const fileData = result[filename];
-        if (!fileData) {
+        const entry = this._centralDir?.get(filename);
+        if (!entry) {
             return null;
+        }
+
+        // Read local file header (30 bytes fixed) to get actual data offset.
+        // The local header's extra field length can differ from the central directory's.
+        const localHeader = await this._readBytes(entry.offset, 30);
+        const lhView = new DataView(localHeader.buffer, localHeader.byteOffset, 30);
+
+        // Verify local file header signature (0x04034b50)
+        if (lhView.getUint32(0, true) !== 0x04034b50) {
+            throw new Error(`Invalid local file header for ${filename}`);
+        }
+
+        const localNameLen = lhView.getUint16(26, true);
+        const localExtraLen = lhView.getUint16(28, true);
+        const dataOffset = entry.offset + 30 + localNameLen + localExtraLen;
+
+        // Read only the compressed data for this file
+        const compressedData = await this._readBytes(dataOffset, entry.compressedSize);
+
+        // Decompress based on compression method
+        let fileData;
+        if (entry.method === 0) {
+            // Stored (no compression) — use bytes directly
+            fileData = compressedData;
+        } else if (entry.method === 8) {
+            // Deflate — decompress with fflate inflateSync
+            fileData = inflateSync(compressedData, new Uint8Array(entry.uncompressedSize));
+        } else {
+            throw new Error(`Unsupported compression method ${entry.method} for ${filename}`);
         }
 
         // Cache for future access
@@ -287,7 +468,7 @@ export class ArchiveLoader {
      * @returns {Promise<Object>} The parsed manifest
      */
     async parseManifest() {
-        if (!this._rawData) {
+        if (!this._hasData) {
             throw new Error('No archive loaded');
         }
 
@@ -436,7 +617,7 @@ export class ArchiveLoader {
      * @returns {Promise<{blob: Blob, url: string, name: string}|null>}
      */
     async extractFile(filename) {
-        if (!this._rawData) {
+        if (!this._hasData) {
             throw new Error('No archive loaded');
         }
 
@@ -627,8 +808,9 @@ export class ArchiveLoader {
      * After calling this, no new files can be extracted.
      */
     releaseRawData() {
-        const hadData = !!this._rawData;
+        const hadData = this._hasData;
         this._rawData = null;
+        this._file = null;
         if (hadData) {
             log.info('Raw archive data released to free memory');
         }
@@ -650,6 +832,8 @@ export class ArchiveLoader {
     dispose() {
         this.cleanup();
         this._rawData = null;
+        this._file = null;
+        this._centralDir = null;
         this._fileCache?.clear();
         this._fileCache = null;
         this._fileIndex = null;

@@ -279,14 +279,15 @@ async function handleArchiveFile(file) {
     showLoading('Loading archive...', true);
 
     try {
-        // === Phase 1: Extract archive + parse manifest (fast, no 3D decompression) ===
-        updateProgress(10, 'Extracting archive...');
+        // === Phase 1: Read file + index ZIP directory (no decompression) ===
+        updateProgress(5, 'Reading archive...');
         const archiveLoader = await loadArchiveFromFile(file, { state });
 
         // Reset asset states for new archive
         state.assetStates = { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED };
 
-        // Phase 1: manifest + metadata
+        // Parse manifest + extract thumbnail (small files only)
+        updateProgress(15, 'Reading metadata...');
         const phase1 = await processArchivePhase1(archiveLoader, file.name, { state });
         const { manifest, contentInfo } = phase1;
 
@@ -294,7 +295,7 @@ async function handleArchiveFile(file) {
         await showBrandedLoading(archiveLoader);
 
         // === Phase 2: Load primary asset for initial display ===
-        updateProgress(30, 'Loading 3D assets...');
+        updateProgress(30, 'Loading 3D data...');
         const primaryType = getPrimaryAssetType(state.displayMode, contentInfo);
         const primaryLoaded = await ensureAssetLoaded(primaryType);
 
