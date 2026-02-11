@@ -116,6 +116,10 @@
             <div id="annotation-mode-indicator" class="hidden">
                 Click on model to place annotation
             </div>
+            <div id="alignment-mode-indicator" class="hidden">
+                <span id="alignment-instruction">Click 3 points on the splat (0 of 3)</span>
+                <button id="btn-alignment-cancel" class="action-btn secondary" style="margin-left: 12px; padding: 4px 12px;">Cancel</button>
+            </div>
             <div id="proxy-mesh-indicator" class="hidden">
                 Viewing display proxy &middot; <a href="#" id="proxy-load-full-link">Load full resolution</a>
             </div>
@@ -123,6 +127,9 @@
 
         <!-- Annotation markers container -->
         <div id="annotation-markers"></div>
+
+        <!-- Alignment markers container -->
+        <div id="alignment-markers"></div>
 
         <!-- Annotation info popup (appears when clicking markers) -->
         <div id="annotation-info-popup" class="hidden">
@@ -1135,10 +1142,9 @@
             <div class="control-section collapsible collapsed">
                 <h3 class="collapsible-header">Alignment <span class="collapse-icon">▶</span></h3>
                 <div class="collapsible-content">
-                    <button id="btn-auto-align" class="action-btn">Auto Align</button>
-                    <button id="btn-icp-align" class="action-btn">ICP Align</button>
+                    <button id="btn-align" class="action-btn">Align Objects</button>
                     <p class="hint-text" style="margin: 5px 0; font-size: 0.75em; opacity: 0.7;">
-                        ICP provides precise alignment using point-to-point matching
+                        Click 3 matching points on each object for precise alignment
                     </p>
                     <button id="btn-reset-alignment" class="action-btn secondary">Reset All</button>
                 </div>

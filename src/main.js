@@ -9,8 +9,8 @@ import { Logger, notify, computeMeshFaceCount, computeMeshVertexCount, disposeOb
 import { FlyControls } from './modules/fly-controls.js';
 import { SceneManager } from './modules/scene-manager.js';
 import {
-    icpAlignObjects as icpAlignObjectsHandler,
-    autoAlignObjects as autoAlignObjectsHandler,
+    LandmarkAlignment,
+    autoCenterAlign as autoCenterAlignHandler,
     fitToView as fitToViewHandler,
     resetAlignment as resetAlignmentHandler,
     resetCamera as resetCameraHandler,
@@ -233,8 +233,9 @@ let modelGroup = null;
 let pointcloudGroup = null;
 let ambientLight, hemisphereLight, directionalLight1, directionalLight2;
 
-// Annotation and archive creation
+// Annotation, alignment, and archive creation
 let annotationSystem = null;
+let landmarkAlignment = null;
 let archiveCreator = null;
 
 // Blob data for archive export (stored when loading files)
@@ -285,9 +286,9 @@ function createFileHandlerDeps() {
                 storeLastPositions();
                 currentSplatBlob = file;
                 document.getElementById('splat-vertices').textContent = 'Loaded';
-                // Auto-align if model is already loaded
+                // Auto center-align if model is already loaded
                 if (state.modelLoaded) {
-                    setTimeout(() => autoAlignObjects(), TIMING.AUTO_ALIGN_DELAY);
+                    setTimeout(() => autoCenterAlign(), TIMING.AUTO_ALIGN_DELAY);
                 }
                 clearArchiveMetadata();
             },
@@ -311,9 +312,9 @@ function createFileHandlerDeps() {
                 } else if (faceCount > MESH_LOD.MOBILE_WARNING_FACES) {
                     notify.info(`Mesh has ${faceCount.toLocaleString()} faces — may not display on mobile/tablet. Consider adding a display proxy.`);
                 }
-                // Auto-align if splat is already loaded, otherwise center on grid
+                // Auto center-align if splat is already loaded, otherwise center on grid
                 if (state.splatLoaded) {
-                    setTimeout(() => autoAlignObjects(), TIMING.AUTO_ALIGN_DELAY);
+                    setTimeout(() => autoCenterAlign(), TIMING.AUTO_ALIGN_DELAY);
                 } else {
                     // Center model on grid when loaded standalone
                     setTimeout(() => centerModelOnGrid(modelGroup), TIMING.AUTO_ALIGN_DELAY);
@@ -412,6 +413,19 @@ function init() {
     annotationSystem.onAnnotationSelected = onAnnotationSelected;
     annotationSystem.onPlacementModeChanged = onPlacementModeChanged;
     log.info(' Annotation system initialized:', !!annotationSystem);
+
+    // Initialize landmark alignment system
+    landmarkAlignment = new LandmarkAlignment({
+        scene, camera, renderer, controls,
+        splatMesh, modelGroup,
+        updateTransformInputs, storeLastPositions
+    });
+    addListener('btn-alignment-cancel', 'click', () => {
+        if (landmarkAlignment.isActive()) {
+            landmarkAlignment.cancel();
+            notify.info('Alignment cancelled');
+        }
+    });
 
     // Initialize archive creator
     archiveCreator = new ArchiveCreator();
@@ -738,11 +752,8 @@ function setupUIEvents() {
         if (directionalLight2) directionalLight2.intensity = intensity;
     });
 
-    // Auto align button
-    addListener('btn-auto-align', 'click', autoAlignObjects);
-
-    // ICP align button
-    addListener('btn-icp-align', 'click', icpAlignObjects);
+    // Align objects button (landmark alignment toggle)
+    addListener('btn-align', 'click', toggleAlignment);
 
     // Annotation controls
     const annoBtn = addListener('btn-annotate', 'click', toggleAnnotationMode);
@@ -2858,13 +2869,13 @@ async function loadDefaultFiles() {
             const alignmentLoaded = await loadAlignmentFromUrl(config.defaultAlignmentUrl);
             if (!alignmentLoaded && state.splatLoaded && state.modelLoaded) {
                 // Fallback to auto-align if alignment URL fetch failed
-                log.info(' Alignment URL failed, falling back to auto-align...');
-                autoAlignObjects();
+                log.info(' Alignment URL failed, falling back to auto-center-align...');
+                autoCenterAlign();
             }
         } else if (state.splatLoaded && state.modelLoaded) {
-            // No alignment provided, run auto-align
-            log.info('Both files loaded from URL, running auto-align...');
-            autoAlignObjects();
+            // No alignment provided, run auto-center-align
+            log.info('Both files loaded from URL, running auto-center-align...');
+            autoCenterAlign();
         }
     }
 }
@@ -3061,14 +3072,24 @@ async function loadPointcloudFromUrl(url) {
 // Alignment functions - wrappers for alignment.js module
 // ============================================================
 
-// ICP alignment function - wrapper for alignment.js
-async function icpAlignObjects() {
-    await icpAlignObjectsHandler(createAlignmentDeps());
+// Toggle landmark alignment mode
+function toggleAlignment() {
+    if (!splatMesh || !modelGroup || modelGroup.children.length === 0) {
+        notify.warning('Both splat and model must be loaded for alignment');
+        return;
+    }
+    // Update refs in case assets loaded after init
+    landmarkAlignment.updateRefs(splatMesh, modelGroup);
+    if (landmarkAlignment.isActive()) {
+        landmarkAlignment.cancel();
+    } else {
+        landmarkAlignment.start();
+    }
 }
 
-// Auto align objects - wrapper for alignment.js
-function autoAlignObjects() {
-    autoAlignObjectsHandler(createAlignmentDeps());
+// Auto center align - simple bounding-box center match on load
+function autoCenterAlign() {
+    autoCenterAlignHandler(createAlignmentDeps());
 }
 
 // Animation loop
@@ -3097,6 +3118,11 @@ function animate() {
         // Update annotation marker positions
         if (annotationSystem) {
             annotationSystem.updateMarkerPositions();
+        }
+
+        // Update alignment marker positions
+        if (landmarkAlignment) {
+            landmarkAlignment.updateMarkerPositions();
         }
 
         // Update annotation popup position to follow marker

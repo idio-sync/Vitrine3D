@@ -1,218 +1,17 @@
 /**
  * Alignment Module
  *
- * Handles 3D object alignment algorithms:
- * - KD-Tree for efficient nearest neighbor search
- * - ICP (Iterative Closest Point) alignment
- * - Auto-alignment based on bounding boxes
+ * Handles 3D object alignment:
+ * - Interactive 3-point landmark alignment (LandmarkAlignment class)
+ * - Simple center matching on load (autoCenterAlign)
  * - Fit-to-view camera positioning
  * - Alignment save/load/reset
- * - Share link generation
  */
 
 import * as THREE from 'three';
 import { Logger, notify } from './utilities.js';
 
 const log = Logger.getLogger('alignment');
-
-// =============================================================================
-// KD-TREE IMPLEMENTATION
-// =============================================================================
-
-/**
- * KD-Tree for efficient nearest neighbor search in 3D space.
- * Used by ICP alignment algorithm.
- */
-class KDTree {
-    constructor(points) {
-        // points is an array of {x, y, z, index}
-        this.root = this.buildTree(points, 0);
-    }
-
-    buildTree(points, depth) {
-        if (points.length === 0) return null;
-
-        const axis = depth % 3; // 0=x, 1=y, 2=z
-        const axisKey = ['x', 'y', 'z'][axis];
-
-        // Sort points by the current axis
-        points.sort((a, b) => a[axisKey] - b[axisKey]);
-
-        const median = Math.floor(points.length / 2);
-
-        return {
-            point: points[median],
-            axis: axis,
-            left: this.buildTree(points.slice(0, median), depth + 1),
-            right: this.buildTree(points.slice(median + 1), depth + 1)
-        };
-    }
-
-    /**
-     * Find nearest neighbor to target point
-     * @param {Object} target - Point with x, y, z properties
-     * @returns {{point: Object, distSq: number}}
-     */
-    nearestNeighbor(target) {
-        let best = { point: null, distSq: Infinity };
-        this.searchNearest(this.root, target, best);
-        return best;
-    }
-
-    searchNearest(node, target, best) {
-        if (node === null) return;
-
-        const dx = target.x - node.point.x;
-        const dy = target.y - node.point.y;
-        const dz = target.z - node.point.z;
-        const distSq = dx * dx + dy * dy + dz * dz;
-
-        if (distSq < best.distSq) {
-            best.point = node.point;
-            best.distSq = distSq;
-        }
-
-        const axisKey = ['x', 'y', 'z'][node.axis];
-        const diff = target[axisKey] - node.point[axisKey];
-
-        // Search the closer side first
-        const first = diff < 0 ? node.left : node.right;
-        const second = diff < 0 ? node.right : node.left;
-
-        this.searchNearest(first, target, best);
-
-        // Only search the other side if it could contain a closer point
-        if (diff * diff < best.distSq) {
-            this.searchNearest(second, target, best);
-        }
-    }
-}
-
-// =============================================================================
-// POINT EXTRACTION
-// =============================================================================
-
-/**
- * Extract positions from splat mesh in world space
- * @param {Object} splatMeshObj - The SplatMesh object
- * @param {number} maxPoints - Maximum points to extract
- * @returns {Array<{x: number, y: number, z: number, index: number}>}
- */
-function extractSplatPositions(splatMeshObj, maxPoints = 5000) {
-    const positions = [];
-
-    // Get splat's world matrix for transforming local positions to world space
-    splatMeshObj.updateMatrixWorld(true);
-    const worldMatrix = splatMeshObj.matrixWorld;
-
-    log.debug('[extractSplatPositions] Checking available APIs...');
-    log.debug('[extractSplatPositions] packedSplats:', !!splatMeshObj.packedSplats);
-    log.debug('[extractSplatPositions] geometry:', !!splatMeshObj.geometry);
-
-    // Try to access splat positions via Spark library's packedSplats API
-    if (splatMeshObj.packedSplats && typeof splatMeshObj.packedSplats.forEachSplat === 'function') {
-        let count = 0;
-        const splatCount = splatMeshObj.packedSplats.splatCount || 0;
-        log.debug('[extractSplatPositions] splatCount:', splatCount);
-
-        if (splatCount === 0) {
-            log.warn('[extractSplatPositions] splatCount is 0, splat may still be loading');
-        }
-
-        const stride = Math.max(1, Math.floor(splatCount / maxPoints));
-
-        try {
-            splatMeshObj.packedSplats.forEachSplat((index, center) => {
-                if (index % stride === 0 && count < maxPoints) {
-                    // center is a reused Vector3, so clone and transform to world space
-                    const worldPos = new THREE.Vector3(center.x, center.y, center.z);
-                    worldPos.applyMatrix4(worldMatrix);
-                    positions.push({
-                        x: worldPos.x,
-                        y: worldPos.y,
-                        z: worldPos.z,
-                        index: index
-                    });
-                    count++;
-                }
-            });
-        } catch (e) {
-            log.error('[extractSplatPositions] Error in forEachSplat:', e);
-        }
-        log.debug(`[extractSplatPositions] Extracted ${positions.length} splat positions via forEachSplat (world space)`);
-    } else if (splatMeshObj.geometry && splatMeshObj.geometry.attributes.position) {
-        // Fallback: try to read from geometry
-        const posAttr = splatMeshObj.geometry.attributes.position;
-        log.debug('[extractSplatPositions] geometry.position.count:', posAttr.count);
-        const stride = Math.max(1, Math.floor(posAttr.count / maxPoints));
-        for (let i = 0; i < posAttr.count && positions.length < maxPoints; i += stride) {
-            const worldPos = new THREE.Vector3(
-                posAttr.getX(i),
-                posAttr.getY(i),
-                posAttr.getZ(i)
-            );
-            worldPos.applyMatrix4(worldMatrix);
-            positions.push({
-                x: worldPos.x,
-                y: worldPos.y,
-                z: worldPos.z,
-                index: i
-            });
-        }
-        log.debug(`[extractSplatPositions] Extracted ${positions.length} splat positions from geometry (world space)`);
-    } else {
-        log.warn('[extractSplatPositions] Could not find splat position data');
-        log.debug('[extractSplatPositions] Available splatMesh properties:', Object.keys(splatMeshObj));
-        if (splatMeshObj.packedSplats) {
-            log.debug('[extractSplatPositions] Available packedSplats properties:', Object.keys(splatMeshObj.packedSplats));
-        }
-    }
-
-    return positions;
-}
-
-/**
- * Extract vertex positions from model mesh in world space
- * @param {THREE.Group} modelGroupObj - The model group
- * @param {number} maxPoints - Maximum points to extract
- * @returns {Array<{x: number, y: number, z: number, index: number}>}
- */
-function extractMeshVertices(modelGroupObj, maxPoints = 10000) {
-    const positions = [];
-    const allVertices = [];
-
-    // Collect all vertices from all meshes
-    modelGroupObj.traverse((child) => {
-        if (child.isMesh && child.geometry) {
-            const geo = child.geometry;
-            const posAttr = geo.attributes.position;
-            if (!posAttr) return;
-
-            // Get world matrix for this mesh
-            child.updateMatrixWorld(true);
-            const matrix = child.matrixWorld;
-
-            for (let i = 0; i < posAttr.count; i++) {
-                const v = new THREE.Vector3(
-                    posAttr.getX(i),
-                    posAttr.getY(i),
-                    posAttr.getZ(i)
-                );
-                v.applyMatrix4(matrix);
-                allVertices.push({ x: v.x, y: v.y, z: v.z, index: allVertices.length });
-            }
-        }
-    });
-
-    // Subsample if too many vertices
-    const stride = Math.max(1, Math.floor(allVertices.length / maxPoints));
-    for (let i = 0; i < allVertices.length && positions.length < maxPoints; i += stride) {
-        positions.push(allVertices[i]);
-    }
-
-    log.debug(`[ICP] Extracted ${positions.length} mesh vertices (from ${allVertices.length} total)`);
-    return positions;
-}
 
 // =============================================================================
 // CENTROID AND ROTATION COMPUTATION
@@ -245,7 +44,6 @@ function computeCentroid(points) {
  */
 function computeOptimalRotation(sourcePoints, targetPoints, sourceCentroid, targetCentroid) {
     // Build the covariance matrix H
-    // H = sum((source - sourceCentroid) * (target - targetCentroid)^T)
     let h = [
         [0, 0, 0],
         [0, 0, 0],
@@ -291,7 +89,6 @@ function computeOptimalRotation(sourcePoints, targetPoints, sourceCentroid, targ
     // Find largest eigenvalue/eigenvector using power iteration
     let q = [1, 0, 0, 0]; // Initial quaternion guess
     for (let iter = 0; iter < 50; iter++) {
-        // Multiply n * q
         const newQ = [
             n[0][0] * q[0] + n[0][1] * q[1] + n[0][2] * q[2] + n[0][3] * q[3],
             n[1][0] * q[0] + n[1][1] * q[1] + n[1][2] * q[2] + n[1][3] * q[3],
@@ -299,7 +96,6 @@ function computeOptimalRotation(sourcePoints, targetPoints, sourceCentroid, targ
             n[3][0] * q[0] + n[3][1] * q[1] + n[3][2] * q[2] + n[3][3] * q[3]
         ];
 
-        // Normalize
         const len = Math.sqrt(newQ[0] * newQ[0] + newQ[1] * newQ[1] + newQ[2] * newQ[2] + newQ[3] * newQ[3]);
         if (len < 1e-10) break;
         q = [newQ[0] / len, newQ[1] / len, newQ[2] / len, newQ[3] / len];
@@ -338,13 +134,11 @@ function computeSplatBoundsFromPositions(splatMeshObj) {
     splatMeshObj.updateMatrixWorld(true);
     const worldMatrix = splatMeshObj.matrixWorld;
 
-    // Try to access splat positions via packedSplats
     if (splatMeshObj.packedSplats && typeof splatMeshObj.packedSplats.forEachSplat === 'function') {
         let count = 0;
         const splatCount = splatMeshObj.packedSplats.splatCount || 0;
 
         if (splatCount > 0) {
-            // Sample up to 10000 splats for bounds calculation
             const maxSamples = 10000;
             const stride = Math.max(1, Math.floor(splatCount / maxSamples));
 
@@ -370,320 +164,510 @@ function computeSplatBoundsFromPositions(splatMeshObj) {
 }
 
 // =============================================================================
-// ICP ALIGNMENT
+// AUTO CENTER ALIGN (simple bounding-box center match on load)
 // =============================================================================
 
 /**
- * Run ICP alignment between splat and model
+ * Simple bounding-box center alignment — translates the mover's center to
+ * the anchor's center. No rotation or scale. Used as the auto-trigger when
+ * both objects are loaded.
  * @param {Object} deps - Dependencies object
- * @param {Object} deps.splatMesh - The splat mesh
- * @param {THREE.Group} deps.modelGroup - The model group
- * @param {Function} deps.showLoading - Show loading overlay
- * @param {Function} deps.hideLoading - Hide loading overlay
- * @param {Function} deps.updateTransformInputs - Update UI inputs
- * @param {Function} deps.storeLastPositions - Store positions for undo
- * @returns {Promise<void>}
  */
-export async function icpAlignObjects(deps) {
-    const { splatMesh, modelGroup, showLoading, hideLoading, updateTransformInputs, storeLastPositions } = deps;
-
-    log.debug('[ICP] icpAlignObjects called');
-
-    if (!splatMesh || !modelGroup || modelGroup.children.length === 0) {
-        notify.warning('Both splat and model must be loaded for ICP alignment');
-        return;
-    }
-
-    showLoading('Running ICP alignment...');
-
-    // Allow UI to update
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    try {
-        // Extract points in world space
-        log.debug('[ICP] Extracting splat positions...');
-        const splatPoints = extractSplatPositions(splatMesh, 3000);
-        log.debug('[ICP] Extracted splat points:', splatPoints.length);
-
-        log.debug('[ICP] Extracting mesh vertices...');
-        const meshPoints = extractMeshVertices(modelGroup, 8000);
-        log.debug('[ICP] Extracted mesh points:', meshPoints.length);
-
-        if (splatPoints.length < 10) {
-            hideLoading();
-            notify.warning('Could not extract enough splat positions for ICP (' + splatPoints.length + ' found). The splat may not support position extraction or may still be loading.');
-            return;
-        }
-
-        if (meshPoints.length < 10) {
-            hideLoading();
-            notify.warning('Could not extract enough mesh vertices for ICP (' + meshPoints.length + ' found).');
-            return;
-        }
-
-        log.debug(`[ICP] Starting ICP with ${splatPoints.length} splat points and ${meshPoints.length} mesh points`);
-
-        // ---- Step 0: Centroid pre-alignment and scale correction ----
-        const srcCentroid = computeCentroid(splatPoints);
-        const tgtCentroid = computeCentroid(meshPoints);
-
-        // Compute RMS spread from centroids for scale estimation
-        let srcSpreadSq = 0, tgtSpreadSq = 0;
-        for (const p of splatPoints) {
-            srcSpreadSq += (p.x - srcCentroid.x) ** 2 + (p.y - srcCentroid.y) ** 2 + (p.z - srcCentroid.z) ** 2;
-        }
-        for (const p of meshPoints) {
-            tgtSpreadSq += (p.x - tgtCentroid.x) ** 2 + (p.y - tgtCentroid.y) ** 2 + (p.z - tgtCentroid.z) ** 2;
-        }
-        const srcRMS = Math.sqrt(srcSpreadSq / splatPoints.length);
-        const tgtRMS = Math.sqrt(tgtSpreadSq / meshPoints.length);
-        const scaleFactor = (srcRMS > 1e-10) ? tgtRMS / srcRMS : 1.0;
-
-        log.debug(`[ICP] Source RMS spread: ${srcRMS.toFixed(4)}, Target RMS spread: ${tgtRMS.toFixed(4)}, Scale factor: ${scaleFactor.toFixed(4)}`);
-
-        // Build pre-alignment matrix: translate to origin, scale, translate to target centroid
-        const preAlign = new THREE.Matrix4();
-        const toOrigin = new THREE.Matrix4().makeTranslation(-srcCentroid.x, -srcCentroid.y, -srcCentroid.z);
-        const scaleM = new THREE.Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor);
-        const toTarget = new THREE.Matrix4().makeTranslation(tgtCentroid.x, tgtCentroid.y, tgtCentroid.z);
-        preAlign.copy(toTarget).multiply(scaleM).multiply(toOrigin);
-
-        // Apply pre-alignment to working points
-        let currentPoints = splatPoints.map(p => {
-            const v = new THREE.Vector3(p.x, p.y, p.z);
-            v.applyMatrix4(preAlign);
-            return { x: v.x, y: v.y, z: v.z, index: p.index };
-        });
-
-        // Cumulative transformation starts with pre-alignment
-        let cumulativeMatrix = preAlign.clone();
-
-        // Build KD-tree from mesh points for fast nearest neighbor search
-        const kdTree = new KDTree([...meshPoints]);
-
-        // ---- ICP iterations ----
-        const maxIterations = 50;
-        const convergenceThreshold = 1e-6;
-        let prevMeanError = Infinity;
-
-        for (let iter = 0; iter < maxIterations; iter++) {
-            // Step 1: Find correspondences with outlier rejection
-            const allCorrespondences = [];
-            for (const srcPt of currentPoints) {
-                const nearest = kdTree.nearestNeighbor(srcPt);
-                if (nearest.point) {
-                    allCorrespondences.push({
-                        source: srcPt,
-                        target: nearest.point,
-                        distSq: nearest.distSq
-                    });
-                }
-            }
-
-            if (allCorrespondences.length < 10) break;
-
-            // Outlier rejection: discard worst 20% of correspondences by distance
-            allCorrespondences.sort((a, b) => a.distSq - b.distSq);
-            const keepCount = Math.max(10, Math.floor(allCorrespondences.length * 0.8));
-            const correspondences = allCorrespondences.slice(0, keepCount);
-
-            let totalError = 0;
-            for (const c of correspondences) totalError += c.distSq;
-            const meanError = totalError / correspondences.length;
-            log.debug(`[ICP] Iteration ${iter + 1}: Mean squared error = ${meanError.toFixed(6)} (${correspondences.length} correspondences)`);
-
-            // Check convergence
-            if (Math.abs(prevMeanError - meanError) < convergenceThreshold) {
-                log.debug(`[ICP] Converged after ${iter + 1} iterations`);
-                break;
-            }
-            prevMeanError = meanError;
-
-            // Step 2: Compute optimal transformation
-            const sourceForAlign = correspondences.map(c => c.source);
-            const targetForAlign = correspondences.map(c => c.target);
-
-            const sourceCentroid = computeCentroid(sourceForAlign);
-            const targetCentroid = computeCentroid(targetForAlign);
-
-            // Compute rotation
-            const rotMatrix = computeOptimalRotation(sourceForAlign, targetForAlign, sourceCentroid, targetCentroid);
-
-            // Compute translation: t = targetCentroid - R * sourceCentroid
-            const rotatedSourceCentroid = new THREE.Vector3(sourceCentroid.x, sourceCentroid.y, sourceCentroid.z);
-            rotatedSourceCentroid.applyMatrix4(rotMatrix);
-
-            const translation = new THREE.Vector3(
-                targetCentroid.x - rotatedSourceCentroid.x,
-                targetCentroid.y - rotatedSourceCentroid.y,
-                targetCentroid.z - rotatedSourceCentroid.z
-            );
-
-            // Build transformation matrix for this iteration
-            const iterMatrix = new THREE.Matrix4();
-            iterMatrix.makeTranslation(translation.x, translation.y, translation.z);
-            iterMatrix.multiply(rotMatrix);
-
-            // Update cumulative transformation
-            cumulativeMatrix.premultiply(iterMatrix);
-
-            // Transform current points for next iteration
-            currentPoints = currentPoints.map(p => {
-                const v = new THREE.Vector3(p.x, p.y, p.z);
-                v.applyMatrix4(iterMatrix);
-                return { x: v.x, y: v.y, z: v.z, index: p.index };
-            });
-        }
-
-        // ---- Apply cumulative transformation to splat mesh ----
-        log.debug('[ICP] Applying cumulative transformation to splat mesh');
-
-        // Combine with existing local transform, accounting for parent
-        // cumulativeMatrix maps: old world positions -> new world positions
-        // We need: new local matrix such that parent * newLocal = cumulativeMatrix * parent * oldLocal
-        // If parent is identity: newLocal = cumulativeMatrix * oldLocal
-        const parentWorldInverse = new THREE.Matrix4();
-        if (splatMesh.parent) {
-            splatMesh.parent.updateMatrixWorld(true);
-            parentWorldInverse.copy(splatMesh.parent.matrixWorld).invert();
-        }
-
-        // newLocal = parentInverse * cumulative * parentWorld * oldLocal
-        const oldWorldMatrix = splatMesh.matrixWorld.clone();
-        const newWorldMatrix = cumulativeMatrix.clone().multiply(oldWorldMatrix);
-        const newLocalMatrix = parentWorldInverse.clone().multiply(newWorldMatrix);
-
-        // Decompose the result
-        const newPos = new THREE.Vector3();
-        const newQuat = new THREE.Quaternion();
-        const newScale = new THREE.Vector3();
-        newLocalMatrix.decompose(newPos, newQuat, newScale);
-
-        // Apply to splatMesh
-        splatMesh.position.copy(newPos);
-        splatMesh.quaternion.copy(newQuat);
-        splatMesh.scale.copy(newScale);
-        splatMesh.updateMatrix();
-        splatMesh.updateMatrixWorld(true);
-
-        log.debug('[ICP] ICP alignment complete');
-        log.debug('[ICP] New splat position:', splatMesh.position.toArray());
-        log.debug('[ICP] New splat scale:', splatMesh.scale.toArray());
-        log.debug('[ICP] Scale correction applied:', scaleFactor.toFixed(4));
-
-        updateTransformInputs();
-        storeLastPositions();
-
-        hideLoading();
-        notify.success(`ICP alignment complete (scale: ${scaleFactor.toFixed(2)}x)`);
-
-    } catch (e) {
-        log.error('[ICP] ICP alignment failed:', e);
-        hideLoading();
-        notify.error('ICP alignment failed: ' + e.message);
-    }
-}
-
-// =============================================================================
-// AUTO-ALIGNMENT
-// =============================================================================
-
-/**
- * Auto-align model to splat based on bounding boxes
- * @param {Object} deps - Dependencies object
- * @param {Object} deps.splatMesh - The splat mesh
- * @param {THREE.Group} deps.modelGroup - The model group
- * @param {Function} deps.updateTransformInputs - Update UI inputs
- * @param {Function} deps.storeLastPositions - Store positions for undo
- * @returns {void}
- */
-export function autoAlignObjects(deps) {
+export function autoCenterAlign(deps) {
     const { splatMesh, modelGroup, updateTransformInputs, storeLastPositions } = deps;
 
     if (!splatMesh || !modelGroup || modelGroup.children.length === 0) {
-        notify.warning('Both splat and model must be loaded for auto-alignment');
         return;
     }
 
-    log.debug('Auto-aligning model to splat...');
+    // Compute bounding-box centers
+    const splatBounds = computeSplatBoundsFromPositions(splatMesh);
+    let splatCenter;
+    if (splatBounds.found) {
+        splatCenter = splatBounds.center.clone();
+    } else {
+        const box = new THREE.Box3().setFromObject(splatMesh);
+        if (box.isEmpty()) {
+            log.warn('[autoCenterAlign] Splat bounds empty, skipping');
+            return;
+        }
+        splatCenter = box.getCenter(new THREE.Vector3());
+    }
 
-    // Get model bounding box
     const modelBox = new THREE.Box3().setFromObject(modelGroup);
+    if (modelBox.isEmpty()) {
+        log.warn('[autoCenterAlign] Model bounds empty, skipping');
+        return;
+    }
     const modelCenter = modelBox.getCenter(new THREE.Vector3());
 
-    // Try to get splat bounding box
-    let splatBox = new THREE.Box3();
-    let splatCenter = new THREE.Vector3();
-    let splatBoundsFound = false;
+    // Determine anchor/mover: object closer to world origin stays fixed
+    const splatDist = splatCenter.length();
+    const modelDist = modelCenter.length();
 
-    // First, try the built-in boundingBox
-    if (splatMesh.geometry && splatMesh.geometry.boundingBox) {
-        splatMesh.geometry.computeBoundingBox();
-        splatBox.copy(splatMesh.geometry.boundingBox);
-        splatBox.applyMatrix4(splatMesh.matrixWorld);
-        splatCenter = splatBox.getCenter(new THREE.Vector3());
-        splatBoundsFound = true;
-        log.debug('Auto-align: Using geometry.boundingBox');
+    let mover, moverCenter, anchorCenter;
+    if (splatDist <= modelDist) {
+        mover = modelGroup;
+        moverCenter = modelCenter;
+        anchorCenter = splatCenter;
+        log.debug('[autoCenterAlign] Anchor: splat, Mover: model');
+    } else {
+        mover = splatMesh;
+        moverCenter = splatCenter;
+        anchorCenter = modelCenter;
+        log.debug('[autoCenterAlign] Anchor: model, Mover: splat');
     }
 
-    // If built-in box seems invalid, try computing from positions
-    if (!splatBoundsFound || splatBox.isEmpty() ||
-        (splatBox.max.x - splatBox.min.x) < 0.001) {
-        log.debug('Auto-align: Built-in bounds invalid, computing from positions...');
-        const computedBounds = computeSplatBoundsFromPositions(splatMesh);
-        if (computedBounds.found) {
-            splatBox.min.copy(computedBounds.min);
-            splatBox.max.copy(computedBounds.max);
-            splatCenter.copy(computedBounds.center);
-            splatBoundsFound = true;
-            log.debug('Auto-align: Using computed bounds from positions');
-        }
-    }
+    // Translate mover center to anchor center
+    const offset = new THREE.Vector3().subVectors(anchorCenter, moverCenter);
+    mover.position.add(offset);
+    mover.updateMatrix();
+    mover.updateMatrixWorld(true);
 
-    // Fallback to setFromObject if still no bounds
-    if (!splatBoundsFound || splatBox.isEmpty()) {
-        log.debug('Auto-align: Falling back to setFromObject');
-        splatBox.setFromObject(splatMesh);
-        splatCenter = splatBox.getCenter(new THREE.Vector3());
-    }
-
-    // Guard against invalid bounds (e.g. splat geometry still loading asynchronously)
-    if (splatBox.isEmpty() || !isFinite(splatCenter.x) || !isFinite(splatCenter.y) || !isFinite(splatCenter.z)) {
-        log.warn('Auto-align: Splat bounds are invalid (geometry may still be loading). Skipping alignment.');
-        return;
-    }
-
-    log.debug('Splat bounds:', splatBox.min.toArray(), 'to', splatBox.max.toArray());
-    log.debug('Model bounds:', modelBox.min.toArray(), 'to', modelBox.max.toArray());
-
-    // Align centers horizontally (X, Z) and align bottoms vertically (Y)
-    const splatBottom = splatBox.min.y;
-    const modelBottom = modelBox.min.y;
-
-    // Calculate where the model should be positioned
-    const targetX = splatCenter.x;
-    const targetY = modelGroup.position.y + (splatBottom - modelBottom);
-    const targetZ = splatCenter.z;
-
-    // Calculate offset from current model center to target position
-    const offsetX = targetX - modelCenter.x;
-    const offsetZ = targetZ - modelCenter.z;
-
-    // Apply the offset
-    modelGroup.position.x += offsetX;
-    modelGroup.position.y = targetY;
-    modelGroup.position.z += offsetZ;
-    modelGroup.updateMatrixWorld(true);
+    log.info(`[autoCenterAlign] Moved by offset: [${offset.x.toFixed(3)}, ${offset.y.toFixed(3)}, ${offset.z.toFixed(3)}]`);
 
     updateTransformInputs();
     storeLastPositions();
+}
 
-    log.debug('Auto-align complete:', {
-        splatBounds: { min: splatBox.min.toArray(), max: splatBox.max.toArray(), center: splatCenter.toArray() },
-        modelBounds: { min: modelBox.min.toArray(), max: modelBox.max.toArray(), center: modelCenter.toArray() },
-        modelPosition: modelGroup.position.toArray(),
-        splatBoundsFound: splatBoundsFound
-    });
+// =============================================================================
+// RIGID TRANSFORM FROM POINT CORRESPONDENCES
+// =============================================================================
+
+/**
+ * Compute a rigid transform (rotation + uniform scale + translation) from
+ * 3 source-destination point correspondences.
+ * @param {THREE.Vector3[]} srcPts - 3 source points (on the mover)
+ * @param {THREE.Vector3[]} dstPts - 3 corresponding destination points (on the anchor)
+ * @returns {THREE.Matrix4} World-space transform matrix
+ */
+function computeRigidTransformFromPoints(srcPts, dstPts) {
+    // Convert to plain objects for computeCentroid / computeOptimalRotation
+    const srcObjs = srcPts.map(v => ({ x: v.x, y: v.y, z: v.z }));
+    const dstObjs = dstPts.map(v => ({ x: v.x, y: v.y, z: v.z }));
+
+    const srcCentroid = computeCentroid(srcObjs);
+    const dstCentroid = computeCentroid(dstObjs);
+
+    // Compute optimal rotation via Horn's quaternion method
+    const rotMatrix = computeOptimalRotation(srcObjs, dstObjs, srcCentroid, dstCentroid);
+
+    // Compute uniform scale: ratio of dst spread to src spread
+    let srcSpreadSq = 0, dstSpreadSq = 0;
+    for (let i = 0; i < srcObjs.length; i++) {
+        const sdx = srcObjs[i].x - srcCentroid.x;
+        const sdy = srcObjs[i].y - srcCentroid.y;
+        const sdz = srcObjs[i].z - srcCentroid.z;
+        srcSpreadSq += sdx * sdx + sdy * sdy + sdz * sdz;
+
+        const ddx = dstObjs[i].x - dstCentroid.x;
+        const ddy = dstObjs[i].y - dstCentroid.y;
+        const ddz = dstObjs[i].z - dstCentroid.z;
+        dstSpreadSq += ddx * ddx + ddy * ddy + ddz * ddz;
+    }
+
+    let scale = 1;
+    if (srcSpreadSq > 1e-10) {
+        scale = Math.sqrt(dstSpreadSq / srcSpreadSq);
+    }
+
+    // Compute translation: t = dstCentroid - scale * R * srcCentroid
+    const rotatedSrcCentroid = new THREE.Vector3(srcCentroid.x, srcCentroid.y, srcCentroid.z)
+        .applyMatrix4(rotMatrix)
+        .multiplyScalar(scale);
+
+    const translation = new THREE.Vector3(
+        dstCentroid.x - rotatedSrcCentroid.x,
+        dstCentroid.y - rotatedSrcCentroid.y,
+        dstCentroid.z - rotatedSrcCentroid.z
+    );
+
+    // Build final matrix: M = T * S * R
+    const result = new THREE.Matrix4();
+    const scaleMat = new THREE.Matrix4().makeScale(scale, scale, scale);
+    const transMat = new THREE.Matrix4().makeTranslation(translation.x, translation.y, translation.z);
+
+    result.copy(transMat).multiply(scaleMat).multiply(rotMatrix);
+    return result;
+}
+
+// =============================================================================
+// LANDMARK ALIGNMENT CLASS
+// =============================================================================
+
+/**
+ * Interactive 3-point landmark alignment tool.
+ *
+ * Workflow:
+ * 1. User clicks "Align Objects" → enters alignment mode
+ * 2. Clicks 3 points on the anchor object (numbered markers appear)
+ * 3. Clicks 3 corresponding points on the mover object
+ * 4. Rigid transform computed and applied to the mover
+ */
+export class LandmarkAlignment {
+    /**
+     * @param {Object} deps - Dependencies
+     * @param {THREE.Scene} deps.scene
+     * @param {THREE.Camera} deps.camera
+     * @param {THREE.WebGLRenderer} deps.renderer
+     * @param {Object} deps.controls - OrbitControls
+     */
+    constructor(deps) {
+        this.scene = deps.scene;
+        this.camera = deps.camera;
+        this.renderer = deps.renderer;
+        this.controls = deps.controls;
+
+        // These are updated via updateRefs() when assets load
+        this.splatMesh = deps.splatMesh || null;
+        this.modelGroup = deps.modelGroup || null;
+
+        // Callbacks from main.js
+        this.updateTransformInputs = deps.updateTransformInputs;
+        this.storeLastPositions = deps.storeLastPositions;
+
+        // State
+        this._active = false;
+        this._phase = null;      // 'anchor' or 'mover'
+        this._anchorObj = null;
+        this._anchorType = '';    // 'splat' or 'model'
+        this._moverObj = null;
+        this._moverType = '';
+        this._anchorPoints = [];  // THREE.Vector3[]
+        this._moverPoints = [];   // THREE.Vector3[]
+
+        // DOM
+        this._markerContainer = null;
+        this._markers = [];       // { element, position: THREE.Vector3, phase }
+        this._indicatorEl = null;
+        this._instructionEl = null;
+
+        // Raycaster
+        this._raycaster = new THREE.Raycaster();
+        this._mouse = new THREE.Vector2();
+
+        // Bound handlers
+        this._onClickBound = this._onClick.bind(this);
+        this._onKeyDownBound = this._onKeyDown.bind(this);
+
+        this._ensureContainer();
+    }
+
+    /**
+     * Update asset references (called when splat/model loads)
+     */
+    updateRefs(splatMesh, modelGroup) {
+        this.splatMesh = splatMesh;
+        this.modelGroup = modelGroup;
+    }
+
+    /**
+     * Ensure the marker container exists in the DOM
+     */
+    _ensureContainer() {
+        this._markerContainer = document.getElementById('alignment-markers');
+        if (!this._markerContainer) {
+            this._markerContainer = document.createElement('div');
+            this._markerContainer.id = 'alignment-markers';
+            document.body.appendChild(this._markerContainer);
+        }
+
+        this._indicatorEl = document.getElementById('alignment-mode-indicator');
+        this._instructionEl = document.getElementById('alignment-instruction');
+    }
+
+    // ── Public API ──────────────────────────────────────────────────
+
+    /**
+     * Enter alignment mode
+     */
+    start() {
+        if (this._active) return;
+
+        if (!this.splatMesh || !this.modelGroup || this.modelGroup.children.length === 0) {
+            notify.warning('Both splat and model must be loaded for alignment');
+            return;
+        }
+
+        this._active = true;
+
+        // Determine anchor/mover
+        const splatBounds = computeSplatBoundsFromPositions(this.splatMesh);
+        let splatCenter;
+        if (splatBounds.found) {
+            splatCenter = splatBounds.center;
+        } else {
+            splatCenter = new THREE.Box3().setFromObject(this.splatMesh).getCenter(new THREE.Vector3());
+        }
+        const modelCenter = new THREE.Box3().setFromObject(this.modelGroup).getCenter(new THREE.Vector3());
+
+        if (splatCenter.length() <= modelCenter.length()) {
+            this._anchorObj = this.splatMesh;
+            this._anchorType = 'splat';
+            this._moverObj = this.modelGroup;
+            this._moverType = 'model';
+        } else {
+            this._anchorObj = this.modelGroup;
+            this._anchorType = 'model';
+            this._moverObj = this.splatMesh;
+            this._moverType = 'splat';
+        }
+
+        this._phase = 'anchor';
+        this._anchorPoints = [];
+        this._moverPoints = [];
+        this._clearMarkers();
+
+        // Attach listeners
+        this.renderer.domElement.addEventListener('click', this._onClickBound);
+        document.addEventListener('keydown', this._onKeyDownBound);
+        this.renderer.domElement.style.cursor = 'crosshair';
+
+        // Show indicator
+        this._updateInstruction();
+        if (this._indicatorEl) this._indicatorEl.classList.remove('hidden');
+
+        log.info(`[LandmarkAlignment] Started — anchor: ${this._anchorType}, mover: ${this._moverType}`);
+    }
+
+    /**
+     * Cancel alignment mode and clean up
+     */
+    cancel() {
+        if (!this._active) return;
+
+        this._active = false;
+        this._phase = null;
+        this._anchorPoints = [];
+        this._moverPoints = [];
+        this._clearMarkers();
+
+        // Remove listeners
+        this.renderer.domElement.removeEventListener('click', this._onClickBound);
+        document.removeEventListener('keydown', this._onKeyDownBound);
+        this.renderer.domElement.style.cursor = 'default';
+
+        // Hide indicator
+        if (this._indicatorEl) this._indicatorEl.classList.add('hidden');
+
+        log.info('[LandmarkAlignment] Cancelled');
+    }
+
+    /**
+     * Whether alignment mode is currently active
+     * @returns {boolean}
+     */
+    isActive() {
+        return this._active;
+    }
+
+    /**
+     * Update marker screen positions — call each frame from animate()
+     */
+    updateMarkerPositions() {
+        if (!this._active || this._markers.length === 0) return;
+
+        const rect = this.renderer.domElement.getBoundingClientRect();
+
+        for (const marker of this._markers) {
+            const screenPos = marker.position.clone().project(this.camera);
+            const x = (screenPos.x * 0.5 + 0.5) * rect.width + rect.left;
+            const y = (-screenPos.y * 0.5 + 0.5) * rect.height + rect.top;
+
+            if (screenPos.z > 1) {
+                marker.element.style.display = 'none';
+            } else {
+                marker.element.style.display = 'flex';
+                marker.element.style.left = x + 'px';
+                marker.element.style.top = y + 'px';
+            }
+        }
+    }
+
+    /**
+     * Dispose — remove event listeners
+     */
+    dispose() {
+        this.cancel();
+    }
+
+    // ── Private ─────────────────────────────────────────────────────
+
+    /**
+     * Handle click during alignment mode
+     */
+    _onClick(event) {
+        if (!this._active) return;
+
+        // Ignore clicks on UI overlays
+        if (event.target !== this.renderer.domElement) return;
+
+        // Compute normalized device coordinates
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        this._mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        this._mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        this._raycaster.setFromCamera(this._mouse, this.camera);
+        const intersects = this._raycaster.intersectObjects(this.scene.children, true);
+
+        // Filter: only accept hits on the current target object
+        const targetObj = this._phase === 'anchor' ? this._anchorObj : this._moverObj;
+        const hit = intersects.find(h => this._isDescendantOf(h.object, targetObj));
+
+        if (!hit) return;
+
+        const point = hit.point.clone();
+
+        if (this._phase === 'anchor') {
+            this._anchorPoints.push(point);
+            this._addMarker(point, this._anchorPoints.length, 'anchor');
+            log.debug(`[LandmarkAlignment] Anchor point ${this._anchorPoints.length}: [${point.x.toFixed(3)}, ${point.y.toFixed(3)}, ${point.z.toFixed(3)}]`);
+
+            if (this._anchorPoints.length === 3) {
+                this._phase = 'mover';
+            }
+            this._updateInstruction();
+
+        } else if (this._phase === 'mover') {
+            this._moverPoints.push(point);
+            this._addMarker(point, this._moverPoints.length, 'mover');
+            log.debug(`[LandmarkAlignment] Mover point ${this._moverPoints.length}: [${point.x.toFixed(3)}, ${point.y.toFixed(3)}, ${point.z.toFixed(3)}]`);
+
+            if (this._moverPoints.length === 3) {
+                this._computeAndApply();
+            } else {
+                this._updateInstruction();
+            }
+        }
+    }
+
+    /**
+     * Handle keydown — Escape cancels
+     */
+    _onKeyDown(event) {
+        if (event.key === 'Escape') {
+            this.cancel();
+            notify.info('Alignment cancelled');
+        }
+    }
+
+    /**
+     * Check whether obj is targetObj itself or a descendant of it
+     */
+    _isDescendantOf(obj, targetObj) {
+        // For splat mesh, direct equality check
+        if (obj === targetObj) return true;
+
+        // For model group, walk up the parent chain
+        let current = obj;
+        while (current) {
+            if (current === targetObj) return true;
+            current = current.parent;
+        }
+        return false;
+    }
+
+    /**
+     * Create a numbered DOM marker at a 3D position
+     */
+    _addMarker(point, number, phase) {
+        const el = document.createElement('div');
+        el.className = `alignment-marker ${phase}`;
+        el.textContent = number;
+        this._markerContainer.appendChild(el);
+
+        this._markers.push({
+            element: el,
+            position: point.clone(),
+            phase
+        });
+    }
+
+    /**
+     * Remove all markers from the DOM
+     */
+    _clearMarkers() {
+        for (const marker of this._markers) {
+            marker.element.remove();
+        }
+        this._markers = [];
+    }
+
+    /**
+     * Update instruction text in the mode indicator
+     */
+    _updateInstruction() {
+        if (!this._instructionEl) return;
+
+        if (this._phase === 'anchor') {
+            const count = this._anchorPoints.length;
+            this._instructionEl.textContent =
+                `Click 3 points on the ${this._anchorType} (${count} of 3)`;
+        } else if (this._phase === 'mover') {
+            const count = this._moverPoints.length;
+            this._instructionEl.textContent =
+                `Now click 3 matching points on the ${this._moverType} (${count} of 3)`;
+        }
+    }
+
+    /**
+     * Compute and apply the rigid transform from the 6 clicked points
+     */
+    _computeAndApply() {
+        log.info('[LandmarkAlignment] Computing rigid transform from 3 point pairs...');
+
+        try {
+            // Source = mover points (in world space), Destination = anchor points (in world space)
+            const transformMatrix = computeRigidTransformFromPoints(this._moverPoints, this._anchorPoints);
+
+            // Convert world-space transform to local space for the mover
+            const parentWorldInverse = new THREE.Matrix4();
+            if (this._moverObj.parent) {
+                this._moverObj.parent.updateMatrixWorld(true);
+                parentWorldInverse.copy(this._moverObj.parent.matrixWorld).invert();
+            }
+
+            const oldWorldMatrix = this._moverObj.matrixWorld.clone();
+            const newWorldMatrix = transformMatrix.clone().multiply(oldWorldMatrix);
+            const newLocalMatrix = parentWorldInverse.clone().multiply(newWorldMatrix);
+
+            const newPos = new THREE.Vector3();
+            const newQuat = new THREE.Quaternion();
+            const newScale = new THREE.Vector3();
+            newLocalMatrix.decompose(newPos, newQuat, newScale);
+
+            // Validate
+            if (!isFinite(newPos.x) || !isFinite(newPos.y) || !isFinite(newPos.z) ||
+                !isFinite(newScale.x) || !isFinite(newScale.y) || !isFinite(newScale.z)) {
+                notify.error('Alignment produced an invalid transform — try clicking different points');
+                log.error('[LandmarkAlignment] NaN in computed transform');
+                this.cancel();
+                return;
+            }
+
+            // Apply
+            this._moverObj.position.copy(newPos);
+            this._moverObj.quaternion.copy(newQuat);
+            this._moverObj.scale.copy(newScale);
+            this._moverObj.updateMatrix();
+            this._moverObj.updateMatrixWorld(true);
+
+            log.info(`[LandmarkAlignment] Applied to ${this._moverType}:`,
+                `pos=[${newPos.x.toFixed(3)}, ${newPos.y.toFixed(3)}, ${newPos.z.toFixed(3)}]`,
+                `scale=[${newScale.x.toFixed(3)}, ${newScale.y.toFixed(3)}, ${newScale.z.toFixed(3)}]`);
+
+            this.updateTransformInputs();
+            this.storeLastPositions();
+
+            notify.success(`Alignment complete (moved ${this._moverType})`);
+        } catch (e) {
+            log.error('[LandmarkAlignment] Transform computation failed:', e);
+            notify.error('Alignment failed: ' + e.message);
+        }
+
+        // Clean up regardless of success/failure
+        this.cancel();
+    }
 }
 
 // =============================================================================
@@ -693,11 +677,6 @@ export function autoAlignObjects(deps) {
 /**
  * Fit camera to view all objects
  * @param {Object} deps - Dependencies object
- * @param {Object} deps.splatMesh - The splat mesh (can be null)
- * @param {THREE.Group} deps.modelGroup - The model group (can be null)
- * @param {THREE.Camera} deps.camera - The camera
- * @param {Object} deps.controls - OrbitControls
- * @returns {void}
  */
 export function fitToView(deps) {
     const { splatMesh, modelGroup, pointcloudGroup, camera, controls } = deps;
@@ -706,14 +685,12 @@ export function fitToView(deps) {
     let hasContent = false;
 
     if (splatMesh) {
-        // For splat, try computed bounds first
         const splatBounds = computeSplatBoundsFromPositions(splatMesh);
         if (splatBounds.found) {
             box.expandByPoint(splatBounds.min);
             box.expandByPoint(splatBounds.max);
             hasContent = true;
         } else {
-            // Fallback to setFromObject
             const tempBox = new THREE.Box3().setFromObject(splatMesh);
             if (!tempBox.isEmpty()) {
                 box.union(tempBox);
@@ -747,7 +724,6 @@ export function fitToView(deps) {
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
 
-    // Position camera to fit the object
     const fov = camera.fov * (Math.PI / 180);
     const cameraDistance = (maxDim / 2) / Math.tan(fov / 2) * 1.5;
 
@@ -765,12 +741,10 @@ export function fitToView(deps) {
 // ALIGNMENT SAVE/LOAD/RESET
 // =============================================================================
 
-
 /**
  * Apply alignment data to objects
  * @param {Object} data - Alignment data
  * @param {Object} deps - Dependencies object
- * @param {Function} deps.updateTransformInputs - Update UI inputs
  */
 export function applyAlignmentData(data, deps) {
     const { splatMesh, modelGroup, updateTransformInputs } = deps;
@@ -822,9 +796,6 @@ export function resetAlignment(deps) {
 /**
  * Reset camera to initial position
  * @param {Object} deps - Dependencies object
- * @param {THREE.Camera} deps.camera - The camera
- * @param {Object} deps.controls - OrbitControls
- * @param {Object} deps.initialPosition - Initial camera position {x, y, z}
  */
 export function resetCamera(deps) {
     const { camera, controls, initialPosition } = deps;
@@ -836,9 +807,9 @@ export function resetCamera(deps) {
 }
 
 // =============================================================================
+
 /**
  * Center a model on the grid (y=0) when loaded standalone (without a splat).
- * Positions the model so its bottom is on the grid and it's centered horizontally.
  * @param {THREE.Group} modelGroup - The model group to center
  */
 export function centerModelOnGrid(modelGroup) {
@@ -847,7 +818,6 @@ export function centerModelOnGrid(modelGroup) {
         return;
     }
 
-    // Calculate the bounding box of the model
     const box = new THREE.Box3().setFromObject(modelGroup);
 
     if (box.isEmpty()) {
@@ -856,22 +826,9 @@ export function centerModelOnGrid(modelGroup) {
     }
 
     const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
 
-    log.debug('[centerModelOnGrid] Model bounds:', {
-        min: box.min.toArray(),
-        max: box.max.toArray(),
-        center: center.toArray(),
-        size: size.toArray()
-    });
-
-    // Calculate offset to center the model horizontally (X, Z) and place bottom on grid (Y)
-    // The model's current world position affects where the bounding box is
-    // We need to offset the modelGroup position to achieve the desired placement
-
-    // Target: center.x = 0, center.z = 0, box.min.y = 0
     const offsetX = -center.x;
-    const offsetY = -box.min.y;  // Move bottom to y=0
+    const offsetY = -box.min.y;
     const offsetZ = -center.z;
 
     modelGroup.position.x += offsetX;
