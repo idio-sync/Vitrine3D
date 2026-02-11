@@ -1,14 +1,11 @@
 // ES Module imports (these are hoisted - execute first before any other code)
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { SplatMesh } from '@sparkjsdev/spark';
 import { ArchiveLoader, isArchiveFile } from './modules/archive-loader.js';
 import { AnnotationSystem } from './modules/annotation-system.js';
 import { ArchiveCreator, captureScreenshot, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
 import { CAMERA, TIMING, ASSET_STATE, MESH_LOD } from './modules/constants.js';
-import { Logger, notify, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject, parseMarkdown, resolveAssetRefs, fetchWithProgress } from './modules/utilities.js';
+import { Logger, notify, computeMeshFaceCount, computeMeshVertexCount, disposeObject, fetchWithProgress } from './modules/utilities.js';
 import { FlyControls } from './modules/fly-controls.js';
 import { SceneManager } from './modules/scene-manager.js';
 import {
@@ -25,7 +22,14 @@ import {
     updateProgress,
     addListener,
     showInlineLoading,
-    hideInlineLoading
+    hideInlineLoading,
+    setupCollapsibles,
+    hideExportPanel,
+    setDisplayMode as setDisplayModeHandler,
+    updateVisibility as updateVisibilityHandler,
+    updateTransformInputs as updateTransformInputsHandler,
+    showExportPanel as showExportPanelHandler,
+    applyControlsMode as applyControlsModeHandler
 } from './modules/ui-controller.js';
 import {
     formatFileSize,
@@ -37,7 +41,20 @@ import {
     setupLicenseField,
     hideMetadataSidebar,
     addVersionEntry,
-    setupFieldValidation
+    setupFieldValidation,
+    showMetadataSidebar as showMetadataSidebarHandler,
+    switchSidebarMode as switchSidebarModeHandler,
+    setupMetadataTabs,
+    toggleMetadataDisplay as toggleMetadataDisplayHandler,
+    populateMetadataDisplay as populateMetadataDisplayHandler,
+    updateMetadataStats as updateMetadataStatsHandler,
+    updateAssetStatus as updateAssetStatusHandler,
+    clearArchiveMetadata as clearArchiveMetadataHandler,
+    showAnnotationPopup as showAnnotationPopupHandler,
+    updateAnnotationPopupPosition as updateAnnotationPopupPositionHandler,
+    hideAnnotationPopup as hideAnnotationPopupHandler,
+    setupMetadataSidebar as setupMetadataSidebarHandler,
+    prefillMetadataFromArchive as prefillMetadataFromArchiveHandler
 } from './modules/metadata-manager.js';
 import {
     loadSplatFromFile as loadSplatFromFileHandler,
@@ -50,7 +67,13 @@ import {
     loadArchiveFullResMesh,
     updatePointcloudPointSize,
     updatePointcloudOpacity,
-    updateModelTextures
+    updateModelTextures,
+    getAssetTypesForMode,
+    getPrimaryAssetType,
+    updateModelOpacity as updateModelOpacityFn,
+    updateModelWireframe as updateModelWireframeFn,
+    loadGLTF,
+    loadOBJFromUrl as loadOBJFromUrlFn
 } from './modules/file-handlers.js';
 import {
     initShareDialog,
@@ -251,6 +274,12 @@ function createFileHandlerDeps() {
         archiveCreator,
         callbacks: {
             onSplatLoaded: (mesh, file) => {
+                // Auto-switch display mode to show the newly loaded splat
+                if (state.modelLoaded && state.displayMode === 'model') {
+                    setDisplayMode('both');
+                } else if (!state.modelLoaded && state.displayMode !== 'splat') {
+                    setDisplayMode('splat');
+                }
                 updateVisibility();
                 updateTransformInputs();
                 storeLastPositions();
@@ -263,6 +292,12 @@ function createFileHandlerDeps() {
                 clearArchiveMetadata();
             },
             onModelLoaded: (object, file, faceCount) => {
+                // Auto-switch display mode to show the newly loaded model
+                if (state.splatLoaded && state.displayMode === 'splat') {
+                    setDisplayMode('both');
+                } else if (!state.splatLoaded && state.displayMode !== 'model') {
+                    setDisplayMode('model');
+                }
                 updateModelOpacity();
                 updateModelWireframe();
                 updateVisibility();
@@ -303,6 +338,23 @@ function createAlignmentDeps() {
         updateTransformInputs,
         storeLastPositions,
         initialPosition: CAMERA.INITIAL_POSITION
+    };
+}
+
+// Helper function to create dependencies object for metadata-manager.js
+function createMetadataDeps() {
+    return {
+        state,
+        annotationSystem,
+        imageAssets: state.imageAssets,
+        currentSplatBlob,
+        currentMeshBlob,
+        currentPointcloudBlob,
+        updateAnnotationsList: updateSidebarAnnotationsList,
+        onAddAnnotation: toggleAnnotationMode,
+        onUpdateAnnotationCamera: updateSelectedAnnotationCamera,
+        onDeleteAnnotation: deleteSelectedAnnotation,
+        onAnnotationUpdated: () => { updateAnnotationsUI(); updateSidebarAnnotationsList(); }
     };
 }
 
@@ -795,34 +847,12 @@ function setupUIEvents() {
 }
 
 function setDisplayMode(mode) {
-    state.displayMode = mode;
-
-    // Update button states
-    ['splat', 'model', 'pointcloud', 'both', 'split'].forEach(m => {
-        const btn = document.getElementById(`btn-${m}`);
-        if (btn) btn.classList.toggle('active', m === mode);
+    setDisplayModeHandler(mode, {
+        state,
+        canvasRight,
+        onResize: onWindowResize,
+        updateVisibility
     });
-
-    // Handle split view
-    const container = document.getElementById('viewer-container');
-    const splitLabels = document.getElementById('split-labels');
-
-    if (mode === 'split') {
-        if (container) container.classList.add('split-view');
-        if (canvasRight) canvasRight.classList.remove('hidden');
-        if (splitLabels) splitLabels.classList.remove('hidden');
-    } else {
-        if (container) container.classList.remove('split-view');
-        if (canvasRight) canvasRight.classList.add('hidden');
-        if (splitLabels) splitLabels.classList.add('hidden');
-    }
-
-    // Use requestAnimationFrame to ensure CSS changes are applied before resize
-    requestAnimationFrame(() => {
-        onWindowResize();
-    });
-
-    updateVisibility();
 
     // Lazy-load any archive assets needed for this mode that aren't loaded yet
     if (state.archiveLoaded && state.archiveLoader) {
@@ -1006,78 +1036,11 @@ function setTransformMode(mode) {
 }
 
 function updateVisibility() {
-    const mode = state.displayMode;
-
-    if (mode === 'split') {
-        // In split mode, both are visible but rendered in separate views
-        if (splatMesh) splatMesh.visible = true;
-        if (modelGroup) modelGroup.visible = true;
-        if (pointcloudGroup) pointcloudGroup.visible = true;
-    } else {
-        const showSplat = mode === 'splat' || mode === 'both';
-        const showModel = mode === 'model' || mode === 'both';
-        const showPointcloud = mode === 'pointcloud';
-
-        if (splatMesh) {
-            splatMesh.visible = showSplat;
-        }
-
-        if (modelGroup) {
-            modelGroup.visible = showModel;
-        }
-
-        if (pointcloudGroup) {
-            pointcloudGroup.visible = showPointcloud;
-        }
-    }
+    updateVisibilityHandler(state.displayMode, splatMesh, modelGroup, pointcloudGroup);
 }
 
 function updateTransformInputs() {
-    // Helper to safely set input value
-    const setInputValue = (id, value) => {
-        const el = document.getElementById(id);
-        if (el) el.value = value;
-    };
-    const setTextContent = (id, value) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = value;
-    };
-
-    // Update splat inputs
-    if (splatMesh) {
-        setInputValue('splat-pos-x', splatMesh.position.x.toFixed(2));
-        setInputValue('splat-pos-y', splatMesh.position.y.toFixed(2));
-        setInputValue('splat-pos-z', splatMesh.position.z.toFixed(2));
-        setInputValue('splat-rot-x', THREE.MathUtils.radToDeg(splatMesh.rotation.x).toFixed(1));
-        setInputValue('splat-rot-y', THREE.MathUtils.radToDeg(splatMesh.rotation.y).toFixed(1));
-        setInputValue('splat-rot-z', THREE.MathUtils.radToDeg(splatMesh.rotation.z).toFixed(1));
-        setInputValue('splat-scale', splatMesh.scale.x);
-        setTextContent('splat-scale-value', splatMesh.scale.x.toFixed(1));
-    }
-
-    // Update model inputs
-    if (modelGroup) {
-        setInputValue('model-pos-x', modelGroup.position.x.toFixed(2));
-        setInputValue('model-pos-y', modelGroup.position.y.toFixed(2));
-        setInputValue('model-pos-z', modelGroup.position.z.toFixed(2));
-        setInputValue('model-rot-x', THREE.MathUtils.radToDeg(modelGroup.rotation.x).toFixed(1));
-        setInputValue('model-rot-y', THREE.MathUtils.radToDeg(modelGroup.rotation.y).toFixed(1));
-        setInputValue('model-rot-z', THREE.MathUtils.radToDeg(modelGroup.rotation.z).toFixed(1));
-        setInputValue('model-scale', modelGroup.scale.x);
-        setTextContent('model-scale-value', modelGroup.scale.x.toFixed(1));
-    }
-
-    // Update pointcloud inputs
-    if (pointcloudGroup) {
-        setInputValue('pointcloud-pos-x', pointcloudGroup.position.x.toFixed(2));
-        setInputValue('pointcloud-pos-y', pointcloudGroup.position.y.toFixed(2));
-        setInputValue('pointcloud-pos-z', pointcloudGroup.position.z.toFixed(2));
-        setInputValue('pointcloud-rot-x', THREE.MathUtils.radToDeg(pointcloudGroup.rotation.x).toFixed(1));
-        setInputValue('pointcloud-rot-y', THREE.MathUtils.radToDeg(pointcloudGroup.rotation.y).toFixed(1));
-        setInputValue('pointcloud-rot-z', THREE.MathUtils.radToDeg(pointcloudGroup.rotation.z).toFixed(1));
-        setInputValue('pointcloud-scale', pointcloudGroup.scale.x);
-        setTextContent('pointcloud-scale-value', pointcloudGroup.scale.x.toFixed(1));
-    }
+    updateTransformInputsHandler(splatMesh, modelGroup, pointcloudGroup);
 }
 
 // Handle loading splat from URL via prompt
@@ -1342,32 +1305,6 @@ async function ensureAssetLoaded(assetType) {
     }
 }
 
-// Get which asset types are needed for a display mode
-function getAssetTypesForMode(mode) {
-    switch (mode) {
-        case 'splat': return ['splat'];
-        case 'model': return ['mesh'];
-        case 'pointcloud': return ['pointcloud'];
-        case 'both': return ['splat', 'mesh'];
-        case 'split': return ['splat', 'mesh'];
-        default: return ['splat', 'mesh'];
-    }
-}
-
-// Determine which asset type to load first based on display mode and what's available
-function getPrimaryAssetType(displayMode, contentInfo) {
-    const modeTypes = getAssetTypesForMode(displayMode);
-    for (const type of modeTypes) {
-        if (type === 'splat' && contentInfo.hasSplat) return 'splat';
-        if (type === 'mesh' && contentInfo.hasMesh) return 'mesh';
-        if (type === 'pointcloud' && contentInfo.hasPointcloud) return 'pointcloud';
-    }
-    if (contentInfo.hasSplat) return 'splat';
-    if (contentInfo.hasMesh) return 'mesh';
-    if (contentInfo.hasPointcloud) return 'pointcloud';
-    return 'splat';
-}
-
 // Process loaded archive - phased lazy loading
 async function processArchive(archiveLoader, archiveName) {
     showLoading('Parsing manifest...');
@@ -1563,9 +1500,9 @@ async function loadModelFromBlobUrl(blobUrl, fileName) {
     let loadedObject;
 
     if (extension === 'glb' || extension === 'gltf') {
-        loadedObject = await loadGLTFFromBlobUrl(blobUrl);
+        loadedObject = await loadGLTF(blobUrl);
     } else if (extension === 'obj') {
-        loadedObject = await loadOBJFromBlobUrl(blobUrl);
+        loadedObject = await loadOBJFromUrlFn(blobUrl);
     }
 
     if (loadedObject) {
@@ -1586,46 +1523,6 @@ async function loadModelFromBlobUrl(blobUrl, fileName) {
         document.getElementById('model-filename').textContent = fileName;
         document.getElementById('model-faces').textContent = faceCount.toLocaleString();
     }
-}
-
-// Load GLTF from blob URL
-function loadGLTFFromBlobUrl(blobUrl) {
-    return new Promise((resolve, reject) => {
-        const loader = new GLTFLoader();
-
-        loader.load(
-            blobUrl,
-            (gltf) => {
-                // Process materials and normals for proper lighting
-                processMeshMaterials(gltf.scene);
-                resolve(gltf.scene);
-            },
-            undefined,
-            (error) => {
-                reject(error);
-            }
-        );
-    });
-}
-
-// Load OBJ from blob URL
-function loadOBJFromBlobUrl(blobUrl) {
-    return new Promise((resolve, reject) => {
-        const loader = new OBJLoader();
-
-        loader.load(
-            blobUrl,
-            (object) => {
-                // OBJ without MTL - use default material
-                processMeshMaterials(object, { forceDefaultMaterial: true });
-                resolve(object);
-            },
-            undefined,
-            (error) => {
-                reject(error);
-            }
-        );
-    });
 }
 
 // Update archive metadata UI panel
@@ -1698,10 +1595,11 @@ function clearArchiveMetadata() {
         state.archiveLoader = null;
     }
 
+    // Delegate DOM cleanup to metadata-manager.js
+    clearArchiveMetadataHandler();
+
     const section = document.getElementById('archive-metadata-section');
     if (section) section.style.display = 'none';
-
-    document.getElementById('archive-filename').textContent = 'No archive loaded';
 
     // Clear source files from previous archive
     sourceFiles = [];
@@ -2043,19 +1941,8 @@ function loadAnnotationsFromArchive(annotations) {
 
 // Show export panel
 function showExportPanel() {
-    log.info(' showExportPanel called');
-    const panel = document.getElementById('export-panel');
-    if (panel) {
-        log.info(' export-panel found, removing hidden class');
-        panel.classList.remove('hidden');
-    }
+    showExportPanelHandler();
     updateArchiveAssetCheckboxes();
-}
-
-// Hide export panel
-function hideExportPanel() {
-    const panel = document.getElementById('export-panel');
-    if (panel) panel.classList.add('hidden');
 }
 
 // Update archive asset checkboxes based on loaded state
@@ -2381,57 +2268,15 @@ async function downloadGenericViewer() {
 
 // ==================== Metadata Sidebar Functions ====================
 
-// Show metadata sidebar
+// Show metadata sidebar - delegates to metadata-manager.js
 function showMetadataSidebar(mode = 'view') {
-    const sidebar = document.getElementById('metadata-sidebar');
-    if (!sidebar) return;
-
-    sidebar.classList.remove('hidden');
-
-    // Switch to the requested mode
-    switchSidebarMode(mode);
-
-    // Update displays
-    if (mode === 'view') {
-        populateMetadataDisplay();
-    } else if (mode === 'edit') {
-        updateMetadataStats();
-        updateAssetStatus();
-    } else if (mode === 'annotations') {
-        updateSidebarAnnotationsList();
-    }
-
-    // Update toolbar button state
-    const btn = document.getElementById('btn-metadata');
-    if (btn) btn.classList.add('active');
-
-    // Resize the 3D view after sidebar transition completes
+    showMetadataSidebarHandler(mode, createMetadataDeps());
     setTimeout(onWindowResize, 300);
 }
 
-// Switch sidebar mode (view/edit/annotations)
+// Switch sidebar mode - delegates to metadata-manager.js
 function switchSidebarMode(mode) {
-    // Update tab buttons
-    const tabs = document.querySelectorAll('.sidebar-mode-tab');
-    tabs.forEach(tab => {
-        tab.classList.toggle('active', tab.dataset.mode === mode);
-    });
-
-    // Update content sections
-    const contents = document.querySelectorAll('.sidebar-mode-content');
-    contents.forEach(content => {
-        content.classList.toggle('active', content.id === `sidebar-${mode}`);
-    });
-
-    // Refresh content for the selected mode
-    if (mode === 'view') {
-        populateMetadataDisplay();
-    } else if (mode === 'edit') {
-        updateMetadataStats();
-        updateAssetStatus();
-    } else if (mode === 'annotations') {
-        updateSidebarAnnotationsList();
-    }
+    switchSidebarModeHandler(mode, createMetadataDeps());
 }
 
 // Legacy function names for compatibility
@@ -2443,159 +2288,13 @@ function hideMetadataPanel() {
     hideMetadataSidebar();
 }
 
-// Setup metadata tab switching (legacy - kept for compatibility)
-function setupMetadataTabs() {
-    const tabs = document.querySelectorAll('.metadata-tab');
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            // Update active tab
-            tabs.forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-
-            // Update active content
-            const tabContents = document.querySelectorAll('.metadata-tab-content');
-            tabContents.forEach(content => content.classList.remove('active'));
-
-            const tabId = tab.dataset.tab;
-            const targetContent = document.getElementById(`tab-${tabId}`);
-            if (targetContent) {
-                targetContent.classList.add('active');
-            }
-        });
-    });
-}
-
-// Setup metadata sidebar event handlers
+// Setup metadata sidebar - delegates to metadata-manager.js
 function setupMetadataSidebar() {
-    // Mode tabs (View/Edit/Annotations)
-    const modeTabs = document.querySelectorAll('.sidebar-mode-tab');
-    modeTabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const mode = tab.dataset.mode;
-            switchSidebarMode(mode);
-        });
+    setupMetadataSidebarHandler({
+        ...createMetadataDeps(),
+        onExportMetadata: exportMetadataManifest,
+        onImportMetadata: importMetadataManifest
     });
-
-    // Edit sub-tabs
-    const editTabs = document.querySelectorAll('.edit-tab');
-    editTabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const tabName = tab.dataset.tab;
-            switchEditTab(tabName);
-        });
-    });
-
-    // Close button
-    addListener('btn-close-sidebar', 'click', hideMetadataSidebar);
-
-    // Sidebar Add Annotation button
-    addListener('btn-sidebar-add-annotation', 'click', () => {
-        hideMetadataSidebar();
-        toggleAnnotationMode();
-    });
-
-    // Sidebar annotation editor buttons
-    addListener('btn-sidebar-update-anno-camera', 'click', updateSelectedAnnotationCamera);
-    addListener('btn-sidebar-delete-anno', 'click', deleteSelectedAnnotation);
-
-    // Sidebar annotation title/body change handlers
-    const annoTitleInput = document.getElementById('sidebar-edit-anno-title');
-    const annoBodyInput = document.getElementById('sidebar-edit-anno-body');
-
-    if (annoTitleInput) {
-        annoTitleInput.addEventListener('change', () => {
-            const selectedAnno = annotationSystem?.selectedAnnotation;
-            if (selectedAnno) {
-                annotationSystem.updateAnnotation(selectedAnno.id, {
-                    title: annoTitleInput.value
-                });
-                updateAnnotationsUI();
-                updateSidebarAnnotationsList();
-            }
-        });
-    }
-
-    if (annoBodyInput) {
-        annoBodyInput.addEventListener('change', () => {
-            const selectedAnno = annotationSystem?.selectedAnnotation;
-            if (selectedAnno) {
-                annotationSystem.updateAnnotation(selectedAnno.id, {
-                    body: annoBodyInput.value
-                });
-            }
-        });
-    }
-
-    // Dynamic list add buttons (Related Objects / Processing Software)
-    const addSoftwareBtn = document.getElementById('btn-add-processing-software');
-    if (addSoftwareBtn) {
-        addSoftwareBtn.addEventListener('click', addProcessingSoftware);
-    }
-
-    const addRelatedBtn = document.getElementById('btn-add-related-object');
-    if (addRelatedBtn) {
-        addRelatedBtn.addEventListener('click', addRelatedObject);
-    }
-
-    // Image insert buttons — shared file input, target tracks which textarea
-    const imageInput = document.getElementById('image-insert-input');
-    let activeImageTextarea = null;
-
-    function insertImageAtCursor(textarea, text) {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const before = textarea.value.substring(0, start);
-        const after = textarea.value.substring(end);
-        textarea.value = before + text + after;
-        textarea.selectionStart = textarea.selectionEnd = start + text.length;
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-        textarea.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-
-    function sanitizeImageFileName(name) {
-        return name.replace(/[^a-zA-Z0-9._-]/g, '_').toLowerCase();
-    }
-
-    if (imageInput) {
-        const insertButtons = [
-            { btnId: 'btn-anno-insert-image', textareaId: 'anno-body' },
-            { btnId: 'btn-sidebar-insert-image', textareaId: 'sidebar-edit-anno-body' },
-            { btnId: 'btn-desc-insert-image', textareaId: 'meta-description' }
-        ];
-
-        insertButtons.forEach(({ btnId, textareaId }) => {
-            const btn = document.getElementById(btnId);
-            if (btn) {
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    activeImageTextarea = document.getElementById(textareaId);
-                    imageInput.value = '';
-                    imageInput.click();
-                });
-            }
-        });
-
-        imageInput.addEventListener('change', () => {
-            const file = imageInput.files[0];
-            if (!file || !activeImageTextarea) return;
-
-            const ext = file.name.split('.').pop().toLowerCase();
-            const baseName = file.name.replace(/\.[^.]+$/, '');
-            const safeName = sanitizeImageFileName(baseName);
-            const timestamp = Date.now();
-            const assetPath = `images/${safeName}_${timestamp}.${ext}`;
-
-            const url = URL.createObjectURL(file);
-            state.imageAssets.set(assetPath, { blob: file, url, name: file.name });
-
-            insertImageAtCursor(activeImageTextarea, `![${file.name}](asset:${assetPath})`);
-            activeImageTextarea = null;
-        });
-    }
-
-    // Metadata import/export
-    addListener('btn-export-metadata', 'click', exportMetadataManifest);
-    addListener('btn-import-metadata', 'click', importMetadataManifest);
 }
 
 function exportMetadataManifest() {
@@ -2654,730 +2353,42 @@ function importMetadataManifest() {
     input.click();
 }
 
-// Update quality stats display in metadata panel
-function updateMetadataStats() {
-    // Splat count
-    const splatCountEl = document.getElementById('meta-splat-count');
-    if (splatCountEl) {
-        splatCountEl.textContent = state.splatLoaded
-            ? (document.getElementById('splat-vertices')?.textContent || '-')
-            : '-';
-    }
+// Update quality stats display - delegates to metadata-manager.js
+function updateMetadataStats() { updateMetadataStatsHandler(createMetadataDeps()); }
 
-    // Mesh polygons and vertices
-    const meshPolysEl = document.getElementById('meta-mesh-polys');
-    const meshVertsEl = document.getElementById('meta-mesh-verts');
-    if (meshPolysEl) {
-        meshPolysEl.textContent = state.modelLoaded
-            ? (document.getElementById('model-faces')?.textContent || '-')
-            : '-';
-    }
-    if (meshVertsEl) {
-        meshVertsEl.textContent = state.modelLoaded
-            ? (state.meshVertexCount || '-')
-            : '-';
-    }
-
-    // Annotation count
-    const annoCountEl = document.getElementById('meta-anno-count');
-    if (annoCountEl && annotationSystem) {
-        annoCountEl.textContent = annotationSystem.getCount().toString();
-    }
-
-    // File sizes
-    const splatSizeEl = document.getElementById('meta-splat-size');
-    const meshSizeEl = document.getElementById('meta-mesh-size');
-    const archiveSizeEl = document.getElementById('meta-archive-size');
-
-    if (splatSizeEl && currentSplatBlob) {
-        splatSizeEl.textContent = formatFileSize(currentSplatBlob.size);
-    } else if (splatSizeEl) {
-        splatSizeEl.textContent = '-';
-    }
-
-    if (meshSizeEl && currentMeshBlob) {
-        meshSizeEl.textContent = formatFileSize(currentMeshBlob.size);
-    } else if (meshSizeEl) {
-        meshSizeEl.textContent = '-';
-    }
-
-    if (archiveSizeEl) {
-        let totalSize = 0;
-        if (currentSplatBlob) totalSize += currentSplatBlob.size;
-        if (currentMeshBlob) totalSize += currentMeshBlob.size;
-        if (currentPointcloudBlob) totalSize += currentPointcloudBlob.size;
-        archiveSizeEl.textContent = totalSize > 0 ? '~' + formatFileSize(totalSize) : '-';
-    }
-}
-
-// Update asset status in metadata panel
-function updateAssetStatus() {
-    // Splat asset
-    const splatStatus = document.getElementById('splat-asset-status');
-    const splatFields = document.getElementById('splat-asset-fields');
-    if (splatStatus) {
-        if (state.splatLoaded) {
-            const fileName = document.getElementById('splat-filename')?.textContent || 'Scene loaded';
-            splatStatus.textContent = fileName;
-            splatStatus.classList.add('loaded');
-            if (splatFields) splatFields.classList.remove('hidden');
-        } else {
-            splatStatus.textContent = 'No splat loaded';
-            splatStatus.classList.remove('loaded');
-            if (splatFields) splatFields.classList.add('hidden');
-        }
-    }
-
-    // Mesh asset
-    const meshStatus = document.getElementById('mesh-asset-status');
-    const meshFields = document.getElementById('mesh-asset-fields');
-    if (meshStatus) {
-        if (state.modelLoaded) {
-            const fileName = document.getElementById('model-filename')?.textContent || 'Mesh loaded';
-            meshStatus.textContent = fileName;
-            meshStatus.classList.add('loaded');
-            if (meshFields) meshFields.classList.remove('hidden');
-        } else {
-            meshStatus.textContent = 'No mesh loaded';
-            meshStatus.classList.remove('loaded');
-            if (meshFields) meshFields.classList.add('hidden');
-        }
-    }
-
-    // Point cloud asset
-    const pcStatus = document.getElementById('pointcloud-asset-status');
-    const pcFields = document.getElementById('pointcloud-asset-fields');
-    if (pcStatus) {
-        if (state.pointcloudLoaded) {
-            const fileName = document.getElementById('pointcloud-filename')?.textContent || 'Point cloud loaded';
-            pcStatus.textContent = fileName;
-            pcStatus.classList.add('loaded');
-            if (pcFields) pcFields.classList.remove('hidden');
-        } else {
-            pcStatus.textContent = 'No point cloud loaded';
-            pcStatus.classList.remove('loaded');
-            if (pcFields) pcFields.classList.add('hidden');
-        }
-    }
-}
+// Update asset status - delegates to metadata-manager.js
+function updateAssetStatus() { updateAssetStatusHandler(createMetadataDeps()); }
 
 // Prefill metadata panel from archive manifest
+// Prefill metadata - delegates to metadata-manager.js
 function prefillMetadataFromArchive(manifest) {
-    if (!manifest) return;
-
-    // Project info
-    if (manifest.project) {
-        if (manifest.project.title) {
-            document.getElementById('meta-title').value = manifest.project.title;
-        }
-        if (manifest.project.id) {
-            document.getElementById('meta-id').value = manifest.project.id;
-        }
-        if (manifest.project.description) {
-            document.getElementById('meta-description').value = manifest.project.description;
-        }
-        if (manifest.project.license) {
-            const licenseSelect = document.getElementById('meta-license');
-            const standardLicenses = ['CC0', 'CC-BY 4.0', 'CC-BY-SA 4.0', 'CC-BY-NC 4.0', 'MIT', 'All Rights Reserved'];
-            if (standardLicenses.includes(manifest.project.license)) {
-                licenseSelect.value = manifest.project.license;
-            } else {
-                licenseSelect.value = 'custom';
-                document.getElementById('custom-license-field').classList.remove('hidden');
-                document.getElementById('meta-custom-license').value = manifest.project.license;
-            }
-        }
-    }
-
-    // Relationships
-    if (manifest.relationships) {
-        const r = manifest.relationships;
-        const setVal = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
-        setVal('meta-part-of', r.part_of);
-        setVal('meta-derived-from', r.derived_from);
-        setVal('meta-replaces', r.replaces);
-
-        // Related objects
-        if (r.related_objects && Array.isArray(r.related_objects)) {
-            const container = document.getElementById('related-objects-list');
-            if (container) {
-                r.related_objects.forEach(obj => {
-                    // Trigger add related object button
-                    const addBtn = document.getElementById('btn-add-related-object');
-                    if (addBtn) addBtn.click();
-                    const rows = container.querySelectorAll('.related-object-row');
-                    const lastRow = rows[rows.length - 1];
-                    if (lastRow) {
-                        const titleInput = lastRow.querySelector('.related-object-title');
-                        const descInput = lastRow.querySelector('.related-object-desc');
-                        const urlInput = lastRow.querySelector('.related-object-url');
-                        if (titleInput && obj.title) titleInput.value = obj.title;
-                        if (descInput && obj.description) descInput.value = obj.description;
-                        if (urlInput && obj.url) urlInput.value = obj.url;
-                    }
-                });
-            }
-        }
-    }
-
-    // Provenance
-    if (manifest.provenance) {
-        const setVal = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
-        setVal('meta-capture-date', manifest.provenance.capture_date);
-        setVal('meta-capture-device', manifest.provenance.capture_device);
-        setVal('meta-device-serial', manifest.provenance.device_serial);
-        setVal('meta-operator', manifest.provenance.operator);
-        setVal('meta-operator-orcid', manifest.provenance.operator_orcid);
-        setVal('meta-location', manifest.provenance.location);
-        setVal('meta-processing-notes', manifest.provenance.processing_notes);
-
-        if (manifest.provenance.convention_hints) {
-            const hints = Array.isArray(manifest.provenance.convention_hints)
-                ? manifest.provenance.convention_hints.join(', ')
-                : manifest.provenance.convention_hints;
-            document.getElementById('meta-conventions').value = hints;
-        }
-
-        // Processing software
-        if (manifest.provenance.processing_software && Array.isArray(manifest.provenance.processing_software)) {
-            const container = document.getElementById('processing-software-list');
-            if (container) {
-                manifest.provenance.processing_software.forEach(sw => {
-                    const addBtn = document.getElementById('btn-add-software');
-                    if (addBtn) addBtn.click();
-                    const rows = container.querySelectorAll('.software-row');
-                    const lastRow = rows[rows.length - 1];
-                    if (lastRow) {
-                        const nameInput = lastRow.querySelector('.software-name');
-                        const versionInput = lastRow.querySelector('.software-version');
-                        const urlInput = lastRow.querySelector('.software-url');
-                        if (nameInput && sw.name) nameInput.value = sw.name;
-                        if (versionInput && sw.version) versionInput.value = sw.version;
-                        if (urlInput && sw.url) urlInput.value = sw.url;
-                    }
-                });
-            }
-        }
-    }
-
-    // Quality metrics
-    if (manifest.quality_metrics) {
-        const q = manifest.quality_metrics;
-        const setVal = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined && val !== null) el.value = val; };
-        setVal('meta-quality-tier', q.tier);
-        setVal('meta-quality-accuracy', q.accuracy_grade);
-        setVal('meta-quality-scale-verify', q.scale_verification);
-
-        if (q.capture_resolution) {
-            setVal('meta-quality-res-value', q.capture_resolution.value);
-            setVal('meta-quality-res-unit', q.capture_resolution.unit);
-            setVal('meta-quality-res-type', q.capture_resolution.type);
-        }
-        if (q.alignment_error) {
-            setVal('meta-quality-align-value', q.alignment_error.value);
-            setVal('meta-quality-align-unit', q.alignment_error.unit);
-            setVal('meta-quality-align-method', q.alignment_error.method);
-        }
-        if (q.data_quality) {
-            setVal('meta-quality-coverage-gaps', q.data_quality.coverage_gaps);
-            setVal('meta-quality-reconstruction', q.data_quality.reconstruction_areas);
-            setVal('meta-quality-color-calibration', q.data_quality.color_calibration);
-            setVal('meta-quality-uncertainty', q.data_quality.measurement_uncertainty);
-        }
-    }
-
-    // Archival record
-    if (manifest.archival_record) {
-        const a = manifest.archival_record;
-        const setVal = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
-        setVal('meta-archival-standard', a.standard);
-        setVal('meta-archival-title', a.title);
-        if (a.alternate_titles && Array.isArray(a.alternate_titles)) {
-            setVal('meta-archival-alt-titles', a.alternate_titles.join(', '));
-        }
-        if (a.ids) {
-            setVal('meta-archival-accession', a.ids.accession_number);
-            setVal('meta-archival-siris', a.ids.siris_id);
-            setVal('meta-archival-uri', a.ids.uri);
-        }
-        if (a.creation) {
-            setVal('meta-archival-creator', a.creation.creator);
-            setVal('meta-archival-date-created', a.creation.date_created);
-            setVal('meta-archival-period', a.creation.period);
-            setVal('meta-archival-culture', a.creation.culture);
-        }
-        if (a.physical_description) {
-            setVal('meta-archival-medium', a.physical_description.medium);
-            setVal('meta-archival-condition', a.physical_description.condition);
-            if (a.physical_description.dimensions) {
-                setVal('meta-archival-dim-height', a.physical_description.dimensions.height);
-                setVal('meta-archival-dim-width', a.physical_description.dimensions.width);
-                setVal('meta-archival-dim-depth', a.physical_description.dimensions.depth);
-            }
-        }
-        setVal('meta-archival-provenance', a.provenance);
-        if (a.rights) {
-            setVal('meta-archival-copyright', a.rights.copyright_status);
-            setVal('meta-archival-credit', a.rights.credit_line);
-        }
-        if (a.context) {
-            setVal('meta-archival-context-desc', a.context.description);
-            setVal('meta-archival-location-history', a.context.location_history);
-        }
-        if (a.coverage) {
-            if (a.coverage.spatial) {
-                setVal('meta-coverage-location', a.coverage.spatial.location_name);
-                if (a.coverage.spatial.coordinates && a.coverage.spatial.coordinates.length >= 2) {
-                    const latEl = document.getElementById('meta-coverage-lat');
-                    const lonEl = document.getElementById('meta-coverage-lon');
-                    if (latEl && a.coverage.spatial.coordinates[0] != null) latEl.value = a.coverage.spatial.coordinates[0];
-                    if (lonEl && a.coverage.spatial.coordinates[1] != null) lonEl.value = a.coverage.spatial.coordinates[1];
-                }
-            }
-            if (a.coverage.temporal) {
-                setVal('meta-coverage-period', a.coverage.temporal.subject_period);
-                const circaEl = document.getElementById('meta-coverage-circa');
-                if (circaEl && a.coverage.temporal.subject_date_circa !== undefined) {
-                    circaEl.checked = !!a.coverage.temporal.subject_date_circa;
-                }
-            }
-        }
-    }
-
-    // Material standard
-    if (manifest.material_standard) {
-        const m = manifest.material_standard;
-        const setVal = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
-        setVal('meta-material-workflow', m.workflow);
-        setVal('meta-material-colorspace', m.color_space);
-        setVal('meta-material-normalspace', m.normal_space);
-        const occEl = document.getElementById('meta-material-occlusion-packed');
-        if (occEl && m.occlusion_packed !== undefined) occEl.checked = !!m.occlusion_packed;
-    }
-
-    // Preservation
-    if (manifest.preservation) {
-        const p = manifest.preservation;
-        const setVal = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
-        if (p.format_registry) {
-            setVal('meta-pres-format-glb', p.format_registry.glb);
-            setVal('meta-pres-format-obj', p.format_registry.obj);
-            setVal('meta-pres-format-ply', p.format_registry.ply);
-            setVal('meta-pres-format-e57', p.format_registry.e57);
-        }
-        setVal('meta-pres-render-req', p.rendering_requirements);
-        setVal('meta-pres-render-notes', p.rendering_notes);
-
-        // Significant properties checkboxes
-        if (p.significant_properties && Array.isArray(p.significant_properties)) {
-            const propMap = {
-                'geometry': 'meta-pres-prop-geometry',
-                'vertex_color': 'meta-pres-prop-vertex-color',
-                'uv_mapping': 'meta-pres-prop-uv',
-                'normal_maps': 'meta-pres-prop-normals',
-                'pbr_materials': 'meta-pres-prop-pbr',
-                'real_world_scale': 'meta-pres-prop-scale',
-                'gaussian_splat_data': 'meta-pres-prop-splat',
-                'e57_point_cloud_data': 'meta-pres-prop-pointcloud'
-            };
-            p.significant_properties.forEach(prop => {
-                const elId = propMap[prop];
-                if (elId) {
-                    const el = document.getElementById(elId);
-                    if (el) el.checked = true;
-                }
-            });
-        }
-    }
-
-    // Asset metadata from data_entries
-    if (manifest.data_entries) {
-        // Find scene entry
-        const sceneKey = Object.keys(manifest.data_entries).find(k => k.startsWith('scene_'));
-        if (sceneKey) {
-            const scene = manifest.data_entries[sceneKey];
-            if (scene.created_by) {
-                document.getElementById('meta-splat-created-by').value = scene.created_by;
-            }
-            if (scene._created_by_version) {
-                document.getElementById('meta-splat-version').value = scene._created_by_version;
-            }
-            if (scene._source_notes) {
-                document.getElementById('meta-splat-notes').value = scene._source_notes;
-            }
-        }
-
-        // Find mesh entry
-        const meshKey = Object.keys(manifest.data_entries).find(k => k.startsWith('mesh_'));
-        if (meshKey) {
-            const mesh = manifest.data_entries[meshKey];
-            if (mesh.created_by) {
-                document.getElementById('meta-mesh-created-by').value = mesh.created_by;
-            }
-            if (mesh._created_by_version) {
-                document.getElementById('meta-mesh-version').value = mesh._created_by_version;
-            }
-            if (mesh._source_notes) {
-                document.getElementById('meta-mesh-notes').value = mesh._source_notes;
-            }
-        }
-
-        // Find pointcloud entry
-        const pcKey = Object.keys(manifest.data_entries).find(k => k.startsWith('pointcloud_'));
-        if (pcKey) {
-            const pc = manifest.data_entries[pcKey];
-            if (pc.created_by) {
-                document.getElementById('meta-pointcloud-created-by').value = pc.created_by;
-            }
-            if (pc._created_by_version) {
-                document.getElementById('meta-pointcloud-version').value = pc._created_by_version;
-            }
-            if (pc._source_notes) {
-                document.getElementById('meta-pointcloud-notes').value = pc._source_notes;
-            }
-        }
-    }
-
-    // Prefill role for each asset type
-    const sceneKey = Object.keys(manifest.data_entries || {}).find(k => k.startsWith('scene_'));
-    if (sceneKey && manifest.data_entries[sceneKey].role) {
-        const el = document.getElementById('meta-splat-role');
-        if (el) el.value = manifest.data_entries[sceneKey].role;
-    }
-
-    const meshKey = Object.keys(manifest.data_entries || {}).find(k => k.startsWith('mesh_'));
-    if (meshKey && manifest.data_entries[meshKey].role) {
-        const el = document.getElementById('meta-mesh-role');
-        if (el) el.value = manifest.data_entries[meshKey].role;
-    }
-
-    const pcKey = Object.keys(manifest.data_entries || {}).find(k => k.startsWith('pointcloud_'));
-    if (pcKey && manifest.data_entries[pcKey].role) {
-        const el = document.getElementById('meta-pointcloud-role');
-        if (el) el.value = manifest.data_entries[pcKey].role;
-    }
-
-    // Custom fields from _meta
-    if (manifest._meta?.custom_fields) {
-        const container = document.getElementById('custom-fields-list');
-        container.replaceChildren(); // Clear safely without innerHTML
-        for (const [key, value] of Object.entries(manifest._meta.custom_fields)) {
-            addCustomField();
-            const rows = container.querySelectorAll('.custom-field-row');
-            const lastRow = rows[rows.length - 1];
-            lastRow.querySelector('.custom-field-key').value = key;
-            lastRow.querySelector('.custom-field-value').value = value;
-        }
-    }
-
-    // Version history
-    if (manifest.version_history && manifest.version_history.length > 0) {
-        const container = document.getElementById('version-history-list');
-        if (container) {
-            container.replaceChildren();
-            for (const entry of manifest.version_history) {
-                addVersionEntry();
-                const rows = container.querySelectorAll('.version-history-row');
-                const lastRow = rows[rows.length - 1];
-                if (lastRow) {
-                    const versionInput = lastRow.querySelector('.version-entry-version');
-                    const descInput = lastRow.querySelector('.version-entry-description');
-                    if (versionInput) versionInput.value = entry.version || '';
-                    if (descInput) descInput.value = entry.description || '';
-                }
-            }
-        }
-    }
+    prefillMetadataFromArchiveHandler(manifest);
 }
 
 // ==================== Museum-Style Metadata Display ====================
 
-// Toggle metadata display visibility
-function toggleMetadataDisplay() {
-    const sidebar = document.getElementById('metadata-sidebar');
-    if (!sidebar) return;
+// Toggle metadata display - delegates to metadata-manager.js
+function toggleMetadataDisplay() { toggleMetadataDisplayHandler(createMetadataDeps()); }
 
-    if (sidebar.classList.contains('hidden')) {
-        showMetadataDisplay();
-    } else {
-        hideMetadataDisplay();
-    }
-}
-
-// Show museum-style metadata display (view mode in sidebar)
-function showMetadataDisplay() {
-    showMetadataSidebar('view');
-}
-
-// Hide museum-style metadata display
-function hideMetadataDisplay() {
-    hideMetadataSidebar();
-}
-
-// Populate the museum-style metadata display
-function populateMetadataDisplay() {
-    // Get metadata from form or archive
-    const metadata = collectMetadata();
-
-    // Track if sections have content
-    let hasDetails = false;
-    let hasStats = false;
-
-    // Title - always show
-    const titleEl = document.getElementById('display-title');
-    if (titleEl) {
-        titleEl.textContent = metadata.project.title || 'Untitled';
-    }
-
-    // Description - hide if empty, render as markdown with image resolution
-    const descEl = document.getElementById('display-description');
-    if (descEl) {
-        if (metadata.project.description) {
-            descEl.innerHTML = parseMarkdown(resolveAssetRefs(metadata.project.description, state.imageAssets));
-            descEl.style.display = '';
-        } else {
-            descEl.style.display = 'none';
-        }
-    }
-
-    // Creator/Operator
-    const creatorRow = document.getElementById('display-creator-row');
-    const creatorEl = document.getElementById('display-creator');
-    if (creatorRow && creatorEl) {
-        if (metadata.provenance.operator) {
-            creatorEl.textContent = metadata.provenance.operator;
-            creatorRow.style.display = '';
-            hasDetails = true;
-        } else {
-            creatorRow.style.display = 'none';
-        }
-    }
-
-    // Capture Date
-    const dateRow = document.getElementById('display-date-row');
-    const dateEl = document.getElementById('display-date');
-    if (dateRow && dateEl) {
-        if (metadata.provenance.captureDate) {
-            // Format date nicely
-            const date = new Date(metadata.provenance.captureDate);
-            dateEl.textContent = date.toLocaleDateString('en-US', {
-                year: 'numeric', month: 'long', day: 'numeric'
-            });
-            dateRow.style.display = '';
-            hasDetails = true;
-        } else {
-            dateRow.style.display = 'none';
-        }
-    }
-
-    // Location
-    const locationRow = document.getElementById('display-location-row');
-    const locationEl = document.getElementById('display-location');
-    if (locationRow && locationEl) {
-        if (metadata.provenance.location) {
-            locationEl.textContent = metadata.provenance.location;
-            locationRow.style.display = '';
-            hasDetails = true;
-        } else {
-            locationRow.style.display = 'none';
-        }
-    }
-
-    // Device
-    const deviceRow = document.getElementById('display-device-row');
-    const deviceEl = document.getElementById('display-device');
-    if (deviceRow && deviceEl) {
-        if (metadata.provenance.captureDevice) {
-            deviceEl.textContent = metadata.provenance.captureDevice;
-            deviceRow.style.display = '';
-            hasDetails = true;
-        } else {
-            deviceRow.style.display = 'none';
-        }
-    }
-
-    // Hide the details section and divider if no details
-    const detailsSection = document.querySelector('#sidebar-view .display-details');
-    const divider = document.querySelector('#sidebar-view .display-divider');
-    if (detailsSection) {
-        detailsSection.style.display = hasDetails ? '' : 'none';
-    }
-    if (divider) {
-        divider.style.display = hasDetails ? '' : 'none';
-    }
-
-    // License - hide if not set
-    const licenseRow = document.getElementById('display-license-row');
-    const licenseEl = document.getElementById('display-license');
-    if (licenseRow && licenseEl) {
-        const license = metadata.project.license;
-        if (license && license !== 'custom' && license !== 'CC0') {
-            // Show non-default licenses
-            licenseEl.textContent = license;
-            licenseRow.style.display = '';
-        } else if (license === 'custom') {
-            const customLicense = document.getElementById('meta-custom-license')?.value;
-            if (customLicense) {
-                licenseEl.textContent = customLicense;
-                licenseRow.style.display = '';
-            } else {
-                licenseRow.style.display = 'none';
-            }
-        } else {
-            // Hide CC0 (default) or empty
-            licenseRow.style.display = 'none';
-        }
-    }
-
-    // Stats - Splat count
-    const splatStat = document.getElementById('display-splat-stat');
-    const splatCountEl = document.getElementById('display-splat-count');
-    if (splatStat && splatCountEl) {
-        if (state.splatLoaded) {
-            const count = document.getElementById('splat-vertices')?.textContent || '-';
-            splatCountEl.textContent = count;
-            splatStat.style.display = '';
-            hasStats = true;
-        } else {
-            splatStat.style.display = 'none';
-        }
-    }
-
-    // Stats - Mesh polygons
-    const meshStat = document.getElementById('display-mesh-stat');
-    const meshCountEl = document.getElementById('display-mesh-count');
-    if (meshStat && meshCountEl) {
-        if (state.modelLoaded) {
-            const count = document.getElementById('model-faces')?.textContent || '-';
-            meshCountEl.textContent = count;
-            meshStat.style.display = '';
-            hasStats = true;
-        } else {
-            meshStat.style.display = 'none';
-        }
-    }
-
-    // Stats - Point cloud count
-    const pcStat = document.getElementById('display-pointcloud-stat');
-    const pcCountEl = document.getElementById('display-pointcloud-count');
-    if (pcStat && pcCountEl) {
-        if (state.pointcloudLoaded) {
-            const count = document.getElementById('pointcloud-points')?.textContent || '-';
-            pcCountEl.textContent = count;
-            pcStat.style.display = '';
-            hasStats = true;
-        } else {
-            pcStat.style.display = 'none';
-        }
-    }
-
-    // Stats - Annotation count
-    const annoStat = document.getElementById('display-anno-stat');
-    const annoCountEl = document.getElementById('display-anno-count');
-    if (annoStat && annoCountEl && annotationSystem) {
-        const count = annotationSystem.getCount();
-        if (count > 0) {
-            annoCountEl.textContent = count.toString();
-            annoStat.style.display = '';
-            hasStats = true;
-        } else {
-            annoStat.style.display = 'none';
-        }
-    }
-
-    // Hide the stats section if nothing to show
-    const statsSection = document.getElementById('display-stats');
-    if (statsSection) {
-        statsSection.style.display = hasStats ? '' : 'none';
-    }
-}
+// Populate the museum-style metadata display - delegates to metadata-manager.js
+function populateMetadataDisplay() { populateMetadataDisplayHandler(createMetadataDeps()); }
 
 // ==================== Annotation Info Popup ====================
 
-// Show annotation popup near the selected marker
+// Show annotation popup - delegates to metadata-manager.js
 function showAnnotationPopup(annotation) {
-    const popup = document.getElementById('annotation-info-popup');
-    if (!popup) return;
-
-    // Find the marker element
-    const marker = document.querySelector(`.annotation-marker[data-annotation-id="${annotation.id}"]`);
-    if (!marker) return;
-
-    // Track which annotation is shown
-    currentPopupAnnotationId = annotation.id;
-
-    // Get annotation number from marker
-    const number = marker.textContent;
-
-    // Populate popup
-    const numberEl = popup.querySelector('.annotation-info-number');
-    const titleEl = popup.querySelector('.annotation-info-title');
-    const bodyEl = popup.querySelector('.annotation-info-body');
-
-    if (numberEl) numberEl.textContent = number;
-    if (titleEl) titleEl.textContent = annotation.title || 'Untitled';
-    if (bodyEl) bodyEl.innerHTML = parseMarkdown(resolveAssetRefs(annotation.body || '', state.imageAssets));
-
-    // Position popup near the marker
+    currentPopupAnnotationId = showAnnotationPopupHandler(annotation, state.imageAssets);
     updateAnnotationPopupPosition();
-
-    popup.classList.remove('hidden');
 }
 
-// Update annotation popup position to follow the marker
+// Update annotation popup position - delegates to metadata-manager.js
 function updateAnnotationPopupPosition() {
-    if (!currentPopupAnnotationId) return;
-
-    const popup = document.getElementById('annotation-info-popup');
-    if (!popup || popup.classList.contains('hidden')) return;
-
-    const marker = document.querySelector(`.annotation-marker[data-annotation-id="${currentPopupAnnotationId}"]`);
-    if (!marker) return;
-
-    // Hide popup if marker is hidden (behind camera)
-    if (marker.style.display === 'none') {
-        popup.style.visibility = 'hidden';
-        return;
-    }
-    popup.style.visibility = 'visible';
-
-    const markerRect = marker.getBoundingClientRect();
-    const popupWidth = popup.getBoundingClientRect().width || 320;
-    const popupHeight = popup.getBoundingClientRect().height || 200;
-    const edgeMargin = 40;
-    const padding = 15;
-    const markerCenterX = markerRect.left + markerRect.width / 2;
-
-    // Use the viewer container to determine the visible midpoint
-    const viewer = document.getElementById('viewer-container');
-    const viewerRect = viewer ? viewer.getBoundingClientRect() : { left: 0, right: window.innerWidth };
-    const viewerMidX = (viewerRect.left + viewerRect.right) / 2;
-
-    // Snap popup toward the nearest horizontal edge of the viewer
-    let left;
-    if (markerCenterX < viewerMidX) {
-        // Marker on left half → popup to the left edge
-        left = viewerRect.left + edgeMargin;
-    } else {
-        // Marker on right half → popup to the right edge
-        left = viewerRect.right - popupWidth - edgeMargin;
-    }
-
-    // Vertical: align with marker center, clamped to viewport
-    let top = markerRect.top + markerRect.height / 2 - popupHeight / 2;
-    if (top < padding) top = padding;
-    if (top + popupHeight > window.innerHeight - padding) {
-        top = window.innerHeight - popupHeight - padding;
-    }
-
-    popup.style.left = left + 'px';
-    popup.style.top = top + 'px';
+    updateAnnotationPopupPositionHandler(currentPopupAnnotationId);
 }
 
-// Hide annotation popup
+// Hide annotation popup - delegates to metadata-manager.js
 function hideAnnotationPopup() {
-    const popup = document.getElementById('annotation-info-popup');
-    if (popup) popup.classList.add('hidden');
+    hideAnnotationPopupHandler();
     currentPopupAnnotationId = null;
 }
 
@@ -3517,34 +2528,9 @@ async function handleLoadFullResMesh() {
     }
 }
 
-function updateModelOpacity() {
-    if (modelGroup) {
-        modelGroup.traverse((child) => {
-            if (child.isMesh && child.material) {
-                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach(mat => {
-                    mat.transparent = state.modelOpacity < 1;
-                    mat.opacity = state.modelOpacity;
-                    mat.needsUpdate = true;
-                });
-            }
-        });
-    }
-}
+function updateModelOpacity() { updateModelOpacityFn(modelGroup, state.modelOpacity); }
 
-function updateModelWireframe() {
-    if (modelGroup) {
-        modelGroup.traverse((child) => {
-            if (child.isMesh && child.material) {
-                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach(mat => {
-                    mat.wireframe = state.modelWireframe;
-                    mat.needsUpdate = true;
-                });
-            }
-        });
-    }
-}
+function updateModelWireframe() { updateModelWireframeFn(modelGroup, state.modelWireframe); }
 
 function saveAlignment() {
     const alignment = {
@@ -3700,44 +2686,17 @@ function fitToView() {
 
 // Controls panel visibility
 function toggleControlsPanel() {
-    const controlsPanel = document.getElementById('controls-panel');
-    if (!controlsPanel) {
-        log.error(' controls-panel not found!');
-        return;
-    }
-
-    // Check hidden state via class (reliable with width-collapse approach)
-    const isCurrentlyHidden = controlsPanel.classList.contains('panel-hidden');
-    const shouldShow = isCurrentlyHidden;
-
-    // Update state
-    state.controlsVisible = shouldShow;
-
-    // Apply visibility via class toggle
-    applyControlsVisibilityDirect(controlsPanel, shouldShow);
+    state.controlsVisible = !state.controlsVisible;
+    applyControlsVisibility(state.controlsVisible);
 }
 
-function applyControlsVisibilityDirect(controlsPanel, shouldShow) {
+function applyControlsVisibility(shouldShowOverride) {
+    const controlsPanel = document.getElementById('controls-panel');
+    if (!controlsPanel) return;
+
     const toggleBtn = document.getElementById('btn-toggle-controls');
-
-    // DIAGNOSTIC: Log state before changes
-    log.debug('[DIAG] === applyControlsVisibilityDirect ===');
-    log.debug('[DIAG] shouldShow:', shouldShow);
-    log.debug('[DIAG] BEFORE - classList:', controlsPanel.className);
-    log.debug('[DIAG] BEFORE - inline style:', controlsPanel.style.cssText);
-    const beforeComputed = window.getComputedStyle(controlsPanel);
-    log.debug('[DIAG] BEFORE - computed width:', beforeComputed.width);
-    log.debug('[DIAG] BEFORE - computed minWidth:', beforeComputed.minWidth);
-    log.debug('[DIAG] BEFORE - computed padding:', beforeComputed.padding);
-
-    // Check controls mode
-    let mode = 'full';
-    try {
-        mode = config.controlsMode || 'full';
-    } catch (e) {
-        log.warn(' Could not read config.controlsMode:', e);
-    }
-    log.debug('[DIAG] mode:', mode);
+    const shouldShow = shouldShowOverride !== undefined ? shouldShowOverride : state.controlsVisible;
+    const mode = config.controlsMode || 'full';
 
     if (mode === 'none') {
         controlsPanel.style.display = 'none';
@@ -3751,13 +2710,8 @@ function applyControlsVisibilityDirect(controlsPanel, shouldShow) {
     controlsPanel.style.opacity = '';
 
     if (shouldShow) {
-        log.debug('[DIAG] Attempting to SHOW panel...');
-
-        // Remove hidden class
         controlsPanel.classList.remove('panel-hidden', 'hidden');
-        log.debug('[DIAG] After classList.remove - className:', controlsPanel.className);
 
-        // Force explicit inline styles to override any CSS issues
         const targetWidth = (mode === 'minimal') ? '200px' : '280px';
         controlsPanel.style.width = targetWidth;
         controlsPanel.style.minWidth = targetWidth;
@@ -3766,88 +2720,19 @@ function applyControlsVisibilityDirect(controlsPanel, shouldShow) {
         controlsPanel.style.overflowY = 'auto';
         controlsPanel.style.borderLeftWidth = '1px';
         controlsPanel.style.pointerEvents = 'auto';
-        log.debug('[DIAG] After setting inline styles - style.cssText:', controlsPanel.style.cssText);
 
         if (toggleBtn) toggleBtn.classList.remove('controls-hidden');
     } else {
-        log.debug('[DIAG] Attempting to HIDE panel...');
         controlsPanel.classList.add('panel-hidden');
-        log.debug('[DIAG] After classList.add - className:', controlsPanel.className);
-
         if (toggleBtn) toggleBtn.classList.add('controls-hidden');
     }
 
-    // DIAGNOSTIC: Log state after changes (immediate)
-    log.debug('[DIAG] AFTER (immediate) - classList:', controlsPanel.className);
-    log.debug('[DIAG] AFTER (immediate) - inline style:', controlsPanel.style.cssText);
-    const afterComputed = window.getComputedStyle(controlsPanel);
-    log.debug('[DIAG] AFTER (immediate) - computed width:', afterComputed.width);
-    log.debug('[DIAG] AFTER (immediate) - computed minWidth:', afterComputed.minWidth);
-    log.debug('[DIAG] AFTER (immediate) - computed padding:', afterComputed.padding);
-    log.debug('[DIAG] AFTER (immediate) - offsetWidth:', controlsPanel.offsetWidth);
-
-    // DIAGNOSTIC: Check again after a delay (after potential transition)
     setTimeout(() => {
-        const delayedComputed = window.getComputedStyle(controlsPanel);
-        log.debug('[DIAG] AFTER (200ms) - classList:', controlsPanel.className);
-        log.debug('[DIAG] AFTER (200ms) - computed width:', delayedComputed.width);
-        log.debug('[DIAG] AFTER (200ms) - offsetWidth:', controlsPanel.offsetWidth);
-        log.debug('[DIAG] === END ===');
-
-        try {
-            if (typeof onWindowResize === 'function') onWindowResize();
-        } catch (e) { /* ignore */ }
+        try { onWindowResize(); } catch (e) { /* ignore */ }
     }, 200);
 }
-
-// Legacy function for initial setup - calls the new direct function
-function applyControlsVisibility() {
-    const controlsPanel = document.getElementById('controls-panel');
-    if (!controlsPanel) return;
-
-    let shouldShow = true;
-    try {
-        shouldShow = state.controlsVisible;
-    } catch (e) {
-        log.warn(' Could not read state.controlsVisible:', e);
-    }
-
-    applyControlsVisibilityDirect(controlsPanel, shouldShow);
-}
-// Apply controls mode (full, minimal, none)
 function applyControlsMode() {
-    const mode = config.controlsMode || 'full';
-    const controlsPanel = document.getElementById('controls-panel');
-    const toggleBtn = document.getElementById('btn-toggle-controls');
-
-    if (mode === 'none') {
-        // Hide everything
-        if (controlsPanel) controlsPanel.style.display = 'none';
-        if (toggleBtn) toggleBtn.style.display = 'none';
-        return;
-    }
-
-    if (mode === 'minimal') {
-        // Show only display mode toggle
-        // Hide all other sections
-        const sections = document.querySelectorAll('#controls-panel .control-section');
-        sections.forEach((section, index) => {
-            // Keep only the first section (Display Mode) and hide the rest
-            if (index === 0) {
-                section.style.display = '';
-            } else {
-                section.style.display = 'none';
-            }
-        });
-
-        // Hide the main title
-        const title = document.querySelector('#controls-panel h2');
-        if (title) title.style.display = 'none';
-
-        // Make the panel narrower for minimal mode
-        if (controlsPanel) controlsPanel.style.width = '200px';
-    }
-    // 'full' mode shows everything (default)
+    applyControlsModeHandler(config.controlsMode || 'full');
 }
 
 // Ensure toolbar visibility is maintained (safeguard against race conditions)
@@ -4091,9 +2976,9 @@ async function loadModelFromUrl(url) {
         let loadedObject;
 
         if (extension === 'glb' || extension === 'gltf') {
-            loadedObject = await loadGLTFFromUrl(blobUrl);
+            loadedObject = await loadGLTF(blobUrl);
         } else if (extension === 'obj') {
-            loadedObject = await loadOBJFromUrl(blobUrl);
+            loadedObject = await loadOBJFromUrlFn(blobUrl);
         }
 
         if (loadedObject) {
@@ -4127,38 +3012,6 @@ async function loadModelFromUrl(url) {
         log.error('Error loading model from URL:', error);
         hideLoading();
     }
-}
-
-function loadGLTFFromUrl(url) {
-    return new Promise((resolve, reject) => {
-        const loader = new GLTFLoader();
-        loader.load(
-            url,
-            (gltf) => {
-                // Process materials and normals for proper lighting
-                processMeshMaterials(gltf.scene);
-                resolve(gltf.scene);
-            },
-            undefined,
-            (error) => reject(error)
-        );
-    });
-}
-
-function loadOBJFromUrl(url) {
-    return new Promise((resolve, reject) => {
-        const loader = new OBJLoader();
-        loader.load(
-            url,
-            (object) => {
-                // OBJ without MTL - use default material
-                processMeshMaterials(object, { forceDefaultMaterial: true, preserveTextures: true });
-                resolve(object);
-            },
-            undefined,
-            (error) => reject(error)
-        );
-    });
 }
 
 // ============================================================
@@ -4211,26 +3064,6 @@ async function loadPointcloudFromUrl(url) {
 // ICP alignment function - wrapper for alignment.js
 async function icpAlignObjects() {
     await icpAlignObjectsHandler(createAlignmentDeps());
-}
-
-// Setup collapsible sections
-function setupCollapsibles() {
-    const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
-    collapsibleHeaders.forEach(header => {
-        header.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            const section = header.closest('.control-section.collapsible');
-            if (section) {
-                section.classList.toggle('collapsed');
-                // Update icon
-                const icon = header.querySelector('.collapse-icon');
-                if (icon) {
-                    icon.textContent = section.classList.contains('collapsed') ? '▶' : '▼';
-                }
-            }
-        });
-    });
 }
 
 // Auto align objects - wrapper for alignment.js

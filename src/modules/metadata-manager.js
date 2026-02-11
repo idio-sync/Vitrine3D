@@ -317,6 +317,16 @@ export function setupMetadataSidebar(deps = {}) {
         });
     }
 
+    // Metadata import/export buttons
+    if (deps.onExportMetadata) {
+        const exportBtn = document.getElementById('btn-export-metadata');
+        if (exportBtn) exportBtn.addEventListener('click', deps.onExportMetadata);
+    }
+    if (deps.onImportMetadata) {
+        const importBtn = document.getElementById('btn-import-metadata');
+        if (importBtn) importBtn.addEventListener('click', deps.onImportMetadata);
+    }
+
     // Setup field validation
     setupFieldValidation();
 }
@@ -1278,7 +1288,8 @@ export function prefillMetadataFromArchive(manifest) {
             const splatFields = {
                 'meta-splat-created-by': scene.created_by,
                 'meta-splat-version': scene._created_by_version,
-                'meta-splat-notes': scene._source_notes
+                'meta-splat-notes': scene._source_notes,
+                'meta-splat-role': scene.role
             };
             for (const [id, value] of Object.entries(splatFields)) {
                 const el = document.getElementById(id);
@@ -1293,7 +1304,8 @@ export function prefillMetadataFromArchive(manifest) {
             const meshFields = {
                 'meta-mesh-created-by': mesh.created_by,
                 'meta-mesh-version': mesh._created_by_version,
-                'meta-mesh-notes': mesh._source_notes
+                'meta-mesh-notes': mesh._source_notes,
+                'meta-mesh-role': mesh.role
             };
             for (const [id, value] of Object.entries(meshFields)) {
                 const el = document.getElementById(id);
@@ -1308,7 +1320,8 @@ export function prefillMetadataFromArchive(manifest) {
             const pcFields = {
                 'meta-pointcloud-created-by': pc.created_by,
                 'meta-pointcloud-version': pc._created_by_version,
-                'meta-pointcloud-notes': pc._source_notes
+                'meta-pointcloud-notes': pc._source_notes,
+                'meta-pointcloud-role': pc.role
             };
             for (const [id, value] of Object.entries(pcFields)) {
                 const el = document.getElementById(id);
@@ -1330,6 +1343,25 @@ export function prefillMetadataFromArchive(manifest) {
                 const valueInput = lastRow.querySelector('.custom-field-value');
                 if (keyInput) keyInput.value = key;
                 if (valueInput) valueInput.value = value;
+            }
+        }
+    }
+
+    // Version history
+    if (manifest.version_history?.length) {
+        const container = document.getElementById('version-history-list');
+        if (container) {
+            container.replaceChildren();
+            for (const entry of manifest.version_history) {
+                addVersionEntry();
+                const rows = container.querySelectorAll('.version-history-row');
+                const lastRow = rows[rows.length - 1];
+                if (lastRow) {
+                    const versionInput = lastRow.querySelector('.version-entry-version');
+                    const descInput = lastRow.querySelector('.version-entry-description');
+                    if (versionInput) versionInput.value = entry.version || '';
+                    if (descInput) descInput.value = entry.description || '';
+                }
             }
         }
     }
@@ -1474,6 +1506,20 @@ export function populateMetadataDisplay(deps = {}) {
             hasStats = true;
         } else {
             meshStat.style.display = 'none';
+        }
+    }
+
+    // Stats - Point cloud count
+    const pcStat = document.getElementById('display-pointcloud-stat');
+    const pcCountEl = document.getElementById('display-pointcloud-count');
+    if (pcStat && pcCountEl) {
+        if (state.pointcloudLoaded) {
+            const count = document.getElementById('pointcloud-points')?.textContent || '-';
+            pcCountEl.textContent = count;
+            pcStat.style.display = '';
+            hasStats = true;
+        } else {
+            pcStat.style.display = 'none';
         }
     }
 

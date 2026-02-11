@@ -647,6 +647,12 @@ export function autoAlignObjects(deps) {
         splatCenter = splatBox.getCenter(new THREE.Vector3());
     }
 
+    // Guard against invalid bounds (e.g. splat geometry still loading asynchronously)
+    if (splatBox.isEmpty() || !isFinite(splatCenter.x) || !isFinite(splatCenter.y) || !isFinite(splatCenter.z)) {
+        log.warn('Auto-align: Splat bounds are invalid (geometry may still be loading). Skipping alignment.');
+        return;
+    }
+
     log.debug('Splat bounds:', splatBox.min.toArray(), 'to', splatBox.max.toArray());
     log.debug('Model bounds:', modelBox.min.toArray(), 'to', modelBox.max.toArray());
 

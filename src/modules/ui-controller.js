@@ -30,7 +30,7 @@ export function setDisplayMode(mode, deps) {
     state.displayMode = mode;
 
     // Update button states
-    ['splat', 'model', 'both', 'split'].forEach(m => {
+    ['splat', 'model', 'pointcloud', 'both', 'split'].forEach(m => {
         const btn = document.getElementById(`btn-${m}`);
         if (btn) btn.classList.toggle('active', m === mode);
     });
@@ -62,15 +62,18 @@ export function setDisplayMode(mode, deps) {
  * @param {string} displayMode - Current display mode
  * @param {Object} splatMesh - The splat mesh
  * @param {THREE.Group} modelGroup - The model group
+ * @param {THREE.Group} [pointcloudGroup] - The point cloud group (optional)
  */
-export function updateVisibility(displayMode, splatMesh, modelGroup) {
+export function updateVisibility(displayMode, splatMesh, modelGroup, pointcloudGroup) {
     if (displayMode === 'split') {
         // In split mode, both are visible but rendered in separate views
         if (splatMesh) splatMesh.visible = true;
         if (modelGroup) modelGroup.visible = true;
+        if (pointcloudGroup) pointcloudGroup.visible = true;
     } else {
         const showSplat = displayMode === 'splat' || displayMode === 'both';
         const showModel = displayMode === 'model' || displayMode === 'both';
+        const showPointcloud = displayMode === 'pointcloud';
 
         if (splatMesh) {
             splatMesh.visible = showSplat;
@@ -78,6 +81,10 @@ export function updateVisibility(displayMode, splatMesh, modelGroup) {
 
         if (modelGroup) {
             modelGroup.visible = showModel;
+        }
+
+        if (pointcloudGroup) {
+            pointcloudGroup.visible = showPointcloud;
         }
     }
 }
@@ -232,7 +239,7 @@ export function applyControlsMode(mode) {
 
     if (mode === 'minimal') {
         // Hide all sections except display mode toggle
-        const sections = controlsPanel?.querySelectorAll('.section');
+        const sections = controlsPanel?.querySelectorAll('.control-section');
         sections?.forEach(section => {
             const header = section.querySelector('h3');
             const headerText = header?.textContent?.toLowerCase() || '';
@@ -260,8 +267,9 @@ export function applyControlsMode(mode) {
  * Update transform input fields from object transforms
  * @param {Object} splatMesh - The splat mesh
  * @param {THREE.Group} modelGroup - The model group
+ * @param {THREE.Group} [pointcloudGroup] - The point cloud group (optional)
  */
-export function updateTransformInputs(splatMesh, modelGroup) {
+export function updateTransformInputs(splatMesh, modelGroup, pointcloudGroup) {
     // Helper to safely set input value
     const setInputValue = (id, value) => {
         const el = document.getElementById(id);
@@ -294,6 +302,18 @@ export function updateTransformInputs(splatMesh, modelGroup) {
         setInputValue('model-rot-z', THREE.MathUtils.radToDeg(modelGroup.rotation.z).toFixed(1));
         setInputValue('model-scale', modelGroup.scale.x);
         setTextContent('model-scale-value', modelGroup.scale.x.toFixed(1));
+    }
+
+    // Update pointcloud inputs
+    if (pointcloudGroup) {
+        setInputValue('pointcloud-pos-x', pointcloudGroup.position.x.toFixed(2));
+        setInputValue('pointcloud-pos-y', pointcloudGroup.position.y.toFixed(2));
+        setInputValue('pointcloud-pos-z', pointcloudGroup.position.z.toFixed(2));
+        setInputValue('pointcloud-rot-x', THREE.MathUtils.radToDeg(pointcloudGroup.rotation.x).toFixed(1));
+        setInputValue('pointcloud-rot-y', THREE.MathUtils.radToDeg(pointcloudGroup.rotation.y).toFixed(1));
+        setInputValue('pointcloud-rot-z', THREE.MathUtils.radToDeg(pointcloudGroup.rotation.z).toFixed(1));
+        setInputValue('pointcloud-scale', pointcloudGroup.scale.x);
+        setTextContent('pointcloud-scale-value', pointcloudGroup.scale.x.toFixed(1));
     }
 }
 
