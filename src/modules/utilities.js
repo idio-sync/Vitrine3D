@@ -660,7 +660,7 @@ async function fetchWithProgress(url, onProgress = null) {
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        chunks.push(value);
+        chunks.push(new Uint8Array(value));
         receivedLength += value.length;
         onProgress(receivedLength, contentLength);
     }
@@ -838,6 +838,22 @@ function resolveAssetRefs(text, imageAssets) {
     });
 }
 
+/**
+ * Trigger a browser download of a Blob with the given filename.
+ * @param {Blob} blob - The data to download
+ * @param {string} filename - Suggested filename for the download
+ */
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
 // =============================================================================
 // EXPORTS
 // =============================================================================
@@ -860,5 +876,6 @@ export {
     resolveAssetRefs,
 
     // Network utilities
-    fetchWithProgress
+    fetchWithProgress,
+    downloadBlob
 };

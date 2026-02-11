@@ -13,7 +13,7 @@ import { SceneManager } from './scene-manager.js';
 import { FlyControls } from './fly-controls.js';
 import { AnnotationSystem } from './annotation-system.js';
 import { CAMERA, ASSET_STATE } from './constants.js';
-import { Logger, notify, parseMarkdown, resolveAssetRefs, fetchWithProgress } from './utilities.js';
+import { Logger, notify, parseMarkdown, resolveAssetRefs, fetchWithProgress, downloadBlob } from './utilities.js';
 import {
     showLoading, hideLoading, updateProgress,
     setDisplayMode, setupCollapsibles, addListener,
@@ -189,6 +189,7 @@ function setupFilePicker() {
         input.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
                 hidePicker();
+                state.archiveSourceUrl = null;
                 handleArchiveFile(e.target.files[0]);
             }
         });
@@ -208,6 +209,7 @@ function setupFilePicker() {
             const file = e.dataTransfer.files[0];
             if (file && /\.(a3d|a3z)$/i.test(file.name)) {
                 hidePicker();
+                state.archiveSourceUrl = null;
                 handleArchiveFile(file);
             } else {
                 notify.warning('Please select an .a3d or .a3z archive file.');
@@ -236,6 +238,7 @@ async function loadArchiveFromUrl(url) {
         });
         const fileName = url.split('/').pop().split('?')[0] || 'archive.a3d';
         const file = new File([blob], fileName, { type: blob.type });
+        state.archiveSourceUrl = url;
         handleArchiveFile(file);
     } catch (err) {
         log.error('Failed to load archive from URL:', err);
@@ -438,6 +441,9 @@ async function handleArchiveFile(file) {
         const toolbar = document.getElementById('left-toolbar');
         if (toolbar) toolbar.style.display = 'flex';
 
+        // Add export section to settings tab now that archive data is available
+        createExportSection();
+
         // Show annotation toggle button if annotations exist, active by default
         if (annotationSystem.hasAnnotations()) {
             const annoBtn = document.getElementById('btn-toggle-annotations');
@@ -472,12 +478,11 @@ async function handleArchiveFile(file) {
                         showRelevantSettings(state.splatLoaded, state.modelLoaded, state.pointcloudLoaded);
                     }
                 }
-                // Release raw ZIP data after all assets extracted
-                archiveLoader.releaseRawData();
-                log.info('All archive assets loaded, raw data released');
+                // Keep archive data available for export downloads
+                log.info('All archive assets loaded, raw data retained for export');
             }, 100);
         } else {
-            archiveLoader.releaseRawData();
+            log.info('Archive data retained for export');
         }
 
     } catch (e) {
@@ -1426,6 +1431,145 @@ function moveSettingsToSidebar() {
     // 6. Hide the now-empty controls panel
     controlsPanel.style.display = 'none';
     log.info('Settings controls moved into sidebar');
+}
+
+/**
+ * Build the "Export" collapsible section and append it to the settings tab.
+ * Called after archive is fully loaded so state.archiveLoader/archiveManifest are available.
+ */
+function createExportSection() {
+    const settingsContainer = document.getElementById('sidebar-settings');
+    if (!settingsContainer || !state.archiveLoader) return;
+
+    // Remove existing export section if present (e.g. when loading a second archive)
+    const existing = settingsContainer.querySelector('.export-section');
+    if (existing) existing.remove();
+
+    // Determine base filename from project title or archive filename
+    const title = state.archiveManifest?.project?.title;
+    const baseName = sanitizeFilename(title || stripExtension(state.archiveFileName || 'archive'));
+
+    // Get content info
+    const contentInfo = state.archiveLoader.getContentInfo();
+    const sceneEntry = state.archiveLoader.getSceneEntry();
+    const meshEntry = state.archiveLoader.getMeshEntry();
+    const pcEntry = state.archiveLoader.getPointcloudEntry();
+
+    // Build the collapsible section using the standard control-section pattern
+    const section = document.createElement('div');
+    section.className = 'control-section collapsible collapsed export-section';
+
+    const header = document.createElement('h3');
+    header.className = 'collapsible-header';
+    header.innerHTML = 'Export <span class="collapse-icon">▶</span>';
+    header.addEventListener('click', () => {
+        section.classList.toggle('collapsed');
+        const icon = header.querySelector('.collapse-icon');
+        if (icon) icon.textContent = section.classList.contains('collapsed') ? '▶' : '▼';
+    });
+
+    const content = document.createElement('div');
+    content.className = 'collapsible-content';
+
+    // --- Full archive download (only when loaded from URL) ---
+    if (state.archiveSourceUrl) {
+        const archiveBtn = createExportButton(
+            'Download Full Archive (.a3d)',
+            `${baseName}.a3d`,
+            async (btn) => {
+                const a = document.createElement('a');
+                a.href = state.archiveSourceUrl;
+                a.download = `${baseName}.a3d`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                log.info(`Archive download initiated from source URL`);
+            }
+        );
+        content.appendChild(archiveBtn);
+
+        const archiveNote = document.createElement('p');
+        archiveNote.className = 'export-note';
+        archiveNote.textContent = 'Full archive includes metadata, annotations, version history, and source files if present.';
+        content.appendChild(archiveNote);
+    }
+
+    // --- Individual assets ---
+    const assets = [];
+    if (contentInfo.hasMesh && meshEntry) {
+        const ext = getFileExtension(meshEntry.file_name);
+        assets.push({ label: `3D Model (${ext})`, entry: meshEntry, filename: `${baseName}${ext}` });
+    }
+    if (contentInfo.hasSplat && sceneEntry) {
+        const ext = getFileExtension(sceneEntry.file_name);
+        assets.push({ label: `Gaussian Splat (${ext})`, entry: sceneEntry, filename: `${baseName}${ext}` });
+    }
+    if (contentInfo.hasPointcloud && pcEntry) {
+        const ext = getFileExtension(pcEntry.file_name);
+        assets.push({ label: `Point Cloud (${ext})`, entry: pcEntry, filename: `${baseName}${ext}` });
+    }
+
+    if (assets.length > 0) {
+        const subHeader = document.createElement('div');
+        subHeader.className = 'export-individual-label';
+        subHeader.textContent = 'Individual Assets';
+        content.appendChild(subHeader);
+
+        for (const asset of assets) {
+            const btn = createExportButton(asset.label, asset.filename, async (btnEl) => {
+                const result = await state.archiveLoader.extractFile(asset.entry.file_name);
+                if (result) {
+                    downloadBlob(result.blob, asset.filename);
+                }
+            });
+            content.appendChild(btn);
+        }
+    }
+
+    section.appendChild(header);
+    section.appendChild(content);
+    settingsContainer.appendChild(section);
+    log.info('Export section added to settings');
+}
+
+/**
+ * Create a styled export button with loading state handling.
+ */
+function createExportButton(label, filename, onClick) {
+    const btn = document.createElement('button');
+    btn.className = 'export-btn';
+    btn.textContent = label;
+    btn.addEventListener('click', async () => {
+        const origText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Preparing download...';
+        try {
+            await onClick(btn);
+        } catch (err) {
+            log.error('Export failed:', err);
+            notify.error(`Export failed: ${err.message}`);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = origText;
+        }
+    });
+    return btn;
+}
+
+/** Sanitize a string for use as a filename */
+function sanitizeFilename(name) {
+    return name.replace(/[<>:"/\\|?*]/g, '-').replace(/\s+/g, ' ').trim() || 'archive';
+}
+
+/** Strip file extension from a filename */
+function stripExtension(filename) {
+    return filename.replace(/\.[^.]+$/, '');
+}
+
+/** Get file extension including the dot (e.g. ".glb") */
+function getFileExtension(filename) {
+    const match = filename.match(/\.[^.]+$/);
+    return match ? match[0] : '';
 }
 
 /**
