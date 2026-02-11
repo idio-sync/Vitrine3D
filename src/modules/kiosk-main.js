@@ -23,6 +23,7 @@ import {
 import {
     loadArchiveFromFile, processArchive,
     processArchivePhase1, loadArchiveAsset,
+    getAssetTypesForMode, getPrimaryAssetType,
     updateModelOpacity, updateModelWireframe, updateModelTextures,
     updatePointcloudPointSize, updatePointcloudOpacity
 } from './file-handlers.js';
@@ -287,30 +288,6 @@ async function ensureAssetLoaded(assetType) {
     } finally {
         hideInlineLoading(assetType);
     }
-}
-
-function getAssetTypesForMode(mode) {
-    switch (mode) {
-        case 'splat': return ['splat'];
-        case 'model': return ['mesh'];
-        case 'pointcloud': return ['pointcloud'];
-        case 'both': return ['splat', 'mesh'];
-        case 'split': return ['splat', 'mesh'];
-        default: return ['splat', 'mesh'];
-    }
-}
-
-function getPrimaryAssetType(displayMode, contentInfo) {
-    const modeTypes = getAssetTypesForMode(displayMode);
-    for (const type of modeTypes) {
-        if (type === 'splat' && contentInfo.hasSplat) return 'splat';
-        if (type === 'mesh' && contentInfo.hasMesh) return 'mesh';
-        if (type === 'pointcloud' && contentInfo.hasPointcloud) return 'pointcloud';
-    }
-    if (contentInfo.hasSplat) return 'splat';
-    if (contentInfo.hasMesh) return 'mesh';
-    if (contentInfo.hasPointcloud) return 'pointcloud';
-    return 'splat';
 }
 
 // Trigger lazy loading of assets needed for a display mode

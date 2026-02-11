@@ -79,6 +79,21 @@ import {
     initShareDialog,
     showShareDialog
 } from './modules/share-dialog.js';
+import {
+    getCurrentPopupAnnotationId,
+    dismissPopup as dismissPopupHandler,
+    onAnnotationPlaced as onAnnotationPlacedHandler,
+    onAnnotationSelected as onAnnotationSelectedHandler,
+    onPlacementModeChanged as onPlacementModeChangedHandler,
+    toggleAnnotationMode as toggleAnnotationModeHandler,
+    saveAnnotation as saveAnnotationHandler,
+    cancelAnnotation as cancelAnnotationHandler,
+    updateSelectedAnnotationCamera as updateSelectedAnnotationCameraHandler,
+    deleteSelectedAnnotation as deleteSelectedAnnotationHandler,
+    updateAnnotationsUI as updateAnnotationsUIHandler,
+    updateSidebarAnnotationsList as updateSidebarAnnotationsListHandler,
+    loadAnnotationsFromArchive as loadAnnotationsFromArchiveHandler
+} from './modules/annotation-controller.js';
 // kiosk-viewer.js is loaded dynamically in downloadGenericViewer() to avoid
 // blocking the main application if the module fails to load.
 
@@ -243,7 +258,6 @@ let currentSplatBlob = null;
 let currentMeshBlob = null;
 let currentProxyMeshBlob = null;
 let currentPointcloudBlob = null;
-let currentPopupAnnotationId = null; // Track which annotation's popup is shown
 let sourceFiles = []; // Array of { file: File|null, name: string, size: number, category: string, fromArchive: boolean }
 
 // Three.js objects - Split view (right side)
@@ -339,6 +353,21 @@ function createAlignmentDeps() {
         updateTransformInputs,
         storeLastPositions,
         initialPosition: CAMERA.INITIAL_POSITION
+    };
+}
+
+// Helper function to create dependencies object for annotation-controller.js
+function createAnnotationControllerDeps() {
+    return {
+        annotationSystem,
+        showAnnotationPopup: (annotation) => {
+            const id = showAnnotationPopupHandler(annotation, state.imageAssets);
+            updateAnnotationPopupPositionHandler(id);
+            return id;
+        },
+        hideAnnotationPopup: () => {
+            hideAnnotationPopupHandler();
+        }
     };
 }
 
@@ -816,7 +845,7 @@ function setupUIEvents() {
         if (popup && !popup.classList.contains('hidden')) {
             // Check if click was outside popup and not on an annotation marker
             if (!popup.contains(e.target) && !e.target.closest('.annotation-marker')) {
-                hideAnnotationPopup();
+                dismissPopupHandler(createAnnotationControllerDeps());
             }
         }
     });
@@ -843,7 +872,7 @@ function setupUIEvents() {
         } else if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey) {
             toggleFlyMode();
         } else if (e.key === 'Escape') {
-            hideAnnotationPopup();
+            dismissPopupHandler(createAnnotationControllerDeps());
             hideMetadataDisplay();
         }
     });
@@ -1621,331 +1650,57 @@ function clearArchiveMetadata() {
 
 // Called when user places an annotation (clicks on model in placement mode)
 function onAnnotationPlaced(position, cameraState) {
-    log.info(' Annotation placed at:', position);
-
-    // Show annotation panel for details entry
-    const panel = document.getElementById('annotation-panel');
-    if (panel) panel.classList.remove('hidden');
-
-    // Pre-fill position display
-    const posDisplay = document.getElementById('anno-pos-display');
-    if (posDisplay) {
-        posDisplay.textContent = `${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)}`;
-    }
-
-    // Generate auto-ID
-    const count = annotationSystem ? annotationSystem.getCount() + 1 : 1;
-    const idInput = document.getElementById('anno-id');
-    if (idInput) idInput.value = `anno_${count}`;
-
-    // Focus title input
-    const titleInput = document.getElementById('anno-title');
-    if (titleInput) titleInput.focus();
+    onAnnotationPlacedHandler(position, cameraState, createAnnotationControllerDeps());
 }
 
 // Called when an annotation is selected
 function onAnnotationSelected(annotation) {
-    log.info(' Annotation selected:', annotation.id);
-
-    // Toggle: if clicking already-open annotation, close popup and deselect
-    if (currentPopupAnnotationId === annotation.id) {
-        hideAnnotationPopup();
-        annotationSystem.selectedAnnotation = null;
-        document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
-        document.querySelectorAll('.annotation-chip.active').forEach(c => c.classList.remove('active'));
-        return;
-    }
-
-    // Update annotations list highlighting
-    const items = document.querySelectorAll('.annotation-item');
-    items.forEach(item => {
-        item.classList.toggle('selected', item.dataset.annoId === annotation.id);
-    });
-
-    // Update annotation chips
-    const chips = document.querySelectorAll('.annotation-chip');
-    chips.forEach(chip => {
-        chip.classList.toggle('active', chip.dataset.annoId === annotation.id);
-    });
-
-    // Show editor panel (in controls - legacy)
-    const editor = document.getElementById('selected-annotation-editor');
-    if (editor) {
-        editor.classList.remove('hidden');
-
-        const titleInput = document.getElementById('edit-anno-title');
-        const bodyInput = document.getElementById('edit-anno-body');
-        if (titleInput) titleInput.value = annotation.title || '';
-        if (bodyInput) bodyInput.value = annotation.body || '';
-    }
-
-    // Update sidebar annotation editor
-    showSidebarAnnotationEditor(annotation);
-
-    // Update sidebar list selection
-    const sidebarItems = document.querySelectorAll('#sidebar-annotations-list .annotation-item');
-    sidebarItems.forEach(item => {
-        item.classList.toggle('selected', item.dataset.annoId === annotation.id);
-    });
-
-    // Show annotation info popup near the marker
-    showAnnotationPopup(annotation);
+    onAnnotationSelectedHandler(annotation, createAnnotationControllerDeps());
 }
 
 // Called when placement mode changes
 function onPlacementModeChanged(active) {
-    log.info(' Placement mode:', active);
-
-    const indicator = document.getElementById('annotation-mode-indicator');
-    const btn = document.getElementById('btn-annotate');
-
-    if (indicator) indicator.classList.toggle('hidden', !active);
-    if (btn) btn.classList.toggle('active', active);
+    onPlacementModeChangedHandler(active);
 }
 
 // Toggle annotation placement mode
 function toggleAnnotationMode() {
-    log.info(' toggleAnnotationMode called, annotationSystem:', !!annotationSystem);
-    if (annotationSystem) {
-        annotationSystem.togglePlacementMode();
-    } else {
-        log.error(' annotationSystem is not initialized!');
-    }
+    toggleAnnotationModeHandler(createAnnotationControllerDeps());
 }
 
 // Save the pending annotation
 function saveAnnotation() {
-    if (!annotationSystem) return;
-
-    const id = document.getElementById('anno-id')?.value || '';
-    const title = document.getElementById('anno-title')?.value || '';
-    const body = document.getElementById('anno-body')?.value || '';
-
-    const annotation = annotationSystem.confirmAnnotation(id, title, body);
-    if (annotation) {
-        log.info(' Annotation saved:', annotation);
-        updateAnnotationsUI();
-    }
-
-    // Hide panel and clear inputs
-    const panel = document.getElementById('annotation-panel');
-    if (panel) panel.classList.add('hidden');
-
-    document.getElementById('anno-id').value = '';
-    document.getElementById('anno-title').value = '';
-    document.getElementById('anno-body').value = '';
-
-    // Disable placement mode after saving
-    annotationSystem.disablePlacementMode();
+    saveAnnotationHandler(createAnnotationControllerDeps());
 }
 
 // Cancel annotation placement
 function cancelAnnotation() {
-    if (annotationSystem) {
-        annotationSystem.cancelAnnotation();
-    }
-
-    const panel = document.getElementById('annotation-panel');
-    if (panel) panel.classList.add('hidden');
-
-    document.getElementById('anno-id').value = '';
-    document.getElementById('anno-title').value = '';
-    document.getElementById('anno-body').value = '';
+    cancelAnnotationHandler(createAnnotationControllerDeps());
 }
 
 // Update camera for selected annotation
 function updateSelectedAnnotationCamera() {
-    if (!annotationSystem || !annotationSystem.selectedAnnotation) return;
-
-    annotationSystem.updateAnnotationCamera(annotationSystem.selectedAnnotation.id);
-    log.info(' Updated camera for annotation:', annotationSystem.selectedAnnotation.id);
+    updateSelectedAnnotationCameraHandler(createAnnotationControllerDeps());
 }
 
 // Delete selected annotation
 function deleteSelectedAnnotation() {
-    if (!annotationSystem || !annotationSystem.selectedAnnotation) return;
-
-    const id = annotationSystem.selectedAnnotation.id;
-    if (confirm(`Delete annotation "${annotationSystem.selectedAnnotation.title}"?`)) {
-        annotationSystem.deleteAnnotation(id);
-        updateAnnotationsUI();
-
-        // Hide editor (legacy)
-        const editor = document.getElementById('selected-annotation-editor');
-        if (editor) editor.classList.add('hidden');
-
-        // Hide sidebar editor
-        const sidebarEditor = document.getElementById('sidebar-annotation-editor');
-        if (sidebarEditor) sidebarEditor.classList.add('hidden');
-    }
+    deleteSelectedAnnotationHandler(createAnnotationControllerDeps());
 }
 
 // Update annotations UI (list and bar)
 function updateAnnotationsUI() {
-    if (!annotationSystem) return;
-
-    const annotations = annotationSystem.getAnnotations();
-    const count = annotations.length;
-
-    // Update count badge
-    const badge = document.getElementById('annotation-count-badge');
-    if (badge) {
-        badge.textContent = count;
-        badge.classList.toggle('hidden', count === 0);
-    }
-
-    // Update annotations list
-    const list = document.getElementById('annotations-list');
-    if (list) {
-        list.replaceChildren(); // Clear safely without innerHTML
-
-        if (count === 0) {
-            const noAnno = document.createElement('p');
-            noAnno.className = 'no-annotations';
-            noAnno.textContent = 'No annotations yet. Click "Add Annotation" to create one.';
-            list.appendChild(noAnno);
-        } else {
-            annotations.forEach((anno, index) => {
-                const item = document.createElement('div');
-                item.className = 'annotation-item';
-                item.dataset.annoId = anno.id;
-
-                const number = document.createElement('span');
-                number.className = 'annotation-number';
-                number.textContent = index + 1;
-
-                const title = document.createElement('span');
-                title.className = 'annotation-title';
-                title.textContent = anno.title || 'Untitled';
-
-                item.appendChild(number);
-                item.appendChild(title);
-
-                item.addEventListener('click', () => {
-                    annotationSystem.goToAnnotation(anno.id);
-                });
-
-                list.appendChild(item);
-            });
-        }
-    }
-
-    // Update annotation bar
-    const bar = document.getElementById('annotation-bar');
-    const chips = document.getElementById('annotation-chips');
-    if (bar && chips) {
-        bar.classList.toggle('hidden', count === 0);
-        chips.replaceChildren(); // Clear safely without innerHTML
-
-        annotations.forEach((anno, index) => {
-            const chip = document.createElement('button');
-            chip.className = 'annotation-chip';
-            chip.dataset.annoId = anno.id;
-            chip.textContent = index + 1;
-            chip.title = anno.title || 'Untitled';
-
-            chip.addEventListener('click', () => {
-                if (currentPopupAnnotationId === anno.id) {
-                    hideAnnotationPopup();
-                    annotationSystem.selectedAnnotation = null;
-                    document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
-                    document.querySelectorAll('.annotation-chip.active').forEach(c => c.classList.remove('active'));
-                } else {
-                    annotationSystem.goToAnnotation(anno.id);
-                }
-            });
-
-            chips.appendChild(chip);
-        });
-    }
-
-    // Also update sidebar annotations list
-    updateSidebarAnnotationsList();
+    updateAnnotationsUIHandler(createAnnotationControllerDeps());
 }
 
-// Update sidebar annotations list
+// Update sidebar annotations list - delegates to annotation-controller.js
 function updateSidebarAnnotationsList() {
-    if (!annotationSystem) return;
-
-    const annotations = annotationSystem.getAnnotations();
-    const list = document.getElementById('sidebar-annotations-list');
-    const editor = document.getElementById('sidebar-annotation-editor');
-    const selectedAnno = annotationSystem.selectedAnnotation;
-
-    if (!list) return;
-
-    list.replaceChildren(); // Clear safely without innerHTML
-
-    if (annotations.length === 0) {
-        const noAnno = document.createElement('p');
-        noAnno.className = 'no-annotations';
-        noAnno.textContent = 'No annotations yet. Click "Add Annotation" to place a new marker.';
-        list.appendChild(noAnno);
-        if (editor) editor.classList.add('hidden');
-    } else {
-        annotations.forEach((anno, index) => {
-            const item = document.createElement('div');
-            item.className = 'annotation-item';
-            item.dataset.annoId = anno.id;
-
-            if (selectedAnno && selectedAnno.id === anno.id) {
-                item.classList.add('selected');
-            }
-
-            const number = document.createElement('span');
-            number.className = 'annotation-number';
-            number.textContent = index + 1;
-
-            const title = document.createElement('span');
-            title.className = 'annotation-title';
-            title.textContent = anno.title || 'Untitled';
-
-            item.appendChild(number);
-            item.appendChild(title);
-
-            item.addEventListener('click', () => {
-                annotationSystem.goToAnnotation(anno.id);
-                // Update selection state
-                list.querySelectorAll('.annotation-item').forEach(el => el.classList.remove('selected'));
-                item.classList.add('selected');
-                // Show editor with selected annotation data
-                showSidebarAnnotationEditor(anno);
-            });
-
-            list.appendChild(item);
-        });
-
-        // Show editor if there's a selection
-        if (selectedAnno) {
-            showSidebarAnnotationEditor(selectedAnno);
-        } else if (editor) {
-            editor.classList.add('hidden');
-        }
-    }
+    updateSidebarAnnotationsListHandler(createAnnotationControllerDeps());
 }
 
-// Show sidebar annotation editor with annotation data
-function showSidebarAnnotationEditor(annotation) {
-    const editor = document.getElementById('sidebar-annotation-editor');
-    const titleInput = document.getElementById('sidebar-edit-anno-title');
-    const bodyInput = document.getElementById('sidebar-edit-anno-body');
-
-    if (!editor) return;
-
-    if (titleInput) titleInput.value = annotation.title || '';
-    if (bodyInput) bodyInput.value = annotation.body || '';
-
-    editor.classList.remove('hidden');
-}
-
-// Load annotations from archive
+// Load annotations from archive - delegates to annotation-controller.js
 function loadAnnotationsFromArchive(annotations) {
-    if (!annotationSystem || !annotations || !Array.isArray(annotations)) return;
-
-    log.info(' Loading', annotations.length, 'annotations from archive');
-    annotationSystem.setAnnotations(annotations);
-    updateAnnotationsUI();
-    updateSidebarAnnotationsList();
+    loadAnnotationsFromArchiveHandler(annotations, createAnnotationControllerDeps());
 }
 
 // ==================== Export/Archive Creation Functions ====================
@@ -2386,21 +2141,9 @@ function populateMetadataDisplay() { populateMetadataDisplayHandler(createMetada
 
 // ==================== Annotation Info Popup ====================
 
-// Show annotation popup - delegates to metadata-manager.js
-function showAnnotationPopup(annotation) {
-    currentPopupAnnotationId = showAnnotationPopupHandler(annotation, state.imageAssets);
-    updateAnnotationPopupPosition();
-}
-
 // Update annotation popup position - delegates to metadata-manager.js
 function updateAnnotationPopupPosition() {
-    updateAnnotationPopupPositionHandler(currentPopupAnnotationId);
-}
-
-// Hide annotation popup - delegates to metadata-manager.js
-function hideAnnotationPopup() {
-    hideAnnotationPopupHandler();
-    currentPopupAnnotationId = null;
+    updateAnnotationPopupPositionHandler(getCurrentPopupAnnotationId());
 }
 
 // ==================== End Annotation/Export Functions ====================

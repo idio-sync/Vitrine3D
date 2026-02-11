@@ -27,6 +27,7 @@ COPY src/modules/scene-manager.js /usr/share/nginx/html/modules/
 COPY src/modules/archive-loader.js /usr/share/nginx/html/modules/
 COPY src/modules/archive-creator.js /usr/share/nginx/html/modules/
 COPY src/modules/annotation-system.js /usr/share/nginx/html/modules/
+COPY src/modules/annotation-controller.js /usr/share/nginx/html/modules/
 COPY src/modules/share-dialog.js /usr/share/nginx/html/modules/
 COPY src/modules/fly-controls.js /usr/share/nginx/html/modules/
 COPY src/modules/kiosk-viewer.js /usr/share/nginx/html/modules/
