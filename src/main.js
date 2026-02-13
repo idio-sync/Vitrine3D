@@ -101,6 +101,17 @@ import {
 // kiosk-viewer.js is loaded dynamically in downloadGenericViewer() to avoid
 // blocking the main application if the module fails to load.
 
+// Tauri desktop integration (lazy-loaded to avoid errors in browser)
+let tauriBridge = null;
+if (window.__TAURI__) {
+    import('./modules/tauri-bridge.js').then(mod => {
+        tauriBridge = mod;
+        console.log('[main.js] Tauri bridge loaded — native dialogs available');
+    }).catch(err => {
+        console.warn('[main.js] Tauri bridge failed to load:', err);
+    });
+}
+
 // Create logger for this module
 const log = Logger.getLogger('main.js');
 
@@ -648,6 +659,17 @@ function setupUIEvents() {
     addListener('btn-load-archive-url', 'click', handleLoadArchiveFromUrlPrompt);
     addListener('btn-load-full-res', 'click', handleLoadFullResMesh);
     addListener('proxy-load-full-link', 'click', (e) => { e.preventDefault(); handleLoadFullResMesh(); });
+
+    // Tauri native file dialogs — override label clicks to use OS dialogs
+    if (window.__TAURI__ && tauriBridge) {
+        wireNativeFileDialogs();
+    } else if (window.__TAURI__) {
+        // Bridge may not be loaded yet (async import); retry once ready
+        import('./modules/tauri-bridge.js').then(mod => {
+            tauriBridge = mod;
+            wireNativeFileDialogs();
+        }).catch(() => {});
+    }
 
     // URL load buttons (using prompt)
     const splatUrlBtn = document.getElementById('btn-load-splat-url');
@@ -2411,12 +2433,16 @@ async function downloadGenericViewer() {
 
         updateProgress(95, 'Starting download...');
         const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'archive-viewer.html';
-        a.click();
-        URL.revokeObjectURL(url);
+        if (tauriBridge) {
+            await tauriBridge.download(blob, 'archive-viewer.html', { name: 'HTML Files', extensions: ['html'] });
+        } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'archive-viewer.html';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
 
         log.info(`[Viewer] Generic viewer exported (${(blob.size / 1024).toFixed(0)} KB)`);
         updateProgress(100, 'Complete');
@@ -2461,7 +2487,7 @@ function setupMetadataSidebar() {
     });
 }
 
-function exportMetadataManifest() {
+async function exportMetadataManifest() {
     const metadata = collectMetadata();
     const manifest = {
         container_version: '1.0',
@@ -2478,12 +2504,16 @@ function exportMetadataManifest() {
 
     const json = JSON.stringify(manifest, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'manifest.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    if (tauriBridge) {
+        await tauriBridge.download(blob, 'manifest.json', { name: 'JSON Files', extensions: ['json'] });
+    } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'manifest.json';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
     notify.success('Manifest exported');
 }
 
@@ -2545,6 +2575,145 @@ function updateAnnotationPopupPosition() {
 }
 
 // ==================== End Annotation/Export Functions ====================
+
+// ==================== Tauri Native File Dialogs ====================
+
+/**
+ * Wire up native file dialogs for all file inputs when running in Tauri.
+ * Overrides the <label for="..."> click to open a native OS dialog instead
+ * of the browser's file picker, then feeds the result into the existing handler.
+ */
+function wireNativeFileDialogs() {
+    if (!tauriBridge || !tauriBridge.isTauri()) return;
+    log.info('Wiring native file dialogs for Tauri');
+
+    function wireInput(inputId, filterKey, multiple, onFiles) {
+        const label = document.querySelector(`label[for="${inputId}"]`);
+        if (!label) return;
+        label.removeAttribute('for');
+        label.style.cursor = 'pointer';
+        label.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const files = await tauriBridge.openFileDialog({ filterKey, multiple });
+            if (files && files.length) await onFiles(files);
+        });
+    }
+
+    wireInput('splat-input', 'splat', false, async (files) => {
+        document.getElementById('splat-filename').textContent = files[0].name;
+        showLoading('Loading Gaussian Splat...');
+        try {
+            await loadSplatFromFileHandler(files[0], createFileHandlerDeps());
+            hideLoading();
+        } catch (error) {
+            log.error('Error loading splat:', error);
+            hideLoading();
+            notify.error('Error loading Gaussian Splat: ' + error.message);
+        }
+    });
+
+    wireInput('model-input', 'model', true, async (files) => {
+        document.getElementById('model-filename').textContent = files[0].name;
+        showLoading('Loading 3D Model...');
+        try {
+            await loadModelFromFileHandler(files, createFileHandlerDeps());
+            hideLoading();
+        } catch (error) {
+            log.error('Error loading model:', error);
+            hideLoading();
+            notify.error('Error loading model: ' + error.message);
+        }
+    });
+
+    wireInput('archive-input', 'archive', false, async (files) => {
+        document.getElementById('archive-filename').textContent = files[0].name;
+        showLoading('Loading archive...');
+        try {
+            if (state.archiveLoader) state.archiveLoader.dispose();
+            const archiveLoader = new ArchiveLoader();
+            await archiveLoader.loadFromFile(files[0]);
+            await processArchive(archiveLoader, files[0].name);
+            state.currentArchiveUrl = null;
+        } catch (error) {
+            log.error('Error loading archive:', error);
+            hideLoading();
+            notify.error('Error loading archive: ' + error.message);
+        }
+    });
+
+    wireInput('pointcloud-input', 'pointcloud', false, async (files) => {
+        document.getElementById('pointcloud-filename').textContent = files[0].name;
+        showLoading('Loading point cloud...');
+        try {
+            await loadPointcloudFromFileHandler(files[0], createPointcloudDeps());
+            hideLoading();
+        } catch (error) {
+            log.error('Error loading point cloud:', error);
+            hideLoading();
+            notify.error('Error loading point cloud: ' + error.message);
+        }
+    });
+
+    wireInput('stl-input', 'stl', false, async (files) => {
+        document.getElementById('stl-filename').textContent = files[0].name;
+        showLoading('Loading STL Model...');
+        try {
+            await loadSTLFileHandler([files[0]], createFileHandlerDeps());
+            hideLoading();
+        } catch (error) {
+            log.error('Error loading STL:', error);
+            hideLoading();
+            notify.error('Error loading STL: ' + error.message);
+        }
+    });
+
+    wireInput('proxy-mesh-input', 'model', false, async (files) => {
+        currentProxyMeshBlob = files[0];
+        document.getElementById('proxy-mesh-filename').textContent = files[0].name;
+        notify.info(`Display proxy "${files[0].name}" ready — will be included in archive exports.`);
+    });
+
+    wireInput('source-files-input', 'all', true, async (files) => {
+        const category = document.getElementById('source-files-category')?.value || '';
+        for (const file of files) {
+            sourceFiles.push({ file, name: file.name, size: file.size, category, fromArchive: false });
+        }
+        updateSourceFilesUI();
+        notify.info(`Added ${files.length} source file(s) for archival.`);
+    });
+
+    wireInput('bg-image-input', 'image', false, async (files) => {
+        if (!sceneManager) return;
+        try {
+            await sceneManager.loadBackgroundImageFromFile(files[0]);
+            const filenameEl = document.getElementById('bg-image-filename');
+            if (filenameEl) { filenameEl.textContent = files[0].name; filenameEl.style.display = ''; }
+            const envBgToggle = document.getElementById('toggle-env-background');
+            if (envBgToggle) envBgToggle.checked = false;
+            document.querySelectorAll('.color-preset').forEach(b => b.classList.remove('active'));
+            const clearBtn = document.getElementById('btn-clear-bg-image');
+            if (clearBtn) clearBtn.style.display = '';
+        } catch (err) {
+            notify.error('Failed to load background image: ' + err.message);
+        }
+    });
+
+    wireInput('hdr-file-input', 'hdr', false, async (files) => {
+        showLoading('Loading HDR environment...');
+        try {
+            await sceneManager.loadHDREnvironmentFromFile(files[0]);
+            const filenameEl = document.getElementById('hdr-filename');
+            if (filenameEl) { filenameEl.textContent = files[0].name; filenameEl.style.display = ''; }
+            const select = document.getElementById('env-map-select');
+            if (select) select.value = '';
+            hideLoading();
+            notify.success('HDR environment loaded');
+        } catch (err) {
+            hideLoading();
+            notify.error('Failed to load HDR: ' + err.message);
+        }
+    });
+}
 
 async function handleSplatFile(event) {
     const file = event.target.files[0];
@@ -2734,7 +2903,7 @@ function updateModelMatcap() { updateModelMatcapFn(modelGroup, state.modelMatcap
 
 function updateModelNormals() { updateModelNormalsFn(modelGroup, state.modelNormals); }
 
-function saveAlignment() {
+async function saveAlignment() {
     const alignment = {
         version: 1,
         splat: splatMesh ? {
@@ -2750,12 +2919,16 @@ function saveAlignment() {
     };
 
     const blob = new Blob([JSON.stringify(alignment, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'alignment.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    if (tauriBridge) {
+        await tauriBridge.download(blob, 'alignment.json', { name: 'JSON Files', extensions: ['json'] });
+    } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'alignment.json';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
 }
 
 // Apply alignment data to splat and model objects

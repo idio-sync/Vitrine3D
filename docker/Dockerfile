@@ -33,6 +33,7 @@ COPY src/modules/fly-controls.js /usr/share/nginx/html/modules/
 COPY src/modules/kiosk-viewer.js /usr/share/nginx/html/modules/
 COPY src/modules/kiosk-main.js /usr/share/nginx/html/modules/
 COPY src/modules/theme-loader.js /usr/share/nginx/html/modules/
+COPY src/modules/tauri-bridge.js /usr/share/nginx/html/modules/
 
 # Copy theme files
 COPY src/themes/ /usr/share/nginx/html/themes/

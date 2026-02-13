@@ -3,3 +3,11 @@
 .mcp.json
 nul
 src/models/
+
+# Tauri
+dist/
+src-tauri/target/
+
+# Node
+node_modules/
+package-lock.json

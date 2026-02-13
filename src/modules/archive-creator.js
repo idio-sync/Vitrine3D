@@ -1545,12 +1545,36 @@ export class ArchiveCreator {
         const blob = await this.createArchive({ format, ...createOptions }, onProgress);
         log.debug(' Archive blob created, size:', blob.size);
 
+        const downloadName = `${filename}.${format}`;
+
+        // Try Tauri native save dialog first
+        if (window.__TAURI__) {
+            try {
+                const { save } = window.__TAURI__.dialog;
+                const { writeFile } = window.__TAURI__.fs;
+                const path = await save({
+                    title: 'Save Archive',
+                    defaultPath: downloadName,
+                    filters: [{ name: '3D Archive', extensions: [format] }],
+                });
+                if (path) {
+                    const buffer = new Uint8Array(await blob.arrayBuffer());
+                    await writeFile(path, buffer);
+                    log.info('Archive saved via native dialog:', path);
+                    return;
+                }
+            } catch (e) {
+                log.warn('Tauri save failed, falling back to browser:', e);
+            }
+        }
+
+        // Browser fallback: anchor-click download
         const url = URL.createObjectURL(blob);
         log.debug(' Blob URL created:', url);
 
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${filename}.${format}`;
+        a.download = downloadName;
         document.body.appendChild(a);
         log.debug(' Triggering download:', a.download);
         a.click();

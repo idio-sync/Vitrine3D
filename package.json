@@ -7,6 +7,10 @@
   "scripts": {
     "start": "npx serve src -p 8080",
     "dev": "npx serve src -p 8080",
+    "tauri:dev": "npx tauri dev",
+    "tauri:build": "npx tauri build",
+    "vendor": "node scripts/vendor-deps.mjs",
+    "branded": "node scripts/build-branded.mjs",
     "docker:build": "docker build -f docker/Dockerfile -t splat-mesh-viewer .",
     "docker:run": "docker run -p 8080:80 splat-mesh-viewer"
   },
@@ -20,6 +24,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@tauri-apps/cli": "^2.10.0",
     "serve": "^14.2.0"
   }
 }
