@@ -25,7 +25,10 @@ import {
     processArchivePhase1, loadArchiveAsset,
     getAssetTypesForMode, getPrimaryAssetType,
     updateModelOpacity, updateModelWireframe, updateModelTextures, updateModelMatcap, updateModelNormals,
-    updatePointcloudPointSize, updatePointcloudOpacity
+    updatePointcloudPointSize, updatePointcloudOpacity,
+    loadSplatFromFile, loadSplatFromUrl,
+    loadModelFromFile, loadModelFromUrl,
+    loadPointcloudFromFile, loadPointcloudFromUrl
 } from './file-handlers.js';
 import {
     showMetadataSidebar, hideMetadataSidebar, switchSidebarMode,
@@ -108,6 +111,31 @@ const state = {
     assetStates: { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED },
     imageAssets: new Map()
 };
+
+// =============================================================================
+// FILE FORMAT CLASSIFICATION
+// =============================================================================
+
+const FILE_CATEGORIES = {
+    archive:    ['.a3d', '.a3z'],
+    model:      ['.glb', '.gltf', '.obj', '.stl'],
+    splat:      ['.ply', '.splat', '.ksplat', '.spz', '.sog'],
+    pointcloud: ['.e57']
+};
+const ALL_SUPPORTED_EXTENSIONS = Object.values(FILE_CATEGORIES).flat();
+
+/**
+ * Classify a filename into its asset category.
+ * @param {string} filename
+ * @returns {'splat'|'model'|'pointcloud'|'archive'|null}
+ */
+function classifyFile(filename) {
+    const ext = '.' + filename.split('.').pop().toLowerCase();
+    for (const [category, extensions] of Object.entries(FILE_CATEGORIES)) {
+        if (extensions.includes(ext)) return category;
+    }
+    return null;
+}
 
 // =============================================================================
 // INITIALIZATION
@@ -219,6 +247,16 @@ export async function init() {
                 });
             }
         }
+        // Let editorial layout customize file picker
+        if (themeMeta.layoutModule?.initFilePicker) {
+            const picker = document.getElementById('kiosk-file-picker');
+            if (picker) {
+                themeMeta.layoutModule.initFilePicker(picker, {
+                    themeAssets: themeMeta.themeAssets || {},
+                    themeBaseUrl: `themes/${config.theme}/`
+                });
+            }
+        }
     } else if (requestedLayout === 'editorial' && !hasEditorialModule) {
         log.warn('Editorial layout requested but no layout module available — using sidebar');
     }
@@ -274,6 +312,14 @@ function setupFilePicker() {
         return;
     }
 
+    // Check for direct file URL params (e.g. ?kiosk=true&splat=URL or ?model=URL)
+    const hasDirectUrl = config.defaultSplatUrl || config.defaultModelUrl || config.defaultPointcloudUrl;
+    if (hasDirectUrl) {
+        log.info('Loading direct files from URL params');
+        loadDirectFilesFromUrls(config);
+        return;
+    }
+
     if (picker) picker.classList.remove('hidden');
 
     const btn = document.getElementById('kiosk-picker-btn');
@@ -284,9 +330,7 @@ function setupFilePicker() {
         btn.addEventListener('click', () => input.click());
         input.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
-                hidePicker();
-                state.archiveSourceUrl = null;
-                handleArchiveFile(e.target.files[0]);
+                handlePickedFiles(e.target.files, picker);
             }
         });
     }
@@ -302,13 +346,8 @@ function setupFilePicker() {
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.classList.remove('drag-over');
-            const file = e.dataTransfer.files[0];
-            if (file && /\.(a3d|a3z)$/i.test(file.name)) {
-                hidePicker();
-                state.archiveSourceUrl = null;
-                handleArchiveFile(file);
-            } else {
-                notify.warning('Please select an .a3d or .a3z archive file.');
+            if (e.dataTransfer.files.length > 0) {
+                handlePickedFiles(e.dataTransfer.files, picker);
             }
         });
     }
@@ -317,6 +356,210 @@ function setupFilePicker() {
         if (picker) picker.classList.add('hidden');
     }
 }
+
+// =============================================================================
+// DIRECT FILE LOADING (non-archive)
+// =============================================================================
+
+/**
+ * Route picked/dropped files to the correct loader.
+ * Handles: archives, direct splats, models (with OBJ+MTL), point clouds.
+ */
+function handlePickedFiles(fileList, pickerElement) {
+    const files = Array.from(fileList);
+    const mainFile = files[0];
+    const category = classifyFile(mainFile.name);
+
+    if (!category) {
+        const ext = mainFile.name.split('.').pop();
+        notify.warning(`Unsupported file format: .${ext}`);
+        return;
+    }
+
+    // Hide picker
+    if (pickerElement) pickerElement.classList.add('hidden');
+
+    if (category === 'archive') {
+        state.archiveSourceUrl = null;
+        handleArchiveFile(mainFile);
+        return;
+    }
+
+    // Direct file loading
+    handleDirectFile(mainFile, category, files);
+}
+
+/**
+ * Load a single direct (non-archive) file into the kiosk viewer.
+ * @param {File} mainFile - The primary file
+ * @param {'splat'|'model'|'pointcloud'} category - Detected category
+ * @param {File[]} allFiles - All dropped files (for OBJ+MTL pairs)
+ */
+async function handleDirectFile(mainFile, category, allFiles) {
+    log.info(`Loading direct ${category} file:`, mainFile.name);
+    showLoading(`Loading ${category}...`, true);
+
+    try {
+        updateProgress(20, `Loading ${mainFile.name}...`);
+
+        if (category === 'splat') {
+            await loadSplatFromFile(mainFile, createSplatDeps());
+        } else if (category === 'model') {
+            await loadModelFromFile(allFiles || [mainFile], createModelDeps());
+        } else if (category === 'pointcloud') {
+            await loadPointcloudFromFile(mainFile, createPointcloudDeps());
+        }
+
+        updateProgress(80, 'Finalizing...');
+        onDirectFileLoaded(mainFile.name);
+    } catch (err) {
+        log.error(`Failed to load ${category}:`, err);
+        hideLoading();
+        notify.error(`Failed to load ${category}: ${err.message}`);
+        // Show picker again for retry
+        const picker = document.getElementById('kiosk-file-picker');
+        if (picker) picker.classList.remove('hidden');
+    }
+}
+
+/**
+ * Load direct files from URL params (?splat=, ?model=, ?pointcloud=).
+ */
+async function loadDirectFilesFromUrls(config) {
+    showLoading('Loading 3D data...', true);
+
+    try {
+        if (config.defaultSplatUrl) {
+            updateProgress(10, 'Loading splat...');
+            await loadSplatFromUrl(config.defaultSplatUrl, createSplatDeps(), (received, totalBytes) => {
+                if (totalBytes > 0) {
+                    const pct = Math.round((received / totalBytes) * 100);
+                    updateProgress(pct * 0.3, `Downloading splat... ${(received / 1048576).toFixed(1)} MB`);
+                }
+            });
+        }
+
+        if (config.defaultModelUrl) {
+            updateProgress(40, 'Loading model...');
+            await loadModelFromUrl(config.defaultModelUrl, createModelDeps(), (received, totalBytes) => {
+                if (totalBytes > 0) {
+                    const pct = Math.round((received / totalBytes) * 100);
+                    updateProgress(40 + pct * 0.3, `Downloading model... ${(received / 1048576).toFixed(1)} MB`);
+                }
+            });
+        }
+
+        if (config.defaultPointcloudUrl) {
+            updateProgress(70, 'Loading point cloud...');
+            await loadPointcloudFromUrl(config.defaultPointcloudUrl, createPointcloudDeps(), (received, totalBytes) => {
+                if (totalBytes > 0) {
+                    const pct = Math.round((received / totalBytes) * 100);
+                    updateProgress(70 + pct * 0.2, `Downloading point cloud... ${(received / 1048576).toFixed(1)} MB`);
+                }
+            });
+        }
+
+        // Apply inline alignment if provided via URL params (?sp=, ?sr=, ?ss=, ?mp=, etc.)
+        if (config.inlineAlignment) {
+            const alignment = config.inlineAlignment;
+            if (alignment.splat && splatMesh) {
+                if (alignment.splat.position) splatMesh.position.fromArray(alignment.splat.position);
+                if (alignment.splat.rotation) splatMesh.rotation.set(...alignment.splat.rotation);
+                if (alignment.splat.scale != null) splatMesh.scale.setScalar(alignment.splat.scale);
+            }
+            if (alignment.model && modelGroup) {
+                if (alignment.model.position) modelGroup.position.fromArray(alignment.model.position);
+                if (alignment.model.rotation) modelGroup.rotation.set(...alignment.model.rotation);
+                if (alignment.model.scale != null) modelGroup.scale.setScalar(alignment.model.scale);
+            }
+            if (alignment.pointcloud && pointcloudGroup) {
+                if (alignment.pointcloud.position) pointcloudGroup.position.fromArray(alignment.pointcloud.position);
+                if (alignment.pointcloud.rotation) pointcloudGroup.rotation.set(...alignment.pointcloud.rotation);
+                if (alignment.pointcloud.scale != null) pointcloudGroup.scale.setScalar(alignment.pointcloud.scale);
+            }
+        }
+
+        updateProgress(90, 'Finalizing...');
+        onDirectFileLoaded(null);
+    } catch (err) {
+        log.error('Failed to load from URLs:', err);
+        hideLoading();
+        notify.error(`Failed to load: ${err.message}`);
+        const picker = document.getElementById('kiosk-file-picker');
+        if (picker) picker.classList.remove('hidden');
+    }
+}
+
+/**
+ * Post-load UI setup for direct (non-archive) file loading.
+ * Simplified version of the post-archive flow — no manifest, no branded loading,
+ * no annotations, no metadata.
+ */
+function onDirectFileLoaded(fileName) {
+    // Set display mode based on what loaded
+    if (state.modelLoaded) {
+        state.displayMode = 'model';
+    } else if (state.splatLoaded) {
+        state.displayMode = 'splat';
+    } else if (state.pointcloudLoaded) {
+        state.displayMode = 'pointcloud';
+    }
+    setDisplayMode(state.displayMode, createDisplayModeDeps());
+
+    // Show only relevant settings sections
+    showRelevantSettings(state.splatLoaded, state.modelLoaded, state.pointcloudLoaded);
+
+    // Fit camera to loaded content
+    fitCameraToScene();
+
+    // Enable shadows for models
+    if (state.modelLoaded) {
+        sceneManager.enableShadows(true);
+        sceneManager.applyShadowProperties(modelGroup);
+    }
+
+    // Enable auto-rotate
+    controls.autoRotate = true;
+    const autoRotateBtn = document.getElementById('btn-auto-rotate');
+    if (autoRotateBtn) autoRotateBtn.classList.add('active');
+
+    // Branch UI setup based on resolved layout (theme + ?layout= override)
+    const isEditorial = (window.APP_CONFIG || {})._resolvedLayout === 'editorial';
+
+    if (isEditorial) {
+        // Delegate to theme's layout module — it creates its own ribbon/toolbar
+        const appConfig = window.APP_CONFIG || {};
+        const layoutModule = appConfig._themeMeta && appConfig._themeMeta.layoutModule;
+        if (layoutModule && layoutModule.setup) {
+            layoutModule.setup(null, createLayoutDeps());
+        }
+        // View switcher as mobile fallback (hidden on desktop by editorial CSS)
+        createViewSwitcher();
+    } else {
+        // Standard kiosk UI
+        createViewSwitcher();
+
+        // Show toolbar
+        const toolbar = document.getElementById('left-toolbar');
+        if (toolbar) toolbar.style.display = 'flex';
+    }
+
+    // Set filename as display title if available
+    if (fileName) {
+        const displayTitle = document.getElementById('display-title');
+        if (displayTitle) displayTitle.textContent = fileName;
+    }
+
+    updateProgress(100, 'Complete');
+    smoothTransitionIn();
+
+    log.info('Direct file loaded:', fileName || '(from URL)');
+    notify.success(`Loaded: ${fileName || 'file from URL'}`);
+}
+
+// =============================================================================
+// CLICK GATE
+// =============================================================================
 
 /**
  * Show click-to-load overlay with poster extracted from archive via Range requests.
@@ -735,6 +978,35 @@ function createArchiveDeps() {
                 }
             }
         }
+    };
+}
+
+function createSplatDeps() {
+    return {
+        scene,
+        getSplatMesh: () => splatMesh,
+        setSplatMesh: (mesh) => { splatMesh = mesh; },
+        state,
+        archiveCreator: null,
+        callbacks: {}
+    };
+}
+
+function createModelDeps() {
+    return {
+        modelGroup,
+        state,
+        archiveCreator: null,
+        callbacks: {}
+    };
+}
+
+function createPointcloudDeps() {
+    return {
+        pointcloudGroup,
+        state,
+        archiveCreator: null,
+        callbacks: {}
     };
 }
 

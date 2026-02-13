@@ -774,6 +774,40 @@ function initClickGate(container, deps) {
     `;
 }
 
+// ---- File picker customization ----
+
+/**
+ * Replace the default file picker content with editorial-styled DOM.
+ * Preserves element IDs so setupFilePicker() event wiring still works.
+ */
+function initFilePicker(container, deps) {
+    const logoSrc = (deps.themeAssets && deps.themeAssets['logo.png'])
+        || (deps.themeBaseUrl || 'themes/editorial/') + 'logo.png';
+
+    container.innerHTML = `
+        <div class="editorial-loading-spine"></div>
+        <div class="editorial-loading-logo">
+            <img src="${logoSrc}" alt="" draggable="false" />
+        </div>
+        <div class="editorial-picker-center">
+            <div class="editorial-picker-eyebrow">Open File</div>
+            <h1 class="editorial-picker-title">3D Viewer</h1>
+            <div class="editorial-loading-title-bar"></div>
+            <p class="editorial-picker-desc">Open a 3D file or archive to view its content.</p>
+            <div class="kiosk-picker-box" id="kiosk-drop-zone">
+                <p>Select a <strong>3D file</strong> or <strong>archive</strong></p>
+                <button id="kiosk-picker-btn" type="button">Select File</button>
+                <p class="kiosk-picker-hint">or drag and drop it here</p>
+                <p class="kiosk-picker-formats">
+                    Archives (.a3d, .a3z) &middot; Models (.glb, .gltf, .obj, .stl)<br>
+                    Splats (.ply, .splat, .ksplat, .spz, .sog) &middot; Point Clouds (.e57)
+                </p>
+            </div>
+            <input type="file" id="kiosk-picker-input" accept=".a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">
+        </div>
+    `;
+}
+
 // ---- Self-register for offline kiosk discovery ----
 if (!window.__KIOSK_LAYOUTS__) window.__KIOSK_LAYOUTS__ = {};
-window.__KIOSK_LAYOUTS__['editorial'] = { setup, initLoadingScreen, initClickGate };
+window.__KIOSK_LAYOUTS__['editorial'] = { setup, initLoadingScreen, initClickGate, initFilePicker };

@@ -30,15 +30,21 @@
     <!-- Kiosk file picker overlay (hidden by default, shown by kiosk-main.js) -->
     <div id="kiosk-file-picker" class="hidden">
         <div class="kiosk-picker-content">
-            <h1>3D Archive Viewer</h1>
-            <p>Open an .a3d or .a3z archive to view its 3D content.</p>
+            <h1>3D Viewer</h1>
+            <p>Open a 3D file or archive to view its content.</p>
             <div class="kiosk-picker-box" id="kiosk-drop-zone">
                 <div class="kiosk-picker-icon">&#128194;</div>
-                <p>Select an <strong>.a3d</strong> or <strong>.a3z</strong> archive</p>
-                <button id="kiosk-picker-btn" type="button">Select Archive File</button>
+                <p>Select a <strong>3D file</strong> or <strong>archive</strong></p>
+                <button id="kiosk-picker-btn" type="button">Select File</button>
                 <p class="kiosk-picker-hint">or drag and drop it here</p>
+                <p class="kiosk-picker-formats">
+                    Archives: .a3d, .a3z<br>
+                    Models: .glb, .gltf, .obj, .stl<br>
+                    Splats: .ply, .splat, .ksplat, .spz, .sog<br>
+                    Point Clouds: .e57
+                </p>
             </div>
-            <input type="file" id="kiosk-picker-input" accept=".a3z,.a3d" style="display:none">
+            <input type="file" id="kiosk-picker-input" accept=".a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">
             <input type="file" id="image-insert-input" accept=".png,.jpg,.jpeg,.webp,.gif" style="display:none">
         </div>
     </div>
