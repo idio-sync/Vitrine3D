@@ -23,8 +23,8 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 
 ## Mobile Support
 - [x] **Done** — Add mobile friendly layout and view for kiosk mode
-- [x] **Done** — Display proxy (LOD) mesh support in archives — upload a pre-simplified mesh, kiosk viewer loads it automatically
-- [ ] Auto-detect mobile devices in kiosk viewer and warn if no proxy mesh available
+- [x] **Done** — Display proxy (LOD) support in archives — upload pre-simplified mesh and/or splat, kiosk viewer loads them automatically
+- [x] **Done** — Auto-detect mobile/low-end devices in kiosk viewer via `quality-tier.js` and default to SD (proxy) assets; SD/HD toggle lets users switch manually
 
 ### Measurement & Analysis Tools
 - [ ] Point-to-point distance measurement (click two surface points, display Euclidean distance)
@@ -137,5 +137,5 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 
 ### Alternative Kiosk Formats
 - [ ] Web Bundle (`.wbn`) — W3C format for self-contained web content
-- [ ] Electron/Tauri packaged viewer for institutional desktops
+- [x] **Done** — Tauri v2 packaged viewer for institutional desktops (defaults to kiosk mode + editorial theme)
 - [ ] Service Worker-based ZIP viewer (`.zip` where `index.html` is the entry point)

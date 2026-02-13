@@ -59,6 +59,7 @@ const CDN_DEPS = {
 // dependencies must appear earlier in this list.
 const LOCAL_MODULES = [
     { specifier: './constants.js',         path: 'constants.js' },
+    { specifier: './logger.js',            path: 'logger.js' },
     { specifier: './utilities.js',         path: 'utilities.js' },
     { specifier: './archive-loader.js',    path: 'archive-loader.js' },
     { specifier: './ui-controller.js',     path: 'ui-controller.js' },

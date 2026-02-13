@@ -18,6 +18,7 @@ COPY src/config.js /usr/share/nginx/html/
 
 # Copy JavaScript modules from src/modules/
 COPY src/modules/constants.js /usr/share/nginx/html/modules/
+COPY src/modules/logger.js /usr/share/nginx/html/modules/
 COPY src/modules/utilities.js /usr/share/nginx/html/modules/
 COPY src/modules/alignment.js /usr/share/nginx/html/modules/
 COPY src/modules/ui-controller.js /usr/share/nginx/html/modules/
