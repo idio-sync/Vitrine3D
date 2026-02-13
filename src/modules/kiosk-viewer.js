@@ -68,6 +68,7 @@ const LOCAL_MODULES = [
     { specifier: './file-handlers.js',     path: 'file-handlers.js' },
     { specifier: './metadata-manager.js',  path: 'metadata-manager.js' },
     { specifier: './theme-loader.js',      path: 'theme-loader.js' },
+    { specifier: './quality-tier.js',      path: 'quality-tier.js' },
     { specifier: './kiosk-main.js',        path: 'kiosk-main.js' },
 ];
 

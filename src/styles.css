@@ -1081,6 +1081,46 @@ input[type="range"]::-webkit-slider-thumb:hover {
     cursor: pointer;
 }
 
+/* Quality tier toggle (SD/HD pill buttons) */
+#quality-toggle-container {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: inline-flex;
+    gap: 0;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.2);
+    z-index: 100;
+}
+
+.quality-toggle-btn {
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.5);
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.quality-toggle-btn:hover {
+    background: rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.8);
+}
+
+.quality-toggle-btn.active {
+    background: rgba(100,180,255,0.3);
+    color: #fff;
+}
+
+.quality-toggle-btn.loading {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
 /* Annotation bar at bottom */
 #annotation-bar {
     position: fixed;
@@ -3123,6 +3163,13 @@ body.kiosk-mode #controls-panel {
 
 body.kiosk-mode #left-toolbar {
     display: none;
+}
+
+body.kiosk-mode #quality-toggle-container {
+    position: fixed;
+    bottom: 12px;
+    right: 12px;
+    border-color: rgba(255,255,255,0.15);
 }
 
 body.kiosk-mode #section-screenshots {

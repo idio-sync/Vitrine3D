@@ -12,7 +12,8 @@ import * as THREE from 'three';
 import { SceneManager } from './scene-manager.js';
 import { FlyControls } from './fly-controls.js';
 import { AnnotationSystem } from './annotation-system.js';
-import { CAMERA, ASSET_STATE } from './constants.js';
+import { CAMERA, ASSET_STATE, QUALITY_TIER } from './constants.js';
+import { resolveQualityTier, hasAnyProxy } from './quality-tier.js';
 import { Logger, notify, parseMarkdown, resolveAssetRefs, fetchWithProgress, downloadBlob } from './utilities.js';
 import {
     showLoading, hideLoading, updateProgress,
@@ -28,7 +29,9 @@ import {
     updatePointcloudPointSize, updatePointcloudOpacity,
     loadSplatFromFile, loadSplatFromUrl,
     loadModelFromFile, loadModelFromUrl,
-    loadPointcloudFromFile, loadPointcloudFromUrl
+    loadPointcloudFromFile, loadPointcloudFromUrl,
+    loadArchiveFullResMesh, loadArchiveFullResSplat,
+    loadArchiveProxyMesh, loadArchiveProxySplat
 } from './file-handlers.js';
 import {
     showMetadataSidebar, hideMetadataSidebar, switchSidebarMode,
@@ -109,7 +112,9 @@ const state = {
     flyModeActive: false,
     annotationsVisible: true,
     assetStates: { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED },
-    imageAssets: new Map()
+    imageAssets: new Map(),
+    qualityTier: QUALITY_TIER.AUTO,
+    qualityResolved: QUALITY_TIER.HD
 };
 
 // =============================================================================
@@ -722,6 +727,11 @@ async function handleArchiveFile(file) {
         const { contentInfo } = phase1;
         const manifest = normalizeManifest(phase1.manifest);
 
+        // Resolve quality tier based on device capabilities
+        const glContext = renderer ? renderer.getContext() : null;
+        state.qualityResolved = resolveQualityTier(state.qualityTier, glContext);
+        log.info('Quality tier resolved:', state.qualityResolved);
+
         // Show branded loading screen with thumbnail, title, and content types
         await showBrandedLoading(archiveLoader);
 
@@ -903,6 +913,11 @@ async function handleArchiveFile(file) {
             showMetadataSidebar('view', { state, annotationSystem, imageAssets: state.imageAssets });
         }
 
+        // Show quality toggle if archive has any proxies (editorial handles its own)
+        if (hasAnyProxy(contentInfo) && !isEditorial) {
+            showQualityToggle();
+        }
+
         log.info('Archive loaded successfully:', file.name);
         notify.success(`Loaded: ${file.name}`);
 
@@ -941,6 +956,86 @@ async function handleArchiveFile(file) {
 }
 
 // =============================================================================
+// QUALITY TIER TOGGLE
+// =============================================================================
+
+/**
+ * Show the SD/HD quality toggle. Uses existing HTML element if present,
+ * otherwise creates one dynamically (for kiosk/editorial without index.html).
+ */
+function showQualityToggle() {
+    let container = document.getElementById('quality-toggle-container');
+    if (!container) {
+        // Dynamically create toggle (kiosk offline HTML won't have it)
+        container = document.createElement('div');
+        container.id = 'quality-toggle-container';
+        container.innerHTML = `
+            <button class="quality-toggle-btn${state.qualityResolved === 'sd' ? ' active' : ''}" data-tier="sd">SD</button>
+            <button class="quality-toggle-btn${state.qualityResolved === 'hd' ? ' active' : ''}" data-tier="hd">HD</button>
+        `;
+        document.body.appendChild(container);
+    } else {
+        container.classList.remove('hidden');
+        // Set initial active state
+        container.querySelectorAll('.quality-toggle-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tier === state.qualityResolved);
+        });
+    }
+
+    // Wire click handlers
+    container.querySelectorAll('.quality-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchQualityTier(btn.dataset.tier));
+    });
+}
+
+/**
+ * Switch between SD and HD quality tiers, swapping proxy/full-res assets.
+ */
+async function switchQualityTier(newTier) {
+    if (newTier === state.qualityResolved) return;
+    state.qualityResolved = newTier;
+
+    // Update button states
+    document.querySelectorAll('.quality-toggle-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tier === newTier);
+        btn.classList.add('loading');
+    });
+
+    const archiveLoader = state.archiveLoader;
+    if (!archiveLoader) return;
+
+    const contentInfo = archiveLoader.getContentInfo();
+    const deps = createArchiveDeps();
+
+    try {
+        // Switch splat if proxy exists
+        if (contentInfo.hasSceneProxy) {
+            if (newTier === 'hd') {
+                await loadArchiveFullResSplat(archiveLoader, deps);
+            } else {
+                await loadArchiveProxySplat(archiveLoader, deps);
+            }
+        }
+        // Switch mesh if proxy exists
+        if (contentInfo.hasMeshProxy) {
+            if (newTier === 'hd') {
+                await loadArchiveFullResMesh(archiveLoader, deps);
+            } else {
+                await loadArchiveProxyMesh(archiveLoader, deps);
+            }
+        }
+        log.info(`Quality tier switched to ${newTier}`);
+    } catch (e) {
+        log.error('Error switching quality tier:', e);
+        notify.error(`Failed to switch quality: ${e.message}`);
+    } finally {
+        document.querySelectorAll('.quality-toggle-btn').forEach(btn => {
+            btn.classList.remove('loading');
+        });
+    }
+}
+
+// =============================================================================
 // DEPS BUILDERS (matching the deps pattern used by file-handlers.js)
 // =============================================================================
 
@@ -950,6 +1045,7 @@ function createArchiveDeps() {
         modelGroup,
         pointcloudGroup,
         state,
+        qualityTier: state.qualityResolved,
         getSplatMesh: () => splatMesh,
         setSplatMesh: (mesh) => { splatMesh = mesh; },
         callbacks: {
@@ -1054,7 +1150,10 @@ function createLayoutDeps() {
         getCurrentPopupId: () => currentPopupAnnotationId,
         setCurrentPopupId: (id) => { currentPopupAnnotationId = id; },
         themeBaseUrl: (window.APP_CONFIG?.theme) ? `themes/${window.APP_CONFIG.theme}/` : '',
-        themeAssets: window.__KIOSK_THEME_ASSETS__ || {}
+        themeAssets: window.__KIOSK_THEME_ASSETS__ || {},
+        hasAnyProxy: hasAnyProxy(state.archiveLoader ? state.archiveLoader.getContentInfo() : {}),
+        qualityResolved: state.qualityResolved,
+        switchQualityTier
     };
 }
 
@@ -2305,6 +2404,11 @@ function showRelevantSettings(hasSplat, hasMesh, hasPointcloud) {
     if (!hasSplat) hideEl('btn-splat');
     if (!hasPointcloud) hideEl('btn-pointcloud');
     if (!hasMesh || !hasSplat) { hideEl('btn-both'); hideEl('btn-split'); }
+
+    // STL button only visible when the mesh is actually an STL file
+    const meshEntry = state.archiveLoader ? state.archiveLoader.getMeshEntry() : null;
+    const isSTL = meshEntry && meshEntry.file_name && meshEntry.file_name.toLowerCase().endsWith('.stl');
+    if (!isSTL) hideEl('btn-stl');
 
     // Hide entire Display Mode section if 0 or 1 button visible
     const displaySection = [...container.querySelectorAll('.control-section')]

@@ -157,6 +157,10 @@
             <div id="proxy-mesh-indicator" class="hidden">
                 Viewing display proxy &middot; <a href="#" id="proxy-load-full-link">Load full resolution</a>
             </div>
+            <div id="quality-toggle-container" class="hidden">
+                <button id="btn-quality-sd" class="quality-toggle-btn" data-tier="sd">SD</button>
+                <button id="btn-quality-hd" class="quality-toggle-btn active" data-tier="hd">HD</button>
+            </div>
         </div>
 
         <!-- Annotation markers container -->
@@ -978,6 +982,15 @@
                         </div>
                         <span id="proxy-mesh-filename" class="filename">No proxy loaded</span>
                         <p class="field-hint">Pre-simplified mesh for mobile/tablet viewers. Full-resolution mesh is preserved in the archive.</p>
+                    </div>
+                    <div class="load-subsection" id="proxy-splat-subsection">
+                        <h4>Splat Display Proxy (.ply, .spz, .ksplat, .splat) <span class="optional-label">optional</span></h4>
+                        <input type="file" id="proxy-splat-input" accept=".ply,.spz,.ksplat,.sog,.splat" />
+                        <div class="button-row">
+                            <label for="proxy-splat-input" class="file-label">From File</label>
+                        </div>
+                        <span id="proxy-splat-filename" class="filename">No proxy loaded</span>
+                        <p class="field-hint">Lower-quality splat for mobile/tablet viewers. Full-resolution splat is preserved in the archive.</p>
                     </div>
                     <div class="load-subsection">
                         <h4>STL Model (.stl)</h4>

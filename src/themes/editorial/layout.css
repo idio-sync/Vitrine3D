@@ -109,6 +109,7 @@ body.kiosk-mode.kiosk-editorial .editorial-bottom-ribbon {
 
 body.kiosk-mode.kiosk-editorial .editorial-view-modes {
     display: flex;
+    align-items: baseline;
     gap: 20px;
     flex-shrink: 0;
 }
@@ -117,11 +118,14 @@ body.kiosk-mode.kiosk-editorial .editorial-view-mode-link {
     font-family: var(--kiosk-font-body);
     font-size: 0.72rem;
     font-weight: 500;
+    line-height: 1;
     color: var(--kiosk-text-muted);
     text-decoration: none;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     cursor: pointer;
+    margin: 0;
+    padding: 0;
     padding-bottom: 1px;
     border: none;
     border-bottom: 1px solid transparent;
@@ -136,6 +140,42 @@ body.kiosk-mode.kiosk-editorial .editorial-view-mode-link:hover {
 body.kiosk-mode.kiosk-editorial .editorial-view-mode-link.active {
     color: var(--kiosk-text-primary);
     border-bottom-color: var(--kiosk-accent);
+}
+
+/* Quality toggle — reset pill styles, use ribbon link style */
+
+body.kiosk-mode.kiosk-editorial .quality-toggle-btn {
+    background: none;
+    border: none;
+    border-radius: 0;
+    margin: 0;
+    padding: 0;
+    padding-bottom: 1px;
+    border-bottom: 1px solid transparent;
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    font-weight: 500;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--kiosk-text-muted);
+    transition: color 0.15s, border-color 0.15s;
+}
+
+body.kiosk-mode.kiosk-editorial .quality-toggle-btn.active {
+    background: none;
+    color: var(--kiosk-text-primary);
+    border-bottom-color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-editorial .quality-toggle-btn:hover {
+    background: none;
+    color: var(--kiosk-text-secondary);
+}
+
+body.kiosk-mode.kiosk-editorial .quality-toggle-btn.loading {
+    opacity: 0.35;
+    pointer-events: none;
 }
 
 /* Ribbon rule separator */
@@ -153,11 +193,18 @@ body.kiosk-mode.kiosk-editorial .editorial-ribbon-rule {
 body.kiosk-mode.kiosk-editorial .editorial-anno-sequence {
     display: flex;
     align-items: center;
-    gap: 0;
-    flex: 1;
     justify-content: center;
+    gap: 0;
+    position: absolute;
+    left: 0;
+    right: 0;
     overflow-x: auto;
     scrollbar-width: none;
+    pointer-events: none;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-sequence > * {
+    pointer-events: auto;
 }
 
 body.kiosk-mode.kiosk-editorial .editorial-anno-sequence::-webkit-scrollbar {
@@ -692,14 +739,14 @@ body.kiosk-mode.kiosk-editorial #annotation-info-popup::before {
 body.kiosk-mode.kiosk-editorial #annotation-info-popup::after {
     content: '';
     position: absolute;
-    inset: 0;
+    inset: -20px -30px -50px -30px;
     z-index: -1;
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     background: rgba(var(--kiosk-bg-deep-rgb), 0.06);
     pointer-events: none;
-    -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 72%);
-    mask-image: radial-gradient(ellipse at center, black 30%, transparent 72%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 42%, transparent 80%);
+    mask-image: radial-gradient(ellipse at center, black 42%, transparent 80%);
 }
 
 body.kiosk-mode.kiosk-editorial #annotation-info-popup .popup-title {

@@ -1,4 +1,4 @@
-# Tauri Desktop Application
+npm # Tauri Desktop Application
 
 The 3D Archive Viewer can be built as a native desktop application using [Tauri v2](https://v2.tauri.app/). The desktop app defaults to **kiosk mode with the editorial theme**, providing a polished viewer experience. The web app (`npm start`) remains the full editor.
 

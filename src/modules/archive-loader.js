@@ -563,11 +563,15 @@ export class ArchiveLoader {
     }
 
     /**
-     * Get the primary scene entry (splat)
+     * Get the primary scene entry (splat), excluding proxy entries
      * @returns {Object|null} The scene entry or null
      */
     getSceneEntry() {
         const scenes = this.findEntriesByPrefix('scene_');
+        // Return the first non-proxy scene entry
+        for (const { key, entry } of scenes) {
+            if (entry.lod !== 'proxy') return entry;
+        }
         return scenes.length > 0 ? scenes[0].entry : null;
     }
 
@@ -602,6 +606,26 @@ export class ArchiveLoader {
      */
     hasMeshProxy() {
         return this.getMeshProxyEntry() !== null;
+    }
+
+    /**
+     * Get the display proxy scene (splat) entry if one exists
+     * @returns {Object|null} The proxy scene entry or null
+     */
+    getSceneProxyEntry() {
+        const scenes = this.findEntriesByPrefix('scene_');
+        for (const { key, entry } of scenes) {
+            if (entry.lod === 'proxy') return entry;
+        }
+        return null;
+    }
+
+    /**
+     * Check if the archive has a display proxy for the scene (splat)
+     * @returns {boolean}
+     */
+    hasSceneProxy() {
+        return this.getSceneProxyEntry() !== null;
     }
 
     /**
@@ -773,6 +797,7 @@ export class ArchiveLoader {
         const scene = this.getSceneEntry();
         const mesh = this.getMeshEntry();
         const meshProxy = this.getMeshProxyEntry();
+        const sceneProxy = this.getSceneProxyEntry();
         const pointcloud = this.getPointcloudEntry();
         const thumbnail = this.getThumbnailEntry();
 
@@ -782,6 +807,7 @@ export class ArchiveLoader {
             hasSplat: scene !== null && isFormatSupported(scene.file_name, 'splat'),
             hasMesh: mesh !== null && isFormatSupported(mesh.file_name, 'mesh'),
             hasMeshProxy: meshProxy !== null && isFormatSupported(meshProxy.file_name, 'mesh'),
+            hasSceneProxy: sceneProxy !== null && isFormatSupported(sceneProxy.file_name, 'splat'),
             hasPointcloud: pointcloud !== null && isFormatSupported(pointcloud.file_name, 'pointcloud'),
             hasThumbnail: thumbnail !== null && isFormatSupported(thumbnail.file_name, 'thumbnail'),
             hasSourceFiles: sourceFiles.length > 0,

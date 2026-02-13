@@ -6,6 +6,9 @@
  *              Designed for Direct Dimensions branding.
  */
 
+/* Source Sans 3 — loaded from Google Fonts when online, falls back to system sans-serif offline */
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+
 body.kiosk-mode {
     /* Gold accent */
     --kiosk-accent: #FEC03A;
@@ -25,9 +28,9 @@ body.kiosk-mode {
     /* Borders */
     --kiosk-border-subtle: rgba(255, 255, 255, 0.08);
 
-    /* Typography — serif display, system body */
-    /* Note: Source Sans 3 is a preferred web font but is NOT bundled for offline kiosk.
-       It degrades gracefully to system sans-serif (Segoe UI / SF Pro / etc.). */
+    /* Typography — serif display, web-loaded body */
+    /* Source Sans 3 is loaded via Google Fonts @import above when online.
+       Offline kiosk degrades gracefully to system sans-serif (Segoe UI / SF Pro / etc.). */
     --kiosk-font-display: Georgia, 'Times New Roman', serif;
     --kiosk-font-body: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 

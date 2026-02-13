@@ -1,6 +1,7 @@
 .omc/
 .claude/settings.local.json
 .mcp.json
+CLAUDE.md
 nul
 src/models/
 

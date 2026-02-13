@@ -877,6 +877,39 @@ export class ArchiveCreator {
     }
 
     /**
+     * Add a display proxy scene (splat) entry (pre-simplified LOD variant)
+     * @param {Blob} blob - The proxy splat file data
+     * @param {string} fileName - Original filename
+     * @param {Object} options - Additional options (derived_from, etc.)
+     */
+    addSceneProxy(blob, fileName, options = {}) {
+        const derivedFrom = options.derived_from || 'scene_0';
+        const entryKey = `${derivedFrom}_proxy`;
+        const ext = fileName.split('.').pop().toLowerCase();
+        const archivePath = `assets/${entryKey}.${ext}`;
+
+        this.files.set(archivePath, { blob, originalName: fileName });
+
+        this.manifest.data_entries[entryKey] = {
+            file_name: archivePath,
+            created_by: options.created_by || "unknown",
+            _created_by_version: options.created_by_version || "",
+            _source_notes: options.source_notes || "",
+            role: "derived",
+            lod: "proxy",
+            derived_from: derivedFrom,
+            _parameters: {
+                position: options.position || [0, 0, 0],
+                rotation: options.rotation || [0, 0, 0],
+                scale: options.scale !== undefined ? options.scale : 1,
+                ...(options.parameters || {})
+            }
+        };
+
+        return entryKey;
+    }
+
+    /**
      * Add a mesh entry
      * @param {Blob} blob - The file data
      * @param {string} fileName - Original filename

@@ -846,29 +846,35 @@ export async function loadArchiveAsset(archiveLoader, assetType, deps) {
 
     try {
         if (assetType === 'splat') {
-            const sceneEntry = archiveLoader.getSceneEntry();
             const contentInfo = archiveLoader.getContentInfo();
+            const sceneEntry = archiveLoader.getSceneEntry();
             if (!sceneEntry || !contentInfo.hasSplat) {
                 state.assetStates[assetType] = ASSET_STATE.UNLOADED;
                 return { loaded: false, blob: null, error: 'No splat in archive' };
             }
 
-            const splatData = await archiveLoader.extractFile(sceneEntry.file_name);
+            // Prefer proxy when available and quality tier is SD
+            const qualityTier = deps.qualityTier || 'hd';
+            const proxyEntry = archiveLoader.getSceneProxyEntry();
+            const useProxy = qualityTier === 'sd' && contentInfo.hasSceneProxy && proxyEntry;
+            const entryToLoad = useProxy ? proxyEntry : sceneEntry;
+
+            const splatData = await archiveLoader.extractFile(entryToLoad.file_name);
             if (!splatData) {
                 state.assetStates[assetType] = ASSET_STATE.ERROR;
                 return { loaded: false, blob: null, error: 'Failed to extract splat file' };
             }
 
-            await loadSplatFromBlobUrl(splatData.url, sceneEntry.file_name, deps);
+            await loadSplatFromBlobUrl(splatData.url, entryToLoad.file_name, deps);
 
-            // Apply transform from manifest
+            // Apply transform from the primary scene entry (proxy inherits the same transform)
             const transform = archiveLoader.getEntryTransform(sceneEntry);
             if (callbacks.onApplySplatTransform) {
                 callbacks.onApplySplatTransform(transform);
             }
 
             state.assetStates[assetType] = ASSET_STATE.LOADED;
-            return { loaded: true, blob: splatData.blob, error: null };
+            return { loaded: true, blob: splatData.blob, error: null, isProxy: !!useProxy };
 
         } else if (assetType === 'mesh') {
             const contentInfo = archiveLoader.getContentInfo();
@@ -878,9 +884,10 @@ export async function loadArchiveAsset(archiveLoader, assetType, deps) {
                 return { loaded: false, blob: null, error: 'No mesh in archive' };
             }
 
-            // Prefer proxy mesh when available
+            // Prefer proxy mesh when available and quality tier is SD
+            const qualityTier = deps.qualityTier || 'hd';
             const proxyEntry = archiveLoader.getMeshProxyEntry();
-            const useProxy = contentInfo.hasMeshProxy && proxyEntry;
+            const useProxy = qualityTier === 'sd' && contentInfo.hasMeshProxy && proxyEntry;
             const entryToLoad = useProxy ? proxyEntry : meshEntry;
 
             const meshData = await archiveLoader.extractFile(entryToLoad.file_name);
@@ -982,6 +989,127 @@ export async function loadArchiveFullResMesh(archiveLoader, deps) {
 
     // Apply transform from manifest
     const transform = archiveLoader.getEntryTransform(meshEntry);
+    if (callbacks.onApplyModelTransform) {
+        callbacks.onApplyModelTransform(transform);
+    }
+
+    state.assetStates.mesh = ASSET_STATE.LOADED;
+    return { loaded: true, blob: meshData.blob, error: null, faceCount: result?.faceCount || 0 };
+}
+
+/**
+ * Load the full-resolution splat from an archive, replacing the currently displayed proxy.
+ * @param {ArchiveLoader} archiveLoader - The archive loader
+ * @param {Object} deps - Dependencies { state, scene, getSplatMesh, setSplatMesh, callbacks }
+ * @returns {Promise<Object>} { loaded, blob, error }
+ */
+export async function loadArchiveFullResSplat(archiveLoader, deps) {
+    const { state, scene, getSplatMesh, setSplatMesh, callbacks = {} } = deps;
+    const sceneEntry = archiveLoader.getSceneEntry();
+    if (!sceneEntry) {
+        return { loaded: false, blob: null, error: 'No full-resolution splat in archive' };
+    }
+
+    const splatData = await archiveLoader.extractFile(sceneEntry.file_name);
+    if (!splatData) {
+        return { loaded: false, blob: null, error: 'Failed to extract full-resolution splat' };
+    }
+
+    // Remove existing splat (the proxy) before loading
+    const existingSplat = getSplatMesh();
+    if (existingSplat) {
+        scene.remove(existingSplat);
+        if (existingSplat.dispose) existingSplat.dispose();
+        setSplatMesh(null);
+    }
+
+    state.splatLoaded = false;
+    await loadSplatFromBlobUrl(splatData.url, sceneEntry.file_name, deps);
+
+    // Apply transform from manifest
+    const transform = archiveLoader.getEntryTransform(sceneEntry);
+    if (callbacks.onApplySplatTransform) {
+        callbacks.onApplySplatTransform(transform);
+    }
+
+    state.assetStates.splat = ASSET_STATE.LOADED;
+    return { loaded: true, blob: splatData.blob, error: null };
+}
+
+/**
+ * Load the proxy splat from an archive, replacing the currently displayed full-res.
+ * @param {ArchiveLoader} archiveLoader - The archive loader
+ * @param {Object} deps - Dependencies { state, scene, getSplatMesh, setSplatMesh, callbacks }
+ * @returns {Promise<Object>} { loaded, blob, error }
+ */
+export async function loadArchiveProxySplat(archiveLoader, deps) {
+    const { state, scene, getSplatMesh, setSplatMesh, callbacks = {} } = deps;
+    const proxyEntry = archiveLoader.getSceneProxyEntry();
+    if (!proxyEntry) {
+        return { loaded: false, blob: null, error: 'No proxy splat in archive' };
+    }
+
+    const splatData = await archiveLoader.extractFile(proxyEntry.file_name);
+    if (!splatData) {
+        return { loaded: false, blob: null, error: 'Failed to extract proxy splat' };
+    }
+
+    // Remove existing splat (the full-res) before loading
+    const existingSplat = getSplatMesh();
+    if (existingSplat) {
+        scene.remove(existingSplat);
+        if (existingSplat.dispose) existingSplat.dispose();
+        setSplatMesh(null);
+    }
+
+    state.splatLoaded = false;
+    await loadSplatFromBlobUrl(splatData.url, proxyEntry.file_name, deps);
+
+    // Apply transform from the primary scene entry (proxy inherits the same transform)
+    const sceneEntry = archiveLoader.getSceneEntry();
+    const transform = archiveLoader.getEntryTransform(sceneEntry || proxyEntry);
+    if (callbacks.onApplySplatTransform) {
+        callbacks.onApplySplatTransform(transform);
+    }
+
+    state.assetStates.splat = ASSET_STATE.LOADED;
+    return { loaded: true, blob: splatData.blob, error: null };
+}
+
+/**
+ * Load the proxy mesh from an archive, replacing the currently displayed full-res.
+ * @param {ArchiveLoader} archiveLoader - The archive loader
+ * @param {Object} deps - Dependencies { state, modelGroup, callbacks }
+ * @returns {Promise<Object>} { loaded, blob, error, faceCount }
+ */
+export async function loadArchiveProxyMesh(archiveLoader, deps) {
+    const { state, callbacks = {} } = deps;
+    const proxyEntry = archiveLoader.getMeshProxyEntry();
+    if (!proxyEntry) {
+        return { loaded: false, blob: null, error: 'No proxy mesh in archive' };
+    }
+
+    const meshData = await archiveLoader.extractFile(proxyEntry.file_name);
+    if (!meshData) {
+        return { loaded: false, blob: null, error: 'Failed to extract proxy mesh' };
+    }
+
+    // Clear existing model (the full-res) before loading
+    const { modelGroup } = deps;
+    if (modelGroup) {
+        while (modelGroup.children.length > 0) {
+            const child = modelGroup.children[0];
+            modelGroup.remove(child);
+            disposeObject(child);
+        }
+    }
+
+    state.modelLoaded = false;
+    const result = await loadModelFromBlobUrl(meshData.url, proxyEntry.file_name, deps);
+
+    // Apply transform from the primary mesh entry (proxy inherits the same transform)
+    const meshEntry = archiveLoader.getMeshEntry();
+    const transform = archiveLoader.getEntryTransform(meshEntry || proxyEntry);
     if (callbacks.onApplyModelTransform) {
         callbacks.onApplyModelTransform(transform);
     }

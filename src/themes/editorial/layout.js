@@ -392,6 +392,35 @@ export function setup(manifest, deps) {
         viewModes.appendChild(link);
     });
 
+    // Quality toggle (SD/HD) — inline with view modes if archive has proxies
+    if (deps.hasAnyProxy) {
+        const qualitySep = document.createElement('span');
+        qualitySep.className = 'editorial-view-mode-sep';
+        qualitySep.textContent = '|';
+        viewModes.appendChild(qualitySep);
+
+        const sdBtn = document.createElement('button');
+        sdBtn.className = 'editorial-view-mode-link quality-toggle-btn' + (deps.qualityResolved === 'sd' ? ' active' : '');
+        sdBtn.dataset.tier = 'sd';
+        sdBtn.textContent = 'SD';
+        viewModes.appendChild(sdBtn);
+
+        const hdBtn = document.createElement('button');
+        hdBtn.className = 'editorial-view-mode-link quality-toggle-btn' + (deps.qualityResolved === 'hd' ? ' active' : '');
+        hdBtn.dataset.tier = 'hd';
+        hdBtn.textContent = 'HD';
+        viewModes.appendChild(hdBtn);
+
+        [sdBtn, hdBtn].forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (deps.switchQualityTier) deps.switchQualityTier(btn.dataset.tier);
+                [sdBtn, hdBtn].forEach(b => {
+                    b.classList.toggle('active', b.dataset.tier === btn.dataset.tier);
+                });
+            });
+        });
+    }
+
     // Details link
     const detailsSep = document.createElement('span');
     detailsSep.className = 'editorial-view-mode-sep';
@@ -480,6 +509,7 @@ export function setup(manifest, deps) {
         ribbon.appendChild(markerToggle);
     }
 
+    // Mesh visualization tools
     // Texture toggle
     const textureToggle = document.createElement('button');
     textureToggle.className = 'editorial-marker-toggle';

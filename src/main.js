@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { SplatMesh } from '@sparkjsdev/spark';
 import { ArchiveLoader, isArchiveFile } from './modules/archive-loader.js';
+import { hasAnyProxy } from './modules/quality-tier.js';
 import { AnnotationSystem } from './modules/annotation-system.js';
 import { ArchiveCreator, captureScreenshot, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
 import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, ENVIRONMENT } from './modules/constants.js';
@@ -64,7 +65,8 @@ import {
     loadPointcloudFromFile as loadPointcloudFromFileHandler,
     loadPointcloudFromUrl as loadPointcloudFromUrlHandler,
     loadPointcloudFromBlobUrl as loadPointcloudFromBlobUrlHandler,
-    loadArchiveFullResMesh,
+    loadArchiveFullResMesh, loadArchiveFullResSplat,
+    loadArchiveProxyMesh, loadArchiveProxySplat,
     updatePointcloudPointSize,
     updatePointcloudOpacity,
     updateModelTextures,
@@ -252,6 +254,9 @@ const state = {
     assetStates: { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED },
     // Whether the currently displayed mesh is a proxy (display-quality LOD)
     viewingProxy: false,
+    // Quality tier (main app defaults to HD — authoring tool)
+    qualityTier: 'hd',
+    qualityResolved: 'hd',
     // Embedded images for annotation/description markdown
     imageAssets: new Map(),
     // Screenshot captures for archive export
@@ -280,6 +285,7 @@ let archiveCreator = null;
 let currentSplatBlob = null;
 let currentMeshBlob = null;
 let currentProxyMeshBlob = null;
+let currentProxySplatBlob = null;
 let currentPointcloudBlob = null;
 let sourceFiles = []; // Array of { file: File|null, name: string, size: number, category: string, fromArchive: boolean }
 
@@ -652,6 +658,7 @@ function setupUIEvents() {
     addListener('archive-input', 'change', handleArchiveFile);
     addListener('pointcloud-input', 'change', handlePointcloudFile);
     addListener('proxy-mesh-input', 'change', handleProxyMeshFile);
+    addListener('proxy-splat-input', 'change', handleProxySplatFile);
     addListener('stl-input', 'change', handleSTLFile);
     addListener('btn-load-stl-url', 'click', handleLoadSTLFromUrlPrompt);
     addListener('source-files-input', 'change', handleSourceFilesInput);
@@ -659,6 +666,8 @@ function setupUIEvents() {
     addListener('btn-load-archive-url', 'click', handleLoadArchiveFromUrlPrompt);
     addListener('btn-load-full-res', 'click', handleLoadFullResMesh);
     addListener('proxy-load-full-link', 'click', (e) => { e.preventDefault(); handleLoadFullResMesh(); });
+    addListener('btn-quality-sd', 'click', () => switchQualityTier('sd'));
+    addListener('btn-quality-hd', 'click', () => switchQualityTier('hd'));
 
     // Tauri native file dialogs — override label clicks to use OS dialogs
     if (window.__TAURI__ && tauriBridge) {
@@ -1558,9 +1567,9 @@ async function ensureAssetLoaded(assetType) {
                 state.assetStates[assetType] = ASSET_STATE.UNLOADED;
                 return false;
             }
-            // Prefer proxy mesh when available
+            // Prefer proxy mesh when quality tier is SD
             const proxyEntry = archiveLoader.getMeshProxyEntry();
-            const useProxy = contentInfo.hasMeshProxy && proxyEntry;
+            const useProxy = state.qualityResolved === 'sd' && contentInfo.hasMeshProxy && proxyEntry;
             const entryToLoad = useProxy ? proxyEntry : meshEntry;
 
             const meshData = await archiveLoader.extractFile(entryToLoad.file_name);
@@ -1731,6 +1740,12 @@ async function processArchive(archiveLoader, archiveName) {
         }
 
         hideLoading();
+
+        // Show quality toggle if archive has any proxies
+        const contentInfoFinal = archiveLoader.getContentInfo();
+        if (hasAnyProxy(contentInfoFinal)) {
+            document.getElementById('quality-toggle-container')?.classList.remove('hidden');
+        }
 
         // === Phase 3: Background-load remaining assets ===
         const remainingTypes = ['splat', 'mesh', 'pointcloud'].filter(
@@ -2271,6 +2286,20 @@ async function downloadArchive() {
         });
     }
 
+    // Add display proxy splat if available
+    if (currentProxySplatBlob) {
+        const proxySplatFileName = document.getElementById('proxy-splat-filename')?.textContent || 'scene_proxy.spz';
+        const splatPosition = splatMesh ? [splatMesh.position.x, splatMesh.position.y, splatMesh.position.z] : [0, 0, 0];
+        const splatRotation = splatMesh ? [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z] : [0, 0, 0];
+        const splatScale = splatMesh ? splatMesh.scale.x : 1;
+
+        log.info(' Adding splat proxy:', { proxySplatFileName });
+        archiveCreator.addSceneProxy(currentProxySplatBlob, proxySplatFileName, {
+            position: splatPosition, rotation: splatRotation, scale: splatScale,
+            derived_from: 'scene_0'
+        });
+    }
+
     // Add point cloud if loaded and selected
     log.info(' Checking pointcloud:', { currentPointcloudBlob: !!currentPointcloudBlob, pointcloudLoaded: state.pointcloudLoaded });
     if (includePointcloud && currentPointcloudBlob && state.pointcloudLoaded) {
@@ -2803,6 +2832,65 @@ async function handleProxyMeshFile(event) {
     currentProxyMeshBlob = file;
     document.getElementById('proxy-mesh-filename').textContent = file.name;
     notify.info(`Display proxy "${file.name}" ready — will be included in archive exports.`);
+}
+
+async function handleProxySplatFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    currentProxySplatBlob = file;
+    document.getElementById('proxy-splat-filename').textContent = file.name;
+    notify.info(`Splat display proxy "${file.name}" ready — will be included in archive exports.`);
+}
+
+async function switchQualityTier(newTier) {
+    if (newTier === state.qualityResolved) return;
+    state.qualityResolved = newTier;
+
+    // Update button states
+    document.querySelectorAll('.quality-toggle-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tier === newTier);
+        btn.classList.add('loading');
+    });
+
+    const archiveLoader = state.archiveLoader;
+    if (!archiveLoader) return;
+
+    const contentInfo = archiveLoader.getContentInfo();
+    const deps = createFileHandlerDeps();
+
+    try {
+        if (contentInfo.hasSceneProxy) {
+            if (newTier === 'hd') {
+                await loadArchiveFullResSplat(archiveLoader, deps);
+            } else {
+                await loadArchiveProxySplat(archiveLoader, deps);
+            }
+        }
+        if (contentInfo.hasMeshProxy) {
+            if (newTier === 'hd') {
+                const result = await loadArchiveFullResMesh(archiveLoader, deps);
+                if (result.loaded) {
+                    currentMeshBlob = result.blob;
+                    state.viewingProxy = false;
+                    document.getElementById('proxy-mesh-indicator')?.classList.add('hidden');
+                }
+            } else {
+                await loadArchiveProxyMesh(archiveLoader, deps);
+                state.viewingProxy = true;
+                document.getElementById('proxy-mesh-indicator')?.classList.remove('hidden');
+            }
+        }
+        updateVisibility();
+        log.info(`Quality tier switched to ${newTier}`);
+    } catch (e) {
+        log.error('Error switching quality tier:', e);
+        notify.error(`Failed to switch quality: ${e.message}`);
+    } finally {
+        document.querySelectorAll('.quality-toggle-btn').forEach(btn => {
+            btn.classList.remove('loading');
+        });
+    }
 }
 
 // ==================== Source Files ====================

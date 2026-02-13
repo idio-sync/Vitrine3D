@@ -139,6 +139,23 @@ export const ASSET_STATE = {
 };
 
 // =============================================================================
+// QUALITY TIER (SD/HD quality-aware loading)
+// =============================================================================
+
+export const QUALITY_TIER = {
+    SD: 'sd',     // proxy / display-quality assets
+    HD: 'hd',     // full resolution assets
+    AUTO: 'auto'  // device-detected default
+};
+
+export const DEVICE_THRESHOLDS = {
+    LOW_MEMORY_GB: 4,         // navigator.deviceMemory threshold
+    LOW_CORES: 4,             // navigator.hardwareConcurrency threshold
+    MOBILE_WIDTH_PX: 768,     // screen.width threshold
+    LOW_MAX_TEXTURE: 8192     // gl.MAX_TEXTURE_SIZE threshold
+};
+
+// =============================================================================
 // MESH LOD / PROXY THRESHOLDS
 // =============================================================================
 
