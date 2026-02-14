@@ -1,6 +1,6 @@
 # Sketchfab Feature Parity Analysis
 
-**Date:** 2026-02-11
+**Date:** 2026-02-11 (last updated 2026-02-14)
 **Purpose:** Ranked feature gap analysis between this viewer and Sketchfab, evaluated for Three.js 0.170.0 feasibility.
 
 ---
@@ -15,6 +15,10 @@
 | 2026-02-12 | Rank 16: Matcap rendering mode. Checkbox toggle + 5 procedurally-generated presets (Clay/Chrome/Pearl/Jade/Copper). Mutually exclusive with wireframe. Works in both main app and kiosk. | `file-handlers.js`, `index.html`, `main.js`, `kiosk-main.js` |
 | 2026-02-12 | Rank 26: Normal map visualization. MeshNormalMaterial toggle (RGB = XYZ normals). Mutually exclusive with wireframe and matcap. Works in main app, kiosk, and editorial theme. | `file-handlers.js`, `index.html`, `main.js`, `kiosk-main.js`, `editorial/layout.js` |
 | 2026-02-12 | Rank 9: FOV control slider (10°–120°). Added to Scene Settings in main app, kiosk standard UI, and editorial theme bottom ribbon as compact inline slider. | `index.html`, `main.js`, `kiosk-main.js`, `editorial/layout.js`, `editorial/layout.css` |
+| 2026-02-12 | STL file loading. Full STL support with file input, URL loading, and display mode toggle. Works in main app and kiosk. | `file-handlers.js`, `index.html`, `main.js`, `kiosk-main.js` |
+| 2026-02-12 | Kiosk theming system. Pluggable theme architecture with `src/themes/` directory, theme-loader.js, template/minimal/editorial themes. Editorial theme has custom layout with bottom ribbon. | `theme-loader.js`, `kiosk-main.js`, `config.js`, `themes/` |
+| 2026-02-12 | SD/HD quality tier toggle. Device-aware auto-detection, proxy mesh and proxy splat support, one-click tier switching. Partially addresses LOD (Rank 40). | `quality-tier.js`, `main.js`, `kiosk-main.js`, `file-handlers.js`, `archive-loader.js`, `archive-creator.js` |
+| 2026-02-13 | Tauri native desktop app. Full desktop application via Tauri with native OS file dialogs, filesystem access, and GitHub Actions release workflow. | `tauri-bridge.js`, `main.js`, `archive-creator.js`, `src-tauri/` |
 
 ---
 
@@ -43,6 +47,9 @@ These features exist in our viewer but **not in Sketchfab**:
 | ICP auto-alignment | Iterative closest point alignment |
 | Dublin Core metadata system (50+ fields, 8 tabs) | Archival-grade metadata |
 | Split-view dual-canvas rendering | Side-by-side comparison |
+| Kiosk theming system | Pluggable themes (editorial, minimal, template) with custom layouts |
+| SD/HD quality tier with proxy assets | Device-aware auto-detection, one-click switching |
+| Tauri native desktop application | Offline desktop app with OS file dialogs and filesystem access |
 
 ---
 
@@ -61,12 +68,12 @@ These features deliver the most visual/functional parity per hour of work.
 | 5 | **Shadow catcher ground plane** | Invisible plane receiving shadows | **DONE** | LOW | High | ShadowMaterial with adjustable opacity (0.05–1.0). Excluded from raycasting. Auto-created with shadows. |
 | 6 | **Screenshot capture** | 1x/2x/4x resolution export | **DONE** | LOW | Medium-High | Capture button + viewfinder preview override + thumbnail grid. Screenshots exported to `/screenshots/` in archive. 1024x1024 JPEG. |
 | 7 | **Auto-rotate** | Turntable with speed/direction control | **DONE** | TRIVIAL | Medium | Toolbar toggle button. Default on in kiosk (auto-disables on interaction), off in main app. Speed: 2.0 (~30s/rev). |
-| 8 | **Camera constraints** | Orbit angle limits, zoom min/max, pan bounds | No | LOW | Medium | OrbitControls properties: `minDistance`, `maxDistance`, `minPolarAngle`, `maxPolarAngle`. Prevents going underground. |
+| 8 | **Camera constraints** | Orbit angle limits, zoom min/max, pan bounds | Partial | LOW | Medium | Zoom limits (`minDistance`/`maxDistance`) set via `ORBIT_CONTROLS` constants in scene-manager.js. Still missing: polar angle limits to prevent going underground, UI controls for runtime adjustment. |
 | 9 | **FOV control** | Adjustable field of view slider | **DONE** | TRIVIAL | Medium | Slider (10°–120°) in Scene Settings, kiosk, and editorial ribbon. |
 | 10 | **Orthographic view toggle** | Parallel projection mode | No | LOW | Medium | Swap between `PerspectiveCamera` and `OrthographicCamera`. Useful for architectural viewing. |
 
 **Estimated total effort for Tier 1: ~15-25 hours**
-**Progress: 7 of 10 features implemented (ranks 1–7)**
+**Progress: 8 of 10 features implemented (ranks 1–7, 9). Rank 8 partial (zoom limits only).**
 **Expected result: ~60% visual parity with Sketchfab**
 
 ---
@@ -129,7 +136,7 @@ Significant engineering investment but differentiating for professional use.
 | 37 | **Material inspector / editor** | View & edit PBR properties per material | No | HIGH | Medium | Read material properties from scene. Display in UI. Editing adds significant complexity. |
 | 38 | **Turntable video export** | Generate 360-degree animation GIF/video | No | HIGH | Medium | Rotate camera programmatically + `MediaRecorder` API on canvas stream. |
 | 39 | **Camera animation timeline** | Keyframe camera paths, export video | No | VERY HIGH | Medium | Full keyframe editor UI + camera path interpolation + video export. |
-| 40 | **LOD (level of detail)** | Auto-simplify by camera distance | No | HIGH | Medium | `THREE.LOD` class exists but requires pre-simplified meshes. Need mesh decimation. |
+| 40 | **LOD (level of detail)** | Auto-simplify by camera distance | Partial | HIGH | Medium | SD/HD quality tier system with proxy mesh/splat support addresses manual LOD switching. Still missing: automatic distance-based LOD via `THREE.LOD` class, runtime mesh decimation. |
 
 **Estimated total effort for Tier 4: ~80-120 hours**
 
@@ -183,6 +190,7 @@ Features Sketchfab has that are less relevant for 3D scan deliverables.
 | Transform gizmo | Translate/rotate/scale via TransformControls | Full |
 | GLTF/GLB loading | GLTFLoader | Full |
 | OBJ loading | OBJLoader + MTL | Full |
+| STL loading | STLLoader with file input, URL loading, display mode | Full |
 | Screenshot capture | 1024x1024 JPEG, viewfinder preview, thumbnail grid, archive `/screenshots/` export | Full |
 | Screenshot (for archives) | Canvas capture for archive thumbnails | Full |
 | Matcap rendering mode | 5 procedural presets (Clay/Chrome/Pearl/Jade/Copper) with dropdown | Full |
@@ -207,24 +215,32 @@ Phase 1 (Tier 1):  ~15-25 hrs  →  60% visual parity  [IN PROGRESS — 8/10 don
   ✅ Auto-rotate (toolbar toggle, kiosk default-on)
   ✅ Screenshot capture (viewfinder preview, thumbnail grid, archive export)
   ✅ FOV control slider (10°–120°)
-  ⬜ Camera constraints, ortho view
+  🟡 Camera constraints (zoom limits only — needs angle limits + UI)
+  ⬜ Orthographic view
 
 Phase 2 (Tier 2):  ~40-60 hrs  →  85% functional parity  [IN PROGRESS — 1/10 done]
   ✅ Matcap rendering mode (5 procedural presets, checkbox + dropdown)
-  - SSAO, bloom, clipping planes, measurement tools,
+  ⬜ SSAO, bloom, clipping planes, measurement tools,
     guided tours, inspector, saved viewpoints, outlines
 
 Phase 3 (Tier 3):  ~25-35 hrs  →  90% polish parity  [IN PROGRESS — 1/10 done]
   ✅ Normal map visualization (MeshNormalMaterial toggle)
-  - DOF, color grading, vignette, diagnostic overlays,
+  ⬜ DOF, color grading, vignette, diagnostic overlays,
     unlit mode, area measurement
 
 Phase 4 (Tier 4):  ~80-120 hrs →  95% feature parity
-  - Section box, animation system, exploded view,
+  🟡 LOD (partial — SD/HD quality tier with proxy assets)
+  ⬜ Section box, animation system, exploded view,
     scene tree, material editor, video export
 
 Phase 5 (Tier 5):  ~60-100 hrs →  ~98% parity (diminishing returns)
-  - VR/AR, spatial audio, SSS, viewer API, analytics
+  ⬜ VR/AR, spatial audio, SSS, viewer API, analytics
+
+Bonus (not in Sketchfab):
+  ✅ STL file loading
+  ✅ Kiosk theming system (editorial/minimal/template themes)
+  ✅ SD/HD quality tier toggle with device-aware auto-detection
+  ✅ Tauri native desktop application
 ```
 
 **Total estimated effort to full parity: ~220-340 hours**
