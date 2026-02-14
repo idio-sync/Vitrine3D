@@ -34,6 +34,7 @@ The format uses ZIP as its physical container and JSON as its metadata language.
    - 5.10 [annotations](#510-annotations)
    - 5.11 [integrity](#511-integrity)
    - 5.12 [_meta](#512-_meta)
+   - 5.13 [version_history](#513-version_history)
 6. [Supported Asset Formats](#6-supported-asset-formats)
 7. [Integrity Verification](#7-integrity-verification)
 8. [Compatibility and Extensibility](#8-compatibility-and-extensibility)
@@ -121,13 +122,23 @@ Archives SHOULD follow this directory structure:
 ```
 archive.a3d
 ├── manifest.json
+├── README.txt                       # RECOMMENDED. Plain-text guide to archive contents
 ├── assets/
 │   ├── scene_0.<ext>                # Gaussian splat file
 │   ├── mesh_0.<ext>                 # Mesh file
 │   ├── pointcloud_0.<ext>           # Point cloud file
+│   ├── mesh_0_proxy.<ext>           # LOD proxy variant (optional)
 │   └── ...
-└── preview.<ext>                    # Thumbnail image
+├── preview.<ext>                    # Thumbnail image
+├── images/                          # Image attachments (optional)
+│   └── ...
+├── screenshots/                     # User-captured screenshots (optional)
+│   └── ...
+└── sources/                         # Archived source files, not rendered (optional)
+    └── ...
 ```
+
+The `README.txt` is a plain-text file describing the archive contents and how to extract and read them. Packers SHOULD generate this file automatically. It is intended for human readers who encounter the archive without any knowledge of the format.
 
 ### 4.3 Filename Constraints
 
@@ -176,6 +187,7 @@ The notation `string | ""` indicates a string field that MAY be an empty string 
 | `data_entries` | object | REQUIRED | Asset file manifest. See [5.9](#59-data_entries). |
 | `annotations` | array | OPTIONAL | Spatial annotations. See [5.10](#510-annotations). |
 | `integrity` | object | OPTIONAL | Integrity verification hashes. See [5.11](#511-integrity). |
+| `version_history` | array | OPTIONAL | Ordered list of version entries. See [5.13](#513-version_history). |
 | `_meta` | object | OPTIONAL | Implementation-specific metadata. See [5.12](#512-_meta). |
 
 ### 5.2 project
@@ -396,15 +408,22 @@ Entry keys MUST follow the pattern `<type>_<index>` where:
 | Type Prefix | Asset Type |
 |-------------|-----------|
 | `scene_` | Gaussian splat representation |
-| `mesh_` | Polygon mesh (GLB, glTF, OBJ) |
+| `mesh_` | Polygon mesh (GLB, glTF, OBJ, STL) |
 | `pointcloud_` | Point cloud (E57) |
 | `thumbnail_` | Preview image |
+| `screenshot_` | User-captured viewport screenshot |
+| `image_` | Embedded image attachment (referenced by annotations or descriptions via the `asset:` protocol) |
+| `source_` | Archived source file (not rendered in viewer; e.g., raw photography, calibration data, reports) |
 
 Index is a zero-based integer. Examples: `scene_0`, `mesh_0`, `mesh_1`, `pointcloud_0`, `thumbnail_0`.
+
+**LOD proxy entries** use the key pattern `<parent_key>_proxy` (e.g., `scene_0_proxy`, `mesh_0_proxy`). They reference a lower-detail variant of the parent entry and are intended for mobile or bandwidth-constrained viewers.
 
 Readers MUST support entries with unrecognized type prefixes by treating them as opaque data.
 
 #### 5.9.2 Entry Fields
+
+**Common fields** (applicable to all entry types):
 
 | Field | Type | Status | Description |
 |-------|------|--------|-------------|
@@ -412,8 +431,25 @@ Readers MUST support entries with unrecognized type prefixes by treating them as
 | `created_by` | string | RECOMMENDED | Name of the software that created this specific file. |
 | `_created_by_version` | string | OPTIONAL | Version of the creating software. |
 | `_source_notes` | string | OPTIONAL | Free-text notes about how this file was produced. |
+| `role` | string | OPTIONAL | Archival role of this asset. Values: `"primary"` (original capture data), `"derived"` (processed from another asset), `"source"` (raw source material). |
 | `_parameters` | object | OPTIONAL | Spatial transform for this asset. See [5.9.3](#593-_parameters). |
 | `_hash` | string | OPTIONAL | Deprecated. Per-asset hashes SHOULD use the `integrity` section instead. |
+
+**LOD proxy fields** (applicable to `*_proxy` entries):
+
+| Field | Type | Status | Description |
+|-------|------|--------|-------------|
+| `lod` | string | RECOMMENDED | Level of detail. Value: `"proxy"` for simplified variants. |
+| `derived_from` | string | RECOMMENDED | Entry key of the parent asset this proxy was derived from (e.g., `"mesh_0"`). |
+| `face_count` | number | OPTIONAL | Polygon count of the proxy mesh. Useful for LOD selection. |
+
+**Source file fields** (applicable to `source_` entries):
+
+| Field | Type | Status | Description |
+|-------|------|--------|-------------|
+| `original_name` | string | RECOMMENDED | Original filename before sanitization. |
+| `source_category` | string | OPTIONAL | Category tag (e.g., `"photography"`, `"calibration"`, `"report"`, `"processing"`). |
+| `size_bytes` | number | OPTIONAL | File size in bytes. |
 
 #### 5.9.3 _parameters
 
@@ -431,6 +467,7 @@ Defines the spatial placement of an asset in a common coordinate space, allowing
     "created_by": "Postshot",
     "_created_by_version": "1.3.0",
     "_source_notes": "Gaussian splat trained from 1,847 photogrammetric images.",
+    "role": "derived",
     "_parameters": {
         "position": [0, 0, 0],
         "rotation": [3.14159, 0, 0],
@@ -441,7 +478,7 @@ Defines the spatial placement of an asset in a common coordinate space, allowing
 
 #### 5.9.4 Minimum Asset Requirement
 
-A valid archive MUST contain at least one data entry with a type prefix of `scene_`, `mesh_`, or `pointcloud_`. Archives containing only `thumbnail_` entries are not valid.
+A valid archive MUST contain at least one data entry with a type prefix of `scene_`, `mesh_`, or `pointcloud_`. Archives containing only `thumbnail_`, `screenshot_`, `image_`, or `source_` entries are not valid.
 
 ### 5.10 annotations
 
@@ -520,6 +557,31 @@ Fields prefixed with `_` throughout the manifest are considered implementation-s
 }
 ```
 
+### 5.13 version_history
+
+An OPTIONAL array of version entries tracking the history of the archive. Entries SHOULD be ordered chronologically.
+
+| Field | Type | Status | Description |
+|-------|------|--------|-------------|
+| `version` | string | REQUIRED | Version identifier (e.g., `"1.0"`, `"1.1"`). |
+| `date` | string | RECOMMENDED | ISO 8601 datetime when this version was created. |
+| `description` | string | RECOMMENDED | Free-text description of changes in this version. |
+
+```json
+"version_history": [
+    {
+        "version": "1.0",
+        "date": "2026-01-15T08:30:00Z",
+        "description": "Initial capture and processing."
+    },
+    {
+        "version": "1.1",
+        "date": "2026-03-20T14:00:00Z",
+        "description": "Added condition annotations, updated mesh with gap-filled regions."
+    }
+]
+```
+
 ---
 
 ## 6. Supported Asset Formats
@@ -545,6 +607,7 @@ Archives MAY contain files in any format. The following formats are defined by t
 | `.glb` | glTF Binary 2.0 | [Khronos glTF 2.0](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) |
 | `.gltf` | glTF 2.0 (JSON + binary) | [Khronos glTF 2.0](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) |
 | `.obj` | Wavefront OBJ | [Wavefront OBJ specification](http://www.martinreddy.net/gfx/3d/OBJ.spec) |
+| `.stl` | STL (Stereolithography) | [STL format](https://en.wikipedia.org/wiki/STL_(file_format)) |
 
 GLB is RECOMMENDED for meshes due to its single-file nature, binary efficiency, widespread tooling support, and Khronos Group stewardship.
 
@@ -852,6 +915,7 @@ The following is a complete manifest demonstrating all sections at Conformance L
             "created_by": "nerfstudio",
             "_created_by_version": "1.1.0",
             "_source_notes": "Trained for 30k iterations from 847 images.",
+            "role": "derived",
             "_parameters": {
                 "position": [0, 0, 0],
                 "rotation": [3.14159, 0, 0],
@@ -863,17 +927,27 @@ The following is a complete manifest demonstrating all sections at Conformance L
             "created_by": "Reality Capture",
             "_created_by_version": "1.4",
             "_source_notes": "Decimated from 200M to 10M faces.",
+            "role": "derived",
             "_parameters": {
                 "position": [0, 0, 0],
                 "rotation": [0, 0, 0],
                 "scale": 1
             }
         },
+        "mesh_0_proxy": {
+            "file_name": "assets/mesh_0_proxy.glb",
+            "created_by": "simple-splat-mesh-viewer",
+            "role": "derived",
+            "lod": "proxy",
+            "derived_from": "mesh_0",
+            "face_count": 50000
+        },
         "pointcloud_0": {
             "file_name": "assets/pointcloud_0.e57",
             "created_by": "Leica Cyclone",
             "_created_by_version": "2024.1.0",
             "_source_notes": "Registered from 12 scan positions.",
+            "role": "primary",
             "_parameters": {
                 "position": [0, 0, 0],
                 "rotation": [0, 0, 0],
@@ -894,6 +968,14 @@ The following is a complete manifest demonstrating all sections at Conformance L
             "position": { "x": 1.2, "y": 3.4, "z": -0.1 },
             "camera_position": { "x": 2.0, "y": 4.0, "z": 3.0 },
             "camera_target": { "x": 1.2, "y": 3.4, "z": -0.1 }
+        }
+    ],
+
+    "version_history": [
+        {
+            "version": "1.0",
+            "date": "2026-01-15T08:30:00Z",
+            "description": "Initial capture and processing."
         }
     ],
 

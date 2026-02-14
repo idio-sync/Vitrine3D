@@ -10,17 +10,22 @@ Archives are ZIP files containing:
 
 ```
 scene.a3d/
-  manifest.json          # Metadata, file listings, transforms, annotations
-  scene.ply              # Gaussian splat data
-  model.glb              # 3D mesh
-  scan.e57               # Point cloud (optional)
-  preview.jpg            # Thumbnail preview (optional, auto-captured or manual)
-  images/                # Image attachments referenced by annotations/descriptions
+  manifest.json              # Metadata, file listings, transforms, annotations
+  README.txt                 # Plain-text guide to archive contents (auto-generated)
+  preview.jpg                # Thumbnail preview (optional, auto-captured or manual)
+  assets/
+    scene_0.ply              # Gaussian splat data
+    mesh_0.glb               # 3D mesh
+    pointcloud_0.e57         # Point cloud (optional)
+    mesh_0_proxy.glb         # LOD proxy mesh (optional)
+  images/                    # Image attachments referenced by annotations/descriptions
     photo1.jpg
     detail2.png
-  screenshots/           # User-captured viewport screenshots (optional)
+  screenshots/               # User-captured viewport screenshots (optional)
     screenshot_0.jpg
     screenshot_1.jpg
+  sources/                   # Archived source files (optional, not rendered)
+    calibration_report.pdf
 ```
 
 ## Manifest Schema
@@ -64,7 +69,7 @@ The `manifest.json` file is the heart of the archive, containing structured meta
   },
 
   "quality_metrics": {
-    "tier": "Tier 2 - Reference",
+    "tier": "reference",
     "accuracy_grade": "A",
     "capture_resolution": { "value": "2", "unit": "mm", "type": "GSD" },
     "alignment_error": { "value": "0.5", "unit": "mm", "method": "RMSE" },
@@ -100,15 +105,15 @@ The `manifest.json` file is the heart of the archive, containing structured meta
       "credit_line": "Heritage Survey Team, 2026"
     },
     "coverage": {
-      "spatial": { "location_name": "Oxford, UK", "coordinates": "51.752,-1.258" },
-      "temporal": { "subject_period": "1860-1875", "circa": true }
+      "spatial": { "location_name": "Oxford, UK", "coordinates": { "latitude": "51.752", "longitude": "-1.258" } },
+      "temporal": { "subject_period": "1860-1875", "subject_date_circa": true }
     }
   },
 
   "material_standard": {
-    "workflow": "metal_roughness",
-    "color_space": "srgb",
-    "normal_space": "opengl"
+    "workflow": "metalness-roughness",
+    "color_space": "sRGB",
+    "normal_space": "OpenGL (+Y up)"
   },
 
   "preservation": {
@@ -176,16 +181,25 @@ The `manifest.json` file is the heart of the archive, containing structured meta
     {
       "id": "anno_1",
       "title": "Crack in tracery",
-      "description": "Structural crack running NE-SW, approx 2.3m\n\n![Detail](asset:images/crack_detail.jpg)",
+      "body": "Structural crack running NE-SW, approx 2.3m\n\n![Detail](asset:images/crack_detail.jpg)",
       "position": { "x": 1.2, "y": 3.4, "z": -0.1 },
-      "cameraPosition": { "x": 2.0, "y": 4.0, "z": 3.0 },
-      "cameraTarget": { "x": 1.2, "y": 3.4, "z": -0.1 }
+      "camera_position": { "x": 2.0, "y": 4.0, "z": 3.0 },
+      "camera_target": { "x": 1.2, "y": 3.4, "z": -0.1 }
     }
   ],
 
+  "integrity": {
+    "algorithm": "SHA-256",
+    "manifest_hash": "a1b2c3d4e5f6...",
+    "assets": {
+      "assets/scene_0.ply": "sha256:abc123...",
+      "assets/mesh_0.glb": "sha256:def456...",
+      "assets/pointcloud_0.e57": "sha256:789ghi..."
+    }
+  },
+
   "_meta": {
-    "custom_fields": {},
-    "_manifest_hash": "sha256:..."
+    "custom_fields": {}
   }
 }
 ```
