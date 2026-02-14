@@ -160,63 +160,11 @@ See `src/themes/editorial/` for a complete example with all three files.
 
 ## Embed Security (Docker Deployment)
 
-When embedding the kiosk viewer via `<iframe>` on client websites, three Docker env vars lock down the viewer to prevent URL tampering:
+When embedding the kiosk viewer via `<iframe>` on client websites, four Docker environment variables (`KIOSK_LOCK`, `ARCHIVE_PATH_PREFIX`, `EMBED_REFERERS`, `FRAME_ANCESTORS`) lock down the viewer to prevent URL tampering, restrict archive access, and control iframe embedding.
 
-### Environment Variables
-
-| Variable | Example | Description |
-|----------|---------|-------------|
-| `KIOSK_LOCK` | `true` | Forces kiosk mode server-side. Ignores privilege-escalating URL params (`?kiosk`, `?controls`, `?sidebar`, `?toolbar`, `?splat`, `?model`, `?pointcloud`, `?alignment`). The `?archive=` param still works (needed for per-embed URLs). Theme/layout params are allowed (cosmetic only). |
-| `ARCHIVE_PATH_PREFIX` | `/archives/` | When set with `KIOSK_LOCK`, only allows loading archives whose path starts with this prefix. Prevents path traversal (`../`) via URL normalization. New archives added to the directory work immediately with no config changes. |
-| `EMBED_REFERERS` | `client.com *.client.com` | nginx `valid_referers` check. Rejects requests from unlisted domains. Direct browser visits (no referer) are still allowed. Space-separated list; supports wildcards. |
-
-These are additive to the existing `FRAME_ANCESTORS` env var (CSP `frame-ancestors` for iframe embedding).
-
-### Example Deployment
-
-```bash
-docker run -e KIOSK_LOCK=true \
-           -e ARCHIVE_PATH_PREFIX="/archives/" \
-           -e FRAME_ANCESTORS="https://client-website.com" \
-           -e EMBED_REFERERS="client-website.com *.client-website.com" \
-           -v /path/to/archives:/usr/share/nginx/html/archives \
-           viewer:latest
-```
-
-Embed on client site:
-```html
-<iframe src="https://viewer.example.com?archive=/archives/a8f3e2b1-4c5d/scan.a3d&autoload=false"></iframe>
-```
+For full details — environment variable reference, example deployment commands, security layers table, recommended non-guessable archive paths, and the threat model — see the [Kiosk Embed Security section in DEPLOYMENT.md](DEPLOYMENT.md#kiosk-embed-security).
 
 Use `autoload=false` when embedding multiple viewers on one page to defer downloads until the user clicks each embed's play button.
-
-### Recommended: Non-Guessable Paths
-
-Use UUID-based directory names instead of predictable names:
-
-```
-/archives/a8f3e2b1-4c5d-9876-abcd-1234567890ef/scan.a3d   (good)
-/archives/client-name/scan.a3d                              (bad - guessable)
-```
-
-This is the same pattern used by Sketchfab (hex model IDs) and Vimeo (hash tokens in embed URLs). Without knowing the UUID, users cannot enumerate or access other clients' archives.
-
-### Security Layers
-
-| Layer | What It Prevents |
-|-------|-----------------|
-| `KIOSK_LOCK` | Switching to editor mode via URL params |
-| `ARCHIVE_PATH_PREFIX` | Loading files outside the archives directory |
-| nginx module blocking | Loading editor JS modules (archive-creator, share-dialog) even via devtools |
-| `EMBED_REFERERS` | Accessing the viewer from unlisted domains |
-| `FRAME_ANCESTORS` | Embedding the viewer iframe on unauthorized sites |
-| Non-guessable paths | Guessing other clients' archive URLs |
-
-### Threat Model
-
-Since archives are served as static files, anyone who knows the direct URL can download the raw `.a3d` file regardless of viewer UI restrictions. The lockdown controls the **UI experience** only. For true per-file access control, use non-guessable UUID paths. If stronger access control is needed (time-limited access, per-user authentication), a backend signing service would be required.
-
-When all env vars are unset, the viewer behaves exactly as before (zero breaking changes).
 
 ## Limitations
 

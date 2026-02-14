@@ -54,7 +54,7 @@ ENV SHOW_CONTROLS="true"
 ENV ALLOWED_DOMAINS=""
 ENV FRAME_ANCESTORS="'self'"
 
-# Kiosk embed security (see docs/KIOSK-VIEWER.md for details)
+# Kiosk embed security (see docs/DEPLOYMENT.md#kiosk-embed-security for details)
 ENV KIOSK_LOCK=""
 ENV ARCHIVE_PATH_PREFIX=""
 ENV EMBED_REFERERS=""
