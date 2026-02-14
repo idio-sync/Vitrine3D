@@ -81,16 +81,6 @@ Access-Control-Allow-Headers: Origin, Content-Type, Accept, Range
 
 ## URL Security
 
-By default, only same-origin URLs are permitted for file loading. To allow external domains, add them to the `ALLOWED_EXTERNAL_DOMAINS` array in `config.js` (or `config.js.template` for Docker):
+By default, only same-origin URLs are permitted for file loading. External domains can be allowed via the `ALLOWED_DOMAINS` environment variable (Docker) or the `ALLOWED_EXTERNAL_DOMAINS` array in `config.js` (local development). Wildcard subdomains are supported (e.g., `*.mycompany.com`).
 
-```javascript
-const ALLOWED_EXTERNAL_DOMAINS = [
-    'trusted-cdn.example.com',
-    '*.mycompany.com',  // wildcard subdomain support
-];
-```
-
-External URLs are validated against:
-- Protocol whitelist (http/https only)
-- Domain allowlist
-- HTTPS enforcement when the viewer itself is served over HTTPS
+For full details on URL validation, domain allowlisting, HTTPS enforcement, and all other security controls, see the [Security section in DEPLOYMENT.md](DEPLOYMENT.md#security).
