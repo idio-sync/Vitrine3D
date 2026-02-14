@@ -7,7 +7,7 @@ Prioritized list of future work, drawn from the [code review](CODE_REVIEW.md), [
 ## Critical
 
 ### Format Specification & Independence
-- [ ] Write a standalone specification document for the `.a3d`/`.a3z` format, independent of the viewer implementation
+- [x] **Done** — Write a standalone specification document for the `.a3d`/`.a3z` format, independent of the viewer implementation (see [SPECIFICATION.md](SPECIFICATION.md))
 - [ ] Create a formal JSON Schema for `manifest.json` and include schema version in the manifest
 - [ ] Define forward/backward compatibility rules (readers MUST ignore unknown fields, major version bump for new required fields)
 - [ ] Decouple the format identity from the viewer — add `format` and `format_spec` fields alongside `packer`
