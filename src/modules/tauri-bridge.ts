@@ -13,11 +13,48 @@ import { Logger } from './utilities.js';
 const log = Logger.getLogger('tauri-bridge');
 
 // ============================================================
+// WINDOW AUGMENTATION
+// ============================================================
+
+interface TauriDialogFilter {
+    name: string;
+    extensions: string[];
+}
+
+interface TauriAPI {
+    dialog: {
+        open: (options: {
+            title?: string;
+            filters?: TauriDialogFilter[];
+            multiple?: boolean;
+        }) => Promise<string | string[] | null>;
+        save: (options: {
+            title?: string;
+            defaultPath?: string;
+            filters?: TauriDialogFilter[];
+        }) => Promise<string | null>;
+    };
+    fs: {
+        readFile: (path: string) => Promise<Uint8Array>;
+        writeFile: (path: string, contents: Uint8Array) => Promise<void>;
+    };
+    shell: {
+        open: (url: string) => Promise<void>;
+    };
+}
+
+declare global {
+    interface Window {
+        __TAURI__?: TauriAPI;
+    }
+}
+
+// ============================================================
 // DETECTION
 // ============================================================
 
 /** Whether we are running inside a Tauri webview */
-export function isTauri() {
+export function isTauri(): boolean {
     return !!window.__TAURI__;
 }
 
@@ -25,7 +62,7 @@ export function isTauri() {
 // FILE FILTER DEFINITIONS
 // ============================================================
 
-const FILE_FILTERS = {
+const FILE_FILTERS: Record<string, TauriDialogFilter> = {
     splat:      { name: 'Gaussian Splats', extensions: ['ply', 'splat', 'ksplat', 'spz', 'sog'] },
     model:      { name: '3D Models', extensions: ['glb', 'gltf', 'obj'] },
     stl:        { name: 'STL Models', extensions: ['stl'] },
@@ -38,22 +75,30 @@ const FILE_FILTERS = {
 };
 
 // ============================================================
+// FILE OBJECT WITH TAURI PATH
+// ============================================================
+
+interface TauriFile extends File {
+    _tauriPath?: string;
+}
+
+// ============================================================
 // NATIVE FILE OPEN DIALOG
 // ============================================================
 
 /**
  * Open a native file dialog and return File object(s).
- *
- * @param {Object} options
- * @param {string} options.filterKey - Key into FILE_FILTERS
- * @param {boolean} options.multiple - Allow multiple selection
- * @returns {Promise<File[]|null>} Array of File objects, or null if cancelled
  */
-export async function openFileDialog({ filterKey = 'all', multiple = false } = {}) {
+export async function openFileDialog(options: {
+    filterKey?: string;
+    multiple?: boolean;
+} = {}): Promise<TauriFile[] | null> {
+    const { filterKey = 'all', multiple = false } = options;
+
     if (!isTauri()) return null;
 
-    const { open } = window.__TAURI__.dialog;
-    const { readFile } = window.__TAURI__.fs;
+    const { open } = window.__TAURI__!.dialog;
+    const { readFile } = window.__TAURI__!.fs;
 
     const filter = FILE_FILTERS[filterKey] || FILE_FILTERS.all;
 
@@ -68,10 +113,10 @@ export async function openFileDialog({ filterKey = 'all', multiple = false } = {
     const paths = Array.isArray(selected) ? selected : [selected];
 
     // Read each file into a File object (Tauri dialog returns paths, not Files)
-    const files = await Promise.all(paths.map(async (filePath) => {
+    const files = await Promise.all(paths.map(async (filePath): Promise<TauriFile> => {
         const contents = await readFile(filePath);
-        const name = filePath.split(/[\\/]/).pop();
-        const file = new File([contents], name);
+        const name = filePath.split(/[\\/]/).pop()!;
+        const file = new File([contents as BlobPart], name) as TauriFile;
         file._tauriPath = filePath; // Preserve native path for direct filesystem access
         return file;
     }));
@@ -87,18 +132,17 @@ export async function openFileDialog({ filterKey = 'all', multiple = false } = {
 /**
  * Save a Blob/string using native save dialog.
  * Returns true if saved, false if cancelled or not in Tauri.
- *
- * @param {Blob} blob - The data to save
- * @param {string} defaultFilename - Suggested filename
- * @param {{ name: string, extensions: string[] }} [filter] - Optional file filter
- * @returns {Promise<boolean>}
  */
-export async function saveFileDialog(blob, defaultFilename, filter) {
+export async function saveFileDialog(
+    blob: Blob,
+    defaultFilename: string,
+    filter?: TauriDialogFilter
+): Promise<boolean> {
     if (!isTauri()) return false;
 
     try {
-        const { save } = window.__TAURI__.dialog;
-        const { writeFile } = window.__TAURI__.fs;
+        const { save } = window.__TAURI__!.dialog;
+        const { writeFile } = window.__TAURI__!.fs;
 
         const path = await save({
             title: 'Save As',
@@ -113,7 +157,7 @@ export async function saveFileDialog(blob, defaultFilename, filter) {
         log.info(`Saved via native dialog: ${path}`);
         return true;
     } catch (err) {
-        log.warn('Native save dialog failed:', err.message);
+        log.warn('Native save dialog failed:', (err as Error).message);
         return false;
     }
 }
@@ -124,12 +168,12 @@ export async function saveFileDialog(blob, defaultFilename, filter) {
 
 /**
  * Download a blob: tries native save dialog first, falls back to anchor-click.
- *
- * @param {Blob} blob - The data to download
- * @param {string} filename - Suggested filename
- * @param {{ name: string, extensions: string[] }} [filter] - Optional file filter
  */
-export async function download(blob, filename, filter) {
+export async function download(
+    blob: Blob,
+    filename: string,
+    filter?: TauriDialogFilter
+): Promise<void> {
     if (isTauri()) {
         const saved = await saveFileDialog(blob, filename, filter);
         if (saved) return;
@@ -148,26 +192,46 @@ export async function download(blob, filename, filter) {
 }
 
 // ============================================================
+// FILE HANDLER CALLBACKS
+// ============================================================
+
+interface FileHandlers {
+    onSplatFiles?: (files: File[]) => Promise<void>;
+    onModelFiles?: (files: File[]) => Promise<void>;
+    onArchiveFiles?: (files: File[]) => Promise<void>;
+    onPointcloudFiles?: (files: File[]) => Promise<void>;
+    onSTLFiles?: (files: File[]) => Promise<void>;
+    onProxyMeshFiles?: (files: File[]) => Promise<void>;
+    onSourceFiles?: (files: File[]) => Promise<void>;
+    onBgImageFiles?: (files: File[]) => Promise<void>;
+    onHdrFiles?: (files: File[]) => Promise<void>;
+}
+
+// ============================================================
 // NATIVE FILE INPUT WIRING
 // ============================================================
 
 /**
  * Replace browser file inputs with native Tauri OS dialogs.
  * Accepts a handlers map so callers keep their business logic.
- *
- * @param {Object} handlers - Map of { onSplatFiles, onModelFiles, onArchiveFiles, ... }
- *   Each handler is an async function receiving File[].
  */
-export function wireNativeFileDialogs(handlers) {
+export function wireNativeFileDialogs(handlers: FileHandlers): void {
     if (!isTauri()) return;
     log.info('Wiring native file dialogs for Tauri');
 
-    function wireInput(inputId, filterKey, multiple, onFiles) {
-        const label = document.querySelector(`label[for="${inputId}"]`);
+    function wireInput(
+        inputId: string,
+        filterKey: string,
+        multiple: boolean,
+        onFiles?: (files: File[]) => Promise<void>
+    ): void {
+        if (!onFiles) return;
+
+        const label = document.querySelector<HTMLLabelElement>(`label[for="${inputId}"]`);
         if (!label) return;
         label.removeAttribute('for');
         label.style.cursor = 'pointer';
-        label.addEventListener('click', async (e) => {
+        label.addEventListener('click', async (e: MouseEvent) => {
             e.preventDefault();
             const files = await openFileDialog({ filterKey, multiple });
             if (files && files.length) await onFiles(files);
@@ -192,16 +256,14 @@ export function wireNativeFileDialogs(handlers) {
 /**
  * Open a URL in the default external browser.
  * In Tauri, uses the shell plugin. In browser, uses window.open.
- *
- * @param {string} url
  */
-export async function openExternal(url) {
+export async function openExternal(url: string): Promise<void> {
     if (isTauri()) {
         try {
-            await window.__TAURI__.shell.open(url);
+            await window.__TAURI__!.shell.open(url);
             return;
         } catch (err) {
-            log.warn('shell.open failed:', err.message);
+            log.warn('shell.open failed:', (err as Error).message);
         }
     }
     window.open(url, '_blank');

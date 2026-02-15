@@ -32,8 +32,8 @@ A web-based viewer for viewing Gaussian splats, 3D models, and E57 point clouds,
 The kiosk viewer supports themes — self-contained packages that control colors, typography, and layout. Built-in themes include `editorial` (gold/navy with full-bleed layout) and `minimal` (neutral white sidebar). Create your own by copying `src/themes/_template/` and customizing the CSS variables. See the [Kiosk Viewer docs](docs/KIOSK-VIEWER.md#themes) for full details.
 
 ```
-?theme=editorial    → Gold/navy editorial layout
-?theme=minimal      → Neutral white sidebar
+?theme=editorial    → Gold/navy editorial inspired layout
+?theme=minimal      → Neutral white sidebar, template theme
 ?theme=your-theme   → Any custom theme folder
 ```
 
@@ -75,8 +75,13 @@ docker run -p 8080:80 \
 ## Supported Formats
 
 ### Archive Containers
-- `.a3d` — Archive 3D container (ZIP-based, uncompressed)
-- `.a3z` — Archive 3D container (ZIP-based, compressed) - experimental
+- `.a3d` — Archive 3D container with metadata (ZIP-based, uncompressed)
+- `.a3z` — Archive 3D container with metadata (ZIP-based, compressed) - experimental
+
+### 3D Models (via Three.js)
+- `.glb` — Binary glTF
+- `.gltf` — glTF with external resources
+- `.obj` — Wavefront OBJ
 
 ### Gaussian Splats (via Spark)
 - `.ply` — Standard PLY format with Gaussian splat data
@@ -84,11 +89,6 @@ docker run -p 8080:80 \
 - `.ksplat` — Compressed splat format
 - `.spz` — Spark compressed format
 - `.sog` — SOG format
-
-### 3D Models (via Three.js)
-- `.glb` — Binary glTF
-- `.gltf` — glTF with external resources
-- `.obj` — Wavefront OBJ
 
 ### Point Clouds
 - `.e57` — ASTM E57 format (via [three-e57-loader](https://www.npmjs.com/package/three-e57-loader), which uses the [web-e57](https://www.npmjs.com/package/web-e57) WASM parser)

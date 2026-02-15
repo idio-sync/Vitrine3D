@@ -12,31 +12,39 @@
 
 import * as THREE from 'three';
 import { Logger } from './utilities.js';
+import type { AppState, SelectedObject, TransformMode } from '../types.js';
 
 const log = Logger.getLogger('transform-controller');
 
 // Private tracking state for sync calculations
-let lastSplatPosition = new THREE.Vector3();
-let lastSplatRotation = new THREE.Euler();
-let lastSplatScale = new THREE.Vector3(1, 1, 1);
-let lastModelPosition = new THREE.Vector3();
-let lastModelRotation = new THREE.Euler();
-let lastModelScale = new THREE.Vector3(1, 1, 1);
-let lastPointcloudPosition = new THREE.Vector3();
-let lastPointcloudRotation = new THREE.Euler();
-let lastPointcloudScale = new THREE.Vector3(1, 1, 1);
+const lastSplatPosition = new THREE.Vector3();
+const lastSplatRotation = new THREE.Euler();
+const lastSplatScale = new THREE.Vector3(1, 1, 1);
+const lastModelPosition = new THREE.Vector3();
+const lastModelRotation = new THREE.Euler();
+const lastModelScale = new THREE.Vector3(1, 1, 1);
+const lastPointcloudPosition = new THREE.Vector3();
+const lastPointcloudRotation = new THREE.Euler();
+const lastPointcloudScale = new THREE.Vector3(1, 1, 1);
+
+interface SetSelectedObjectDeps {
+    transformControls: any; // TODO: type when @types/three is installed (TransformControls)
+    splatMesh: any; // TODO: type when @types/three is installed (SplatMesh | null)
+    modelGroup: any; // TODO: type when @types/three is installed (THREE.Group)
+    state: AppState;
+}
 
 /**
  * Set the selected object for transform controls.
- * @param {string} selection - 'splat', 'model', 'both', or 'none'
- * @param {Object} deps - { transformControls, splatMesh, modelGroup, state }
+ * @param selection - 'splat', 'model', 'both', or 'none'
+ * @param deps - { transformControls, splatMesh, modelGroup, state }
  */
-export function setSelectedObject(selection, deps) {
+export function setSelectedObject(selection: SelectedObject, deps: SetSelectedObjectDeps): void {
     const { transformControls, splatMesh, modelGroup, state } = deps;
     state.selectedObject = selection;
 
     // Update button states
-    ['splat', 'model', 'both', 'none'].forEach(s => {
+    (['splat', 'model', 'both', 'none'] as const).forEach(s => {
         const btn = document.getElementById(`btn-select-${s}`);
         if (btn) btn.classList.toggle('active', s === selection);
     });
@@ -68,12 +76,19 @@ export function setSelectedObject(selection, deps) {
     }
 }
 
+interface SyncBothObjectsDeps {
+    transformControls: any; // TODO: type when @types/three is installed (TransformControls)
+    splatMesh: any; // TODO: type when @types/three is installed (SplatMesh | null)
+    modelGroup: any; // TODO: type when @types/three is installed (THREE.Group)
+    pointcloudGroup: any; // TODO: type when @types/three is installed (THREE.Group)
+}
+
 /**
  * Sync both objects when moving in "both" mode.
  * Applies delta movement from the attached object to the other objects.
- * @param {Object} deps - { transformControls, splatMesh, modelGroup, pointcloudGroup }
+ * @param deps - { transformControls, splatMesh, modelGroup, pointcloudGroup }
  */
-export function syncBothObjects(deps) {
+export function syncBothObjects(deps: SyncBothObjectsDeps): void {
     const { transformControls, splatMesh, modelGroup, pointcloudGroup } = deps;
     if (!splatMesh || !modelGroup) return;
 
@@ -144,12 +159,18 @@ export function syncBothObjects(deps) {
     }
 }
 
+interface StoreLastPositionsDeps {
+    splatMesh: any; // TODO: type when @types/three is installed (SplatMesh | null)
+    modelGroup: any; // TODO: type when @types/three is installed (THREE.Group)
+    pointcloudGroup: any; // TODO: type when @types/three is installed (THREE.Group)
+}
+
 /**
  * Store last positions, rotations, and scales for delta calculations.
  * Must be called when selection changes or after applying transforms.
- * @param {Object} deps - { splatMesh, modelGroup, pointcloudGroup }
+ * @param deps - { splatMesh, modelGroup, pointcloudGroup }
  */
-export function storeLastPositions(deps) {
+export function storeLastPositions(deps: StoreLastPositionsDeps): void {
     const { splatMesh, modelGroup, pointcloudGroup } = deps;
     if (splatMesh) {
         lastSplatPosition.copy(splatMesh.position);
@@ -168,18 +189,26 @@ export function storeLastPositions(deps) {
     }
 }
 
+interface SetTransformModeDeps {
+    transformControls: any; // TODO: type when @types/three is installed (TransformControls)
+    state: AppState;
+    splatMesh: any; // TODO: type when @types/three is installed (SplatMesh | null)
+    modelGroup: any; // TODO: type when @types/three is installed (THREE.Group)
+    pointcloudGroup: any; // TODO: type when @types/three is installed (THREE.Group)
+}
+
 /**
  * Set the transform mode (translate/rotate/scale).
- * @param {string} mode - 'translate', 'rotate', or 'scale'
- * @param {Object} deps - { transformControls, state, splatMesh, modelGroup, pointcloudGroup }
+ * @param mode - 'translate', 'rotate', or 'scale'
+ * @param deps - { transformControls, state, splatMesh, modelGroup, pointcloudGroup }
  */
-export function setTransformMode(mode, deps) {
+export function setTransformMode(mode: TransformMode, deps: SetTransformModeDeps): void {
     const { transformControls, state, splatMesh, modelGroup, pointcloudGroup } = deps;
     state.transformMode = mode;
     transformControls.setMode(mode);
 
     // Update button states
-    ['translate', 'rotate', 'scale'].forEach(m => {
+    (['translate', 'rotate', 'scale'] as const).forEach(m => {
         const btnId = m === 'translate' ? 'btn-translate' : m === 'rotate' ? 'btn-rotate' : 'btn-scale';
         const btn = document.getElementById(btnId);
         if (btn) btn.classList.toggle('active', m === mode);

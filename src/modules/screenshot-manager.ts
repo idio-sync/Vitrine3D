@@ -7,14 +7,21 @@
 
 import { captureScreenshot } from './archive-creator.js';
 import { Logger, notify } from './utilities.js';
+import type { AppState } from '../types.js';
 
 const log = Logger.getLogger('screenshot-manager');
 
+interface ScreenshotDeps {
+    renderer: any; // TODO: type when @types/three is installed (THREE.WebGLRenderer)
+    scene: any;    // TODO: type when @types/three is installed (THREE.Scene)
+    camera: any;   // TODO: type when @types/three is installed (THREE.PerspectiveCamera)
+    state: AppState;
+}
+
 /**
  * Capture a screenshot and add it to the screenshots list.
- * @param {Object} deps - { renderer, scene, camera, state }
  */
-export async function captureScreenshotToList(deps) {
+export async function captureScreenshotToList(deps: ScreenshotDeps): Promise<void> {
     const { renderer, scene, camera, state } = deps;
     if (!renderer) {
         notify.error('Renderer not ready');
@@ -27,16 +34,16 @@ export async function captureScreenshotToList(deps) {
             notify.error('Screenshot capture failed');
             return;
         }
-        const dataUrl = await new Promise((resolve) => {
+        const dataUrl = await new Promise<string>((resolve) => {
             const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
+            reader.onload = () => resolve(reader.result as string);
             reader.readAsDataURL(blob);
         });
         state.screenshots.push({
-            id: Date.now(),
+            id: Date.now().toString(),
             blob,
             dataUrl,
-            timestamp: new Date().toISOString()
+            timestamp: Date.now()
         });
         renderScreenshotsList(state);
         notify.success('Screenshot captured');
@@ -49,7 +56,7 @@ export async function captureScreenshotToList(deps) {
 /**
  * Show the viewfinder overlay for manual preview capture.
  */
-export function showViewfinder() {
+export function showViewfinder(): void {
     const overlay = document.getElementById('viewfinder-overlay');
     const frame = document.getElementById('viewfinder-frame');
     const controls = document.getElementById('viewfinder-controls');
@@ -57,6 +64,8 @@ export function showViewfinder() {
     if (!overlay || !frame || !controls) return;
 
     const container = document.getElementById('viewer-container');
+    if (!container) return;
+
     const rect = container.getBoundingClientRect();
     const cw = rect.width;
     const ch = rect.height;
@@ -80,16 +89,15 @@ export function showViewfinder() {
 /**
  * Hide the viewfinder overlay.
  */
-export function hideViewfinder() {
+export function hideViewfinder(): void {
     const overlay = document.getElementById('viewfinder-overlay');
     if (overlay) overlay.classList.add('hidden');
 }
 
 /**
  * Capture a manual preview image and store it in state.
- * @param {Object} deps - { renderer, scene, camera, state }
  */
-export async function captureManualPreview(deps) {
+export async function captureManualPreview(deps: ScreenshotDeps): Promise<void> {
     const { renderer, scene, camera, state } = deps;
     if (!renderer) return;
     try {
@@ -110,9 +118,8 @@ export async function captureManualPreview(deps) {
 
 /**
  * Render the screenshots list in the DOM.
- * @param {Object} state - App state with screenshots array
  */
-export function renderScreenshotsList(state) {
+export function renderScreenshotsList(state: AppState): void {
     const list = document.getElementById('screenshots-list');
     if (!list) return;
     list.innerHTML = '';
@@ -132,7 +139,7 @@ export function renderScreenshotsList(state) {
         del.className = 'screenshot-delete';
         del.textContent = '\u00D7';
         del.title = 'Remove screenshot';
-        del.addEventListener('click', (e) => {
+        del.addEventListener('click', (e: Event) => {
             e.stopPropagation();
             removeScreenshot(shot.id, state);
         });
@@ -144,10 +151,8 @@ export function renderScreenshotsList(state) {
 
 /**
  * Remove a screenshot by ID from state and re-render the list.
- * @param {number} id - Screenshot ID
- * @param {Object} state - App state with screenshots array
  */
-export function removeScreenshot(id, state) {
+export function removeScreenshot(id: string, state: AppState): void {
     state.screenshots = state.screenshots.filter(s => s.id !== id);
     renderScreenshotsList(state);
 }

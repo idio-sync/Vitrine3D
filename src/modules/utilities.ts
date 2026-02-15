@@ -564,7 +564,7 @@ function parseMarkdown(text: string): string {
     let listType: 'ul' | 'ol' | null = null;
 
     for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
+        const line = lines[i];
 
         // Headers: # ## ### ####
         const headerMatch = line.match(/^(#{1,4})\s+(.+)$/);

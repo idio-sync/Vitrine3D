@@ -16,7 +16,24 @@ import { Logger } from './utilities.js';
 
 const log = Logger.getLogger('theme-loader');
 
-const DEFAULT_META = { layout: 'sidebar', sceneBg: null, name: null, layoutModule: null };
+interface ThemeMeta {
+    layout: string;
+    sceneBg: string | null;
+    name: string | null;
+    layoutModule: any | null;
+}
+
+const DEFAULT_META: ThemeMeta = { layout: 'sidebar', sceneBg: null, name: null, layoutModule: null };
+
+interface LoadThemeOptions {
+    layoutOverride?: string;
+}
+
+declare global {
+    interface Window {
+        __KIOSK_LAYOUTS__?: Record<string, any>;
+    }
+}
 
 /**
  * Fetch raw CSS text from a URL.
@@ -27,11 +44,8 @@ const DEFAULT_META = { layout: 'sidebar', sceneBg: null, name: null, layoutModul
  *
  * In production (nginx, static hosting), the response is plain CSS and is
  * returned directly.
- *
- * @param {string} url - Relative or absolute URL to a .css file
- * @returns {Promise<string|null>} Raw CSS text, or null if not found
  */
-async function fetchRawCSS(url) {
+async function fetchRawCSS(url: string): Promise<string | null> {
     const resp = await fetch(url);
     if (!resp.ok) return null;
 
@@ -56,11 +70,9 @@ async function fetchRawCSS(url) {
 
 /**
  * Parse theme metadata from the first CSS block comment.
- * @param {string} css - Raw CSS text
- * @returns {{ layout: string, sceneBg: string|null, name: string|null }}
  */
-export function parseThemeMeta(css) {
-    const meta = { ...DEFAULT_META };
+export function parseThemeMeta(css: string): ThemeMeta {
+    const meta: ThemeMeta = { ...DEFAULT_META };
     const match = css.match(/\/\*[\s\S]*?\*\//);
     if (!match) return meta;
 
@@ -79,7 +91,7 @@ export function parseThemeMeta(css) {
 /**
  * Look up a layout module from the global registry.
  */
-function getLayoutModule(layoutName) {
+function getLayoutModule(layoutName: string): any | null {
     const registry = window.__KIOSK_LAYOUTS__;
     return (registry && registry[layoutName]) ? registry[layoutName] : null;
 }
@@ -87,12 +99,12 @@ function getLayoutModule(layoutName) {
 /**
  * Load layout.css and layout.js for a non-sidebar theme.
  */
-async function loadLayoutFiles(baseUrl, meta) {
+async function loadLayoutFiles(baseUrl: string, meta: ThemeMeta): Promise<void> {
     // Try to load layout.css
     try {
         const css = await fetchRawCSS(baseUrl + 'layout.css');
         if (css) {
-            let el = document.getElementById('kiosk-layout');
+            let el = document.getElementById('kiosk-layout') as HTMLStyleElement | null;
             if (!el) {
                 el = document.createElement('style');
                 el.id = 'kiosk-layout';
@@ -104,7 +116,8 @@ async function loadLayoutFiles(baseUrl, meta) {
             log.warn(`Layout CSS not found: ${baseUrl}layout.css`);
         }
     } catch (e) {
-        log.warn(`Layout CSS fetch error: ${e.message}`);
+        const message = e instanceof Error ? e.message : String(e);
+        log.warn(`Layout CSS fetch error: ${message}`);
     }
 
     // Check for pre-registered layout module first (offline kiosk)
@@ -127,27 +140,24 @@ async function loadLayoutFiles(baseUrl, meta) {
             log.warn(`layout.js loaded but no module registered for "${meta.layout}"`);
         }
     } catch (e) {
-        log.warn(`Layout JS import error: ${e.message}`);
+        const message = e instanceof Error ? e.message : String(e);
+        log.warn(`Layout JS import error: ${message}`);
     }
 }
 
 /**
  * Load and inject a theme by folder name.
- * @param {string} name - Theme folder name (e.g., 'editorial')
- * @param {Object} [options] - Optional settings
- * @param {string} [options.layoutOverride] - URL ?layout= override; if 'sidebar', skip loading layout files
- * @returns {Promise<{ layout: string, sceneBg: string|null, name: string|null, layoutModule: object|null }>}
  */
-export async function loadTheme(name, options) {
+export async function loadTheme(name: string, options?: LoadThemeOptions): Promise<ThemeMeta> {
     if (!name) {
         log.info('No theme specified, using defaults');
         return { ...DEFAULT_META };
     }
 
-    const layoutOverride = options && options.layoutOverride;
+    const layoutOverride = options?.layoutOverride;
 
     // Check for pre-inlined theme CSS (offline kiosk viewer)
-    const existing = document.getElementById('kiosk-theme');
+    const existing = document.getElementById('kiosk-theme') as HTMLStyleElement | null;
     if (existing && existing.textContent.trim()) {
         log.info(`Using pre-inlined theme CSS for: ${name}`);
         const meta = parseThemeMeta(existing.textContent);
@@ -178,7 +188,7 @@ export async function loadTheme(name, options) {
         const meta = parseThemeMeta(css);
 
         // Inject theme CSS
-        let styleEl = document.getElementById('kiosk-theme');
+        let styleEl = document.getElementById('kiosk-theme') as HTMLStyleElement | null;
         if (!styleEl) {
             styleEl = document.createElement('style');
             styleEl.id = 'kiosk-theme';
@@ -197,7 +207,8 @@ export async function loadTheme(name, options) {
         log.info(`Theme loaded: ${meta.name || name} (layout: ${meta.layout}, scene-bg: ${meta.sceneBg || 'default'})`);
         return meta;
     } catch (err) {
-        log.warn(`Failed to load theme "${name}": ${err.message}`);
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`Failed to load theme "${name}": ${message}`);
         return { ...DEFAULT_META };
     }
 }

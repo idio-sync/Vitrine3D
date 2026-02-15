@@ -8,14 +8,30 @@
  */
 
 import { Logger } from './utilities.js';
+import type { Annotation } from '../types.js';
 
 const log = Logger.getLogger('annotation-controller');
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
+interface AnnotationControllerDeps {
+    annotationSystem: any; // TODO: type when @types/three is installed
+    showAnnotationPopup: (annotation: Annotation) => string;
+    hideAnnotationPopup: () => void;
+}
+
+interface CameraState {
+    position: { x: number; y: number; z: number };
+    target: { x: number; y: number; z: number };
+}
 
 // =============================================================================
 // MODULE STATE
 // =============================================================================
 
-let currentPopupAnnotationId = null;
+let currentPopupAnnotationId: string | null = null;
 
 // =============================================================================
 // STATE ACCESSORS
@@ -25,7 +41,7 @@ let currentPopupAnnotationId = null;
  * Get the ID of the annotation whose popup is currently shown.
  * Used by the animate loop for popup position updates.
  */
-export function getCurrentPopupAnnotationId() {
+export function getCurrentPopupAnnotationId(): string | null {
     return currentPopupAnnotationId;
 }
 
@@ -37,7 +53,7 @@ export function getCurrentPopupAnnotationId() {
  * Dismiss the current annotation popup and clear selection state.
  * Used by click-outside and Escape key handlers.
  */
-export function dismissPopup(deps) {
+export function dismissPopup(deps: AnnotationControllerDeps): void {
     deps.hideAnnotationPopup();
     currentPopupAnnotationId = null;
 }
@@ -49,7 +65,11 @@ export function dismissPopup(deps) {
 /**
  * Called when a new annotation is placed on the scene.
  */
-export function onAnnotationPlaced(position, cameraState, deps) {
+export function onAnnotationPlaced(
+    position: { x: number; y: number; z: number },
+    cameraState: CameraState,
+    deps: AnnotationControllerDeps
+): void {
     const { annotationSystem } = deps;
     log.info('Annotation placed at:', position);
 
@@ -65,18 +85,18 @@ export function onAnnotationPlaced(position, cameraState, deps) {
 
     // Generate auto-ID
     const count = annotationSystem ? annotationSystem.getCount() + 1 : 1;
-    const idInput = document.getElementById('anno-id');
+    const idInput = document.getElementById('anno-id') as HTMLInputElement | null;
     if (idInput) idInput.value = `anno_${count}`;
 
     // Focus title input
-    const titleInput = document.getElementById('anno-title');
+    const titleInput = document.getElementById('anno-title') as HTMLInputElement | null;
     if (titleInput) titleInput.focus();
 }
 
 /**
  * Called when an annotation marker is clicked/selected.
  */
-export function onAnnotationSelected(annotation, deps) {
+export function onAnnotationSelected(annotation: Annotation, deps: AnnotationControllerDeps): void {
     const { annotationSystem, showAnnotationPopup, hideAnnotationPopup } = deps;
     log.info('Annotation selected:', annotation.id);
 
@@ -92,12 +112,12 @@ export function onAnnotationSelected(annotation, deps) {
 
     // Update annotations list highlighting
     document.querySelectorAll('.annotation-item').forEach(item => {
-        item.classList.toggle('selected', item.dataset.annoId === annotation.id);
+        item.classList.toggle('selected', (item as HTMLElement).dataset.annoId === annotation.id);
     });
 
     // Update annotation chips
     document.querySelectorAll('.annotation-chip').forEach(chip => {
-        chip.classList.toggle('active', chip.dataset.annoId === annotation.id);
+        chip.classList.toggle('active', (chip as HTMLElement).dataset.annoId === annotation.id);
     });
 
     // Show editor panel (in controls - legacy)
@@ -105,8 +125,8 @@ export function onAnnotationSelected(annotation, deps) {
     if (editor) {
         editor.classList.remove('hidden');
 
-        const titleInput = document.getElementById('edit-anno-title');
-        const bodyInput = document.getElementById('edit-anno-body');
+        const titleInput = document.getElementById('edit-anno-title') as HTMLInputElement | null;
+        const bodyInput = document.getElementById('edit-anno-body') as HTMLTextAreaElement | null;
         if (titleInput) titleInput.value = annotation.title || '';
         if (bodyInput) bodyInput.value = annotation.body || '';
     }
@@ -116,7 +136,7 @@ export function onAnnotationSelected(annotation, deps) {
 
     // Update sidebar list selection
     document.querySelectorAll('#sidebar-annotations-list .annotation-item').forEach(item => {
-        item.classList.toggle('selected', item.dataset.annoId === annotation.id);
+        item.classList.toggle('selected', (item as HTMLElement).dataset.annoId === annotation.id);
     });
 
     // Show annotation info popup near the marker
@@ -126,7 +146,7 @@ export function onAnnotationSelected(annotation, deps) {
 /**
  * Called when placement mode changes.
  */
-export function onPlacementModeChanged(active) {
+export function onPlacementModeChanged(active: boolean): void {
     log.info('Placement mode:', active);
 
     const indicator = document.getElementById('annotation-mode-indicator');
@@ -143,7 +163,7 @@ export function onPlacementModeChanged(active) {
 /**
  * Toggle annotation placement mode.
  */
-export function toggleAnnotationMode(deps) {
+export function toggleAnnotationMode(deps: AnnotationControllerDeps): void {
     const { annotationSystem } = deps;
     log.info('toggleAnnotationMode called, annotationSystem:', !!annotationSystem);
     if (annotationSystem) {
@@ -156,13 +176,17 @@ export function toggleAnnotationMode(deps) {
 /**
  * Save the pending annotation.
  */
-export function saveAnnotation(deps) {
+export function saveAnnotation(deps: AnnotationControllerDeps): void {
     const { annotationSystem } = deps;
     if (!annotationSystem) return;
 
-    const id = document.getElementById('anno-id')?.value || '';
-    const title = document.getElementById('anno-title')?.value || '';
-    const body = document.getElementById('anno-body')?.value || '';
+    const idInput = document.getElementById('anno-id') as HTMLInputElement | null;
+    const titleInput = document.getElementById('anno-title') as HTMLInputElement | null;
+    const bodyInput = document.getElementById('anno-body') as HTMLTextAreaElement | null;
+
+    const id = idInput?.value || '';
+    const title = titleInput?.value || '';
+    const body = bodyInput?.value || '';
 
     const annotation = annotationSystem.confirmAnnotation(id, title, body);
     if (annotation) {
@@ -174,9 +198,9 @@ export function saveAnnotation(deps) {
     const panel = document.getElementById('annotation-panel');
     if (panel) panel.classList.add('hidden');
 
-    document.getElementById('anno-id').value = '';
-    document.getElementById('anno-title').value = '';
-    document.getElementById('anno-body').value = '';
+    if (idInput) idInput.value = '';
+    if (titleInput) titleInput.value = '';
+    if (bodyInput) bodyInput.value = '';
 
     // Disable placement mode after saving
     annotationSystem.disablePlacementMode();
@@ -185,7 +209,7 @@ export function saveAnnotation(deps) {
 /**
  * Cancel annotation placement.
  */
-export function cancelAnnotation(deps) {
+export function cancelAnnotation(deps: AnnotationControllerDeps): void {
     const { annotationSystem } = deps;
     if (annotationSystem) {
         annotationSystem.cancelAnnotation();
@@ -194,15 +218,19 @@ export function cancelAnnotation(deps) {
     const panel = document.getElementById('annotation-panel');
     if (panel) panel.classList.add('hidden');
 
-    document.getElementById('anno-id').value = '';
-    document.getElementById('anno-title').value = '';
-    document.getElementById('anno-body').value = '';
+    const idInput = document.getElementById('anno-id') as HTMLInputElement | null;
+    const titleInput = document.getElementById('anno-title') as HTMLInputElement | null;
+    const bodyInput = document.getElementById('anno-body') as HTMLTextAreaElement | null;
+
+    if (idInput) idInput.value = '';
+    if (titleInput) titleInput.value = '';
+    if (bodyInput) bodyInput.value = '';
 }
 
 /**
  * Update camera position for the selected annotation.
  */
-export function updateSelectedAnnotationCamera(deps) {
+export function updateSelectedAnnotationCamera(deps: AnnotationControllerDeps): void {
     const { annotationSystem } = deps;
     if (!annotationSystem || !annotationSystem.selectedAnnotation) return;
 
@@ -213,7 +241,7 @@ export function updateSelectedAnnotationCamera(deps) {
 /**
  * Delete the selected annotation.
  */
-export function deleteSelectedAnnotation(deps) {
+export function deleteSelectedAnnotation(deps: AnnotationControllerDeps): void {
     const { annotationSystem } = deps;
     if (!annotationSystem || !annotationSystem.selectedAnnotation) return;
 
@@ -239,17 +267,17 @@ export function deleteSelectedAnnotation(deps) {
 /**
  * Update annotations UI (list, chips, sidebar).
  */
-export function updateAnnotationsUI(deps) {
+export function updateAnnotationsUI(deps: AnnotationControllerDeps): void {
     const { annotationSystem, hideAnnotationPopup } = deps;
     if (!annotationSystem) return;
 
-    const annotations = annotationSystem.getAnnotations();
+    const annotations: Annotation[] = annotationSystem.getAnnotations();
     const count = annotations.length;
 
     // Update count badge
     const badge = document.getElementById('annotation-count-badge');
     if (badge) {
-        badge.textContent = count;
+        badge.textContent = String(count);
         badge.classList.toggle('hidden', count === 0);
     }
 
@@ -271,7 +299,7 @@ export function updateAnnotationsUI(deps) {
 
                 const number = document.createElement('span');
                 number.className = 'annotation-number';
-                number.textContent = index + 1;
+                number.textContent = String(index + 1);
 
                 const title = document.createElement('span');
                 title.className = 'annotation-title';
@@ -300,7 +328,7 @@ export function updateAnnotationsUI(deps) {
             const chip = document.createElement('button');
             chip.className = 'annotation-chip';
             chip.dataset.annoId = anno.id;
-            chip.textContent = index + 1;
+            chip.textContent = String(index + 1);
             chip.title = anno.title || 'Untitled';
 
             chip.addEventListener('click', () => {
@@ -326,11 +354,11 @@ export function updateAnnotationsUI(deps) {
 /**
  * Update sidebar annotations list.
  */
-export function updateSidebarAnnotationsList(deps) {
+export function updateSidebarAnnotationsList(deps: AnnotationControllerDeps): void {
     const { annotationSystem } = deps;
     if (!annotationSystem) return;
 
-    const annotations = annotationSystem.getAnnotations();
+    const annotations: Annotation[] = annotationSystem.getAnnotations();
     const list = document.getElementById('sidebar-annotations-list');
     const editor = document.getElementById('sidebar-annotation-editor');
     const selectedAnno = annotationSystem.selectedAnnotation;
@@ -357,7 +385,7 @@ export function updateSidebarAnnotationsList(deps) {
 
             const number = document.createElement('span');
             number.className = 'annotation-number';
-            number.textContent = index + 1;
+            number.textContent = String(index + 1);
 
             const title = document.createElement('span');
             title.className = 'annotation-title';
@@ -390,10 +418,10 @@ export function updateSidebarAnnotationsList(deps) {
 /**
  * Show sidebar annotation editor with annotation data.
  */
-export function showSidebarAnnotationEditor(annotation) {
+export function showSidebarAnnotationEditor(annotation: Annotation): void {
     const editor = document.getElementById('sidebar-annotation-editor');
-    const titleInput = document.getElementById('sidebar-edit-anno-title');
-    const bodyInput = document.getElementById('sidebar-edit-anno-body');
+    const titleInput = document.getElementById('sidebar-edit-anno-title') as HTMLInputElement | null;
+    const bodyInput = document.getElementById('sidebar-edit-anno-body') as HTMLTextAreaElement | null;
 
     if (!editor) return;
 
@@ -406,7 +434,7 @@ export function showSidebarAnnotationEditor(annotation) {
 /**
  * Load annotations from archive data.
  */
-export function loadAnnotationsFromArchive(annotations, deps) {
+export function loadAnnotationsFromArchive(annotations: Annotation[], deps: AnnotationControllerDeps): void {
     const { annotationSystem } = deps;
     if (!annotationSystem || !annotations || !Array.isArray(annotations)) return;
 
