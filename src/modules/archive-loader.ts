@@ -16,12 +16,102 @@ const log = Logger.getLogger('ArchiveLoader');
 const ARCHIVE_EXTENSIONS = ['a3d', 'a3z'];
 
 // Supported file formats within archives
-const SUPPORTED_FORMATS = {
+const SUPPORTED_FORMATS: Record<string, string[]> = {
     splat: ['.ply', '.spz', '.ksplat', '.sog', '.splat'],
     mesh: ['.glb', '.gltf', '.obj', '.stl'],
     pointcloud: ['.e57'],
     thumbnail: ['.png', '.jpg', '.jpeg', '.webp']
 };
+
+type FormatType = 'splat' | 'mesh' | 'pointcloud' | 'thumbnail';
+
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
+
+interface CentralDirEntry {
+    offset: number;
+    compressedSize: number;
+    uncompressedSize: number;
+    method: number;
+}
+
+interface FileIndexEntry {
+    name: string;
+    originalSize: number;
+}
+
+interface ExtractedFile {
+    blob: Blob;
+    url: string;
+    name: string;
+}
+
+interface SanitizationResult {
+    safe: boolean;
+    sanitized: string;
+    error: string;
+}
+
+interface EntryTransform {
+    position: number[];
+    rotation: number[];
+    scale: number;
+}
+
+interface ContentInfo {
+    hasSplat: boolean;
+    hasMesh: boolean;
+    hasMeshProxy: boolean;
+    hasSceneProxy: boolean;
+    hasPointcloud: boolean;
+    hasThumbnail: boolean;
+    hasSourceFiles: boolean;
+    sourceFileCount: number;
+}
+
+interface ArchiveMetadata {
+    version: string;
+    packer: string;
+    packerVersion: string;
+    createdAt: string | null;
+    conventionHints: string[];
+    meta: Record<string, any>;
+    parameters: Record<string, any>;
+}
+
+interface ManifestDataEntry {
+    file_name: string;
+    created_by?: string;
+    _created_by_version?: string;
+    _parameters?: {
+        position?: number[];
+        rotation?: number[];
+        scale?: number;
+        [key: string]: any;
+    };
+    lod?: string;
+    [key: string]: any;
+}
+
+interface ArchiveManifest {
+    container_version: string;
+    data_entries: Record<string, ManifestDataEntry>;
+    packer?: string;
+    packer_version?: string;
+    _creation_date?: string;
+    created_at?: string;
+    convention_hints?: string[];
+    _meta?: Record<string, any>;
+    _parameters?: {
+        alignment?: any;
+        [key: string]: any;
+    };
+    alignment?: any;
+    annotations?: any[];
+    project?: Record<string, any>;
+    [key: string]: any;
+}
 
 // =============================================================================
 // FILENAME SANITIZATION - Security measure to prevent path traversal attacks
@@ -30,11 +120,8 @@ const SUPPORTED_FORMATS = {
 /**
  * Sanitizes a filename from an archive to prevent path traversal attacks.
  * This is critical because archive manifests are untrusted user data.
- *
- * @param {string} filename - The filename to sanitize
- * @returns {{safe: boolean, sanitized: string, error: string}} Sanitization result
  */
-function sanitizeArchiveFilename(filename) {
+function sanitizeArchiveFilename(filename: string): SanitizationResult {
     if (!filename || typeof filename !== 'string') {
         return { safe: false, sanitized: '', error: 'Filename is empty or not a string' };
     }
@@ -100,33 +187,27 @@ function sanitizeArchiveFilename(filename) {
 
 /**
  * Check if a filename is an archive file
- * @param {string} filename - The filename to check
- * @returns {boolean} True if the file is an archive
  */
-export function isArchiveFile(filename) {
+export function isArchiveFile(filename: string): boolean {
     if (!filename) return false;
-    const ext = filename.split('.').pop().toLowerCase();
-    return ARCHIVE_EXTENSIONS.includes(ext);
+    const ext = filename.split('.').pop()?.toLowerCase();
+    return ext ? ARCHIVE_EXTENSIONS.includes(ext) : false;
 }
 
 /**
  * Get the file extension from a filename
- * @param {string} filename - The filename
- * @returns {string} The lowercase extension
  */
-function getExtension(filename) {
-    return '.' + filename.split('.').pop().toLowerCase();
+function getExtension(filename: string): string {
+    return '.' + filename.split('.').pop()?.toLowerCase();
 }
 
 /**
  * Check if a file format is supported for a given type
- * @param {string} filename - The filename to check
- * @param {string} type - The type ('splat', 'mesh', 'thumbnail')
- * @returns {boolean} True if supported
  */
-function isFormatSupported(filename, type) {
+function isFormatSupported(filename: string, type: FormatType): boolean {
     const ext = getExtension(filename);
-    return SUPPORTED_FORMATS[type]?.includes(ext) || false;
+    const formats = SUPPORTED_FORMATS[type];
+    return formats ? formats.includes(ext) : false;
 }
 
 /**
@@ -139,22 +220,20 @@ function isFormatSupported(filename, type) {
  * sliced in-memory. Decompressed files are cached for instant re-access.
  */
 export class ArchiveLoader {
-    constructor() {
-        this._file = null;          // File/Blob reference for slice-based reading (from loadFromFile)
-        this._rawData = null;       // Uint8Array - raw ZIP bytes (from loadFromArrayBuffer/loadFromUrl)
-        this._url = null;           // URL for Range-request-based reading (from loadRemoteIndex)
-        this._fileSize = 0;         // Total file size in bytes (used with _url source)
-        this._fileCache = new Map(); // Map<string, Uint8Array> - decompressed file cache
-        this._fileIndex = [];       // Array<{name, originalSize}> - from central directory scan
-        this._centralDir = null;    // Map<string, {offset, compressedSize, uncompressedSize, method}>
-        this.manifest = null;
-        this.blobUrls = [];         // Track blob URLs for cleanup
-    }
+    private _file: File | Blob | null = null;
+    private _rawData: Uint8Array | null = null;
+    private _url: string | null = null;
+    private _fileSize: number = 0;
+    private _fileCache: Map<string, Uint8Array> = new Map();
+    private _fileIndex: FileIndexEntry[] = [];
+    private _centralDir: Map<string, CentralDirEntry> | null = null;
+    manifest: ArchiveManifest | null = null;
+    blobUrls: string[] = [];
 
     /**
      * Check if archive data is available (either File reference or raw buffer).
      */
-    get _hasData() {
+    private get _hasData(): boolean {
         return !!(this._file || this._rawData || this._url);
     }
 
@@ -162,7 +241,7 @@ export class ArchiveLoader {
      * Backward-compatible getter: returns cached files as a plain object.
      * Returns null if no files have been cached yet.
      */
-    get files() {
+    get files(): Record<string, Uint8Array> | null {
         if (this._fileCache.size === 0 && !this._hasData) return null;
         // Return a truthy object so existing `if (!this.files)` checks pass
         // when we have data but haven't cached anything yet
@@ -175,10 +254,8 @@ export class ArchiveLoader {
     /**
      * Load archive from a File object.
      * Only reads the ZIP central directory (~64KB) — does not read the full file.
-     * @param {File} file - The archive file
-     * @returns {Promise<void>}
      */
-    async loadFromFile(file) {
+    async loadFromFile(file: File): Promise<void> {
         // Validate ZIP magic bytes by reading first 4 bytes
         const header = new Uint8Array(await file.slice(0, 4).arrayBuffer());
         if (header[0] !== 0x50 || header[1] !== 0x4B) {
@@ -194,11 +271,8 @@ export class ArchiveLoader {
 
     /**
      * Load archive from a URL
-     * @param {string} url - The URL to fetch
-     * @param {function} onProgress - Optional progress callback (0-1)
-     * @returns {Promise<void>}
      */
-    async loadFromUrl(url, onProgress = null) {
+    async loadFromUrl(url: string, onProgress: ((progress: number) => void) | null = null): Promise<void> {
         const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -206,9 +280,9 @@ export class ArchiveLoader {
 
         // If we can track progress
         if (onProgress && response.headers.get('content-length')) {
-            const contentLength = parseInt(response.headers.get('content-length'), 10);
-            const reader = response.body.getReader();
-            const chunks = [];
+            const contentLength = parseInt(response.headers.get('content-length')!, 10);
+            const reader = response.body!.getReader();
+            const chunks: Uint8Array[] = [];
             let receivedLength = 0;
 
             while (true) {
@@ -236,14 +310,12 @@ export class ArchiveLoader {
      * Load only the ZIP central directory from a remote URL via HTTP Range requests.
      * After calling this, parseManifest() and extractFile() work via on-demand
      * Range requests — no full download needed. Total transfer is ~100KB.
-     * @param {string} url - The archive URL
-     * @returns {Promise<number>} The total file size in bytes
      */
-    async loadRemoteIndex(url) {
+    async loadRemoteIndex(url: string): Promise<number> {
         const head = await fetch(url, { method: 'HEAD' });
         if (!head.ok) throw new Error(`HTTP ${head.status}: ${head.statusText}`);
 
-        const size = parseInt(head.headers.get('content-length'), 10);
+        const size = parseInt(head.headers.get('content-length')!, 10);
         if (!size || isNaN(size)) throw new Error('Server did not return Content-Length');
 
         this._url = url;
@@ -259,10 +331,8 @@ export class ArchiveLoader {
     /**
      * Load archive from an ArrayBuffer.
      * Only scans the central directory — no files are decompressed.
-     * @param {ArrayBuffer} arrayBuffer - The archive data
-     * @returns {Promise<void>}
      */
-    async loadFromArrayBuffer(arrayBuffer) {
+    async loadFromArrayBuffer(arrayBuffer: ArrayBuffer): Promise<void> {
         // Validate ZIP magic bytes
         const header = new Uint8Array(arrayBuffer, 0, 4);
         if (header[0] !== 0x50 || header[1] !== 0x4B) {
@@ -284,12 +354,8 @@ export class ArchiveLoader {
      * Read bytes from the archive source (File or raw buffer).
      * For File sources, only the requested range is read from disk.
      * For ArrayBuffer sources, returns a zero-copy subarray view.
-     * @param {number} offset - Byte offset from start of archive
-     * @param {number} length - Number of bytes to read
-     * @returns {Promise<Uint8Array>} The requested bytes
-     * @private
      */
-    async _readBytes(offset, length) {
+    private async _readBytes(offset: number, length: number): Promise<Uint8Array> {
         if (length === 0) return new Uint8Array(0);
         if (this._file) {
             const slice = this._file.slice(offset, offset + length);
@@ -315,9 +381,8 @@ export class ArchiveLoader {
      * Parse the ZIP central directory to build a file index with byte offsets.
      * Supports ZIP64 for archives > 4GB or with > 65535 entries.
      * Only reads the end of the archive (central directory) — file data is not touched.
-     * @private
      */
-    async _parseCentralDirectory() {
+    private async _parseCentralDirectory(): Promise<void> {
         const fileSize = this._file ? this._file.size : (this._rawData ? this._rawData.length : this._fileSize);
 
         // Read last ~65KB to find End of Central Directory record.
@@ -446,14 +511,11 @@ export class ArchiveLoader {
     /**
      * Extract a single file from the archive, using the cache if available.
      * Reads only the specific byte range for the requested file.
-     * @param {string} filename - The exact filename within the ZIP
-     * @returns {Promise<Uint8Array|null>} The decompressed file data, or null if not found
-     * @private
      */
-    async _extractSingle(filename) {
+    private async _extractSingle(filename: string): Promise<Uint8Array | null> {
         // Check cache first
         if (this._fileCache.has(filename)) {
-            return this._fileCache.get(filename);
+            return this._fileCache.get(filename)!;
         }
 
         if (!this._hasData) {
@@ -483,13 +545,13 @@ export class ArchiveLoader {
         const compressedData = await this._readBytes(dataOffset, entry.compressedSize);
 
         // Decompress based on compression method
-        let fileData;
+        let fileData: Uint8Array;
         if (entry.method === 0) {
             // Stored (no compression) — use bytes directly
             fileData = compressedData;
         } else if (entry.method === 8) {
             // Deflate — decompress with fflate inflateSync
-            fileData = inflateSync(compressedData, new Uint8Array(entry.uncompressedSize));
+            fileData = inflateSync(compressedData);
         } else {
             throw new Error(`Unsupported compression method ${entry.method} for ${filename}`);
         }
@@ -501,9 +563,8 @@ export class ArchiveLoader {
 
     /**
      * Parse and validate the manifest.json from the archive
-     * @returns {Promise<Object>} The parsed manifest
      */
-    async parseManifest() {
+    async parseManifest(): Promise<ArchiveManifest> {
         if (!this._hasData) {
             throw new Error('No archive loaded');
         }
@@ -523,33 +584,30 @@ export class ArchiveLoader {
         }
 
         // Validate required fields
-        if (!this.manifest.container_version) {
+        if (!this.manifest!.container_version) {
             throw new Error('Invalid manifest: missing container_version');
         }
 
-        if (!this.manifest.data_entries) {
+        if (!this.manifest!.data_entries) {
             throw new Error('Invalid manifest: missing data_entries');
         }
 
-        return this.manifest;
+        return this.manifest!;
     }
 
     /**
      * Get data entries from manifest
-     * @returns {Object} The data_entries object
      */
-    getDataEntries() {
+    getDataEntries(): Record<string, ManifestDataEntry> {
         return this.manifest?.data_entries || {};
     }
 
     /**
      * Find entries by type prefix (e.g., 'scene_', 'mesh_', 'thumbnail_')
-     * @param {string} prefix - The entry name prefix
-     * @returns {Array<{key: string, entry: Object}>} Matching entries
      */
-    findEntriesByPrefix(prefix) {
+    findEntriesByPrefix(prefix: string): Array<{ key: string; entry: ManifestDataEntry }> {
         const entries = this.getDataEntries();
-        const results = [];
+        const results: Array<{ key: string; entry: ManifestDataEntry }> = [];
 
         for (const [key, entry] of Object.entries(entries)) {
             if (key.startsWith(prefix)) {
@@ -564,9 +622,8 @@ export class ArchiveLoader {
 
     /**
      * Get the primary scene entry (splat), excluding proxy entries
-     * @returns {Object|null} The scene entry or null
      */
-    getSceneEntry() {
+    getSceneEntry(): ManifestDataEntry | null {
         const scenes = this.findEntriesByPrefix('scene_');
         // Return the first non-proxy scene entry
         for (const { key, entry } of scenes) {
@@ -577,9 +634,8 @@ export class ArchiveLoader {
 
     /**
      * Get the primary mesh entry (excludes proxy entries)
-     * @returns {Object|null} The mesh entry or null
      */
-    getMeshEntry() {
+    getMeshEntry(): ManifestDataEntry | null {
         const meshes = this.findEntriesByPrefix('mesh_');
         // Return the first non-proxy mesh entry
         for (const { key, entry } of meshes) {
@@ -590,9 +646,8 @@ export class ArchiveLoader {
 
     /**
      * Get the display proxy mesh entry if one exists
-     * @returns {Object|null} The proxy mesh entry or null
      */
-    getMeshProxyEntry() {
+    getMeshProxyEntry(): ManifestDataEntry | null {
         const meshes = this.findEntriesByPrefix('mesh_');
         for (const { key, entry } of meshes) {
             if (entry.lod === 'proxy') return entry;
@@ -602,17 +657,15 @@ export class ArchiveLoader {
 
     /**
      * Check if the archive has a display proxy for the mesh
-     * @returns {boolean}
      */
-    hasMeshProxy() {
+    hasMeshProxy(): boolean {
         return this.getMeshProxyEntry() !== null;
     }
 
     /**
      * Get the display proxy scene (splat) entry if one exists
-     * @returns {Object|null} The proxy scene entry or null
      */
-    getSceneProxyEntry() {
+    getSceneProxyEntry(): ManifestDataEntry | null {
         const scenes = this.findEntriesByPrefix('scene_');
         for (const { key, entry } of scenes) {
             if (entry.lod === 'proxy') return entry;
@@ -622,61 +675,53 @@ export class ArchiveLoader {
 
     /**
      * Check if the archive has a display proxy for the scene (splat)
-     * @returns {boolean}
      */
-    hasSceneProxy() {
+    hasSceneProxy(): boolean {
         return this.getSceneProxyEntry() !== null;
     }
 
     /**
      * Get the primary point cloud entry
-     * @returns {Object|null} The point cloud entry or null
      */
-    getPointcloudEntry() {
+    getPointcloudEntry(): ManifestDataEntry | null {
         const pointclouds = this.findEntriesByPrefix('pointcloud_');
         return pointclouds.length > 0 ? pointclouds[0].entry : null;
     }
 
     /**
      * Get the primary thumbnail entry
-     * @returns {Object|null} The thumbnail entry or null
      */
-    getThumbnailEntry() {
+    getThumbnailEntry(): ManifestDataEntry | null {
         const thumbnails = this.findEntriesByPrefix('thumbnail_');
         return thumbnails.length > 0 ? thumbnails[0].entry : null;
     }
 
     /**
      * Get all embedded image entries (used in annotation/description markdown)
-     * @returns {Object[]} Array of image entry objects
      */
-    getImageEntries() {
+    getImageEntries(): ManifestDataEntry[] {
         return this.findEntriesByPrefix('image_').map(({ entry }) => entry);
     }
 
     /**
      * Get all source file entries (archived for preservation, not rendered)
-     * @returns {Array<{key: string, entry: Object}>} Source file entries
      */
-    getSourceFileEntries() {
+    getSourceFileEntries(): Array<{ key: string; entry: ManifestDataEntry }> {
         return this.findEntriesByPrefix('source_');
     }
 
     /**
      * Check if the archive contains source files
-     * @returns {boolean}
      */
-    hasSourceFiles() {
+    hasSourceFiles(): boolean {
         return this.getSourceFileEntries().length > 0;
     }
 
     /**
      * Extract a file from the archive as a blob URL.
      * Decompresses on demand and caches the result.
-     * @param {string} filename - The filename within the archive
-     * @returns {Promise<{blob: Blob, url: string, name: string}|null>}
      */
-    async extractFile(filename) {
+    async extractFile(filename: string): Promise<ExtractedFile | null> {
         if (!this._hasData) {
             throw new Error('No archive loaded');
         }
@@ -696,7 +741,9 @@ export class ArchiveLoader {
         }
 
         // Convert Uint8Array to Blob
-        const blob = new Blob([fileData]);
+        // Create a new Uint8Array with standard ArrayBuffer to satisfy TypeScript
+        const standardBuffer = new Uint8Array(fileData);
+        const blob = new Blob([standardBuffer]);
         const url = URL.createObjectURL(blob);
         this.blobUrls.push(url);
 
@@ -705,10 +752,8 @@ export class ArchiveLoader {
 
     /**
      * Get transform/alignment data for an entry
-     * @param {Object} entry - The data entry from manifest
-     * @returns {Object} Transform data with position, rotation, scale
      */
-    getEntryTransform(entry) {
+    getEntryTransform(entry: ManifestDataEntry): EntryTransform {
         const params = entry?._parameters || {};
         return {
             position: params.position || [0, 0, 0],
@@ -719,9 +764,8 @@ export class ArchiveLoader {
 
     /**
      * Get global alignment data from manifest
-     * @returns {Object|null} Alignment data or null
      */
-    getGlobalAlignment() {
+    getGlobalAlignment(): any {
         // Check for alignment in manifest root or _parameters
         return this.manifest?.alignment ||
                this.manifest?._parameters?.alignment ||
@@ -730,9 +774,8 @@ export class ArchiveLoader {
 
     /**
      * Get archive metadata summary
-     * @returns {Object} Metadata summary
      */
-    getMetadata() {
+    getMetadata(): ArchiveMetadata | null {
         if (!this.manifest) return null;
 
         return {
@@ -748,29 +791,38 @@ export class ArchiveLoader {
 
     /**
      * Get annotations from manifest
-     * @returns {Array} Array of annotation objects
      */
-    getAnnotations() {
+    getAnnotations(): any[] {
         if (!this.manifest) return [];
         return this.manifest.annotations || [];
     }
 
     /**
      * Get project info from manifest
-     * @returns {Object|null} Project info
      */
-    getProjectInfo() {
+    getProjectInfo(): Record<string, any> | null {
         if (!this.manifest) return null;
         return this.manifest.project || null;
     }
 
     /**
      * Get all entries with their details for UI display
-     * @returns {Array<Object>} Entry details
      */
-    getEntryList() {
+    getEntryList(): Array<{
+        key: string;
+        fileName: string;
+        createdBy: string;
+        createdByVersion: string;
+        parameters: Record<string, any>;
+    }> {
         const entries = this.getDataEntries();
-        const list = [];
+        const list: Array<{
+            key: string;
+            fileName: string;
+            createdBy: string;
+            createdByVersion: string;
+            parameters: Record<string, any>;
+        }> = [];
 
         for (const [key, entry] of Object.entries(entries)) {
             // Sanitize filename for safe display
@@ -791,9 +843,8 @@ export class ArchiveLoader {
 
     /**
      * Check if the archive contains viewable content
-     * @returns {{hasSplat: boolean, hasMesh: boolean, hasPointcloud: boolean, hasThumbnail: boolean}}
      */
-    getContentInfo() {
+    getContentInfo(): ContentInfo {
         const scene = this.getSceneEntry();
         const mesh = this.getMeshEntry();
         const meshProxy = this.getMeshProxyEntry();
@@ -821,28 +872,27 @@ export class ArchiveLoader {
 
     /**
      * Get the file index (names and sizes) without decompressing anything.
-     * @returns {Array<{name: string, originalSize: number}>}
      */
-    getFileIndex() {
+    getFileIndex(): FileIndexEntry[] {
         return this._fileIndex ? [...this._fileIndex] : [];
     }
 
     /**
      * Check if a specific file has already been extracted and cached.
-     * @param {string} filename
-     * @returns {boolean}
      */
-    isFileCached(filename) {
+    isFileCached(filename: string): boolean {
         return this._fileCache.has(filename);
     }
 
     /**
      * Find entries by prefix with their cached/uncached status.
      * Useful for LOD: returns all scene_0, scene_1, etc. with their parameters and readiness.
-     * @param {string} prefix - e.g., 'scene_', 'mesh_', 'pointcloud_'
-     * @returns {Array<{key: string, entry: Object, cached: boolean}>}
      */
-    findEntriesWithStatus(prefix) {
+    findEntriesWithStatus(prefix: string): Array<{
+        key: string;
+        entry: ManifestDataEntry;
+        cached: boolean;
+    }> {
         const entries = this.findEntriesByPrefix(prefix);
         return entries.map(({ key, entry }) => ({
             key,
@@ -853,10 +903,8 @@ export class ArchiveLoader {
 
     /**
      * Pre-extract specific files into the cache (for background loading).
-     * @param {Array<string>} filenames
-     * @returns {Promise<void>}
      */
-    async preExtract(filenames) {
+    async preExtract(filenames: string[]): Promise<void> {
         for (const filename of filenames) {
             if (!this._fileCache.has(filename)) {
                 await this._extractSingle(filename);
@@ -869,7 +917,7 @@ export class ArchiveLoader {
      * Call this after all needed assets have been extracted and cached.
      * After calling this, no new files can be extracted.
      */
-    releaseRawData() {
+    releaseRawData(): void {
         const hadData = this._hasData;
         this._rawData = null;
         this._file = null;
@@ -881,7 +929,7 @@ export class ArchiveLoader {
     /**
      * Clean up all created blob URLs
      */
-    cleanup() {
+    cleanup(): void {
         for (const url of this.blobUrls) {
             URL.revokeObjectURL(url);
         }
@@ -891,7 +939,7 @@ export class ArchiveLoader {
     /**
      * Full cleanup including raw data and file cache
      */
-    dispose() {
+    dispose(): void {
         this.cleanup();
         this._rawData = null;
         this._file = null;
@@ -899,8 +947,8 @@ export class ArchiveLoader {
         this._fileSize = 0;
         this._centralDir = null;
         this._fileCache?.clear();
-        this._fileCache = null;
-        this._fileIndex = null;
+        this._fileCache = null as any;
+        this._fileIndex = null as any;
         this.manifest = null;
     }
 }

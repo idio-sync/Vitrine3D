@@ -9,9 +9,130 @@
  */
 
 import * as THREE from 'three';
+import type {
+    Scene,
+    PerspectiveCamera,
+    WebGLRenderer,
+    Group,
+    Object3D,
+    Vector3,
+    Matrix4,
+    Raycaster,
+    Vector2
+} from 'three';
 import { Logger, notify } from './utilities.js';
 
 const log = Logger.getLogger('alignment');
+
+// =============================================================================
+// TYPES AND INTERFACES
+// =============================================================================
+
+/** 3D point with x, y, z coordinates */
+export interface Point3D {
+    x: number;
+    y: number;
+    z: number;
+}
+
+/** Splat bounding box result */
+interface SplatBounds {
+    min: Vector3;
+    max: Vector3;
+    center: Vector3;
+    found: boolean;
+}
+
+/** Alignment data JSON format */
+export interface AlignmentData {
+    version: number;
+    splat?: {
+        position: [number, number, number];
+        rotation: [number, number, number];
+        scale: number;
+    } | null;
+    model?: {
+        position: [number, number, number];
+        rotation: [number, number, number];
+        scale: number;
+    } | null;
+    pointcloud?: {
+        position: [number, number, number];
+        rotation: [number, number, number];
+        scale: number;
+    } | null;
+}
+
+/** Dependencies for autoCenterAlign */
+export interface AutoCenterAlignDeps {
+    splatMesh: Object3D | null;
+    modelGroup: Group | null;
+    updateTransformInputs: () => void;
+    storeLastPositions: () => void;
+}
+
+/** Dependencies for LandmarkAlignment constructor */
+export interface LandmarkAlignmentDeps {
+    scene: Scene;
+    camera: PerspectiveCamera;
+    renderer: WebGLRenderer;
+    controls: any; // OrbitControls type not available
+    splatMesh?: Object3D | null;
+    modelGroup?: Group | null;
+    updateTransformInputs: () => void;
+    storeLastPositions: () => void;
+}
+
+/** Dependencies for fitToView */
+export interface FitToViewDeps {
+    splatMesh: Object3D | null;
+    modelGroup: Group | null;
+    pointcloudGroup: Group | null;
+    camera: PerspectiveCamera;
+    controls: any; // OrbitControls type
+}
+
+/** Dependencies for alignment data operations */
+export interface AlignmentDataDeps {
+    splatMesh: Object3D | null;
+    modelGroup: Group | null;
+    pointcloudGroup: Group | null;
+    updateTransformInputs: () => void;
+    storeLastPositions?: () => void;
+}
+
+/** Dependencies for resetCamera */
+export interface ResetCameraDeps {
+    camera: PerspectiveCamera;
+    controls: any; // OrbitControls type
+    initialPosition: { x: number; y: number; z: number };
+}
+
+/** Dependencies for saveAlignment */
+export interface SaveAlignmentDeps {
+    splatMesh: Object3D | null;
+    modelGroup: Group | null;
+    pointcloudGroup: Group | null;
+    tauriBridge?: any;
+}
+
+/** Dependencies for loadAlignment */
+export type LoadAlignmentDeps = AlignmentDataDeps;
+
+/** Marker data for landmark alignment */
+interface MarkerData {
+    element: HTMLDivElement;
+    position: Vector3;
+    phase: 'anchor' | 'mover';
+}
+
+/** SplatMesh interface (minimal, for Spark.js internals) */
+interface SplatMesh extends Object3D {
+    packedSplats?: {
+        splatCount?: number;
+        forEachSplat?: (callback: (index: number, center: Point3D) => void) => void;
+    };
+}
 
 // =============================================================================
 // CENTROID AND ROTATION COMPUTATION
@@ -19,10 +140,8 @@ const log = Logger.getLogger('alignment');
 
 /**
  * Compute centroid of points
- * @param {Array<{x: number, y: number, z: number}>} points
- * @returns {{x: number, y: number, z: number}}
  */
-function computeCentroid(points) {
+function computeCentroid(points: Point3D[]): Point3D {
     let cx = 0, cy = 0, cz = 0;
     for (const p of points) {
         cx += p.x;
@@ -36,15 +155,15 @@ function computeCentroid(points) {
 /**
  * Compute optimal rotation using SVD-like approach (Kabsch algorithm / Horn's method)
  * Returns a rotation matrix that best aligns source to target
- * @param {Array} sourcePoints - Source point cloud
- * @param {Array} targetPoints - Target point cloud
- * @param {Object} sourceCentroid - Centroid of source points
- * @param {Object} targetCentroid - Centroid of target points
- * @returns {THREE.Matrix4} Rotation matrix
  */
-function computeOptimalRotation(sourcePoints, targetPoints, sourceCentroid, targetCentroid) {
+function computeOptimalRotation(
+    sourcePoints: Point3D[],
+    targetPoints: Point3D[],
+    sourceCentroid: Point3D,
+    targetCentroid: Point3D
+): Matrix4 {
     // Build the covariance matrix H
-    let h = [
+    const h = [
         [0, 0, 0],
         [0, 0, 0],
         [0, 0, 0]
@@ -120,11 +239,9 @@ function computeOptimalRotation(sourcePoints, targetPoints, sourceCentroid, targ
 
 /**
  * Compute bounds from splat positions (sampling approach)
- * @param {Object} splatMeshObj - The SplatMesh object
- * @returns {{min: THREE.Vector3, max: THREE.Vector3, center: THREE.Vector3, found: boolean}}
  */
-function computeSplatBoundsFromPositions(splatMeshObj) {
-    const bounds = {
+function computeSplatBoundsFromPositions(splatMeshObj: Object3D): SplatBounds {
+    const bounds: SplatBounds = {
         min: new THREE.Vector3(Infinity, Infinity, Infinity),
         max: new THREE.Vector3(-Infinity, -Infinity, -Infinity),
         center: new THREE.Vector3(),
@@ -134,15 +251,16 @@ function computeSplatBoundsFromPositions(splatMeshObj) {
     splatMeshObj.updateMatrixWorld(true);
     const worldMatrix = splatMeshObj.matrixWorld;
 
-    if (splatMeshObj.packedSplats && typeof splatMeshObj.packedSplats.forEachSplat === 'function') {
+    const splatMesh = splatMeshObj as SplatMesh;
+    if (splatMesh.packedSplats && typeof splatMesh.packedSplats.forEachSplat === 'function') {
         let count = 0;
-        const splatCount = splatMeshObj.packedSplats.splatCount || 0;
+        const splatCount = splatMesh.packedSplats.splatCount || 0;
 
         if (splatCount > 0) {
             const maxSamples = 10000;
             const stride = Math.max(1, Math.floor(splatCount / maxSamples));
 
-            splatMeshObj.packedSplats.forEachSplat((index, center) => {
+            splatMesh.packedSplats.forEachSplat((index: number, center: Point3D) => {
                 if (index % stride === 0) {
                     const worldPos = new THREE.Vector3(center.x, center.y, center.z);
                     worldPos.applyMatrix4(worldMatrix);
@@ -171,9 +289,8 @@ function computeSplatBoundsFromPositions(splatMeshObj) {
  * Simple bounding-box center alignment — translates the mover's center to
  * the anchor's center. No rotation or scale. Used as the auto-trigger when
  * both objects are loaded.
- * @param {Object} deps - Dependencies object
  */
-export function autoCenterAlign(deps) {
+export function autoCenterAlign(deps: AutoCenterAlignDeps): void {
     const { splatMesh, modelGroup, updateTransformInputs, storeLastPositions } = deps;
 
     if (!splatMesh || !modelGroup || modelGroup.children.length === 0) {
@@ -182,7 +299,7 @@ export function autoCenterAlign(deps) {
 
     // Compute bounding-box centers
     const splatBounds = computeSplatBoundsFromPositions(splatMesh);
-    let splatCenter;
+    let splatCenter: Vector3;
     if (splatBounds.found) {
         splatCenter = splatBounds.center.clone();
     } else {
@@ -205,7 +322,9 @@ export function autoCenterAlign(deps) {
     const splatDist = splatCenter.length();
     const modelDist = modelCenter.length();
 
-    let mover, moverCenter, anchorCenter;
+    let mover: Object3D | Group;
+    let moverCenter: Vector3;
+    let anchorCenter: Vector3;
     if (splatDist <= modelDist) {
         mover = modelGroup;
         moverCenter = modelCenter;
@@ -237,11 +356,8 @@ export function autoCenterAlign(deps) {
 /**
  * Compute a rigid transform (rotation + uniform scale + translation) from
  * 3 source-destination point correspondences.
- * @param {THREE.Vector3[]} srcPts - 3 source points (on the mover)
- * @param {THREE.Vector3[]} dstPts - 3 corresponding destination points (on the anchor)
- * @returns {THREE.Matrix4} World-space transform matrix
  */
-function computeRigidTransformFromPoints(srcPts, dstPts) {
+function computeRigidTransformFromPoints(srcPts: Vector3[], dstPts: Vector3[]): Matrix4 {
     // Convert to plain objects for computeCentroid / computeOptimalRotation
     const srcObjs = srcPts.map(v => ({ x: v.x, y: v.y, z: v.z }));
     const dstObjs = dstPts.map(v => ({ x: v.x, y: v.y, z: v.z }));
@@ -305,14 +421,44 @@ function computeRigidTransformFromPoints(srcPts, dstPts) {
  * 4. Rigid transform computed and applied to the mover
  */
 export class LandmarkAlignment {
-    /**
-     * @param {Object} deps - Dependencies
-     * @param {THREE.Scene} deps.scene
-     * @param {THREE.Camera} deps.camera
-     * @param {THREE.WebGLRenderer} deps.renderer
-     * @param {Object} deps.controls - OrbitControls
-     */
-    constructor(deps) {
+    private scene: Scene;
+    private camera: PerspectiveCamera;
+    private renderer: WebGLRenderer;
+    private controls: any; // OrbitControls
+
+    // Asset references (updated via updateRefs())
+    private splatMesh: Object3D | null;
+    private modelGroup: Group | null;
+
+    // Callbacks from main.js
+    private updateTransformInputs: () => void;
+    private storeLastPositions: () => void;
+
+    // State
+    private _active: boolean;
+    private _phase: 'anchor' | 'mover' | null;
+    private _anchorObj: Object3D | Group | null;
+    private _anchorType: string;
+    private _moverObj: Object3D | Group | null;
+    private _moverType: string;
+    private _anchorPoints: Vector3[];
+    private _moverPoints: Vector3[];
+
+    // DOM
+    private _markerContainer: HTMLDivElement | null;
+    private _markers: MarkerData[];
+    private _indicatorEl: HTMLElement | null;
+    private _instructionEl: HTMLElement | null;
+
+    // Raycaster
+    private _raycaster: Raycaster;
+    private _mouse: Vector2;
+
+    // Bound handlers
+    private _onClickBound: (event: MouseEvent) => void;
+    private _onKeyDownBound: (event: KeyboardEvent) => void;
+
+    constructor(deps: LandmarkAlignmentDeps) {
         this.scene = deps.scene;
         this.camera = deps.camera;
         this.renderer = deps.renderer;
@@ -328,17 +474,17 @@ export class LandmarkAlignment {
 
         // State
         this._active = false;
-        this._phase = null;      // 'anchor' or 'mover'
+        this._phase = null;
         this._anchorObj = null;
-        this._anchorType = '';    // 'splat' or 'model'
+        this._anchorType = '';
         this._moverObj = null;
         this._moverType = '';
-        this._anchorPoints = [];  // THREE.Vector3[]
-        this._moverPoints = [];   // THREE.Vector3[]
+        this._anchorPoints = [];
+        this._moverPoints = [];
 
         // DOM
         this._markerContainer = null;
-        this._markers = [];       // { element, position: THREE.Vector3, phase }
+        this._markers = [];
         this._indicatorEl = null;
         this._instructionEl = null;
 
@@ -356,7 +502,7 @@ export class LandmarkAlignment {
     /**
      * Update asset references (called when splat/model loads)
      */
-    updateRefs(splatMesh, modelGroup) {
+    updateRefs(splatMesh: Object3D | null, modelGroup: Group | null): void {
         this.splatMesh = splatMesh;
         this.modelGroup = modelGroup;
     }
@@ -364,8 +510,8 @@ export class LandmarkAlignment {
     /**
      * Ensure the marker container exists in the DOM
      */
-    _ensureContainer() {
-        this._markerContainer = document.getElementById('alignment-markers');
+    private _ensureContainer(): void {
+        this._markerContainer = document.getElementById('alignment-markers') as HTMLDivElement | null;
         if (!this._markerContainer) {
             this._markerContainer = document.createElement('div');
             this._markerContainer.id = 'alignment-markers';
@@ -381,7 +527,7 @@ export class LandmarkAlignment {
     /**
      * Enter alignment mode
      */
-    start() {
+    start(): void {
         if (this._active) return;
 
         if (!this.splatMesh || !this.modelGroup || this.modelGroup.children.length === 0) {
@@ -393,7 +539,7 @@ export class LandmarkAlignment {
 
         // Determine anchor/mover
         const splatBounds = computeSplatBoundsFromPositions(this.splatMesh);
-        let splatCenter;
+        let splatCenter: Vector3;
         if (splatBounds.found) {
             splatCenter = splatBounds.center;
         } else {
@@ -433,7 +579,7 @@ export class LandmarkAlignment {
     /**
      * Cancel alignment mode and clean up
      */
-    cancel() {
+    cancel(): void {
         if (!this._active) return;
 
         this._active = false;
@@ -455,16 +601,15 @@ export class LandmarkAlignment {
 
     /**
      * Whether alignment mode is currently active
-     * @returns {boolean}
      */
-    isActive() {
+    isActive(): boolean {
         return this._active;
     }
 
     /**
      * Update marker screen positions — call each frame from animate()
      */
-    updateMarkerPositions() {
+    updateMarkerPositions(): void {
         if (!this._active || this._markers.length === 0) return;
 
         const rect = this.renderer.domElement.getBoundingClientRect();
@@ -487,7 +632,7 @@ export class LandmarkAlignment {
     /**
      * Dispose — remove event listeners
      */
-    dispose() {
+    dispose(): void {
         this.cancel();
     }
 
@@ -496,7 +641,7 @@ export class LandmarkAlignment {
     /**
      * Handle click during alignment mode
      */
-    _onClick(event) {
+    private _onClick(event: MouseEvent): void {
         if (!this._active) return;
 
         // Ignore clicks on UI overlays
@@ -544,7 +689,7 @@ export class LandmarkAlignment {
     /**
      * Handle keydown — Escape cancels
      */
-    _onKeyDown(event) {
+    private _onKeyDown(event: KeyboardEvent): void {
         if (event.key === 'Escape') {
             this.cancel();
             notify.info('Alignment cancelled');
@@ -554,12 +699,14 @@ export class LandmarkAlignment {
     /**
      * Check whether obj is targetObj itself or a descendant of it
      */
-    _isDescendantOf(obj, targetObj) {
+    private _isDescendantOf(obj: Object3D, targetObj: Object3D | Group | null): boolean {
+        if (!targetObj) return false;
+
         // For splat mesh, direct equality check
         if (obj === targetObj) return true;
 
         // For model group, walk up the parent chain
-        let current = obj;
+        let current: Object3D | null = obj;
         while (current) {
             if (current === targetObj) return true;
             current = current.parent;
@@ -570,11 +717,13 @@ export class LandmarkAlignment {
     /**
      * Create a numbered DOM marker at a 3D position
      */
-    _addMarker(point, number, phase) {
+    private _addMarker(point: Vector3, number: number, phase: 'anchor' | 'mover'): void {
         const el = document.createElement('div');
         el.className = `alignment-marker ${phase}`;
-        el.textContent = number;
-        this._markerContainer.appendChild(el);
+        el.textContent = String(number);
+        if (this._markerContainer) {
+            this._markerContainer.appendChild(el);
+        }
 
         this._markers.push({
             element: el,
@@ -586,7 +735,7 @@ export class LandmarkAlignment {
     /**
      * Remove all markers from the DOM
      */
-    _clearMarkers() {
+    private _clearMarkers(): void {
         for (const marker of this._markers) {
             marker.element.remove();
         }
@@ -596,7 +745,7 @@ export class LandmarkAlignment {
     /**
      * Update instruction text in the mode indicator
      */
-    _updateInstruction() {
+    private _updateInstruction(): void {
         if (!this._instructionEl) return;
 
         if (this._phase === 'anchor') {
@@ -613,10 +762,14 @@ export class LandmarkAlignment {
     /**
      * Compute and apply the rigid transform from the 6 clicked points
      */
-    _computeAndApply() {
+    private _computeAndApply(): void {
         log.info('[LandmarkAlignment] Computing rigid transform from 3 point pairs...');
 
         try {
+            if (!this._moverObj) {
+                throw new Error('Mover object is null');
+            }
+
             // Source = mover points (in world space), Destination = anchor points (in world space)
             const transformMatrix = computeRigidTransformFromPoints(this._moverPoints, this._anchorPoints);
 
@@ -661,8 +814,9 @@ export class LandmarkAlignment {
 
             notify.success(`Alignment complete (moved ${this._moverType})`);
         } catch (e) {
-            log.error('[LandmarkAlignment] Transform computation failed:', e);
-            notify.error('Alignment failed: ' + e.message);
+            const error = e as Error;
+            log.error('[LandmarkAlignment] Transform computation failed:', error);
+            notify.error('Alignment failed: ' + error.message);
         }
 
         // Clean up regardless of success/failure
@@ -676,9 +830,8 @@ export class LandmarkAlignment {
 
 /**
  * Fit camera to view all objects
- * @param {Object} deps - Dependencies object
  */
-export function fitToView(deps) {
+export function fitToView(deps: FitToViewDeps): void {
     const { splatMesh, modelGroup, pointcloudGroup, camera, controls } = deps;
 
     const box = new THREE.Box3();
@@ -743,10 +896,8 @@ export function fitToView(deps) {
 
 /**
  * Apply alignment data to objects
- * @param {Object} data - Alignment data with splat/model/pointcloud transforms
- * @param {Object} deps - Dependencies object
  */
-export function applyAlignmentData(data, deps) {
+export function applyAlignmentData(data: AlignmentData, deps: AlignmentDataDeps): void {
     const { splatMesh, modelGroup, pointcloudGroup, updateTransformInputs, storeLastPositions } = deps;
 
     if (data.splat && splatMesh) {
@@ -773,9 +924,8 @@ export function applyAlignmentData(data, deps) {
 
 /**
  * Reset alignment to defaults
- * @param {Object} deps - Dependencies object
  */
-export function resetAlignment(deps) {
+export function resetAlignment(deps: AlignmentDataDeps): void {
     const { splatMesh, modelGroup, pointcloudGroup, updateTransformInputs, storeLastPositions } = deps;
 
     if (splatMesh) {
@@ -797,14 +947,13 @@ export function resetAlignment(deps) {
     }
 
     updateTransformInputs();
-    storeLastPositions();
+    if (storeLastPositions) storeLastPositions();
 }
 
 /**
  * Reset camera to initial position
- * @param {Object} deps - Dependencies object
  */
-export function resetCamera(deps) {
+export function resetCamera(deps: ResetCameraDeps): void {
     const { camera, controls, initialPosition } = deps;
 
     camera.position.set(initialPosition.x, initialPosition.y, initialPosition.z);
@@ -819,25 +968,24 @@ export function resetCamera(deps) {
 
 /**
  * Save current alignment transforms to a JSON file.
- * @param {Object} deps - { splatMesh, modelGroup, pointcloudGroup, tauriBridge }
  */
-export async function saveAlignment(deps) {
+export async function saveAlignment(deps: SaveAlignmentDeps): Promise<void> {
     const { splatMesh, modelGroup, pointcloudGroup, tauriBridge } = deps;
 
-    const alignment = {
+    const alignment: AlignmentData = {
         version: 1,
         splat: splatMesh ? {
-            position: splatMesh.position.toArray(),
+            position: splatMesh.position.toArray() as [number, number, number],
             rotation: [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z],
             scale: splatMesh.scale.x
         } : null,
         model: modelGroup ? {
-            position: modelGroup.position.toArray(),
+            position: modelGroup.position.toArray() as [number, number, number],
             rotation: [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z],
             scale: modelGroup.scale.x
         } : null,
         pointcloud: pointcloudGroup ? {
-            position: pointcloudGroup.position.toArray(),
+            position: pointcloudGroup.position.toArray() as [number, number, number],
             rotation: [pointcloudGroup.rotation.x, pointcloudGroup.rotation.y, pointcloudGroup.rotation.z],
             scale: pointcloudGroup.scale.x
         } : null
@@ -858,42 +1006,43 @@ export async function saveAlignment(deps) {
 
 /**
  * Load alignment from a file input event and apply it.
- * @param {Event} event - File input change event
- * @param {Object} deps - Dependencies for applyAlignmentData
  */
-export function loadAlignment(event, deps) {
-    const file = event.target.files[0];
+export function loadAlignment(event: Event, deps: LoadAlignmentDeps): void {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = (e: ProgressEvent<FileReader>) => {
         try {
-            const alignment = JSON.parse(e.target.result);
+            const result = e.target?.result;
+            if (typeof result !== 'string') {
+                throw new Error('Failed to read file as text');
+            }
+            const alignment = JSON.parse(result) as AlignmentData;
             applyAlignmentData(alignment, deps);
         } catch (error) {
-            notify('Error loading alignment file: ' + error.message, 'error');
+            const err = error as Error;
+            notify.error('Error loading alignment file: ' + err.message);
         }
     };
     reader.readAsText(file);
 
     // Reset input so same file can be loaded again
-    event.target.value = '';
+    target.value = '';
 }
 
 /**
  * Load alignment from a URL and apply it.
- * @param {string} url - URL to fetch alignment JSON from
- * @param {Object} deps - Dependencies for applyAlignmentData
- * @returns {Promise<boolean>} true if loaded successfully
  */
-export async function loadAlignmentFromUrl(url, deps) {
+export async function loadAlignmentFromUrl(url: string, deps: LoadAlignmentDeps): Promise<boolean> {
     try {
         log.info('Loading alignment from URL:', url);
         const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const alignment = await response.json();
+        const alignment = await response.json() as AlignmentData;
         applyAlignmentData(alignment, deps);
         log.info('Alignment loaded successfully from URL');
         return true;
@@ -907,9 +1056,8 @@ export async function loadAlignmentFromUrl(url, deps) {
 
 /**
  * Center a model on the grid (y=0) when loaded standalone (without a splat).
- * @param {THREE.Group} modelGroup - The model group to center
  */
-export function centerModelOnGrid(modelGroup) {
+export function centerModelOnGrid(modelGroup: Group): void {
     if (!modelGroup || modelGroup.children.length === 0) {
         log.warn('[centerModelOnGrid] No model to center');
         return;

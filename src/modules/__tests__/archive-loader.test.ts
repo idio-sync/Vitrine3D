@@ -9,7 +9,7 @@
  */
 import { describe, it, expect } from 'vitest';
 
-// Since sanitizeArchiveFilename is not exported from archive-loader.js,
+// Since sanitizeArchiveFilename is not exported from archive-loader.ts,
 // we replicate the core sanitization logic here for testing.
 // This ensures the algorithm is correct; integration tests would cover the actual module.
 function sanitizeArchiveFilename(filename: string | null | undefined): { safe: boolean; sanitized: string; error: string } {

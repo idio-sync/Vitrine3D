@@ -12,6 +12,24 @@
  */
 
 import * as THREE from 'three';
+import {
+    Scene,
+    PerspectiveCamera,
+    WebGLRenderer,
+    AmbientLight,
+    HemisphereLight,
+    DirectionalLight,
+    GridHelper,
+    Group,
+    Color,
+    Texture,
+    PMREMGenerator,
+    Mesh,
+    ShadowMaterial,
+    Object3D,
+    PlaneGeometry,
+    ToneMapping,
+} from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
@@ -21,6 +39,13 @@ import { Logger } from './utilities.js';
 const log = Logger.getLogger('scene-manager');
 
 // =============================================================================
+// CALLBACK TYPES
+// =============================================================================
+
+type TransformChangeCallback = () => void;
+type DraggingChangedCallback = (isDragging: boolean) => void;
+
+// =============================================================================
 // SCENE MANAGER CLASS
 // =============================================================================
 
@@ -28,6 +53,54 @@ const log = Logger.getLogger('scene-manager');
  * Manages the Three.js scene, camera, renderers, and animation loop.
  */
 export class SceneManager {
+    // Three.js core objects
+    scene: Scene | null;
+    camera: PerspectiveCamera | null;
+    renderer: WebGLRenderer | null;
+    rendererRight: WebGLRenderer | null;
+    controls: OrbitControls | null;
+    controlsRight: OrbitControls | null;
+    transformControls: TransformControls | null;
+
+    // Lighting
+    ambientLight: AmbientLight | null;
+    hemisphereLight: HemisphereLight | null;
+    directionalLight1: DirectionalLight | null;
+    directionalLight2: DirectionalLight | null;
+
+    // Grid
+    gridHelper: GridHelper | null;
+
+    // Environment
+    pmremGenerator: PMREMGenerator | null;
+    currentEnvTexture: Texture | null;
+    currentEnvMap: Texture | null;
+    envAsBackground: boolean;
+    savedBackgroundColor: Color | null;
+
+    // Shadow catcher
+    shadowCatcherPlane: Mesh<PlaneGeometry, ShadowMaterial> | null;
+
+    // Background image
+    backgroundImageTexture: Texture | null;
+
+    // Model group
+    modelGroup: Group | null;
+
+    // Point cloud group
+    pointcloudGroup: Group | null;
+
+    // STL group
+    stlGroup: Group | null;
+
+    // FPS tracking
+    frameCount: number;
+    lastFpsTime: number;
+
+    // Callbacks
+    onTransformChange: TransformChangeCallback | null;
+    onDraggingChanged: DraggingChangedCallback | null;
+
     constructor() {
         // Three.js core objects
         this.scene = null;
@@ -80,11 +153,8 @@ export class SceneManager {
 
     /**
      * Initialize the scene with all components
-     * @param {HTMLCanvasElement} canvas - Main canvas element
-     * @param {HTMLCanvasElement} canvasRight - Right canvas for split view
-     * @returns {boolean} Success status
      */
-    init(canvas, canvasRight) {
+    init(canvas: HTMLCanvasElement, canvasRight: HTMLCanvasElement): boolean {
         if (!canvas) {
             log.error('FATAL: Main canvas not found!');
             return false;
@@ -97,11 +167,11 @@ export class SceneManager {
         log.info('Initializing scene...');
 
         // Scene
-        this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(COLORS.SCENE_BACKGROUND);
+        this.scene = new Scene();
+        this.scene.background = new Color(COLORS.SCENE_BACKGROUND);
 
         // Camera
-        this.camera = new THREE.PerspectiveCamera(
+        this.camera = new PerspectiveCamera(
             CAMERA.FOV,
             canvas.clientWidth / canvas.clientHeight,
             CAMERA.NEAR,
@@ -114,7 +184,7 @@ export class SceneManager {
         );
 
         // Main Renderer
-        this.renderer = new THREE.WebGLRenderer({
+        this.renderer = new WebGLRenderer({
             canvas: canvas,
             antialias: true
         });
@@ -127,7 +197,7 @@ export class SceneManager {
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
         // Right Renderer (for split view)
-        this.rendererRight = new THREE.WebGLRenderer({
+        this.rendererRight = new WebGLRenderer({
             canvas: canvasRight,
             antialias: true
         });
@@ -176,9 +246,9 @@ export class SceneManager {
 
         // Transform Controls
         this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
-        this.transformControls.addEventListener('dragging-changed', (event) => {
-            this.controls.enabled = !event.value;
-            this.controlsRight.enabled = !event.value;
+        this.transformControls.addEventListener('dragging-changed', (event: any) => {
+            this.controls!.enabled = !event.value;
+            this.controlsRight!.enabled = !event.value;
             if (this.onDraggingChanged) {
                 this.onDraggingChanged(event.value);
             }
@@ -196,7 +266,7 @@ export class SceneManager {
             log.error('This indicates THREE.js is loaded multiple times (import map issue).');
         }
         try {
-            this.scene.add(this.transformControls);
+            this.scene.add(this.transformControls as unknown as Object3D);
             log.info('TransformControls added to scene successfully');
         } catch (tcError) {
             log.error('Failed to add TransformControls to scene:', tcError);
@@ -207,15 +277,15 @@ export class SceneManager {
         this.setupLighting();
 
         // Model group
-        this.modelGroup = new THREE.Group();
+        this.modelGroup = new Group();
         this.modelGroup.name = 'modelGroup';
         this.scene.add(this.modelGroup);
 
-        this.pointcloudGroup = new THREE.Group();
+        this.pointcloudGroup = new Group();
         this.pointcloudGroup.name = 'pointcloudGroup';
         this.scene.add(this.pointcloudGroup);
 
-        this.stlGroup = new THREE.Group();
+        this.stlGroup = new Group();
         this.stlGroup.name = 'stlGroup';
         this.scene.add(this.stlGroup);
 
@@ -226,24 +296,24 @@ export class SceneManager {
     /**
      * Setup scene lighting
      */
-    setupLighting() {
+    setupLighting(): void {
         // Ambient light
-        this.ambientLight = new THREE.AmbientLight(
+        this.ambientLight = new AmbientLight(
             LIGHTING.AMBIENT.COLOR,
             LIGHTING.AMBIENT.INTENSITY
         );
-        this.scene.add(this.ambientLight);
+        this.scene!.add(this.ambientLight);
 
         // Hemisphere light
-        this.hemisphereLight = new THREE.HemisphereLight(
+        this.hemisphereLight = new HemisphereLight(
             LIGHTING.HEMISPHERE.SKY_COLOR,
             LIGHTING.HEMISPHERE.GROUND_COLOR,
             LIGHTING.HEMISPHERE.INTENSITY
         );
-        this.scene.add(this.hemisphereLight);
+        this.scene!.add(this.hemisphereLight);
 
         // Directional light 1
-        this.directionalLight1 = new THREE.DirectionalLight(
+        this.directionalLight1 = new DirectionalLight(
             LIGHTING.DIRECTIONAL_1.COLOR,
             LIGHTING.DIRECTIONAL_1.INTENSITY
         );
@@ -263,10 +333,10 @@ export class SceneManager {
         this.directionalLight1.shadow.camera.bottom = -SHADOWS.CAMERA_SIZE;
         this.directionalLight1.shadow.bias = SHADOWS.BIAS;
         this.directionalLight1.shadow.normalBias = SHADOWS.NORMAL_BIAS;
-        this.scene.add(this.directionalLight1);
+        this.scene!.add(this.directionalLight1);
 
         // Directional light 2
-        this.directionalLight2 = new THREE.DirectionalLight(
+        this.directionalLight2 = new DirectionalLight(
             LIGHTING.DIRECTIONAL_2.COLOR,
             LIGHTING.DIRECTIONAL_2.INTENSITY
         );
@@ -275,27 +345,26 @@ export class SceneManager {
             LIGHTING.DIRECTIONAL_2.POSITION.y,
             LIGHTING.DIRECTIONAL_2.POSITION.z
         );
-        this.scene.add(this.directionalLight2);
+        this.scene!.add(this.directionalLight2);
 
         log.info('Lighting setup complete');
     }
 
     /**
      * Toggle grid visibility
-     * @param {boolean} show - Whether to show the grid
      */
-    toggleGrid(show) {
+    toggleGrid(show: boolean): void {
         if (show && !this.gridHelper) {
-            this.gridHelper = new THREE.GridHelper(
+            this.gridHelper = new GridHelper(
                 GRID.SIZE,
                 GRID.DIVISIONS,
                 GRID.COLOR_PRIMARY,
                 GRID.COLOR_SECONDARY
             );
             this.gridHelper.position.y = GRID.Y_OFFSET;
-            this.scene.add(this.gridHelper);
+            this.scene!.add(this.gridHelper);
         } else if (!show && this.gridHelper) {
-            this.scene.remove(this.gridHelper);
+            this.scene!.remove(this.gridHelper);
             this.gridHelper.dispose();
             this.gridHelper = null;
         }
@@ -303,11 +372,10 @@ export class SceneManager {
 
     /**
      * Set scene background color
-     * @param {string} hexColor - Hex color string
      */
-    setBackgroundColor(hexColor) {
-        const color = new THREE.Color(hexColor);
-        this.scene.background = color;
+    setBackgroundColor(hexColor: string): void {
+        const color = new Color(hexColor);
+        this.scene!.background = color;
         this.savedBackgroundColor = color.clone();
         this.envAsBackground = false;
         this.clearBackgroundImage();
@@ -320,10 +388,9 @@ export class SceneManager {
 
     /**
      * Set tone mapping algorithm
-     * @param {string} type - 'None', 'Linear', 'Reinhard', 'Cineon', 'ACESFilmic', 'AgX'
      */
-    setToneMapping(type) {
-        const mappings = {
+    setToneMapping(type: string): void {
+        const mappings: Record<string, ToneMapping> = {
             'None': THREE.NoToneMapping,
             'Linear': THREE.LinearToneMapping,
             'Reinhard': THREE.ReinhardToneMapping,
@@ -332,17 +399,16 @@ export class SceneManager {
             'AgX': THREE.AgXToneMapping
         };
         const mapping = mappings[type] || THREE.NoToneMapping;
-        this.renderer.toneMapping = mapping;
-        this.rendererRight.toneMapping = mapping;
+        this.renderer!.toneMapping = mapping;
+        this.rendererRight!.toneMapping = mapping;
     }
 
     /**
      * Set tone mapping exposure
-     * @param {number} value - Exposure value (0.1 - 3.0)
      */
-    setToneMappingExposure(value) {
-        this.renderer.toneMappingExposure = value;
-        this.rendererRight.toneMappingExposure = value;
+    setToneMappingExposure(value: number): void {
+        this.renderer!.toneMappingExposure = value;
+        this.rendererRight!.toneMappingExposure = value;
     }
 
     // =========================================================================
@@ -351,13 +417,11 @@ export class SceneManager {
 
     /**
      * Load an HDR environment map from URL
-     * @param {string} url - URL to .hdr file
-     * @returns {Promise<THREE.Texture>}
      */
-    loadHDREnvironment(url) {
+    loadHDREnvironment(url: string): Promise<Texture> {
         return new Promise((resolve, reject) => {
             if (!this.pmremGenerator) {
-                this.pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+                this.pmremGenerator = new PMREMGenerator(this.renderer!);
                 this.pmremGenerator.compileEquirectangularShader();
             }
 
@@ -372,14 +436,14 @@ export class SceneManager {
                     if (this.currentEnvTexture) this.currentEnvTexture.dispose();
 
                     this.currentEnvTexture = texture;
-                    this.currentEnvMap = this.pmremGenerator.fromEquirectangular(texture).texture;
+                    this.currentEnvMap = this.pmremGenerator!.fromEquirectangular(texture).texture;
 
                     // Apply as environment lighting (IBL)
-                    this.scene.environment = this.currentEnvMap;
+                    this.scene!.environment = this.currentEnvMap;
 
                     // If env-as-background is enabled, also set as background
                     if (this.envAsBackground) {
-                        this.scene.background = this.currentEnvTexture;
+                        this.scene!.background = this.currentEnvTexture;
                     }
 
                     log.info('HDR environment loaded:', url);
@@ -396,10 +460,8 @@ export class SceneManager {
 
     /**
      * Load HDR environment from a File object
-     * @param {File} file - The .hdr file
-     * @returns {Promise<THREE.Texture>}
      */
-    loadHDREnvironmentFromFile(file) {
+    loadHDREnvironmentFromFile(file: File): Promise<Texture> {
         const url = URL.createObjectURL(file);
         return this.loadHDREnvironment(url).finally(() => {
             URL.revokeObjectURL(url);
@@ -409,10 +471,10 @@ export class SceneManager {
     /**
      * Clear the current HDR environment
      */
-    clearEnvironment() {
-        this.scene.environment = null;
+    clearEnvironment(): void {
+        this.scene!.environment = null;
         if (this.envAsBackground) {
-            this.scene.background = this.savedBackgroundColor || new THREE.Color(COLORS.SCENE_BACKGROUND);
+            this.scene!.background = this.savedBackgroundColor || new Color(COLORS.SCENE_BACKGROUND);
             this.envAsBackground = false;
         }
         if (this.currentEnvMap) {
@@ -428,21 +490,20 @@ export class SceneManager {
 
     /**
      * Toggle environment as scene background
-     * @param {boolean} show - Whether to show environment as background
      */
-    setEnvironmentAsBackground(show) {
+    setEnvironmentAsBackground(show: boolean): void {
         this.envAsBackground = show;
         if (show && this.currentEnvTexture) {
-            if (this.scene.background instanceof THREE.Color) {
-                this.savedBackgroundColor = this.scene.background.clone();
+            if (this.scene!.background instanceof Color) {
+                this.savedBackgroundColor = this.scene!.background.clone();
             }
-            this.scene.background = this.currentEnvTexture;
+            this.scene!.background = this.currentEnvTexture;
             this.clearBackgroundImage();
         } else if (!show) {
             if (this.backgroundImageTexture) {
-                this.scene.background = this.backgroundImageTexture;
+                this.scene!.background = this.backgroundImageTexture;
             } else {
-                this.scene.background = this.savedBackgroundColor || new THREE.Color(COLORS.SCENE_BACKGROUND);
+                this.scene!.background = this.savedBackgroundColor || new Color(COLORS.SCENE_BACKGROUND);
             }
         }
     }
@@ -453,19 +514,18 @@ export class SceneManager {
 
     /**
      * Enable or disable shadow rendering
-     * @param {boolean} enabled
      */
-    enableShadows(enabled) {
-        this.renderer.shadowMap.enabled = enabled;
-        this.rendererRight.shadowMap.enabled = enabled;
-        this.directionalLight1.castShadow = enabled;
+    enableShadows(enabled: boolean): void {
+        this.renderer!.shadowMap.enabled = enabled;
+        this.rendererRight!.shadowMap.enabled = enabled;
+        this.directionalLight1!.castShadow = enabled;
 
         // Enable castShadow on all meshes in modelGroup
         if (this.modelGroup) {
             this.modelGroup.traverse((child) => {
-                if (child.isMesh) {
-                    child.castShadow = enabled;
-                    child.receiveShadow = enabled;
+                if ((child as Mesh).isMesh) {
+                    (child as Mesh).castShadow = enabled;
+                    (child as Mesh).receiveShadow = enabled;
                 }
             });
         }
@@ -478,8 +538,8 @@ export class SceneManager {
         }
 
         // Force shadow map rebuild
-        this.renderer.shadowMap.needsUpdate = true;
-        this.rendererRight.shadowMap.needsUpdate = true;
+        this.renderer!.shadowMap.needsUpdate = true;
+        this.rendererRight!.shadowMap.needsUpdate = true;
 
         log.info('Shadows', enabled ? 'enabled' : 'disabled');
     }
@@ -487,14 +547,13 @@ export class SceneManager {
     /**
      * Apply shadow properties to all meshes in an object.
      * Call after loading new models when shadows are enabled.
-     * @param {THREE.Object3D} object
      */
-    applyShadowProperties(object) {
-        const shadowsEnabled = this.renderer.shadowMap.enabled;
+    applyShadowProperties(object: Object3D): void {
+        const shadowsEnabled = this.renderer!.shadowMap.enabled;
         object.traverse((child) => {
-            if (child.isMesh) {
-                child.castShadow = shadowsEnabled;
-                child.receiveShadow = shadowsEnabled;
+            if ((child as Mesh).isMesh) {
+                (child as Mesh).castShadow = shadowsEnabled;
+                (child as Mesh).receiveShadow = shadowsEnabled;
             }
         });
     }
@@ -502,19 +561,19 @@ export class SceneManager {
     /**
      * Create a shadow catcher ground plane
      */
-    createShadowCatcher() {
+    createShadowCatcher(): void {
         if (this.shadowCatcherPlane) return;
 
-        const geometry = new THREE.PlaneGeometry(
+        const geometry = new PlaneGeometry(
             SHADOWS.GROUND_PLANE_SIZE,
             SHADOWS.GROUND_PLANE_SIZE
         );
-        const material = new THREE.ShadowMaterial({
+        const material = new ShadowMaterial({
             opacity: 0.3,
             color: 0x000000
         });
 
-        this.shadowCatcherPlane = new THREE.Mesh(geometry, material);
+        this.shadowCatcherPlane = new Mesh(geometry, material);
         this.shadowCatcherPlane.rotation.x = -Math.PI / 2;
         this.shadowCatcherPlane.position.y = SHADOWS.GROUND_PLANE_Y;
         this.shadowCatcherPlane.receiveShadow = true;
@@ -523,16 +582,16 @@ export class SceneManager {
         // Exclude from raycasting so annotations/alignment pass through
         this.shadowCatcherPlane.raycast = () => {};
 
-        this.scene.add(this.shadowCatcherPlane);
+        this.scene!.add(this.shadowCatcherPlane);
         log.info('Shadow catcher plane created');
     }
 
     /**
      * Remove the shadow catcher ground plane
      */
-    removeShadowCatcher() {
+    removeShadowCatcher(): void {
         if (this.shadowCatcherPlane) {
-            this.scene.remove(this.shadowCatcherPlane);
+            this.scene!.remove(this.shadowCatcherPlane);
             this.shadowCatcherPlane.geometry.dispose();
             this.shadowCatcherPlane.material.dispose();
             this.shadowCatcherPlane = null;
@@ -542,9 +601,8 @@ export class SceneManager {
 
     /**
      * Set shadow catcher opacity
-     * @param {number} opacity - 0.05 to 1.0
      */
-    setShadowCatcherOpacity(opacity) {
+    setShadowCatcherOpacity(opacity: number): void {
         if (this.shadowCatcherPlane && this.shadowCatcherPlane.material) {
             this.shadowCatcherPlane.material.opacity = opacity;
         }
@@ -556,10 +614,8 @@ export class SceneManager {
 
     /**
      * Load a background image from URL
-     * @param {string} url - Image URL
-     * @returns {Promise<THREE.Texture>}
      */
-    loadBackgroundImage(url) {
+    loadBackgroundImage(url: string): Promise<Texture> {
         return new Promise((resolve, reject) => {
             const loader = new THREE.TextureLoader();
             loader.load(
@@ -570,7 +626,7 @@ export class SceneManager {
                         this.backgroundImageTexture.dispose();
                     }
                     this.backgroundImageTexture = texture;
-                    this.scene.background = texture;
+                    this.scene!.background = texture;
                     this.envAsBackground = false;
                     log.info('Background image loaded');
                     resolve(texture);
@@ -586,10 +642,8 @@ export class SceneManager {
 
     /**
      * Load a background image from a File object
-     * @param {File} file - The image file
-     * @returns {Promise<THREE.Texture>}
      */
-    loadBackgroundImageFromFile(file) {
+    loadBackgroundImageFromFile(file: File): Promise<Texture> {
         const url = URL.createObjectURL(file);
         return this.loadBackgroundImage(url).then((texture) => {
             URL.revokeObjectURL(url);
@@ -603,7 +657,7 @@ export class SceneManager {
     /**
      * Clear the background image and revert to solid color
      */
-    clearBackgroundImage() {
+    clearBackgroundImage(): void {
         if (this.backgroundImageTexture) {
             this.backgroundImageTexture.dispose();
             this.backgroundImageTexture = null;
@@ -612,29 +666,25 @@ export class SceneManager {
 
     /**
      * Handle window resize
-     * @param {string} displayMode - Current display mode ('split' or other)
-     * @param {HTMLElement} container - Viewer container element
      */
-    onWindowResize(displayMode, container) {
+    onWindowResize(displayMode: string, container: HTMLElement): void {
         if (displayMode === 'split') {
             const halfWidth = container.clientWidth / 2;
-            this.camera.aspect = halfWidth / container.clientHeight;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(halfWidth, container.clientHeight);
-            this.rendererRight.setSize(halfWidth, container.clientHeight);
+            this.camera!.aspect = halfWidth / container.clientHeight;
+            this.camera!.updateProjectionMatrix();
+            this.renderer!.setSize(halfWidth, container.clientHeight);
+            this.rendererRight!.setSize(halfWidth, container.clientHeight);
         } else {
-            this.camera.aspect = container.clientWidth / container.clientHeight;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(container.clientWidth, container.clientHeight);
+            this.camera!.aspect = container.clientWidth / container.clientHeight;
+            this.camera!.updateProjectionMatrix();
+            this.renderer!.setSize(container.clientWidth, container.clientHeight);
         }
     }
 
     /**
      * Update light intensity
-     * @param {string} lightType - 'ambient', 'hemisphere', 'directional1', 'directional2'
-     * @param {number} intensity - New intensity value
      */
-    setLightIntensity(lightType, intensity) {
+    setLightIntensity(lightType: string, intensity: number): void {
         switch (lightType) {
             case 'ambient':
                 if (this.ambientLight) this.ambientLight.intensity = intensity;
@@ -653,26 +703,24 @@ export class SceneManager {
 
     /**
      * Set transform controls mode
-     * @param {string} mode - 'translate', 'rotate', or 'scale'
      */
-    setTransformMode(mode) {
-        this.transformControls.setMode(mode);
+    setTransformMode(mode: 'translate' | 'rotate' | 'scale'): void {
+        this.transformControls!.setMode(mode);
     }
 
     /**
      * Attach transform controls to an object
-     * @param {THREE.Object3D} object - Object to attach to
      */
-    attachTransformControls(object) {
+    attachTransformControls(object: Object3D | null): void {
         try {
-            this.transformControls.detach();
+            this.transformControls!.detach();
         } catch (e) {
             log.warn('Error detaching transform controls:', e);
         }
 
         if (object) {
             try {
-                this.transformControls.attach(object);
+                this.transformControls!.attach(object);
             } catch (attachError) {
                 log.error('Error attaching transform controls:', attachError);
             }
@@ -682,9 +730,9 @@ export class SceneManager {
     /**
      * Detach transform controls
      */
-    detachTransformControls() {
+    detachTransformControls(): void {
         try {
-            this.transformControls.detach();
+            this.transformControls!.detach();
         } catch (e) {
             log.warn('Error detaching transform controls:', e);
         }
@@ -692,14 +740,13 @@ export class SceneManager {
 
     /**
      * Update FPS counter
-     * @param {HTMLElement} fpsElement - Element to display FPS
      */
-    updateFPS(fpsElement) {
+    updateFPS(fpsElement: HTMLElement | null): void {
         this.frameCount++;
         const currentTime = performance.now();
         if (currentTime - this.lastFpsTime >= 1000) {
             if (fpsElement) {
-                fpsElement.textContent = this.frameCount;
+                fpsElement.textContent = this.frameCount.toString();
             }
             this.frameCount = 0;
             this.lastFpsTime = currentTime;
@@ -708,13 +755,14 @@ export class SceneManager {
 
     /**
      * Render a single frame
-     * @param {string} displayMode - Current display mode
-     * @param {THREE.Object3D} splatMesh - Splat mesh object
-     * @param {THREE.Group} modelGroup - Model group object
-     * @param {THREE.Group} pointcloudGroup - Point cloud group object
-     * @param {THREE.Group} stlGroup - STL group object
      */
-    render(displayMode, splatMesh, modelGroup, pointcloudGroup, stlGroup) {
+    render(
+        displayMode: string,
+        splatMesh: Object3D | null,
+        modelGroup: Group | null,
+        pointcloudGroup: Group | null,
+        stlGroup: Group | null
+    ): void {
         if (displayMode === 'split') {
             // Split view - render splat on left, model + pointcloud + stl on right
             const splatVisible = splatMesh ? splatMesh.visible : false;
@@ -727,14 +775,14 @@ export class SceneManager {
             if (modelGroup) modelGroup.visible = false;
             if (pointcloudGroup) pointcloudGroup.visible = false;
             if (stlGroup) stlGroup.visible = false;
-            this.renderer.render(this.scene, this.camera);
+            this.renderer!.render(this.scene!, this.camera!);
 
             // Right view - model + pointcloud + stl
             if (splatMesh) splatMesh.visible = false;
             if (modelGroup) modelGroup.visible = true;
             if (pointcloudGroup) pointcloudGroup.visible = true;
             if (stlGroup) stlGroup.visible = true;
-            this.rendererRight.render(this.scene, this.camera);
+            this.rendererRight!.render(this.scene!, this.camera!);
 
             // Restore visibility
             if (splatMesh) splatMesh.visible = splatVisible;
@@ -743,30 +791,28 @@ export class SceneManager {
             if (stlGroup) stlGroup.visible = stlVisible;
         } else {
             // Normal view
-            this.renderer.render(this.scene, this.camera);
+            this.renderer!.render(this.scene!, this.camera!);
         }
     }
 
     /**
      * Add an object to the scene
-     * @param {THREE.Object3D} object - Object to add
      */
-    addToScene(object) {
-        this.scene.add(object);
+    addToScene(object: Object3D): void {
+        this.scene!.add(object);
     }
 
     /**
      * Remove an object from the scene
-     * @param {THREE.Object3D} object - Object to remove
      */
-    removeFromScene(object) {
-        this.scene.remove(object);
+    removeFromScene(object: Object3D): void {
+        this.scene!.remove(object);
     }
 
     /**
      * Dispose of scene resources
      */
-    dispose() {
+    dispose(): void {
         // Clean up environment
         if (this.currentEnvMap) {
             this.currentEnvMap.dispose();
@@ -787,13 +833,13 @@ export class SceneManager {
         this.removeShadowCatcher();
 
         if (this.gridHelper) {
-            this.scene.remove(this.gridHelper);
+            this.scene!.remove(this.gridHelper);
             this.gridHelper.dispose();
             this.gridHelper = null;
         }
 
         if (this.transformControls) {
-            this.scene.remove(this.transformControls);
+            this.scene!.remove(this.transformControls as unknown as Object3D);
             this.transformControls.dispose();
         }
 
@@ -823,11 +869,8 @@ export class SceneManager {
 
 /**
  * Create and initialize a scene manager
- * @param {HTMLCanvasElement} canvas - Main canvas element
- * @param {HTMLCanvasElement} canvasRight - Right canvas for split view
- * @returns {SceneManager|null} Initialized scene manager or null on failure
  */
-export function createSceneManager(canvas, canvasRight) {
+export function createSceneManager(canvas: HTMLCanvasElement, canvasRight: HTMLCanvasElement): SceneManager | null {
     const manager = new SceneManager();
     const success = manager.init(canvas, canvasRight);
     return success ? manager : null;
