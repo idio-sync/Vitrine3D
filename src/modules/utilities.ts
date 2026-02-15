@@ -462,22 +462,27 @@ async function fetchWithProgress(url: string, onProgress: ((received: number, to
 
     const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
 
-    // If no progress callback or no content-length, fall back to simple blob
-    if (!onProgress || !contentLength) {
+    // Fall back to simple blob when:
+    // - no progress callback needed
+    // - no content-length (chunked transfer)
+    // - response body not available (older browsers)
+    if (!onProgress || !contentLength || !response.body) {
         const blob = await response.blob();
         if (onProgress) onProgress(blob.size, blob.size);
         return blob;
     }
 
-    // Stream the response and track progress
-    const reader = response.body!.getReader();
+    // Stream the response and track progress.
+    // Chunks are cloned via .slice() to avoid buffer-reuse issues
+    // that can occur with CDN compression (Content-Encoding) layers.
+    const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
     let receivedLength = 0;
 
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        chunks.push(value);
+        chunks.push(value.slice());
         receivedLength += value.length;
         onProgress(receivedLength, contentLength);
     }
