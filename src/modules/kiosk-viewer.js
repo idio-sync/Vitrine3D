@@ -161,10 +161,13 @@ export async function fetchDependencies(onProgress) {
     }
 
     // 2. Fetch local modules from same origin
+    // Use document location (not import.meta.url) so paths resolve correctly
+    // whether served raw (dev) or from a Vite bundle chunk (production).
+    const appBase = window.location.href.replace(/[^/]*$/, '');
     const modules = [];
     for (const mod of LOCAL_MODULES) {
         progress(`Fetching ${mod.path}...`);
-        const url = new URL(`./${mod.path}`, import.meta.url).href;
+        const url = appBase + 'modules/' + mod.path;
         log.info(`Fetching module: ${mod.path}`);
         const src = await fetchText(url);
         modules.push({ specifier: mod.specifier, b64: toBase64(src) });
@@ -172,7 +175,7 @@ export async function fetchDependencies(onProgress) {
     }
 
     // 3. Fetch HTML, CSS, and pre-module.js from same origin
-    const baseUrl = new URL('..', import.meta.url).href;
+    const baseUrl = appBase;
 
     progress('Fetching styles.css...');
     const stylesCSS = await fetchText(new URL('styles.css', baseUrl).href);

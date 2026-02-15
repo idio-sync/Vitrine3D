@@ -10,21 +10,21 @@ Two modes of use:
 
 ## Tech Stack & Constraints
 
-- **No build step.** `src/` is served directly. No bundler, no transpiler, no node_modules at runtime.
-- **ES modules only.** All imports resolve through the import map in `index.html`.
-- **All dependencies are from CDN** (esm.sh / sparkjs.dev). Pinned versions:
+- **Vite + TypeScript (hybrid).** Vite serves `src/` in dev and bundles to `dist/` for production. TypeScript configured with `allowJs: true` — existing `.js` files work unchanged, new modules written as `.ts`.
+- **ES modules only.** Bare specifiers (`'three'`, `'fflate'`, etc.) resolved by Vite from `node_modules/`.
+- **Runtime dependencies** installed via npm. Pinned versions:
   - Three.js 0.170.0
   - Spark.js 0.1.10 (Gaussian splat renderer)
   - fflate 0.8.2 (ZIP compression)
   - three-e57-loader 1.2.0 / web-e57 1.2.0 (E57 point clouds, WASM)
-- **`package.json` only has `serve` as a devDependency** — used for `npm start`.
 - **Docker deployment** via nginx:alpine. `docker/docker-entrypoint.sh` substitutes env vars into `config.js` at container start.
+- **Tauri v2** for desktop builds. `src-tauri/` scaffold with Cargo.toml, capabilities, etc.
 
 ## Project Structure
 
 ```
 src/
-  index.html              Entry point. CSP, import map, all HTML structure (~1100 lines)
+  index.html              Entry point. CSP, all HTML structure (~1100 lines)
   config.js               IIFE (non-module). Parses URL params, sets window.APP_CONFIG
   pre-module.js           Error watchdog. Loaded before ES modules
   main.js                 App controller / glue layer (~3,900 lines)
@@ -44,7 +44,7 @@ src/
     share-dialog.js       Share link builder with URL parameters
     kiosk-viewer.js       Offline viewer generator — fetches CDN deps, base64-inlines them
 docker/
-  Dockerfile              nginx:alpine, copies src/ files individually
+  Dockerfile              nginx:alpine, serves Vite build output from dist/
   nginx.conf              Gzip, CORS, caching, CSP headers
   config.js.template      Template for env var substitution
   docker-entrypoint.sh    Runs envsubst at container start
@@ -53,12 +53,15 @@ docker/
 ## How to Run
 
 ```bash
-npm start                  # serves src/ on http://localhost:8080
-npm run docker:build       # builds Docker image
+npm run dev                # Vite dev server on http://localhost:8080
+npm run build              # Vite production build to dist/
+npm run preview            # Preview production build locally
+npm run docker:build       # Vite build + Docker image
 npm run docker:run         # runs on http://localhost:8080 (port 80 inside container)
+npx tauri dev              # Desktop app (Tauri, requires Rust)
 ```
 
-There are no tests. There is no linter configured. There is no type checking.
+There are no tests. There is no linter configured.
 
 ## Boot Sequence
 
@@ -98,23 +101,20 @@ Several post-load operations use `setTimeout` with delays from `constants.js` TI
 
 ## Rules for Making Changes
 
-### Do not introduce a build step
-This project serves `src/` directly. Do not add webpack, vite, rollup, esbuild, or any other bundler. Do not add TypeScript compilation. All code must be valid browser ES modules.
+### Keep modular
+If adding functionality, investigate if it makes sense to create a module instead of locating new code in main.js before writing code. New modules should be written as TypeScript (`.ts`).
 
-### Keep mudular
-If adding functionality, investegate if it makes sense to create module instead of locating new code in main.js before writing code
+### npm dependencies
+Runtime deps are in `package.json` and resolved by Vite. If adding a new dependency, install via `npm install` and import normally. Vite resolves bare specifiers from `node_modules/`.
 
-### Do not add npm runtime dependencies
-All runtime dependencies come from CDN via the import map in `index.html`. The only npm dependency is `serve` for local dev. If a new library is needed, add it to the import map.
-
-### Keep CDN versions in sync
-The import map in `index.html` and the `CDN_DEPS` object in `kiosk-viewer.js` both reference Three.js, Spark.js, etc. by version. If you update a version in one, update the other. Mismatched versions have caused real bugs.
+### Keep kiosk CDN deps in sync
+The `CDN_DEPS` object in `kiosk-viewer.js` fetches dependencies from CDN at kiosk generation time (not from `node_modules/`). If you update a dependency version in `package.json`, also update the corresponding URL in `kiosk-viewer.js`.
 
 ### Kiosk mode must work fully offline
 The generated kiosk HTML must contain all dependencies inlined (base64-encoded). It must never make network requests at runtime. Test by opening the generated file with network disabled.
 
-### Dockerfile needs manual updates for new files
-The Dockerfile copies each source file by name. If you add a new module to `src/modules/`, add a corresponding `COPY` line to `docker/Dockerfile` or it will be missing from Docker builds.
+### Docker uses Vite build output
+The Dockerfile copies `dist/` (Vite build output). Run `npm run build` before `docker build`. No need to add per-file COPY lines — just ensure new modules are imported so Vite bundles them, or add them to the `KIOSK_MODULES` list in `vite.config.ts` if they need to be copied as raw files for the kiosk viewer.
 
 ### CSP requires `unsafe-eval`
 Spark.js WASM needs `'unsafe-eval'` in the CSP `script-src`. Do not remove it or splat rendering will break. If the CSP in `index.html` is changed, also check `docker/nginx.conf` which adds its own `frame-ancestors` header.
@@ -131,7 +131,7 @@ All DOM structure lives in `index.html`. Modules query elements by ID. If you ne
 
 ## Known Fragile Areas
 
-- **`main.js` is ~3,900 lines** and handles too many concerns. Tread carefully when modifying — changes can have non-obvious side effects.
+- **`main.js` is ~3,500 lines** and handles too many concerns. Active refactoring in progress (see `docs/reference/REFACTOR_MAIN.md`). Tread carefully when modifying — changes can have non-obvious side effects.
 - **No tests.** Manual testing is the only verification. Security-critical code (archive filename sanitization, URL validation) has no automated coverage.
 - **Point cloud memory.** No size limits on E57 loading. Large files can OOM the browser.
 - **`annotation-system.js`** is the only module that doesn't use Logger — it has no structured logging.

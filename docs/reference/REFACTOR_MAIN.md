@@ -251,7 +251,7 @@ Save the **hardest** for last:
 
 ## Notes
 
+- **Phase 2+ extractions should be written as TypeScript (`.ts`)** — Vite + `allowJs: true` means new `.ts` modules interop seamlessly with existing `.js` modules.
 - All new modules should follow existing conventions: create a logger via `Logger.getLogger('module-name')`, export functions that receive deps objects, use `notify()` for user-facing messages.
-- Each new module added to `src/modules/` requires a corresponding `COPY` line in `docker/Dockerfile`.
+- Docker uses `COPY dist/` — no per-file Dockerfile updates needed. New modules that the kiosk viewer fetches as raw text must be added to the `KIOSK_MODULES` list in `vite.config.ts`.
 - The deps pattern is already established — new modules should follow it rather than importing main.js.
-- No build step changes needed — all modules are ES modules loaded via import.

@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "identifier": "com.splat-mesh-viewer.app",
   "build": {
-    "beforeDevCommand": "npx serve src -p 8080",
+    "beforeDevCommand": "npx vite --port 8080",
     "devUrl": "http://localhost:8080/?kiosk=true&theme=editorial",
-    "beforeBuildCommand": "node scripts/vendor-deps.mjs",
+    "beforeBuildCommand": "npx vite build",
     "frontendDist": "../dist"
   },
   "app": {

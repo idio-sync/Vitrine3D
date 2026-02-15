@@ -223,13 +223,13 @@ async function build({ archivePath, productName, iconPath }) {
         conf.productName = productName;
         conf.app.windows[0].title = productName;
         conf.app.windows[0].url = `index.html?kiosk=true&theme=editorial&archive=${archiveFilename}`;
-        // Skip beforeBuildCommand since we run vendor-deps ourselves
+        // Skip beforeBuildCommand since we run vite build ourselves
         conf.build.beforeBuildCommand = '';
         writeFileSync(TAURI_CONF, JSON.stringify(conf, null, 2) + '\n', 'utf8');
 
-        // Step 3: Run vendor-deps
-        console.log('[3/7] Running vendor-deps (downloading CDN dependencies)...');
-        execSync('node scripts/vendor-deps.mjs', { cwd: ROOT, stdio: 'inherit' });
+        // Step 3: Run Vite build
+        console.log('[3/7] Building frontend with Vite...');
+        execSync('npx vite build', { cwd: ROOT, stdio: 'inherit' });
 
         // Step 4: Copy archive into dist/
         console.log(`[4/7] Copying archive to dist/${archiveFilename}...`);

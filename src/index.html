@@ -10,7 +10,7 @@
     <!-- Note: 'unsafe-eval' is required for Spark.js WASM and PLY parser -->
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'self';
-        script-src 'self' https://esm.sh https://*.esm.sh https://sparkjs.dev 'sha256-/NZOJCG03eCcGHQBnx3BTDU/mNycnBQwr+naJ7szBD4=' 'sha256-IuiN2EQs1vVueT6Fjp0BBkqVHfALDvUH0p96VVC1GT4=' 'unsafe-eval';
+        script-src 'self' 'unsafe-inline' 'unsafe-eval';
         style-src 'self' 'unsafe-inline';
         img-src 'self' blob: data:;
         connect-src 'self' https: blob: data:;
@@ -1391,24 +1391,6 @@
         </div>
     </div>
 
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://esm.sh/three@0.170.0",
-            "three/addons/controls/OrbitControls.js": "https://esm.sh/three@0.170.0/examples/jsm/controls/OrbitControls.js?external=three",
-            "three/addons/controls/TransformControls.js": "https://esm.sh/three@0.170.0/examples/jsm/controls/TransformControls.js?external=three",
-            "three/addons/loaders/GLTFLoader.js": "https://esm.sh/three@0.170.0/examples/jsm/loaders/GLTFLoader.js?external=three",
-            "three/addons/loaders/OBJLoader.js": "https://esm.sh/three@0.170.0/examples/jsm/loaders/OBJLoader.js?external=three",
-            "three/addons/loaders/MTLLoader.js": "https://esm.sh/three@0.170.0/examples/jsm/loaders/MTLLoader.js?external=three",
-            "three/addons/loaders/RGBELoader.js": "https://esm.sh/three@0.170.0/examples/jsm/loaders/RGBELoader.js?external=three",
-            "three/addons/loaders/STLLoader.js": "https://esm.sh/three@0.170.0/examples/jsm/loaders/STLLoader.js?external=three",
-            "@sparkjsdev/spark": "https://sparkjs.dev/releases/spark/0.1.10/spark.module.js",
-            "fflate": "https://esm.sh/fflate@0.8.2",
-            "three-e57-loader": "https://esm.sh/three-e57-loader@1.2.0?external=three",
-            "web-e57": "https://esm.sh/web-e57@1.2.0"
-        }
-    }
-    </script>
     <script src="pre-module.js"></script>
     <script type="module" src="main.js"></script>
 </body>

@@ -5,14 +5,15 @@
   "main": "src/main.js",
   "type": "module",
   "scripts": {
-    "start": "npx http-server src -p 8080 --cors -c-1",
-    "dev": "npx http-server src -p 8080 --cors -c-1",
+    "dev": "vite",
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "npx tauri dev",
     "tauri:build": "npx tauri build",
-    "vendor": "node scripts/vendor-deps.mjs",
     "branded": "node scripts/build-branded.mjs",
-    "docker:build": "docker build -f docker/Dockerfile -t splat-mesh-viewer .",
+    "docker:build": "vite build && docker build -f docker/Dockerfile -t splat-mesh-viewer .",
     "docker:run": "docker run -p 8080:80 splat-mesh-viewer"
   },
   "keywords": [
@@ -26,6 +27,14 @@
   "license": "MIT",
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.0",
-    "serve": "^14.2.0"
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "@sparkjsdev/spark": "^0.1.10",
+    "fflate": "^0.8.2",
+    "three": "^0.170.0",
+    "three-e57-loader": "^1.2.0",
+    "web-e57": "^1.2.0"
   }
 }
