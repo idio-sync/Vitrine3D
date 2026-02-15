@@ -619,12 +619,14 @@ async function showClickGate(archiveUrl) {
         if (titleEl && title) titleEl.textContent = title;
 
         // Extract thumbnail for poster
+        let posterBlobUrl = null;
         const thumbEntry = loader.getThumbnailEntry();
         if (thumbEntry) {
             const thumbData = await loader.extractFile(thumbEntry.file_name);
             if (thumbData) {
+                posterBlobUrl = thumbData.url;
                 const posterImg = document.getElementById('kiosk-gate-poster');
-                if (posterImg) posterImg.src = thumbData.url;
+                if (posterImg) posterImg.src = posterBlobUrl;
             }
         }
 
@@ -636,6 +638,11 @@ async function showClickGate(archiveUrl) {
         if (contentInfo.hasPointcloud) types.push('Point Cloud');
         if (typesEl && types.length) typesEl.textContent = types.join(' + ');
 
+        // Remove poster blob URL from loader's tracked URLs before dispose
+        // so it isn't revoked before the <img> finishes loading
+        if (posterBlobUrl) {
+            loader.blobUrls = loader.blobUrls.filter(u => u !== posterBlobUrl);
+        }
         loader.dispose();
     } catch (e) {
         log.warn('Could not extract poster via Range requests:', e.message);
