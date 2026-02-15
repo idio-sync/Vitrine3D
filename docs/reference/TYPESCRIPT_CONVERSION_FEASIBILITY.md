@@ -2,13 +2,13 @@
 
 **Date:** 2026-02-06 (original), **Updated:** 2026-02-15
 **Scope:** Full assessment of converting simple-splat-mesh-viewer from JavaScript to TypeScript
-**Codebase:** ~20,000 lines across 30 source files (19 `.js` + 10 `.ts` modules + shared types + tests)
+**Codebase:** ~20,000 lines across 30 source files (14 `.js` + 15 `.ts` modules + shared types + tests)
 
 ---
 
 ## Executive Summary
 
-Converting this project to TypeScript is **feasible, in progress, and recommended to continue**. The original assessment identified the CDN import map architecture as the primary blocker — that has been fully resolved. Vite is in place, TypeScript is configured, shared types exist, and 10 modules are already `.ts` (Phases 0-1 complete). The remaining work is converting 16 `.js` modules incrementally (Phases 2-4).
+Converting this project to TypeScript is **feasible, in progress, and recommended to continue**. The original assessment identified the CDN import map architecture as the primary blocker — that has been fully resolved. Vite is in place, TypeScript is configured, shared types exist, and 15 modules are already `.ts` (Phases 0-1 complete, Phase 2 in progress). The remaining work is converting 11 `.js` modules incrementally (Phases 2-4).
 
 ### Feasibility Rating: **Very High** (9/10)
 
@@ -33,7 +33,8 @@ Converting this project to TypeScript is **feasible, in progress, and recommende
 | Phase 1 foundation conversions | **Done** — `constants`, `logger`, `asset-store`, `quality-tier`, `fly-controls`, `utilities` |
 | Declaration stubs | **Done** — `spark.d.ts`, `three-e57-loader.d.ts`, `web-e57.d.ts` |
 | `Transform`, `Annotation` interfaces | **Done** — added to `src/types.ts` |
-| Remaining 16 `.js` modules (Phase 2-4) | **Not started** |
+| Phase 2 batch 1 conversions | **Done** — `screenshot-manager`, `transform-controller`, `theme-loader`, `tauri-bridge`, `annotation-controller` |
+| Remaining 11 `.js` modules (Phase 2-4) | **Not started** |
 | `@types/three` installation | **Not started** (install at start of Phase 2) |
 | `strict: true` | **Not started** |
 
@@ -65,6 +66,11 @@ Converting this project to TypeScript is **feasible, in progress, and recommende
 | `modules/quality-tier.ts` | 90 | Phase 1 — SD/HD detection |
 | `modules/fly-controls.ts` | 236 | Phase 1 — simple class with Three.js types |
 | `modules/utilities.ts` | 677 | Phase 1 — utility functions |
+| `modules/screenshot-manager.ts` | 153 | Phase 2 — screenshot capture/list |
+| `modules/transform-controller.ts` | 190 | Phase 2 — gizmo orchestration |
+| `modules/theme-loader.ts` | 203 | Phase 2 — CSS/layout loading |
+| `modules/tauri-bridge.ts` | 208 | Phase 2 — Tauri feature detection |
+| `modules/annotation-controller.ts` | 417 | Phase 2 — annotation UI orchestration |
 
 **Remaining JavaScript (to convert):**
 
@@ -82,11 +88,6 @@ Converting this project to TypeScript is **feasible, in progress, and recommende
 | `modules/annotation-system.js` | 655 | Medium | Easy — well-typed JSDoc, clean class |
 | `modules/share-dialog.js` | 543 | Medium | Easy — URL parameter serialization |
 | `modules/kiosk-viewer.js` | 456 | Medium | Medium — generates HTML strings |
-| `modules/annotation-controller.js` | 417 | Medium | Easy — annotation UI orchestration |
-| `modules/tauri-bridge.js` | 208 | Low | Easy — Tauri feature detection |
-| `modules/theme-loader.js` | 203 | Low | Easy — CSS/layout loading |
-| `modules/transform-controller.js` | 190 | Low | Easy — gizmo orchestration |
-| `modules/screenshot-manager.js` | 153 | Low | Easy — screenshot capture/list |
 | `config.js` | 208 | Low | Special — IIFE, must remain JS (see Section 3) |
 | `pre-module.js` | 15 | Low | Trivial |
 
@@ -331,25 +332,25 @@ Also completed in this phase:
 - [x] Created `src/types/spark.d.ts`, `src/types/three-e57-loader.d.ts`, `src/types/web-e57.d.ts` declaration stubs
 - [x] Added `Transform`, `Annotation` interfaces to `src/types.ts`
 
-### Phase 2 — Module Conversion (Medium-Risk Files)
+### Phase 2 — Module Conversion (Medium-Risk Files) — **IN PROGRESS**
 
 Convert standalone modules with clean APIs and good JSDoc:
 
 | File | Lines | Approach |
 |------|-------|----------|
+| ~~`transform-controller.js`~~ → `transform-controller.ts` | 190 | Small, gizmo orchestration |
+| ~~`screenshot-manager.js`~~ → `screenshot-manager.ts` | 153 | Small, self-contained |
+| ~~`theme-loader.js`~~ → `theme-loader.ts` | 203 | Small, already tested |
+| ~~`tauri-bridge.js`~~ → `tauri-bridge.ts` | 208 | Feature detection module |
+| ~~`annotation-controller.js`~~ → `annotation-controller.ts` | 417 | Annotation UI orchestration |
 | `scene-manager.js` → `scene-manager.ts` | 836 | Three.js class; benefits most from `@types/three` |
 | `ui-controller.js` → `ui-controller.ts` | 683 | DOM wrappers, typed event handlers |
 | `alignment.js` → `alignment.ts` | 939 | Algorithmic, clear I/O types |
 | `archive-loader.js` → `archive-loader.ts` | 908 | Well-documented, good JSDoc |
 | `annotation-system.js` → `annotation-system.ts` | 655 | Clean class with JSDoc `@typedef` |
 | `share-dialog.js` → `share-dialog.ts` | 543 | URL parameter serialization |
-| `transform-controller.js` → `transform-controller.ts` | 190 | Small, gizmo orchestration |
-| `screenshot-manager.js` → `screenshot-manager.ts` | 153 | Small, self-contained |
-| `theme-loader.js` → `theme-loader.ts` | 203 | Small, already tested |
-| `tauri-bridge.js` → `tauri-bridge.ts` | 208 | Feature detection module |
-| `annotation-controller.js` → `annotation-controller.ts` | 417 | Annotation UI orchestration |
 
-**`@types/three` should be installed at the start of Phase 2**, since `scene-manager.ts` and `alignment.ts` will benefit immediately. Fix type errors as each module is converted.
+**`@types/three` should be installed before converting the remaining Phase 2 modules**, since `scene-manager.ts` and `alignment.ts` will benefit immediately. Fix type errors as each module is converted.
 
 ### Phase 3 — Complex Module Conversion (Higher-Risk Files)
 
@@ -407,12 +408,12 @@ Convert standalone modules with clean APIs and good JSDoc:
 | 0 — Build pipeline | Config files only | **DONE** | — |
 | 0.5 — Quality infrastructure | Types + linter + tests | **DONE** | — |
 | 1 — Foundation | 6 files + declaration stubs | **DONE** | Low |
-| 2 — Modules | 11 files + `@types/three` | Not started | Medium |
+| 2 — Modules | 11 files + `@types/three` | **In progress** (5/11 done) | Medium |
 | 3 — Complex modules | 5 files | Not started | Medium-High |
 | 4 — Main + strict | 1-2 files + strict audit | Not started | High |
 
-**Remaining files to convert:** 16 `.js` modules + `main.js` + `config.js` (excluding `pre-module.js`)
-**Already TypeScript:** 10 modules + shared types (11 files, ~3,575 lines)
+**Remaining files to convert:** 11 `.js` modules + `main.js` + `config.js` (excluding `pre-module.js`)
+**Already TypeScript:** 15 modules + shared types (16 files, ~4,746 lines)
 **Additional type definitions needed:** ~10 interfaces (ArchiveManifest, ProjectMetadata, and module-specific types added during conversion)
 
 ---
@@ -484,14 +485,14 @@ GitHub Actions workflow already includes install, build, and Docker steps. Add `
 5. **Catches real bugs** — common issues like passing `null` where `Object3D` is expected, or misspelling metadata field names, will be caught before runtime
 6. **Future-proofing** — TypeScript makes onboarding new developers significantly faster
 7. **Aligns with code review findings** — the existing CODE_REVIEW.md identifies "Missing Type Safety" as HIGH priority item 1.1
-8. **Proven feasible** — 4 modules already converted successfully with zero runtime regressions
+8. **Proven feasible** — 15 modules already converted successfully with zero runtime regressions
 
 ---
 
 ## 10. Conclusion
 
-This project is **actively being converted** to TypeScript with strong results so far. The original blockers (no bundler, CDN import map, no tests) have all been resolved. The hybrid `.js`/`.ts` approach is proven — 10 modules and shared types are already TypeScript, interoperating seamlessly with the remaining JavaScript.
+This project is **actively being converted** to TypeScript with strong results so far. The original blockers (no bundler, CDN import map, no tests) have all been resolved. The hybrid `.js`/`.ts` approach is proven — 15 modules and shared types are already TypeScript, interoperating seamlessly with the remaining JavaScript.
 
-The recommended next step is **Phase 2** — converting 11 medium-complexity modules (`scene-manager`, `ui-controller`, `alignment`, `archive-loader`, `annotation-system`, `share-dialog`, `transform-controller`, `screenshot-manager`, `theme-loader`, `tauri-bridge`, `annotation-controller`) and installing `@types/three`. Start with the smallest files (`transform-controller`, `screenshot-manager`, `theme-loader`, `tauri-bridge`) to build momentum, then tackle the Three.js-heavy modules that benefit most from `@types/three`.
+The recommended next step is **completing Phase 2** — converting the remaining 6 medium-complexity modules (`scene-manager`, `ui-controller`, `alignment`, `archive-loader`, `annotation-system`, `share-dialog`) and installing `@types/three`. The Three.js-heavy modules (`scene-manager`, `alignment`) will benefit most from `@types/three`.
 
-**Key change from original assessment:** The risk profile has dropped significantly. What was originally rated Low-Medium risk with a "requires bundler" caveat is now Low risk with infrastructure fully in place, Phase 1 complete, and a proven track record of 10 successful module conversions.
+**Key change from original assessment:** The risk profile has dropped significantly. What was originally rated Low-Medium risk with a "requires bundler" caveat is now Low risk with infrastructure fully in place, Phase 1 complete, Phase 2 half done, and a proven track record of 15 successful module conversions.
