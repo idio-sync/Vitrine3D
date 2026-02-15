@@ -18,10 +18,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install dependencies and build
-        run: npm ci && npm run build
+        run: npm install && npm run build
 
       - name: Login to Docker Hub
         id: login_docker_hub
