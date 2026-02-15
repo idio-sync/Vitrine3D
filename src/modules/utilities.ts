@@ -23,25 +23,30 @@ const NotificationType = {
     WARNING: 'warning',
     SUCCESS: 'success',
     INFO: 'info'
-};
+} as const;
+
+type NotificationTypeValue = typeof NotificationType[keyof typeof NotificationType];
+
+interface NotificationOptions {
+    duration?: number;
+    log?: boolean;
+}
 
 /**
  * Centralized error and notification handler.
  * Provides user-friendly notifications instead of alert() dialogs.
  */
 class NotificationManager {
-    constructor() {
-        this.container = null;
-        this.queue = [];
-        this.maxVisible = 3;
-        this.defaultDuration = 5000; // 5 seconds
-        this.initialized = false;
-    }
+    container: HTMLDivElement | null = null;
+    queue: HTMLDivElement[] = [];
+    maxVisible: number = 3;
+    defaultDuration: number = 5000; // 5 seconds
+    initialized: boolean = false;
 
     /**
      * Initialize the notification container in the DOM
      */
-    init() {
+    init(): void {
         if (this.initialized) return;
 
         // Create notification container
@@ -70,7 +75,7 @@ class NotificationManager {
      * @param {number} options.duration - How long to show (ms), 0 for persistent
      * @param {boolean} options.log - Whether to also log to console (default: true)
      */
-    show(message, type = NotificationType.INFO, options = {}) {
+    show(message: string, type: NotificationTypeValue = NotificationType.INFO, options: NotificationOptions = {}): HTMLDivElement {
         const { duration = this.defaultDuration, log = true } = options;
 
         // Ensure initialized
@@ -105,7 +110,7 @@ class NotificationManager {
         `;
 
         // Type-specific styling
-        const colors = {
+        const colors: Record<string, { bg: string; border: string; icon: string; textColor?: string }> = {
             error: { bg: '#dc3545', border: '#c82333', icon: '\u2716' },
             warning: { bg: '#ffc107', border: '#e0a800', icon: '\u26A0', textColor: '#000' },
             success: { bg: '#28a745', border: '#218838', icon: '\u2714' },
@@ -150,7 +155,7 @@ class NotificationManager {
         notification.appendChild(closeBtn);
 
         // Add to container
-        this.container.appendChild(notification);
+        this.container!.appendChild(notification);
 
         // Auto-remove after duration (if not persistent)
         if (duration > 0) {
@@ -164,7 +169,7 @@ class NotificationManager {
      * Remove a notification
      * @param {HTMLElement} notification - The notification element to remove
      */
-    remove(notification) {
+    remove(notification: HTMLDivElement): void {
         if (!notification || !notification.parentNode) return;
 
         notification.style.animation = 'slideOut 0.3s ease-in forwards';
@@ -180,7 +185,7 @@ class NotificationManager {
      * @param {string} message - Error message
      * @param {Error} error - Optional error object for logging
      */
-    error(message, error = null) {
+    error(message: string, error: Error | null = null): HTMLDivElement {
         if (error) {
             console.error('[Error]', message, error);
         }
@@ -191,7 +196,7 @@ class NotificationManager {
      * Show a warning notification
      * @param {string} message - Warning message
      */
-    warning(message) {
+    warning(message: string): HTMLDivElement {
         return this.show(message, NotificationType.WARNING, { duration: 6000 });
     }
 
@@ -199,7 +204,7 @@ class NotificationManager {
      * Show a success notification
      * @param {string} message - Success message
      */
-    success(message) {
+    success(message: string): HTMLDivElement {
         return this.show(message, NotificationType.SUCCESS, { duration: 4000 });
     }
 
@@ -207,7 +212,7 @@ class NotificationManager {
      * Show an info notification
      * @param {string} message - Info message
      */
-    info(message) {
+    info(message: string): HTMLDivElement {
         return this.show(message, NotificationType.INFO);
     }
 }
@@ -245,11 +250,27 @@ const notify = new NotificationManager();
 // MESH PROCESSING UTILITIES
 // =============================================================================
 
+interface ConvertToStandardMaterialOptions {
+    preserveTextures?: boolean;
+    disposeOld?: boolean;
+}
+
+interface CreateDefaultMaterialOptions {
+    color?: any; // THREE.Color | number
+    map?: any; // THREE.Texture | null
+}
+
+interface ProcessMeshMaterialsOptions {
+    upgradeBasicMaterials?: boolean;
+    forceDefaultMaterial?: boolean;
+    preserveTextures?: boolean;
+}
+
 /**
  * Ensures a mesh has computed vertex normals for proper lighting.
  * @param {THREE.Mesh} mesh - The mesh to process
  */
-function ensureMeshNormals(mesh) {
+function ensureMeshNormals(mesh: any): void { // THREE.Mesh
     if (mesh.geometry && !mesh.geometry.attributes.normal) {
         mesh.geometry.computeVertexNormals();
     }
@@ -265,7 +286,7 @@ function ensureMeshNormals(mesh) {
  * @param {boolean} options.disposeOld - Whether to dispose the old material (default: true)
  * @returns {THREE.MeshStandardMaterial} - The converted or original material
  */
-function convertToStandardMaterial(material, options = {}) {
+function convertToStandardMaterial(material: any, options: ConvertToStandardMaterialOptions = {}): any { // THREE.Material → THREE.MeshStandardMaterial
     const { preserveTextures = true, disposeOld = true } = options;
 
     // Only convert non-PBR materials
@@ -304,7 +325,7 @@ function convertToStandardMaterial(material, options = {}) {
  * @param {THREE.Texture} options.map - Diffuse texture map
  * @returns {THREE.MeshStandardMaterial}
  */
-function createDefaultMaterial(options = {}) {
+function createDefaultMaterial(options: CreateDefaultMaterialOptions = {}): any { // THREE.MeshStandardMaterial
     const { color = COLORS.DEFAULT_MATERIAL, map = null } = options;
 
     return new THREE.MeshStandardMaterial({
@@ -325,14 +346,14 @@ function createDefaultMaterial(options = {}) {
  * @param {boolean} options.forceDefaultMaterial - Replace all materials with default (default: false)
  * @param {boolean} options.preserveTextures - Keep texture maps when converting (default: true)
  */
-function processMeshMaterials(object, options = {}) {
+function processMeshMaterials(object: any, options: ProcessMeshMaterialsOptions = {}): void { // THREE.Object3D
     const {
         upgradeBasicMaterials = true,
         forceDefaultMaterial = false,
         preserveTextures = true
     } = options;
 
-    object.traverse((child) => {
+    object.traverse((child: any) => {
         if (!child.isMesh) return;
 
         // Ensure normals exist for proper lighting
@@ -363,10 +384,10 @@ function processMeshMaterials(object, options = {}) {
  * @param {THREE.Object3D} object - The 3D object to analyze
  * @returns {number} - Total face count
  */
-function computeMeshFaceCount(object) {
+function computeMeshFaceCount(object: any): number { // THREE.Object3D
     let faceCount = 0;
 
-    object.traverse((child) => {
+    object.traverse((child: any) => {
         if (child.isMesh && child.geometry) {
             const geo = child.geometry;
             if (geo.index) {
@@ -386,10 +407,10 @@ function computeMeshFaceCount(object) {
  * @param {THREE.Object3D} object - The 3D object to analyze
  * @returns {number} - Total vertex count
  */
-function computeMeshVertexCount(object) {
+function computeMeshVertexCount(object: any): number { // THREE.Object3D
     let vertexCount = 0;
 
-    object.traverse((child) => {
+    object.traverse((child: any) => {
         if (child.isMesh && child.geometry && child.geometry.attributes.position) {
             vertexCount += child.geometry.attributes.position.count;
         }
@@ -404,14 +425,14 @@ function computeMeshVertexCount(object) {
  *
  * @param {THREE.Object3D} object - The object to dispose
  */
-function disposeObject(object) {
-    object.traverse((child) => {
+function disposeObject(object: any): void { // THREE.Object3D
+    object.traverse((child: any) => {
         if (child.geometry) {
             child.geometry.dispose();
         }
         if (child.material) {
             if (Array.isArray(child.material)) {
-                child.material.forEach(m => {
+                child.material.forEach((m: any) => {
                     if (m.dispose) m.dispose();
                 });
             } else if (child.material.dispose) {
@@ -433,7 +454,7 @@ function disposeObject(object) {
  * @param {Function} onProgress - Callback with (receivedBytes, totalBytes). totalBytes may be 0 if unknown.
  * @returns {Promise<Blob>} The fetched data as a Blob
  */
-async function fetchWithProgress(url, onProgress = null) {
+async function fetchWithProgress(url: string, onProgress: ((received: number, total: number) => void) | null = null): Promise<Blob> {
     const response = await fetch(url);
     if (!response.ok) {
         throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
@@ -449,20 +470,20 @@ async function fetchWithProgress(url, onProgress = null) {
     }
 
     // Stream the response and track progress
-    const reader = response.body.getReader();
-    const chunks = [];
+    const reader = response.body!.getReader();
+    const chunks: Uint8Array[] = [];
     let receivedLength = 0;
 
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        chunks.push(new Uint8Array(value));
+        chunks.push(value);
         receivedLength += value.length;
         onProgress(receivedLength, contentLength);
     }
 
     // Combine chunks into a single Blob
-    return new Blob(chunks);
+    return new Blob(chunks as BlobPart[]);
 }
 
 // =============================================================================
@@ -474,7 +495,7 @@ async function fetchWithProgress(url, onProgress = null) {
  * @param {string} text - Text to escape
  * @returns {string} Escaped text
  */
-function escapeHtml(text) {
+function escapeHtml(text: string): string {
     return text
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -488,7 +509,7 @@ function escapeHtml(text) {
  * @param {string} text - Text to parse
  * @returns {string} HTML string
  */
-function parseInlineMarkdown(text) {
+function parseInlineMarkdown(text: string): string {
     let html = escapeHtml(text);
 
     // Images: ![alt](url) - must come before links
@@ -531,13 +552,13 @@ function parseInlineMarkdown(text) {
  * @param {string} text - Markdown text to parse
  * @returns {string} HTML string
  */
-function parseMarkdown(text) {
+function parseMarkdown(text: string): string {
     if (!text) return '';
 
     const lines = text.split('\n');
-    const result = [];
+    const result: string[] = [];
     let inList = false;
-    let listType = null; // 'ul' or 'ol'
+    let listType: 'ul' | 'ol' | null = null;
 
     for (let i = 0; i < lines.length; i++) {
         let line = lines[i];
@@ -626,7 +647,7 @@ function parseMarkdown(text) {
  * @param {Map} imageAssets - Map of asset path → { blob, url, name }
  * @returns {string} Text with asset: refs replaced by blob URLs
  */
-function resolveAssetRefs(text, imageAssets) {
+function resolveAssetRefs(text: string, imageAssets: Map<string, { blob: Blob; url: string; name: string }>): string {
     if (!text || !imageAssets || imageAssets.size === 0) return text;
     return text.replace(/asset:(images\/[^\s)"']+)/g, (match, path) => {
         const asset = imageAssets.get(path);
@@ -639,7 +660,7 @@ function resolveAssetRefs(text, imageAssets) {
  * @param {Blob} blob - The data to download
  * @param {string} filename - Suggested filename for the download
  */
-function downloadBlob(blob, filename) {
+function downloadBlob(blob: Blob, filename: string): void {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

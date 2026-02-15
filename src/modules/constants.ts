@@ -14,7 +14,7 @@ export const CAMERA = {
     NEAR: 0.1,                        // Near clipping plane
     FAR: 1000,                        // Far clipping plane
     INITIAL_POSITION: { x: 0, y: 1, z: 3 }  // Starting camera position
-};
+} as const;
 
 // =============================================================================
 // ORBIT CONTROLS
@@ -25,7 +25,7 @@ export const ORBIT_CONTROLS = {
     MIN_DISTANCE: 0.1,                // Minimum zoom distance
     MAX_DISTANCE: 100,                // Maximum zoom distance
     AUTO_ROTATE_SPEED: 2.0            // ~30s per revolution at 60fps (matches Sketchfab default)
-};
+} as const;
 
 // =============================================================================
 // RENDERER SETTINGS
@@ -33,7 +33,7 @@ export const ORBIT_CONTROLS = {
 
 export const RENDERER = {
     MAX_PIXEL_RATIO: 2                // Cap pixel ratio to prevent performance issues on high-DPI displays
-};
+} as const;
 
 // =============================================================================
 // LIGHTING CONFIGURATION
@@ -59,7 +59,7 @@ export const LIGHTING = {
         INTENSITY: 0.5,
         POSITION: { x: -5, y: 3, z: -5 }
     }
-};
+} as const;
 
 // =============================================================================
 // GRID HELPER
@@ -71,7 +71,7 @@ export const GRID = {
     COLOR_PRIMARY: 0x4a4a6a,          // Main grid line color
     COLOR_SECONDARY: 0x2a2a3a,        // Secondary grid line color
     Y_OFFSET: -0.01                   // Slight offset to avoid z-fighting
-};
+} as const;
 
 // =============================================================================
 // SCENE COLORS
@@ -91,7 +91,7 @@ export const COLORS = {
         LIGHT_GRAY: '#808080',
         WHITE: '#f0f0f0'
     }
-};
+} as const;
 
 // =============================================================================
 // TIMING / DELAYS (milliseconds)
@@ -115,7 +115,7 @@ export const TIMING = {
 
     // Delay for URL-based model loading
     URL_MODEL_LOAD_DELAY: 500
-};
+} as const;
 
 // =============================================================================
 // MATERIAL DEFAULTS
@@ -125,7 +125,7 @@ export const MATERIAL = {
     DEFAULT_METALNESS: 0.1,
     DEFAULT_ROUGHNESS: 0.8,
     DEFAULT_OPACITY: 1.0
-};
+} as const;
 
 // =============================================================================
 // ASSET STATE (used by lazy archive loading)
@@ -136,7 +136,7 @@ export const ASSET_STATE = {
     LOADING: 'loading',
     LOADED: 'loaded',
     ERROR: 'error'
-};
+} as const;
 
 // =============================================================================
 // QUALITY TIER (SD/HD quality-aware loading)
@@ -146,14 +146,14 @@ export const QUALITY_TIER = {
     SD: 'sd',     // proxy / display-quality assets
     HD: 'hd',     // full resolution assets
     AUTO: 'auto'  // device-detected default
-};
+} as const;
 
 export const DEVICE_THRESHOLDS = {
     LOW_MEMORY_GB: 4,         // navigator.deviceMemory threshold
     LOW_CORES: 4,             // navigator.hardwareConcurrency threshold
     MOBILE_WIDTH_PX: 768,     // screen.width threshold
     LOW_MAX_TEXTURE: 8192     // gl.MAX_TEXTURE_SIZE threshold
-};
+} as const;
 
 // =============================================================================
 // MESH LOD / PROXY THRESHOLDS
@@ -164,7 +164,7 @@ export const MESH_LOD = {
     MOBILE_WARNING_FACES: 300_000,
     // Face count above which a general GPU memory warning is shown (advisory only)
     DESKTOP_WARNING_FACES: 10_000_000
-};
+} as const;
 
 // =============================================================================
 // SHADOW SETTINGS
@@ -179,7 +179,7 @@ export const SHADOWS = {
     NORMAL_BIAS: 0.02,
     GROUND_PLANE_SIZE: 30,            // Shadow catcher plane size
     GROUND_PLANE_Y: -0.02             // Slightly below grid to avoid z-fighting
-};
+} as const;
 
 // =============================================================================
 // ENVIRONMENT MAP PRESETS
@@ -192,5 +192,4 @@ export const ENVIRONMENT = {
         { name: 'Studio', url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr' },
         { name: 'Sunset', url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr' }
     ]
-};
-
+} as const;

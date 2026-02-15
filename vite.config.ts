@@ -1,19 +1,22 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
-import { copyFileSync, cpSync, mkdirSync, existsSync } from 'fs';
+import { copyFileSync, cpSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
+import { transformSync } from 'esbuild';
 
 // Kiosk viewer fetches these as raw text at runtime to inline into offline HTML.
-// They must exist as individual files in dist/modules/ after build.
+// They must exist as individual .js files in dist/modules/ after build.
+// Entries can be .js (copied as-is) or .ts (compiled to JS via esbuild before copying).
 const KIOSK_MODULES = [
-    'constants.js', 'logger.js', 'utilities.js', 'archive-loader.js',
-    'ui-controller.js', 'scene-manager.js', 'fly-controls.js',
+    'constants.ts', 'logger.ts', 'utilities.ts', 'archive-loader.js',
+    'ui-controller.js', 'scene-manager.js', 'fly-controls.ts',
     'annotation-system.js', 'file-handlers.js', 'metadata-manager.js',
-    'theme-loader.js', 'quality-tier.js', 'kiosk-main.js'
+    'theme-loader.js', 'quality-tier.ts', 'kiosk-main.js'
 ];
 
 /**
  * Vite plugin that copies files needed at runtime but not imported at build time.
  * These include kiosk module source files, non-bundled scripts, themes, and raw CSS.
+ * TypeScript files are compiled to JavaScript via esbuild before copying.
  */
 function copyRuntimeAssets() {
     return {
@@ -28,8 +31,21 @@ function copyRuntimeAssets() {
             // Copy kiosk module source files (raw .js for runtime fetching)
             for (const mod of KIOSK_MODULES) {
                 const src = resolve(srcDir, 'modules', mod);
-                const dest = resolve(distDir, 'modules', mod);
-                if (existsSync(src)) {
+                // Output is always .js regardless of source extension
+                const destName = mod.replace(/\.ts$/, '.js');
+                const dest = resolve(distDir, 'modules', destName);
+                if (!existsSync(src)) continue;
+
+                if (mod.endsWith('.ts')) {
+                    // Compile TypeScript to JavaScript using esbuild (strip types only)
+                    const tsSource = readFileSync(src, 'utf-8');
+                    const { code } = transformSync(tsSource, {
+                        loader: 'ts',
+                        target: 'es2020',
+                        format: 'esm',
+                    });
+                    writeFileSync(dest, code);
+                } else {
                     copyFileSync(src, dest);
                 }
             }

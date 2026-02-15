@@ -10,16 +10,23 @@ import { Logger } from './utilities.js';
 
 const log = Logger.getLogger('quality-tier');
 
+// Extend Navigator interface for Chrome-only deviceMemory API
+declare global {
+  interface Navigator {
+    deviceMemory?: number;
+  }
+}
+
 /**
  * Detect device capability tier based on hardware signals.
  * Returns QUALITY_TIER.SD for low-end devices, QUALITY_TIER.HD for capable ones.
  *
  * Scoring: 5 heuristics, each worth 1 point. Score >= 3 = HD.
  *
- * @param {WebGLRenderingContext|WebGL2RenderingContext} [gl] - GL context for GPU queries
- * @returns {string} QUALITY_TIER.SD or QUALITY_TIER.HD
+ * @param gl - GL context for GPU queries
+ * @returns QUALITY_TIER.SD or QUALITY_TIER.HD
  */
-export function detectDeviceTier(gl) {
+export function detectDeviceTier(gl?: WebGLRenderingContext | WebGL2RenderingContext): string {
     let score = 0;
 
     // 1. Device memory (Chrome/Edge only; absent = assume capable)
@@ -69,11 +76,11 @@ export function detectDeviceTier(gl) {
  * Resolve a quality tier value. AUTO is resolved via device detection;
  * SD and HD are returned as-is.
  *
- * @param {string} tier - QUALITY_TIER.AUTO, .SD, or .HD
- * @param {WebGLRenderingContext|WebGL2RenderingContext} [gl]
- * @returns {string} QUALITY_TIER.SD or QUALITY_TIER.HD
+ * @param tier - QUALITY_TIER.AUTO, .SD, or .HD
+ * @param gl - GL context for device detection
+ * @returns QUALITY_TIER.SD or QUALITY_TIER.HD
  */
-export function resolveQualityTier(tier, gl) {
+export function resolveQualityTier(tier: string, gl?: WebGLRenderingContext | WebGL2RenderingContext): string {
     if (tier === QUALITY_TIER.SD || tier === QUALITY_TIER.HD) {
         return tier;
     }
@@ -82,9 +89,9 @@ export function resolveQualityTier(tier, gl) {
 
 /**
  * Check if archive content has any proxies (mesh or splat).
- * @param {Object} contentInfo - from archiveLoader.getContentInfo()
- * @returns {boolean}
+ * @param contentInfo - from archiveLoader.getContentInfo()
+ * @returns true if mesh or scene proxy exists
  */
-export function hasAnyProxy(contentInfo) {
+export function hasAnyProxy(contentInfo: { hasMeshProxy?: boolean; hasSceneProxy?: boolean }): boolean {
     return !!(contentInfo.hasMeshProxy || contentInfo.hasSceneProxy);
 }

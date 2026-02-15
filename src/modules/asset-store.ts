@@ -15,7 +15,25 @@ import { Logger } from './utilities.js';
 
 const log = Logger.getLogger('asset-store');
 
-const store = {
+// More precise type for sourceFiles entries than the simpler AssetStore interface
+interface SourceFileEntry {
+    file: File | null;
+    name: string;
+    size: number;
+    category: string;
+    fromArchive: boolean;
+}
+
+interface LocalAssetStore {
+    splatBlob: Blob | null;
+    meshBlob: Blob | null;
+    proxyMeshBlob: Blob | null;
+    proxySplatBlob: Blob | null;
+    pointcloudBlob: Blob | null;
+    sourceFiles: SourceFileEntry[];
+}
+
+const store: LocalAssetStore = {
     splatBlob: null,
     meshBlob: null,
     proxyMeshBlob: null,
@@ -28,7 +46,7 @@ const store = {
  * Get the asset store singleton.
  * @returns {Object} The mutable store object
  */
-export function getStore() {
+export function getStore(): LocalAssetStore {
     return store;
 }
 
@@ -36,7 +54,7 @@ export function getStore() {
  * Reset all blob references and source files.
  * Useful when loading a new project/archive.
  */
-export function resetBlobs() {
+export function resetBlobs(): void {
     store.splatBlob = null;
     store.meshBlob = null;
     store.proxyMeshBlob = null;

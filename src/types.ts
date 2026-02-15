@@ -78,6 +78,25 @@ export interface UICallbacks {
     updateProgress?: (percent: number, stage?: string) => void;
 }
 
+// ===== 3D Data Types =====
+
+/** 3D position/rotation/scale transform, used in alignment data and archive manifests. */
+export interface Transform {
+    position: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number };
+    scale: number;
+}
+
+/** A 3D annotation placed on a surface via raycasting. */
+export interface Annotation {
+    id: string;
+    title: string;
+    body: string;
+    position: { x: number; y: number; z: number };
+    camera_target: { x: number; y: number; z: number };
+    camera_position: { x: number; y: number; z: number };
+}
+
 // ===== Asset Store =====
 
 export interface AssetStore {

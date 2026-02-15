@@ -23,14 +23,35 @@ const DEFAULTS = {
     speedStep: 1.2,          // Scroll wheel speed change factor
     minSpeed: 0.1,
     maxSpeed: 50.0
-};
+} as const;
 
 export class FlyControls {
+    camera: any;                     // THREE.PerspectiveCamera
+    domElement: HTMLElement;
+    enabled: boolean;
+    moveSpeed: number;
+    lookSpeed: number;
+    keysDown: Set<string>;
+    isRightMouseDown: boolean;
+    euler: any;                      // THREE.Euler
+    moveVector: any;                 // THREE.Vector3
+    lastTime: number;
+
+    // Bound event handlers
+    _onKeyDown: (event: KeyboardEvent) => void;
+    _onKeyUp: (event: KeyboardEvent) => void;
+    _onMouseDown: (event: MouseEvent) => void;
+    _onMouseUp: (event: MouseEvent) => void;
+    _onMouseMove: (event: MouseEvent) => void;
+    _onWheel: (event: WheelEvent) => void;
+    _onContextMenu: (event: Event) => void;
+    _onPointerLockChange: () => void;
+
     /**
      * @param {THREE.Camera} camera - The camera to control
      * @param {HTMLElement} domElement - The canvas/element to listen on
      */
-    constructor(camera, domElement) {
+    constructor(camera: any, domElement: HTMLElement) {
         this.camera = camera;
         this.domElement = domElement;
         this.enabled = false;
@@ -45,20 +66,20 @@ export class FlyControls {
         this.lastTime = performance.now();
 
         // Bind handlers (so we can remove them later)
-        this._onKeyDown = this._onKeyDown.bind(this);
-        this._onKeyUp = this._onKeyUp.bind(this);
-        this._onMouseDown = this._onMouseDown.bind(this);
-        this._onMouseUp = this._onMouseUp.bind(this);
-        this._onMouseMove = this._onMouseMove.bind(this);
-        this._onWheel = this._onWheel.bind(this);
-        this._onContextMenu = this._onContextMenu.bind(this);
-        this._onPointerLockChange = this._onPointerLockChange.bind(this);
+        this._onKeyDown = this._handleKeyDown.bind(this);
+        this._onKeyUp = this._handleKeyUp.bind(this);
+        this._onMouseDown = this._handleMouseDown.bind(this);
+        this._onMouseUp = this._handleMouseUp.bind(this);
+        this._onMouseMove = this._handleMouseMove.bind(this);
+        this._onWheel = this._handleWheel.bind(this);
+        this._onContextMenu = this._handleContextMenu.bind(this);
+        this._onPointerLockChange = this._handlePointerLockChange.bind(this);
     }
 
     /**
      * Enable fly controls — attach event listeners
      */
-    enable() {
+    enable(): void {
         if (this.enabled) return;
         this.enabled = true;
         this.keysDown.clear();
@@ -83,7 +104,7 @@ export class FlyControls {
     /**
      * Disable fly controls — remove event listeners
      */
-    disable() {
+    disable(): void {
         if (!this.enabled) return;
         this.enabled = false;
         this.keysDown.clear();
@@ -110,7 +131,7 @@ export class FlyControls {
      * Call each frame to move the camera based on held keys.
      * @returns {boolean} Whether the camera was moved this frame
      */
-    update() {
+    update(): boolean {
         if (!this.enabled) return false;
 
         const now = performance.now();
@@ -149,7 +170,7 @@ export class FlyControls {
     /**
      * Dispose — clean up all listeners
      */
-    dispose() {
+    dispose(): void {
         this.disable();
     }
 
@@ -157,9 +178,9 @@ export class FlyControls {
     // INTERNAL EVENT HANDLERS
     // =========================================================================
 
-    _onKeyDown(event) {
+    private _handleKeyDown(event: KeyboardEvent): void {
         // Don't capture keys when typing in inputs
-        const tag = event.target.tagName;
+        const tag = (event.target as HTMLElement).tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
         const key = event.key.toLowerCase();
@@ -172,14 +193,14 @@ export class FlyControls {
         if (event.ctrlKey || event.metaKey) this.keysDown.add('ctrl');
     }
 
-    _onKeyUp(event) {
+    private _handleKeyUp(event: KeyboardEvent): void {
         const key = event.key.toLowerCase();
         this.keysDown.delete(key);
         if (!event.shiftKey) this.keysDown.delete('shift');
         if (!event.ctrlKey && !event.metaKey) this.keysDown.delete('ctrl');
     }
 
-    _onMouseDown(event) {
+    private _handleMouseDown(event: MouseEvent): void {
         if (event.button === 2) { // right click
             this.isRightMouseDown = true;
             this.domElement.requestPointerLock();
@@ -187,7 +208,7 @@ export class FlyControls {
         }
     }
 
-    _onMouseUp(event) {
+    private _handleMouseUp(event: MouseEvent): void {
         if (event.button === 2) {
             this.isRightMouseDown = false;
             if (document.pointerLockElement === this.domElement) {
@@ -196,7 +217,7 @@ export class FlyControls {
         }
     }
 
-    _onMouseMove(event) {
+    private _handleMouseMove(event: MouseEvent): void {
         if (!this.isRightMouseDown) return;
 
         const dx = event.movementX || 0;
@@ -211,7 +232,7 @@ export class FlyControls {
         this.camera.quaternion.setFromEuler(this.euler);
     }
 
-    _onWheel(event) {
+    private _handleWheel(event: WheelEvent): void {
         event.preventDefault();
         // Adjust movement speed with scroll
         if (event.deltaY < 0) {
@@ -222,11 +243,11 @@ export class FlyControls {
         log.debug('Fly speed:', this.moveSpeed.toFixed(2));
     }
 
-    _onContextMenu(event) {
+    private _handleContextMenu(event: Event): void {
         event.preventDefault();
     }
 
-    _onPointerLockChange() {
+    private _handlePointerLockChange(): void {
         if (document.pointerLockElement !== this.domElement) {
             this.isRightMouseDown = false;
         }

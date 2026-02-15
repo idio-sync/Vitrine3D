@@ -25,7 +25,22 @@ const LogLevel = {
     WARN: 2,
     ERROR: 3,
     NONE: 4
-};
+} as const;
+
+type LogLevelValue = typeof LogLevel[keyof typeof LogLevel];
+
+/**
+ * Logger instance interface returned by getLogger()
+ */
+export interface LoggerInstance {
+    debug: (...args: unknown[]) => void;
+    info: (...args: unknown[]) => void;
+    warn: (...args: unknown[]) => void;
+    error: (...args: unknown[]) => void;
+    group: (label: string, fn: () => void) => void;
+    time: (label: string) => void;
+    timeEnd: (label: string) => void;
+}
 
 /**
  * Centralized logging system with configurable log levels.
@@ -45,16 +60,16 @@ const LogLevel = {
  *   log.error('Error message', errorObject);
  */
 class Logger {
-    static _level = LogLevel.WARN; // Default to WARN for production
-    static _showTimestamps = false;
-    static _initialized = false;
-    static _loggers = new Map();
+    static _level: LogLevelValue = LogLevel.WARN; // Default to WARN for production
+    static _showTimestamps: boolean = false;
+    static _initialized: boolean = false;
+    static _loggers: Map<string, LoggerInstance> = new Map();
 
     /**
      * Initialize the logging system.
      * Checks URL parameters and sets appropriate log level.
      */
-    static init() {
+    static init(): void {
         if (Logger._initialized) return;
 
         // Check URL parameter for log level override
@@ -98,7 +113,7 @@ class Logger {
 
         // Log the current level if not NONE
         if (Logger._level < LogLevel.NONE) {
-            const levelName = Object.keys(LogLevel).find(k => LogLevel[k] === Logger._level);
+            const levelName = Object.keys(LogLevel).find(k => LogLevel[k as keyof typeof LogLevel] === Logger._level);
             console.info(`[Logger] Log level: ${levelName}${logParam ? ' (from URL)' : isDev ? ' (dev default)' : ' (prod default)'}`);
         }
     }
@@ -107,7 +122,7 @@ class Logger {
      * Set the global log level programmatically
      * @param {number} level - LogLevel value
      */
-    static setLevel(level) {
+    static setLevel(level: LogLevelValue): void {
         Logger._level = level;
     }
 
@@ -116,23 +131,23 @@ class Logger {
      * @param {string} moduleName - Name of the module (used as prefix)
      * @returns {Object} Logger instance with debug, info, warn, error methods
      */
-    static getLogger(moduleName) {
+    static getLogger(moduleName: string): LoggerInstance {
         if (!Logger._initialized) {
             Logger.init();
         }
 
         // Return cached logger if exists
         if (Logger._loggers.has(moduleName)) {
-            return Logger._loggers.get(moduleName);
+            return Logger._loggers.get(moduleName)!;
         }
 
         const prefix = `[${moduleName}]`;
 
-        const logger = {
+        const logger: LoggerInstance = {
             /**
              * Log debug message (most verbose, for development)
              */
-            debug: (...args) => {
+            debug: (...args: unknown[]) => {
                 if (Logger._level <= LogLevel.DEBUG) {
                     const timestamp = Logger._showTimestamps ? `[${new Date().toISOString().substr(11, 12)}] ` : '';
                     console.debug(timestamp + prefix, ...args);
@@ -142,7 +157,7 @@ class Logger {
             /**
              * Log info message (general information)
              */
-            info: (...args) => {
+            info: (...args: unknown[]) => {
                 if (Logger._level <= LogLevel.INFO) {
                     console.info(prefix, ...args);
                 }
@@ -151,7 +166,7 @@ class Logger {
             /**
              * Log warning message
              */
-            warn: (...args) => {
+            warn: (...args: unknown[]) => {
                 if (Logger._level <= LogLevel.WARN) {
                     console.warn(prefix, ...args);
                 }
@@ -160,7 +175,7 @@ class Logger {
             /**
              * Log error message (always shown unless NONE)
              */
-            error: (...args) => {
+            error: (...args: unknown[]) => {
                 if (Logger._level <= LogLevel.ERROR) {
                     console.error(prefix, ...args);
                 }
@@ -171,7 +186,7 @@ class Logger {
              * @param {string} label - Group label
              * @param {Function} fn - Function that logs the group contents
              */
-            group: (label, fn) => {
+            group: (label: string, fn: () => void) => {
                 if (Logger._level <= LogLevel.DEBUG) {
                     console.groupCollapsed(prefix + ' ' + label);
                     fn();
@@ -183,7 +198,7 @@ class Logger {
              * Log timing information
              * @param {string} label - Timer label
              */
-            time: (label) => {
+            time: (label: string) => {
                 if (Logger._level <= LogLevel.DEBUG) {
                     console.time(prefix + ' ' + label);
                 }
@@ -193,7 +208,7 @@ class Logger {
              * End timing and log result
              * @param {string} label - Timer label (must match time() call)
              */
-            timeEnd: (label) => {
+            timeEnd: (label: string) => {
                 if (Logger._level <= LogLevel.DEBUG) {
                     console.timeEnd(prefix + ' ' + label);
                 }
@@ -209,7 +224,7 @@ class Logger {
      * @param {number} level - LogLevel to check
      * @returns {boolean}
      */
-    static isEnabled(level) {
+    static isEnabled(level: LogLevelValue): boolean {
         return Logger._level <= level;
     }
 }
@@ -218,3 +233,4 @@ class Logger {
 Logger.init();
 
 export { Logger, LogLevel };
+export type { LogLevelValue };
