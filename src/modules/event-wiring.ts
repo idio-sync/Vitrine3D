@@ -585,6 +585,12 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         }
     });
 
+    addListener('meta-viewer-bg-override', 'change', (e: Event) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const colorRow = document.getElementById('meta-viewer-bg-color-row');
+        if (colorRow) colorRow.style.display = checked ? '' : 'none';
+    });
+
     addListener('meta-viewer-bg-color', 'input', (e: Event) => {
         const hex = (e.target as HTMLInputElement).value;
         if (sceneRefs.scene) sceneRefs.scene.background = new THREE.Color(hex);

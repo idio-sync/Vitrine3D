@@ -233,7 +233,7 @@ export class ArchiveCreator {
             },
             viewer_settings: {
                 single_sided: true,
-                background_color: "#1a1a2e"
+                background_color: null
             },
             preservation: {
                 format_registry: {

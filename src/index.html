@@ -883,12 +883,15 @@
 
                     <div class="subsection-header" style="margin-top: 20px;">Scene</div>
                     <div class="metadata-field">
-                        <label for="meta-viewer-bg-color">Background Color</label>
-                        <div class="color-input-row">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="meta-viewer-bg-override">
+                            <label for="meta-viewer-bg-override">Override Background Color</label>
+                        </div>
+                        <span class="field-hint">When unchecked, the viewer theme controls the background color.</span>
+                        <div class="color-input-row" id="meta-viewer-bg-color-row" style="margin-top: 6px; display: none;">
                             <input type="color" id="meta-viewer-bg-color" value="#1a1a2e">
                             <span class="color-hex-label" id="meta-viewer-bg-color-hex">#1a1a2e</span>
                         </div>
-                        <span class="field-hint">Default scene background color for the viewer and kiosk mode.</span>
                     </div>
                 </div>
             </div>

@@ -881,7 +881,9 @@ export function collectMetadata() {
         includeIntegrity: document.getElementById('meta-include-integrity')?.checked ?? true,
         viewerSettings: {
             singleSided: document.getElementById('meta-viewer-single-sided')?.checked ?? true,
-            backgroundColor: document.getElementById('meta-viewer-bg-color')?.value || '#1a1a2e'
+            backgroundColor: document.getElementById('meta-viewer-bg-override')?.checked
+                ? (document.getElementById('meta-viewer-bg-color')?.value || '#1a1a2e')
+                : null
         }
     };
 
@@ -1339,8 +1341,17 @@ export function prefillMetadataFromArchive(manifest) {
         const singleSidedEl = document.getElementById('meta-viewer-single-sided');
         if (singleSidedEl) singleSidedEl.checked = manifest.viewer_settings.single_sided ?? true;
 
+        const bgOverrideEl = document.getElementById('meta-viewer-bg-override');
         const bgColorEl = document.getElementById('meta-viewer-bg-color');
-        if (bgColorEl && manifest.viewer_settings.background_color) {
+        const bgColorRow = document.getElementById('meta-viewer-bg-color-row');
+        const hasBgColor = !!manifest.viewer_settings.background_color;
+        if (bgOverrideEl) {
+            bgOverrideEl.checked = hasBgColor;
+        }
+        if (bgColorRow) {
+            bgColorRow.style.display = hasBgColor ? '' : 'none';
+        }
+        if (bgColorEl && hasBgColor) {
             bgColorEl.value = manifest.viewer_settings.background_color;
             const hexLabel = document.getElementById('meta-viewer-bg-color-hex');
             if (hexLabel) hexLabel.textContent = manifest.viewer_settings.background_color;
