@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import { Logger, notify } from './utilities.js';
-import type { AppState, DisplayMode } from '../types.js';
+import type { AppState, DisplayMode } from '@/types.js';
 
 const log = Logger.getLogger('ui-controller');
 
@@ -229,7 +229,7 @@ export function applyControlsVisibility(deps: ControlsPanelDeps, shouldShowOverr
     }
 
     setTimeout(() => {
-        try { if (onWindowResize) onWindowResize(); } catch (e) { /* ignore */ }
+        try { if (onWindowResize) onWindowResize(); } catch { /* ignore */ }
     }, 200);
 }
 

@@ -7,7 +7,7 @@
 
 import { captureScreenshot } from './archive-creator.js';
 import { Logger, notify } from './utilities.js';
-import type { AppState } from '../types.js';
+import type { AppState } from '@/types.js';
 
 const log = Logger.getLogger('screenshot-manager');
 

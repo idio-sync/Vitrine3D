@@ -55,11 +55,8 @@ import {
 } from './modules/metadata-manager.js';
 import {
     loadSplatFromFile as loadSplatFromFileHandler,
-    loadSplatFromUrl as loadSplatFromUrlHandler,
     loadModelFromFile as loadModelFromFileHandler,
-    loadModelFromUrl as loadModelFromUrlHandler,
     loadPointcloudFromFile as loadPointcloudFromFileHandler,
-    loadPointcloudFromUrl as loadPointcloudFromUrlHandler,
     getAssetTypesForMode,
     updateModelOpacity as updateModelOpacityFn,
     updateModelWireframe as updateModelWireframeFn,
@@ -69,7 +66,6 @@ import {
     updateModelMetalness as updateModelMetalnessFn,
     updateModelSpecularF0 as updateModelSpecularF0Fn,
     loadSTLFile as loadSTLFileHandler,
-    loadSTLFromUrlWithDeps as loadSTLFromUrlWithDepsHandler
 } from './modules/file-handlers.js';
 import {
     handleLoadSplatFromUrlPrompt as handleLoadSplatFromUrlPromptCtrl,
@@ -85,9 +81,7 @@ import {
     handleProxySplatFile as handleProxySplatFileCtrl,
     loadSplatFromUrl as loadSplatFromUrlCtrl,
     loadModelFromUrl as loadModelFromUrlCtrl,
-    loadPointcloudFromUrl as loadPointcloudFromUrlCtrl,
-    loadSTLFromUrl as loadSTLFromUrlCtrl,
-    wireNativeFileDialogs as wireNativeFileDialogsCtrl
+    loadPointcloudFromUrl as loadPointcloudFromUrlCtrl
 } from './modules/file-input-handlers.js';
 import {
     initShareDialog,
@@ -1104,10 +1098,6 @@ async function handleSTLFile(event: Event) {
 
 function handleLoadSTLFromUrlPrompt() {
     handleLoadSTLFromUrlPromptCtrl(createFileInputDeps());
-}
-
-async function loadSTLFromUrl(url: string) {
-    return loadSTLFromUrlCtrl(url, createFileInputDeps());
 }
 
 async function handleProxyMeshFile(event: Event) {

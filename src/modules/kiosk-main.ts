@@ -9,7 +9,7 @@
  */
 
 import * as THREE from 'three';
-import type { Annotation, DisplayMode } from '../types.js';
+import type { Annotation, DisplayMode } from '@/types.js';
 import { SceneManager } from './scene-manager.js';
 
 // Local AssetType (not exported from types.ts)

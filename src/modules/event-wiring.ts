@@ -28,7 +28,7 @@ import {
     updatePointcloudOpacity,
     updateModelTextures
 } from './file-handlers.js';
-import type { EventWiringDeps } from '../types.js';
+import type { EventWiringDeps } from '@/types.js';
 
 const log = Logger.getLogger('event-wiring');
 

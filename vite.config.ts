@@ -7,10 +7,10 @@ import { transformSync } from 'esbuild';
 // They must exist as individual .js files in dist/modules/ after build.
 // Entries can be .js (copied as-is) or .ts (compiled to JS via esbuild before copying).
 const KIOSK_MODULES = [
-    'constants.ts', 'logger.ts', 'utilities.ts', 'archive-loader.js',
-    'ui-controller.js', 'scene-manager.js', 'fly-controls.ts',
-    'annotation-system.js', 'file-handlers.js', 'metadata-manager.js',
-    'theme-loader.js', 'quality-tier.ts', 'kiosk-main.ts'
+    'constants.ts', 'logger.ts', 'utilities.ts', 'archive-loader.ts',
+    'ui-controller.ts', 'scene-manager.ts', 'fly-controls.ts',
+    'annotation-system.ts', 'file-handlers.ts', 'metadata-manager.ts',
+    'theme-loader.ts', 'quality-tier.ts', 'kiosk-main.ts'
 ];
 
 /**
@@ -90,6 +90,8 @@ export default defineConfig({
             // Current code uses three/addons/ (from import map).
             // npm three uses three/examples/jsm/. This alias bridges the gap.
             'three/addons/': 'three/examples/jsm/',
+            // Path alias: @/ maps to src/ for cleaner cross-directory imports
+            '@': resolve(__dirname, 'src'),
         },
     },
 

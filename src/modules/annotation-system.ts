@@ -3,7 +3,7 @@
 // Based on the U3DP annotation viewer pattern
 
 import * as THREE from 'three';
-import type { Annotation } from '../types.js';
+import type { Annotation } from '@/types.js';
 
 // TODO: type when @types/three is installed
 type Vector3 = any;

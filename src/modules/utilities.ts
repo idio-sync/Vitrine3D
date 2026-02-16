@@ -9,7 +9,7 @@
 
 import * as THREE from 'three';
 import { COLORS, MATERIAL } from './constants.js';
-import { Logger, LogLevel } from './logger.js';
+import { Logger } from './logger.js';
 
 // =============================================================================
 // ERROR HANDLING & NOTIFICATIONS

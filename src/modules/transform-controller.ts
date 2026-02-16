@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import { Logger } from './utilities.js';
-import type { AppState, SelectedObject, TransformMode } from '../types.js';
+import type { AppState, SelectedObject, TransformMode } from '@/types.js';
 
 const log = Logger.getLogger('transform-controller');
 

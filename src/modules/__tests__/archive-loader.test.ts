@@ -46,7 +46,7 @@ function sanitizeArchiveFilename(filename: string | null | undefined): { safe: b
     }
 
     // Validate characters
-    if (!/^[a-zA-Z0-9_\-\.\/]+$/.test(sanitized)) {
+    if (!/^[a-zA-Z0-9_\-./]+$/.test(sanitized)) {
         return { safe: false, sanitized: '', error: 'Filename contains invalid characters' };
     }
 

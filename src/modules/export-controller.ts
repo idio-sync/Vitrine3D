@@ -9,7 +9,7 @@ import { captureScreenshot } from './archive-creator.js';
 import { Logger, notify } from './utilities.js';
 import { formatFileSize } from './metadata-manager.js';
 import { getStore } from './asset-store.js';
-import type { ExportDeps } from '../types.js';
+import type { ExportDeps } from '@/types.js';
 
 const log = Logger.getLogger('export-controller');
 

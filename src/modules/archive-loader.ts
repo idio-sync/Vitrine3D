@@ -160,7 +160,7 @@ function sanitizeArchiveFilename(filename: string): SanitizationResult {
 
     // Validate remaining characters - allow alphanumeric, underscore, hyphen, dot, forward slash
     // This allows subdirectories within the archive (e.g., "assets/model.glb")
-    if (!/^[a-zA-Z0-9_\-\.\/]+$/.test(sanitized)) {
+    if (!/^[a-zA-Z0-9_\-./]+$/.test(sanitized)) {
         log.warn(' Blocked filename with invalid characters:', filename);
         return { safe: false, sanitized: '', error: 'Filename contains invalid characters' };
     }
@@ -482,7 +482,6 @@ export class ArchiveLoader {
                         }
                         if (localHeaderOffset === 0xFFFFFFFF && eOff + 8 <= fieldSize) {
                             localHeaderOffset = Number(eView.getBigUint64(eOff, true));
-                            eOff += 8;
                         }
                         break;
                     }
@@ -579,7 +578,7 @@ export class ArchiveLoader {
 
         try {
             this.manifest = JSON.parse(manifestText);
-        } catch (e) {
+        } catch {
             throw new Error('Invalid archive: manifest.json is not valid JSON');
         }
 
@@ -626,7 +625,7 @@ export class ArchiveLoader {
     getSceneEntry(): ManifestDataEntry | null {
         const scenes = this.findEntriesByPrefix('scene_');
         // Return the first non-proxy scene entry
-        for (const { key, entry } of scenes) {
+        for (const { entry } of scenes) {
             if (entry.lod !== 'proxy') return entry;
         }
         return scenes.length > 0 ? scenes[0].entry : null;
@@ -638,7 +637,7 @@ export class ArchiveLoader {
     getMeshEntry(): ManifestDataEntry | null {
         const meshes = this.findEntriesByPrefix('mesh_');
         // Return the first non-proxy mesh entry
-        for (const { key, entry } of meshes) {
+        for (const { entry } of meshes) {
             if (entry.lod !== 'proxy') return entry;
         }
         return meshes.length > 0 ? meshes[0].entry : null;
@@ -649,7 +648,7 @@ export class ArchiveLoader {
      */
     getMeshProxyEntry(): ManifestDataEntry | null {
         const meshes = this.findEntriesByPrefix('mesh_');
-        for (const { key, entry } of meshes) {
+        for (const { entry } of meshes) {
             if (entry.lod === 'proxy') return entry;
         }
         return null;
@@ -667,7 +666,7 @@ export class ArchiveLoader {
      */
     getSceneProxyEntry(): ManifestDataEntry | null {
         const scenes = this.findEntriesByPrefix('scene_');
-        for (const { key, entry } of scenes) {
+        for (const { entry } of scenes) {
             if (entry.lod === 'proxy') return entry;
         }
         return null;

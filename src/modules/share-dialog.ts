@@ -14,7 +14,7 @@
  */
 
 import { Logger } from './utilities.js';
-import type { AppState, Transform } from '../types.js';
+import type { AppState, Transform } from '@/types.js';
 
 const log = Logger.getLogger('ShareDialog');
 

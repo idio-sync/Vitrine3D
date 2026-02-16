@@ -8,7 +8,7 @@
  */
 
 import { Logger } from './utilities.js';
-import type { Annotation } from '../types.js';
+import type { Annotation } from '@/types.js';
 
 const log = Logger.getLogger('annotation-controller');
 

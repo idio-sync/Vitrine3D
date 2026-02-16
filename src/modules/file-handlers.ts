@@ -18,7 +18,7 @@ import { SplatMesh } from '@sparkjsdev/spark';
 import { ArchiveLoader } from './archive-loader.js';
 import { TIMING, ASSET_STATE } from './constants.js';
 import { Logger, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject, fetchWithProgress } from './utilities.js';
-import type { AppState, QualityTier } from '../types.js';
+import type { AppState, QualityTier } from '@/types.js';
 
 // E57Loader is loaded lazily via dynamic import to allow graceful degradation
 // when the three-e57-loader CDN module is unavailable (e.g., offline kiosk viewer).

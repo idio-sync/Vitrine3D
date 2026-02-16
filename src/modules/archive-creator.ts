@@ -4,7 +4,7 @@
 
 import { zip, strToU8, type AsyncZipOptions } from 'fflate';
 import { Logger } from './utilities.js';
-import type { Annotation } from '../types.js';
+import type { Annotation } from '@/types.js';
 
 // Create logger for this module
 const log = Logger.getLogger('archive-creator');

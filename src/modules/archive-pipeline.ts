@@ -22,7 +22,7 @@ import {
     getPrimaryAssetType
 } from './file-handlers.js';
 import { centerModelOnGrid } from './alignment.js';
-import type { ArchivePipelineDeps } from '../types.js';
+import type { ArchivePipelineDeps } from '@/types.js';
 
 const log = Logger.getLogger('archive-pipeline');
 

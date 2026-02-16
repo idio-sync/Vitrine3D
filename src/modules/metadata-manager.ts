@@ -12,7 +12,7 @@
  */
 
 import { Logger, parseMarkdown, resolveAssetRefs } from './utilities.js';
-import type { AppState, Annotation } from '../types.js';
+import type { AppState, Annotation } from '@/types.js';
 
 const log = Logger.getLogger('metadata-manager');
 

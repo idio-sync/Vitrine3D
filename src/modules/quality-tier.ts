@@ -53,7 +53,7 @@ export function detectDeviceTier(gl?: WebGLRenderingContext | WebGL2RenderingCon
             if (maxTex >= DEVICE_THRESHOLDS.LOW_MAX_TEXTURE) {
                 score++;
             }
-        } catch (e) {
+        } catch {
             // If we can't query, assume capable
             score++;
         }
