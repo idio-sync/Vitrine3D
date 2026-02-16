@@ -91,7 +91,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [ ] Support multiple annotation layers that can be toggled independently
 
 ### Rendering & Runtime
-- [ ] Abstract the rendering backend to allow swapping Three.js WebGL for WebGPU when mature
+- [x] Abstract the rendering backend to allow swapping Three.js WebGL for WebGPU when mature
 - [ ] Add file size warnings in the UI for large assets (>100 MB mesh, >500 MB E57)
 - [ ] Cache fetched CDN dependencies (Cache API or IndexedDB) so kiosk exports survive CDN outages
 - [ ] Bundle CDN dependencies as local assets for air-gapped/institutional deployments
