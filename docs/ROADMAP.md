@@ -80,7 +80,8 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 ### Type Safety
 - [x] **Done** — Add shared TypeScript types (`src/types.ts`): `AppState`, `SceneRefs`, deps interfaces with JSDoc `@returns` on factory functions
 - [x] **Done** — TypeScript migration Phases 1–3 complete: 26 of 29 modules converted to `.ts`, hybrid `allowJs: true` setup, `@types/three` installed
-- [ ] Phase 4: Convert `main.js` (final `.js` module) and enable `strict: true`
+- [x] **Done** — Phase 4: Convert `main.js` → `main.ts` (~1,450 lines), extract `source-files-manager.ts` and `file-input-handlers.ts`
+- [ ] Phase 5: Enable `strict: true` and fix resulting type errors
 - [ ] Add comprehensive JSDoc type annotations to any remaining `.js` exported functions
 
 ### Versioning & Collaboration

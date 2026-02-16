@@ -27,35 +27,37 @@ src/
   index.html              Entry point. CSP, all HTML structure (~1100 lines)
   config.js               IIFE (non-module). Parses URL params, sets window.APP_CONFIG
   pre-module.js           Error watchdog. Loaded before ES modules
-  main.js                 App controller / glue layer (~1,680 lines, refactored from ~3,900)
+  main.ts                 App controller / glue layer (~1,450 lines, refactored from ~3,900)
   types.ts                Shared TypeScript types (AppState, SceneRefs, deps interfaces)
   styles.css              All CSS (~2,600 lines)
   modules/
     constants.js          Shared config values (camera, lighting, timing, extensions)
     utilities.js          Logger, notify(), mesh helpers, disposeObject(), fetchWithProgress()
-    logger.js             Standalone Logger class (extracted from utilities.js)
-    scene-manager.js      Three.js scene/camera/renderer/controls/lighting setup
-    ui-controller.js      Loading overlay, display-mode helpers, addListener()
-    file-handlers.js      Asset loading: splat, mesh, point cloud, archive
-    archive-loader.js     ZIP extraction, manifest parsing, filename sanitization
-    archive-creator.js    Archive creation, SHA-256 hashing, screenshot capture
-    archive-pipeline.ts   Archive loading/processing pipeline (extracted from main.js)
+    logger.ts             Standalone Logger class (extracted from utilities)
+    scene-manager.ts      Three.js scene/camera/renderer/controls/lighting setup
+    ui-controller.ts      Loading overlay, display-mode helpers, addListener()
+    file-handlers.ts      Asset loading: splat, mesh, point cloud, archive
+    file-input-handlers.ts File input events, URL prompts, URL loaders, Tauri dialogs
+    archive-loader.ts     ZIP extraction, manifest parsing, filename sanitization
+    archive-creator.ts    Archive creation, SHA-256 hashing, screenshot capture
+    archive-pipeline.ts   Archive loading/processing pipeline (extracted from main.ts)
     export-controller.ts  Archive export, generic viewer download, metadata manifests
     event-wiring.ts       Central UI event binding — setupUIEvents()
-    asset-store.js        ES module singleton for blob references (splat, mesh, pointcloud)
-    screenshot-manager.js Screenshot capture, viewfinder, screenshot list management
-    transform-controller.js Transform gizmo orchestration, object sync, delta tracking
+    asset-store.ts        ES module singleton for blob references (splat, mesh, pointcloud)
+    screenshot-manager.ts Screenshot capture, viewfinder, screenshot list management
+    transform-controller.ts Transform gizmo orchestration, object sync, delta tracking
     url-validation.ts     URL validation for user-entered URLs (extracted, testable)
-    alignment.js          KD-tree, ICP algorithm, auto-align, fit-to-view, alignment I/O
-    annotation-system.js  3D annotation placement via raycasting
-    metadata-manager.js   Metadata sidebar (view/edit/annotations), Dublin Core schema
-    fly-controls.js       WASD + mouse-look first-person camera
-    share-dialog.js       Share link builder with URL parameters
-    quality-tier.js       SD/HD quality detection and switching
-    theme-loader.js       Theme CSS/layout loading for kiosk mode
-    kiosk-viewer.js       Offline viewer generator — fetches CDN deps, base64-inlines them
-    kiosk-main.js         Kiosk mode entry point (embedded into offline HTML)
-    __tests__/            Vitest test suites (url-validation, theme-loader, archive-loader)
+    source-files-manager.ts Source file list UI management for archive exports
+    alignment.ts          KD-tree, ICP algorithm, auto-align, fit-to-view, alignment I/O
+    annotation-system.ts  3D annotation placement via raycasting
+    metadata-manager.ts   Metadata sidebar (view/edit/annotations), Dublin Core schema
+    fly-controls.ts       WASD + mouse-look first-person camera
+    share-dialog.ts       Share link builder with URL parameters
+    quality-tier.ts       SD/HD quality detection and switching
+    theme-loader.ts       Theme CSS/layout loading for kiosk mode
+    kiosk-viewer.ts       Offline viewer generator — fetches CDN deps, base64-inlines them
+    kiosk-main.ts         Kiosk mode entry point (embedded into offline HTML)
+    __tests__/            Vitest test suites (url-validation, theme-loader, archive-loader, utilities, quality-tier)
 docker/
   Dockerfile              nginx:alpine, serves Vite build output from dist/
   nginx.conf              Gzip, CORS, caching, CSP headers
@@ -84,13 +86,13 @@ npm run test:watch         # Vitest in watch mode
 
 1. `index.html` loads `config.js` (regular script) → parses URL params, validates URLs, writes `window.APP_CONFIG`
 2. `pre-module.js` (regular script) → installs error handlers, starts 5s watchdog
-3. `main.js` (ES module) → imports all modules, reads `APP_CONFIG`, calls `init()`
+3. `main.ts` (ES module) → imports all modules, reads `APP_CONFIG`, calls `init()`
 4. `init()` creates `SceneManager`, extracts its internals to module-scope variables, wires up all UI events, calls `loadDefaultFiles()`, starts `animate()` loop
 
 ## Key Patterns to Understand
 
 ### The "deps pattern"
-Modules don't store references to shared objects. Instead, `main.js` builds a fresh dependency object on each call:
+Modules don't store references to shared objects. Instead, `main.ts` builds a fresh dependency object on each call:
 ```js
 /** @returns {import('./types.js').ExportDeps} */
 function createExportDeps() {
@@ -98,17 +100,17 @@ function createExportDeps() {
 }
 downloadArchive(createExportDeps());
 ```
-Deps interfaces for the three largest extracted modules (`ExportDeps`, `ArchivePipelineDeps`, `EventWiringDeps`) are defined in `src/types.ts` with typed `state: AppState` and `Pick<SceneRefs, ...>` for scene references. The main.js factory functions have JSDoc `@returns` annotations pointing to these types.
+Deps interfaces for the largest extracted modules (`ExportDeps`, `ArchivePipelineDeps`, `EventWiringDeps`, `FileInputDeps`) are defined in `src/types.ts` and `src/modules/file-input-handlers.ts`. The main.ts factory functions have typed return annotations.
 
 ### SceneManager extraction
-After creating `SceneManager`, `init()` copies all its properties into loose `let` variables (`scene`, `camera`, `renderer`, etc.) at module scope in `main.js`. These loose variables are what the rest of `main.js` actually uses. Two sources of truth — be aware.
+After creating `SceneManager`, `init()` copies all its properties into loose `let` variables (`scene`, `camera`, `renderer`, etc.) at module scope in `main.ts`. These loose variables are what the rest of `main.ts` actually uses. Two sources of truth — be aware.
 
 ### State management
-A single mutable `const state = { ... }` object in `main.js`. No setters, no events, no validation. Any function can mutate it directly.
+A single mutable `const state: AppState = { ... }` object in `main.ts`. No setters, no events, no validation. Any function can mutate it directly.
 
 ### URL validation
 The core validation logic is in `url-validation.ts` (extracted, testable). It is used by:
-- `main.js` — thin wrapper that passes `window.location` context and `ALLOWED_EXTERNAL_DOMAINS`
+- `main.ts` — thin wrapper that passes `window.location` context and `ALLOWED_EXTERNAL_DOMAINS`
 - `config.js` line 58 — validates URL params at boot (separate implementation)
 - `file-handlers.js` line 35 — validates programmatic URL loads (separate implementation)
 
@@ -120,7 +122,7 @@ Several post-load operations use `setTimeout` with delays from `constants.js` TI
 ## Rules for Making Changes
 
 ### Keep modular
-If adding functionality, investigate if it makes sense to create a module instead of locating new code in main.js before writing code. New modules should be written as TypeScript (`.ts`).
+If adding functionality, investigate if it makes sense to create a module instead of locating new code in main.ts before writing code. All modules are now TypeScript (`.ts`).
 
 ### npm dependencies
 Runtime deps are in `package.json` and resolved by Vite. If adding a new dependency, install via `npm install` and import normally. Vite resolves bare specifiers from `node_modules/`.
@@ -139,8 +141,8 @@ Spark.js WASM needs `'unsafe-eval'` in the CSP `script-src`. Do not remove it or
 
 ### Module conventions
 - Each module creates a logger: `const log = Logger.getLogger('module-name');`
-- Export functions/classes that `main.js` imports and orchestrates
-- Modules receive dependencies via the deps pattern — don't import main.js
+- Export functions/classes that `main.ts` imports and orchestrates
+- Modules receive dependencies via the deps pattern — don't import main.ts
 - Use `notify()` from utilities.js for user-facing messages
 - Use `showLoading()` / `hideLoading()` from ui-controller.js for progress
 
@@ -149,11 +151,11 @@ All DOM structure lives in `index.html`. Modules query elements by ID. If you ne
 
 ## Known Fragile Areas
 
-- **`main.js` is ~1,680 lines** — reduced from ~3,900 via Phase 1-2 refactoring (see `docs/reference/REFACTOR_MAIN.md`). It's now a glue layer: `init()`, state declarations, deps factories, animation loop, and thin delegation wrappers.
-- **Tests cover security-critical code only.** 31 tests across 3 suites: URL validation, theme metadata parsing, archive filename sanitization. No E2E or integration tests yet.
+- **`main.ts` is ~1,450 lines** — reduced from ~3,900 via Phase 1-4 refactoring (see `docs/reference/REFACTOR_MAIN.md`). It's now a fully typed glue layer: `init()`, state declarations, deps factories, animation loop, and thin delegation wrappers.
+- **Tests cover security-critical code only.** 90 tests across 5 suites: URL validation, theme metadata parsing, archive filename sanitization. No E2E or integration tests yet.
 - **Point cloud memory.** No size limits on E57 loading. Large files can OOM the browser.
 - **`annotation-system.js`** is the only module that doesn't use Logger — it has no structured logging.
-- **`@types/three` is NOT installed.** Using `any` with documentation comments for Three.js types. Installing it would surface hundreds of errors in existing `.js` files.
+- **`@types/three` is installed** but many Three.js references still use `any` for compatibility with Spark.js and dynamic patterns.
 
 ## When changes are made
 - Update ROADMAP.MD if changed item is present

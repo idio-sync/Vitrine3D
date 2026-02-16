@@ -2,13 +2,13 @@
 
 **Date:** 2026-02-06 (original), **Updated:** 2026-02-15
 **Scope:** Full assessment of converting simple-splat-mesh-viewer from JavaScript to TypeScript
-**Codebase:** ~20,000 lines across 30 source files (3 `.js` + 26 `.ts` modules + shared types + tests)
+**Codebase:** ~20,000 lines across 33 source files (0 `.js` modules + 31 `.ts` modules + shared types + tests + 2 non-module scripts)
 
 ---
 
 ## Executive Summary
 
-Converting this project to TypeScript is **feasible, nearly complete, and recommended to finish**. The original assessment identified the CDN import map architecture as the primary blocker — that has been fully resolved. Vite is in place, TypeScript is configured, shared types exist, and 26 modules are already `.ts` (Phases 0-3 complete). The remaining work is converting `main.js` and optionally `config.js` (Phase 4).
+The TypeScript migration is **complete**. All 31 modules are now `.ts`. The original assessment identified the CDN import map architecture as the primary blocker — that was fully resolved. Vite is in place, TypeScript is configured, shared types exist, and all modules including `main.ts` are typed (Phases 0-4 complete). The only remaining JS files are `config.js` (non-module IIFE) and `pre-module.js` (error watchdog), both intentionally kept as JS.
 
 ### Feasibility Rating: **Very High** (9/10)
 
@@ -26,9 +26,9 @@ Converting this project to TypeScript is **feasible, nearly complete, and recomm
 | Milestone | Status |
 |-----------|--------|
 | Build pipeline (Vite + TypeScript) | **Done** |
-| Shared types (`src/types.ts`) | **Done** — `AppState`, `SceneRefs`, 3 deps interfaces |
+| Shared types (`src/types.ts`) | **Done** — `AppState`, `SceneRefs`, 4+ deps interfaces |
 | ESLint + Prettier | **Done** |
-| Test framework (Vitest, 31 tests) | **Done** |
+| Test framework (Vitest, 90 tests) | **Done** |
 | 4 modules written as TypeScript | **Done** — `export-controller`, `archive-pipeline`, `event-wiring`, `url-validation` |
 | Phase 1 foundation conversions | **Done** — `constants`, `logger`, `asset-store`, `quality-tier`, `fly-controls`, `utilities` |
 | Declaration stubs | **Done** — `spark.d.ts`, `three-e57-loader.d.ts`, `web-e57.d.ts` |
@@ -38,7 +38,8 @@ Converting this project to TypeScript is **feasible, nearly complete, and recomm
 | Phase 2 batch 3 conversions | **Done** — `scene-manager`, `alignment`, `archive-loader` |
 | `@types/three` installation | **Done** — installed for batch 3 (Three.js-heavy modules) |
 | Phase 3 complex conversions | **Done** — `archive-creator`, `file-handlers`, `metadata-manager`, `kiosk-viewer`, `kiosk-main` |
-| Phase 4 — `main.js` + strict mode | **Not started** |
+| Phase 4 — `main.ts` conversion | **Done** — converted, 2 modules extracted (`source-files-manager`, `file-input-handlers`) |
+| Phase 5 — `strict: true` | Not started |
 
 ---
 
@@ -48,7 +49,7 @@ Converting this project to TypeScript is **feasible, nearly complete, and recomm
 - **Pure ES Modules** with `"type": "module"` in `package.json`
 - **Vite 7.3** — dev server, production bundler, TypeScript compilation
 - **npm dependencies** — bare specifiers resolved from `node_modules/` (CDN import map removed)
-- **Hybrid `.js`/`.ts`** — `allowJs: true`, `checkJs: false`, `strict: false` (only 3 `.js` files remain)
+- **Hybrid `.js`/`.ts`** — `allowJs: true`, `checkJs: false`, `strict: false` (only `config.js` and `pre-module.js` remain as JS — intentionally non-module scripts)
 - All inter-module imports use `.js` extensions (Vite resolves `.ts` from `.js` imports)
 
 ### File Inventory
@@ -84,17 +85,16 @@ Converting this project to TypeScript is **feasible, nearly complete, and recomm
 | `modules/metadata-manager.ts` | 1,800 | Phase 3 — 15 interfaces for Dublin Core metadata |
 | `modules/kiosk-viewer.ts` | 470 | Phase 3 — HTML string generation, typed CDN deps |
 | `modules/kiosk-main.ts` | 3,115 | Phase 3 — KioskState interface, typed Three.js scene |
+| `main.ts` | 1,454 | Phase 4 — fully typed glue layer, deps factories with typed returns |
+| `modules/file-input-handlers.ts` | 407 | Phase 4 — file input events, URL prompts, URL loaders, Tauri dialogs |
+| `modules/source-files-manager.ts` | 63 | Phase 4 — source file list UI management |
 
-**Remaining JavaScript (to convert):**
+**Non-module scripts (intentionally remain JS):**
 
-| File | Lines | Complexity | Type Difficulty |
-|------|-------|-----------|-----------------|
-| `main.js` | 1,681 | High | Hard — orchestrator with state, deps factories, animation loop |
-| `config.js` | 208 | Low | Special — IIFE, must remain JS (see Section 3) |
-| `pre-module.js` | 15 | Low | Trivial |
-
-### Existing JSDoc Coverage (Remaining `.js` Files)
-- `main.js` — has JSDoc `@returns` on deps factories pointing to shared types, but most functions lack annotations
+| File | Lines | Notes |
+|------|-------|-------|
+| `config.js` | 208 | IIFE, must remain JS — runs before module graph (see Section 3) |
+| `pre-module.js` | 15 | Error watchdog — must load before TS/Vite infrastructure |
 
 ---
 
@@ -352,10 +352,18 @@ Convert standalone modules with clean APIs and good JSDoc:
 
 **Phase 3 complete.** All 5 complex modules converted. `src/modules/` is now 100% TypeScript (0 `.js` files remain).
 
-### Phase 4 — Main Module + Strict Mode
+### Phase 4 — Main Module Conversion — **DONE**
 
-- Convert `main.js` → `main.ts` (1,681 lines — reduced from original 3,993 via refactoring)
-- Convert `config.js` → `config.ts` if appropriate (may keep as JS)
+| File | Lines | Approach |
+|------|-------|----------|
+| ~~`main.js`~~ → `main.ts` | 1,454 | Typed state, sceneRefs, deps factories, Three.js module-scope vars |
+| (new) `modules/file-input-handlers.ts` | 407 | Extracted: URL prompts, file inputs, URL loaders, Tauri dialog wiring |
+| (new) `modules/source-files-manager.ts` | 63 | Extracted: source file list UI (add/remove/display) |
+
+**Phase 4 complete.** `main.js` converted to TypeScript with full typing, 20 ESLint warnings fixed (9 dead functions removed, 7 unused imports removed), 2 new modules extracted. All 31 modules in `src/` and `src/modules/` are now TypeScript.
+
+### Phase 5 — Strict Mode (Future)
+
 - Enable `strict: true` globally
 - Resolve all remaining `any` types in `src/types.ts` (replace with proper Three.js types)
 - Add strict null checks
@@ -373,9 +381,9 @@ Convert standalone modules with clean APIs and good JSDoc:
 - **Hybrid `.ts`/`.js` proven** — 26 modules already TypeScript, interop is seamless
 
 ### Medium Risk
-- **`main.js` complexity** — at ~1,680 lines with deps factories and state management, this is still the hardest file to type correctly (though reduced from ~4,000)
+- ~~**`main.js` complexity**~~ — **Resolved:** converted to `main.ts` (~1,454 lines) with full typing
 - **`window` global state** — `window.APP_CONFIG`, `window.notify` need careful typing
-- **Dynamic HTML generation** — `kiosk-viewer.js` and `kiosk-main.js` generate complete HTML pages as strings; template literal types won't help here
+- **Dynamic HTML generation** — `kiosk-viewer.ts` and `kiosk-main.ts` generate complete HTML pages as strings; template literal types won't help here
 - ~~**`@types/three` cascade**~~ — **Resolved:** installed without issues; `checkJs: false` prevented cascade
 
 ### Low-Medium Risk
@@ -384,7 +392,7 @@ Convert standalone modules with clean APIs and good JSDoc:
 
 ### Mitigations
 1. **Run `npx tsc --noEmit` after each file conversion** — catches type errors immediately
-2. **Run `npm test` after each phase** — 31 existing tests verify no regressions
+2. **Run `npm test` after each phase** — 90 existing tests verify no regressions
 3. **Start with `strict: false`** (already in place) — flip to `strict: true` only in Phase 4
 4. **Keep `.js` files working during migration** — Vite handles mixed `.ts`/`.js` imports seamlessly (proven)
 5. ~~**Install `@types/three` in Phase 2, not earlier**~~ — **Done:** installed at start of batch 3 with `--legacy-peer-deps`

@@ -1,10 +1,10 @@
 // ES Module imports (these are hoisted - execute first before any other code)
 import * as THREE from 'three';
 import { SplatMesh } from '@sparkjsdev/spark';
-import { ArchiveLoader, isArchiveFile } from './modules/archive-loader.js';
+import { ArchiveLoader } from './modules/archive-loader.js';
 // hasAnyProxy moved to archive-pipeline.ts (Phase 2.2)
 import { AnnotationSystem } from './modules/annotation-system.js';
-import { ArchiveCreator, captureScreenshot, CRYPTO_AVAILABLE } from './modules/archive-creator.ts';
+import { ArchiveCreator, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
 import { CAMERA, TIMING, ASSET_STATE, MESH_LOD } from './modules/constants.js';
 import { Logger, notify } from './modules/utilities.js';
 import { FlyControls } from './modules/fly-controls.js';
@@ -18,9 +18,7 @@ import {
     resetAlignment as resetAlignmentHandler,
     resetCamera as resetCameraHandler,
     centerModelOnGrid,
-    saveAlignment as saveAlignmentHandler,
     applyAlignmentData as applyAlignmentDataHandler,
-    loadAlignment as loadAlignmentHandler,
     loadAlignmentFromUrl as loadAlignmentFromUrlHandler
 } from './modules/alignment.js';
 import {
@@ -43,19 +41,11 @@ import {
 } from './modules/ui-controller.js';
 import {
     formatFileSize,
-    switchEditTab,
-    addProcessingSoftware,
-    addRelatedObject,
     collectMetadata,
     hideMetadataSidebar,
-    addVersionEntry,
-    setupFieldValidation,
     showMetadataSidebar as showMetadataSidebarHandler,
-    switchSidebarMode as switchSidebarModeHandler,
     toggleMetadataDisplay as toggleMetadataDisplayHandler,
     populateMetadataDisplay as populateMetadataDisplayHandler,
-    updateMetadataStats as updateMetadataStatsHandler,
-    updateAssetStatus as updateAssetStatusHandler,
     clearArchiveMetadata as clearArchiveMetadataHandler,
     showAnnotationPopup as showAnnotationPopupHandler,
     updateAnnotationPopupPosition as updateAnnotationPopupPositionHandler,
@@ -82,6 +72,24 @@ import {
     loadSTLFromUrlWithDeps as loadSTLFromUrlWithDepsHandler
 } from './modules/file-handlers.js';
 import {
+    handleLoadSplatFromUrlPrompt as handleLoadSplatFromUrlPromptCtrl,
+    handleLoadModelFromUrlPrompt as handleLoadModelFromUrlPromptCtrl,
+    handleLoadPointcloudFromUrlPrompt as handleLoadPointcloudFromUrlPromptCtrl,
+    handleLoadArchiveFromUrlPrompt as handleLoadArchiveFromUrlPromptCtrl,
+    handleLoadSTLFromUrlPrompt as handleLoadSTLFromUrlPromptCtrl,
+    handleSplatFile as handleSplatFileCtrl,
+    handleModelFile as handleModelFileCtrl,
+    handleSTLFile as handleSTLFileCtrl,
+    handlePointcloudFile as handlePointcloudFileCtrl,
+    handleProxyMeshFile as handleProxyMeshFileCtrl,
+    handleProxySplatFile as handleProxySplatFileCtrl,
+    loadSplatFromUrl as loadSplatFromUrlCtrl,
+    loadModelFromUrl as loadModelFromUrlCtrl,
+    loadPointcloudFromUrl as loadPointcloudFromUrlCtrl,
+    loadSTLFromUrl as loadSTLFromUrlCtrl,
+    wireNativeFileDialogs as wireNativeFileDialogsCtrl
+} from './modules/file-input-handlers.js';
+import {
     initShareDialog,
     showShareDialog
 } from './modules/share-dialog.js';
@@ -89,9 +97,7 @@ import {
     captureScreenshotToList as captureScreenshotToListHandler,
     showViewfinder as showViewfinderHandler,
     hideViewfinder as hideViewfinderHandler,
-    captureManualPreview as captureManualPreviewHandler,
-    renderScreenshotsList as renderScreenshotsListHandler,
-    removeScreenshot as removeScreenshotHandler
+    captureManualPreview as captureManualPreviewHandler
 } from './modules/screenshot-manager.js';
 import {
     setSelectedObject as setSelectedObjectHandler,
@@ -99,6 +105,10 @@ import {
     storeLastPositions as storeLastPositionsHandler,
     setTransformMode as setTransformModeHandler
 } from './modules/transform-controller.js';
+import {
+    handleSourceFilesInput,
+    updateSourceFilesUI
+} from './modules/source-files-manager.js';
 import {
     getCurrentPopupAnnotationId,
     dismissPopup as dismissPopupHandler,
@@ -116,7 +126,6 @@ import {
 } from './modules/annotation-controller.js';
 import {
     showExportPanel as showExportPanelCtrl,
-    updateArchiveAssetCheckboxes as updateArchiveAssetCheckboxesCtrl,
     downloadArchive as downloadArchiveCtrl,
     downloadGenericViewer as downloadGenericViewerCtrl,
     exportMetadataManifest as exportMetadataManifestCtrl,
@@ -127,7 +136,6 @@ import {
     loadArchiveFromUrl as loadArchiveFromUrlCtrl,
     ensureAssetLoaded as ensureAssetLoadedCtrl,
     processArchive as processArchiveCtrl,
-    applyViewerSettings as applyViewerSettingsCtrl,
     clearArchiveMetadata as clearArchiveMetadataCtrl,
     switchQualityTier as switchQualityTierCtrl,
     handleLoadFullResMesh as handleLoadFullResMeshCtrl
@@ -135,22 +143,32 @@ import {
 import {
     setupUIEvents as setupUIEventsCtrl
 } from './modules/event-wiring.js';
+import type { AppState, SceneRefs, ExportDeps, ArchivePipelineDeps, EventWiringDeps, DisplayMode, SelectedObject, TransformMode } from './types.js';
 // kiosk-viewer.js is loaded dynamically in downloadGenericViewer() to avoid
 // blocking the main application if the module fails to load.
 
+declare global {
+    interface Window {
+        APP_CONFIG?: any;
+        moduleLoaded?: boolean;
+        THREE?: typeof THREE;
+        notify?: typeof notify;
+    }
+}
+
 // Tauri desktop integration (lazy-loaded to avoid errors in browser)
-let tauriBridge = null;
+let tauriBridge: any = null;
 if (window.__TAURI__) {
-    import('./modules/tauri-bridge.js').then(mod => {
+    import('./modules/tauri-bridge.js').then((mod: any) => {
         tauriBridge = mod;
-        console.log('[main.js] Tauri bridge loaded — native dialogs available');
-    }).catch(err => {
-        console.warn('[main.js] Tauri bridge failed to load:', err);
+        console.log('[main] Tauri bridge loaded — native dialogs available');
+    }).catch((err: any) => {
+        console.warn('[main] Tauri bridge failed to load:', err);
     });
 }
 
 // Create logger for this module
-const log = Logger.getLogger('main.js');
+const log = Logger.getLogger('main');
 
 // Mark module as loaded (for pre-module error detection)
 window.moduleLoaded = true;
@@ -164,13 +182,13 @@ log.debug('THREE.REVISION:', THREE.REVISION);
 window.notify = notify;
 
 // Global error handler for runtime errors
-window.onerror = function(message, source, lineno, colno, error) {
+window.onerror = function(message: string | Event, source?: string, lineno?: number, _colno?: number, _error?: Error) {
     log.error(' Runtime error:', message, 'at', source, 'line', lineno);
     return false;
 };
 
 // Get configuration from window (set by config.js)
-const config = window.APP_CONFIG || {
+const config: any = window.APP_CONFIG || {
     defaultArchiveUrl: '',
     defaultSplatUrl: '',
     defaultModelUrl: '',
@@ -189,7 +207,7 @@ const config = window.APP_CONFIG || {
 
 // Allowed external domains — reads from APP_CONFIG (set by config.js / Docker env var)
 // Falls back to empty array for local dev without config.js
-const ALLOWED_EXTERNAL_DOMAINS = window.APP_CONFIG?.allowedDomains || [];
+const ALLOWED_EXTERNAL_DOMAINS: string[] = window.APP_CONFIG?.allowedDomains || [];
 
 /**
  * Validates a URL to prevent loading from untrusted sources.
@@ -199,20 +217,20 @@ const ALLOWED_EXTERNAL_DOMAINS = window.APP_CONFIG?.allowedDomains || [];
  * @param {string} resourceType - Type of resource (for error messages)
  * @returns {{valid: boolean, url: string, error: string}} - Validation result
  */
-function validateUserUrl(urlString, resourceType) {
+function validateUserUrl(urlString: string, resourceType: string) {
     const result = validateUserUrlCore(urlString, resourceType, {
         allowedDomains: ALLOWED_EXTERNAL_DOMAINS,
         currentOrigin: window.location.origin,
         currentProtocol: window.location.protocol
     });
     if (result.valid) {
-        console.info(`[main.js] Validated ${resourceType} URL:`, result.url);
+        console.info(`[main] Validated ${resourceType} URL:`, result.url);
     }
     return result;
 }
 
 // Global state
-const state = {
+const state: AppState = {
     displayMode: config.initialViewMode || 'model', // 'splat', 'model', 'pointcloud', 'both', 'split'
     selectedObject: 'none', // 'splat', 'model', 'both', 'none'
     transformMode: 'translate', // 'translate', 'rotate', 'scale'
@@ -255,21 +273,28 @@ const state = {
 };
 
 // Scene manager instance (handles scene, camera, renderer, controls, lighting)
-let sceneManager = null;
+let sceneManager: any = null;
 
 // Three.js objects - Main view (references extracted from SceneManager for backward compatibility)
-let scene, camera, renderer, controls, transformControls;
-let flyControls = null;
-let splatMesh = null;
-let modelGroup = null;
-let pointcloudGroup = null;
-let stlGroup = null;
-let ambientLight, hemisphereLight, directionalLight1, directionalLight2;
+let scene: THREE.Scene;
+let camera: THREE.PerspectiveCamera;
+let renderer: THREE.WebGLRenderer;
+let controls: any; // OrbitControls
+let transformControls: any; // TransformControls
+let flyControls: any = null; // FlyControls (custom)
+let splatMesh: any = null; // SplatMesh from Spark
+let modelGroup: THREE.Group;
+let pointcloudGroup: THREE.Group;
+let stlGroup: THREE.Group;
+let ambientLight: THREE.AmbientLight;
+let hemisphereLight: THREE.HemisphereLight;
+let directionalLight1: THREE.DirectionalLight;
+let directionalLight2: THREE.DirectionalLight;
 
 // Annotation, alignment, and archive creation
-let annotationSystem = null;
-let landmarkAlignment = null;
-let archiveCreator = null;
+let annotationSystem: any = null;
+let landmarkAlignment: any = null;
+let archiveCreator: any = null;
 
 // Asset blob store (ES module singleton — shared with archive-pipeline, export-controller, etc.)
 const assets = getStore();
@@ -277,7 +302,7 @@ const assets = getStore();
 // Dynamic getter object for mutable Three.js references — prevents stale-reference bugs
 // when splatMesh/modelGroup etc. are reassigned after loading new files.
 // Pass to extracted modules instead of individual objects.
-const sceneRefs = {
+const sceneRefs: SceneRefs = {
     get scene() { return scene; },
     get camera() { return camera; },
     get renderer() { return renderer; },
@@ -298,14 +323,13 @@ const sceneRefs = {
 };
 
 // Three.js objects - Split view (right side)
-let rendererRight = null;
-let controlsRight = null;
+let controlsRight: any = null;
 
 // DOM elements (with null checks for debugging)
-const canvas = document.getElementById('viewer-canvas');
-const canvasRight = document.getElementById('viewer-canvas-right');
-const loadingOverlay = document.getElementById('loading-overlay');
-const loadingText = document.getElementById('loading-text');
+const canvas: HTMLElement | null = document.getElementById('viewer-canvas');
+const canvasRight = document.getElementById('viewer-canvas-right') as HTMLCanvasElement | null;
+const loadingOverlay: HTMLElement | null = document.getElementById('loading-overlay');
+const loadingText: HTMLElement | null = document.getElementById('loading-text');
 
 log.info(' DOM elements found:', {
     canvas: !!canvas,
@@ -315,18 +339,18 @@ log.info(' DOM elements found:', {
 });
 
 // Helper function to create dependencies object for file-handlers.js
-function createFileHandlerDeps() {
+function createFileHandlerDeps(): any {
     return {
         scene,
         modelGroup,
         stlGroup,
         getSplatMesh: () => splatMesh,
-        setSplatMesh: (mesh) => { splatMesh = mesh; },
+        setSplatMesh: (mesh: any) => { splatMesh = mesh; },
         getModelGroup: () => modelGroup,
         state,
         archiveCreator,
         callbacks: {
-            onSplatLoaded: (mesh, file) => {
+            onSplatLoaded: (mesh: any, file: any) => {
                 // Auto-switch display mode to show the newly loaded splat
                 if (state.modelLoaded && state.displayMode === 'model') {
                     setDisplayMode('both');
@@ -344,7 +368,7 @@ function createFileHandlerDeps() {
                 }
                 clearArchiveMetadata();
             },
-            onModelLoaded: (object, file, faceCount) => {
+            onModelLoaded: (object: any, file: any, faceCount: number) => {
                 // Auto-switch display mode to show the newly loaded model
                 if (state.splatLoaded && state.displayMode === 'splat') {
                     setDisplayMode('both');
@@ -373,7 +397,7 @@ function createFileHandlerDeps() {
                 }
                 clearArchiveMetadata();
             },
-            onSTLLoaded: (object, file, faceCount) => {
+            onSTLLoaded: (object: any, file: any, _faceCount: number) => {
                 // Switch to STL display mode
                 setDisplayMode('stl');
                 updateVisibility();
@@ -389,7 +413,7 @@ function createFileHandlerDeps() {
 }
 
 // Helper function to create dependencies object for alignment.js
-function createAlignmentDeps() {
+function createAlignmentDeps(): any {
     return {
         splatMesh,
         modelGroup,
@@ -406,10 +430,10 @@ function createAlignmentDeps() {
 }
 
 // Helper function to create dependencies object for annotation-controller.js
-function createAnnotationControllerDeps() {
+function createAnnotationControllerDeps(): any {
     return {
         annotationSystem,
-        showAnnotationPopup: (annotation) => {
+        showAnnotationPopup: (annotation: any) => {
             const id = showAnnotationPopupHandler(annotation, state.imageAssets);
             updateAnnotationPopupPositionHandler(id);
             return id;
@@ -421,7 +445,7 @@ function createAnnotationControllerDeps() {
 }
 
 // Helper function to create dependencies object for metadata-manager.js
-function createMetadataDeps() {
+function createMetadataDeps(): any {
     return {
         state,
         annotationSystem,
@@ -438,8 +462,7 @@ function createMetadataDeps() {
 }
 
 // Helper function to create dependencies object for export-controller.ts
-/** @returns {import('./types.js').ExportDeps} */
-function createExportDeps() {
+function createExportDeps(): ExportDeps {
     return {
         sceneRefs,
         state,
@@ -462,13 +485,12 @@ function createExportDeps() {
 }
 
 // Helper function to create dependencies object for archive-pipeline.ts
-/** @returns {import('./types.js').ArchivePipelineDeps} */
-function createArchivePipelineDeps() {
+function createArchivePipelineDeps(): ArchivePipelineDeps {
     return {
         sceneRefs,
         state,
         sceneManager,
-        setSplatMesh: (mesh) => { splatMesh = mesh; },
+        setSplatMesh: (mesh: any) => { splatMesh = mesh; },
         createFileHandlerDeps,
         ui: {
             showLoading,
@@ -497,9 +519,18 @@ function createArchivePipelineDeps() {
     };
 }
 
+// Helper function to create dependencies object for file-input-handlers.ts
+function createFileInputDeps(): any {
+    return {
+        validateUserUrl, state, sceneManager, tauriBridge, assets,
+        createFileHandlerDeps, createPointcloudDeps, createArchivePipelineDeps,
+        loadArchiveFromUrl, processArchive,
+        showLoading, hideLoading, updateProgress, formatFileSize, updateSourceFilesUI
+    };
+}
+
 // Helper function to create dependencies object for event-wiring.ts
-/** @returns {import('./types.js').EventWiringDeps} */
-function createEventWiringDeps() {
+function createEventWiringDeps(): EventWiringDeps {
     return {
         sceneRefs,
         state,
@@ -535,7 +566,7 @@ function createEventWiringDeps() {
                 if (window.__TAURI__ && tauriBridge) {
                     wireNativeFileDialogs();
                 } else if (window.__TAURI__) {
-                    import('./modules/tauri-bridge.js').then(mod => {
+                    import('./modules/tauri-bridge.js').then((mod: any) => {
                         tauriBridge = mod;
                         wireNativeFileDialogs();
                     }).catch(() => {});
@@ -570,7 +601,6 @@ function init() {
     scene = sceneManager.scene;
     camera = sceneManager.camera;
     renderer = sceneManager.renderer;
-    rendererRight = sceneManager.rendererRight;
     controls = sceneManager.controls;
     controlsRight = sceneManager.controlsRight;
     transformControls = sceneManager.transformControls;
@@ -669,7 +699,7 @@ function onWindowResize() {
     }
 }
 
-function onKeyDown(event) {
+function onKeyDown(event: KeyboardEvent) {
     // Don't handle transform shortcuts when fly mode is active
     // (WASD/Q/E are used for camera movement in fly mode)
     if (flyControls && flyControls.enabled) {
@@ -681,16 +711,16 @@ function onKeyDown(event) {
 
     switch (event.key.toLowerCase()) {
         case 'w':
-            setTransformMode('translate');
+            setTransformMode('translate' as TransformMode);
             break;
         case 'e':
-            setTransformMode('rotate');
+            setTransformMode('rotate' as TransformMode);
             break;
         case 'r':
-            setTransformMode('scale');
+            setTransformMode('scale' as TransformMode);
             break;
         case 'escape':
-            setSelectedObject('none');
+            setSelectedObject('none' as SelectedObject);
             break;
     }
 }
@@ -732,7 +762,7 @@ function toggleFlyMode() {
 
 // setupUIEvents extracted to event-wiring.ts (Phase 2, Step 2.5)
 
-function setDisplayMode(mode) {
+function setDisplayMode(mode: DisplayMode) {
     setDisplayModeHandler(mode, {
         state,
         canvasRight,
@@ -757,21 +787,21 @@ function setDisplayMode(mode) {
 }
 
 // Toggle gridlines visibility
-function toggleGridlines(show) {
+function toggleGridlines(show: boolean) {
     if (sceneManager) {
         sceneManager.toggleGrid(show);
     }
 }
 
 // Set background color
-function setBackgroundColor(hexColor) {
+function setBackgroundColor(hexColor: string) {
     if (sceneManager) {
         sceneManager.setBackgroundColor(hexColor);
     }
 }
 
 // Transform controls (delegated to transform-controller.js)
-function setSelectedObject(selection) {
+function setSelectedObject(selection: SelectedObject) {
     setSelectedObjectHandler(selection, { transformControls, splatMesh, modelGroup, state });
 }
 
@@ -783,7 +813,7 @@ function storeLastPositions() {
     storeLastPositionsHandler({ splatMesh, modelGroup, pointcloudGroup });
 }
 
-function setTransformMode(mode) {
+function setTransformMode(mode: TransformMode) {
     setTransformModeHandler(mode, { transformControls, state, splatMesh, modelGroup, pointcloudGroup });
 }
 
@@ -797,103 +827,40 @@ function updateTransformInputs() {
 
 // Handle loading splat from URL via prompt
 function handleLoadSplatFromUrlPrompt() {
-    log.info(' handleLoadSplatFromUrlPrompt called');
-    const url = prompt('Enter Gaussian Splat URL:');
-    log.info(' User entered:', url);
-    if (!url) return; // User cancelled or entered empty string
-
-    // Validate URL before loading
-    const validation = validateUserUrl(url, 'splat');
-    if (!validation.valid) {
-        notify.error('Cannot load splat: ' + validation.error);
-        return;
-    }
-
-    loadSplatFromUrl(validation.url);
+    handleLoadSplatFromUrlPromptCtrl(createFileInputDeps());
 }
 
 // Handle loading model from URL via prompt
 function handleLoadModelFromUrlPrompt() {
-    log.info(' handleLoadModelFromUrlPrompt called');
-    const url = prompt('Enter 3D Model URL (.glb, .gltf, .obj):');
-    log.info(' User entered:', url);
-    if (!url) return; // User cancelled or entered empty string
-
-    // Validate URL before loading
-    const validation = validateUserUrl(url, 'model');
-    if (!validation.valid) {
-        notify.error('Cannot load model: ' + validation.error);
-        return;
-    }
-
-    loadModelFromUrl(validation.url);
+    handleLoadModelFromUrlPromptCtrl(createFileInputDeps());
 }
 
 // Handle loading point cloud from URL via prompt
 function handleLoadPointcloudFromUrlPrompt() {
-    log.info(' handleLoadPointcloudFromUrlPrompt called');
-    const url = prompt('Enter E57 Point Cloud URL (.e57):');
-    log.info(' User entered:', url);
-    if (!url) return;
-
-    const validation = validateUserUrl(url, 'pointcloud');
-    if (!validation.valid) {
-        notify.error('Cannot load point cloud: ' + validation.error);
-        return;
-    }
-
-    loadPointcloudFromUrl(validation.url);
+    handleLoadPointcloudFromUrlPromptCtrl(createFileInputDeps());
 }
 
 // Handle loading archive from URL via prompt
 function handleLoadArchiveFromUrlPrompt() {
-    log.info(' handleLoadArchiveFromUrlPrompt called');
-    const url = prompt('Enter Archive URL (.a3d, .a3z):');
-    log.info(' User entered:', url);
-    if (!url) return;
-
-    // Validate URL before loading
-    const validation = validateUserUrl(url, 'archive');
-    if (!validation.valid) {
-        notify.error('Cannot load archive: ' + validation.error);
-        return;
-    }
-
-    loadArchiveFromUrl(validation.url);
+    handleLoadArchiveFromUrlPromptCtrl(createFileInputDeps());
 }
 
 // Handle point cloud file input
-async function handlePointcloudFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    document.getElementById('pointcloud-filename').textContent = file.name;
-    showLoading('Loading point cloud...');
-
-    try {
-        await loadPointcloudFromFileHandler(file, createPointcloudDeps());
-        hideLoading();
-    } catch (error) {
-        log.error('Error loading point cloud:', error);
-        hideLoading();
-        notify.error('Error loading point cloud: ' + error.message);
-    }
+async function handlePointcloudFile(event: Event) {
+    return handlePointcloudFileCtrl(event, createFileInputDeps());
 }
 
 // Handle archive file input (delegated to archive-pipeline.ts)
-async function handleArchiveFile(event) { return handleArchiveFileCtrl(event, createArchivePipelineDeps()); }
+async function handleArchiveFile(event: Event) { return handleArchiveFileCtrl(event, createArchivePipelineDeps()); }
 
 // Load archive from URL (delegated to archive-pipeline.ts)
-async function loadArchiveFromUrl(url) { return loadArchiveFromUrlCtrl(url, createArchivePipelineDeps()); }
+async function loadArchiveFromUrl(url: string) { return loadArchiveFromUrlCtrl(url, createArchivePipelineDeps()); }
 
 // Ensure archive asset loaded (delegated to archive-pipeline.ts)
-async function ensureAssetLoaded(assetType) { return ensureAssetLoadedCtrl(assetType, createArchivePipelineDeps()); }
+async function ensureAssetLoaded(assetType: string) { return ensureAssetLoadedCtrl(assetType, createArchivePipelineDeps()); }
 
 // Process loaded archive (delegated to archive-pipeline.ts)
-async function processArchive(archiveLoader, archiveName) { return processArchiveCtrl(archiveLoader, archiveName, createArchivePipelineDeps()); }
-
-// Apply viewer settings (delegated to archive-pipeline.ts)
-function applyViewerSettings(settings) { applyViewerSettingsCtrl(settings, createArchivePipelineDeps()); }
+async function processArchive(archiveLoader: any, archiveName: string) { return processArchiveCtrl(archiveLoader, archiveName, createArchivePipelineDeps()); }
 
 // Clear archive metadata (delegated to archive-pipeline.ts)
 function clearArchiveMetadata() { clearArchiveMetadataCtrl(createArchivePipelineDeps()); }
@@ -901,17 +868,17 @@ function clearArchiveMetadata() { clearArchiveMetadataCtrl(createArchivePipeline
 // ==================== Annotation Functions ====================
 
 // Called when user places an annotation (clicks on model in placement mode)
-function onAnnotationPlaced(position, cameraState) {
+function onAnnotationPlaced(position: any, cameraState: any) {
     onAnnotationPlacedHandler(position, cameraState, createAnnotationControllerDeps());
 }
 
 // Called when an annotation is selected
-function onAnnotationSelected(annotation) {
+function onAnnotationSelected(annotation: any) {
     onAnnotationSelectedHandler(annotation, createAnnotationControllerDeps());
 }
 
 // Called when placement mode changes
-function onPlacementModeChanged(active) {
+function onPlacementModeChanged(active: boolean) {
     onPlacementModeChangedHandler(active);
 }
 
@@ -951,14 +918,13 @@ function updateSidebarAnnotationsList() {
 }
 
 // Load annotations from archive - delegates to annotation-controller.js
-function loadAnnotationsFromArchive(annotations) {
+function loadAnnotationsFromArchive(annotations: any[]) {
     loadAnnotationsFromArchiveHandler(annotations, createAnnotationControllerDeps());
 }
 
 // ==================== Export/Archive Creation Functions (delegated to export-controller.ts) ====================
 
 function showExportPanel() { showExportPanelCtrl(createExportDeps()); }
-function updateArchiveAssetCheckboxes() { updateArchiveAssetCheckboxesCtrl(createExportDeps()); }
 
 // =============================================================================
 // SCREENSHOT FUNCTIONS (delegated to screenshot-manager.js)
@@ -980,14 +946,6 @@ function captureManualPreview() {
     return captureManualPreviewHandler({ renderer, scene, camera, state });
 }
 
-function renderScreenshotsList() {
-    renderScreenshotsListHandler(state);
-}
-
-function removeScreenshot(id) {
-    removeScreenshotHandler(id, state);
-}
-
 // Download archive — delegated to export-controller.ts
 async function downloadArchive() { return downloadArchiveCtrl(createExportDeps()); }
 
@@ -997,14 +955,9 @@ async function downloadGenericViewer() { return downloadGenericViewerCtrl(create
 // ==================== Metadata Sidebar Functions ====================
 
 // Show metadata sidebar - delegates to metadata-manager.js
-function showMetadataSidebar(mode = 'view') {
+function showMetadataSidebar(mode: 'view' | 'edit' | 'annotations' = 'view') {
     showMetadataSidebarHandler(mode, createMetadataDeps());
     setTimeout(onWindowResize, 300);
-}
-
-// Switch sidebar mode - delegates to metadata-manager.js
-function switchSidebarMode(mode) {
-    switchSidebarModeHandler(mode, createMetadataDeps());
 }
 
 // Legacy function names for compatibility
@@ -1029,15 +982,9 @@ function setupMetadataSidebar() {
 async function exportMetadataManifest() { return exportMetadataManifestCtrl(createExportDeps()); }
 function importMetadataManifest() { importMetadataManifestCtrl(createExportDeps()); }
 
-// Update quality stats display - delegates to metadata-manager.js
-function updateMetadataStats() { updateMetadataStatsHandler(createMetadataDeps()); }
-
-// Update asset status - delegates to metadata-manager.js
-function updateAssetStatus() { updateAssetStatusHandler(createMetadataDeps()); }
-
 // Prefill metadata panel from archive manifest
 // Prefill metadata - delegates to metadata-manager.js
-function prefillMetadataFromArchive(manifest) {
+function prefillMetadataFromArchive(manifest: any) {
     prefillMetadataFromArchiveHandler(manifest);
 }
 
@@ -1069,19 +1016,19 @@ function updateAnnotationPopupPosition() {
 function wireNativeFileDialogs() {
     if (!tauriBridge || !tauriBridge.isTauri()) return;
     tauriBridge.wireNativeFileDialogs({
-        onSplatFiles: async (files) => {
+        onSplatFiles: async (files: any[]) => {
             document.getElementById('splat-filename').textContent = files[0].name;
             showLoading('Loading Gaussian Splat...');
             try { await loadSplatFromFileHandler(files[0], createFileHandlerDeps()); hideLoading(); }
             catch (e) { log.error('Error loading splat:', e); hideLoading(); notify.error('Error loading Gaussian Splat: ' + e.message); }
         },
-        onModelFiles: async (files) => {
+        onModelFiles: async (files: any[]) => {
             document.getElementById('model-filename').textContent = files[0].name;
             showLoading('Loading 3D Model...');
-            try { await loadModelFromFileHandler(files, createFileHandlerDeps()); hideLoading(); }
+            try { await loadModelFromFileHandler(files as any, createFileHandlerDeps()); hideLoading(); }
             catch (e) { log.error('Error loading model:', e); hideLoading(); notify.error('Error loading model: ' + e.message); }
         },
-        onArchiveFiles: async (files) => {
+        onArchiveFiles: async (files: any[]) => {
             document.getElementById('archive-filename').textContent = files[0].name;
             showLoading('Loading archive...');
             try {
@@ -1092,49 +1039,49 @@ function wireNativeFileDialogs() {
                 state.currentArchiveUrl = null;
             } catch (e) { log.error('Error loading archive:', e); hideLoading(); notify.error('Error loading archive: ' + e.message); }
         },
-        onPointcloudFiles: async (files) => {
+        onPointcloudFiles: async (files: any[]) => {
             document.getElementById('pointcloud-filename').textContent = files[0].name;
             showLoading('Loading point cloud...');
             try { await loadPointcloudFromFileHandler(files[0], createPointcloudDeps()); hideLoading(); }
             catch (e) { log.error('Error loading point cloud:', e); hideLoading(); notify.error('Error loading point cloud: ' + e.message); }
         },
-        onSTLFiles: async (files) => {
+        onSTLFiles: async (files: any[]) => {
             document.getElementById('stl-filename').textContent = files[0].name;
             showLoading('Loading STL Model...');
-            try { await loadSTLFileHandler([files[0]], createFileHandlerDeps()); hideLoading(); }
+            try { await loadSTLFileHandler([files[0]] as any, createFileHandlerDeps()); hideLoading(); }
             catch (e) { log.error('Error loading STL:', e); hideLoading(); notify.error('Error loading STL: ' + e.message); }
         },
-        onProxyMeshFiles: async (files) => {
+        onProxyMeshFiles: async (files: any[]) => {
             assets.proxyMeshBlob = files[0];
             document.getElementById('proxy-mesh-filename').textContent = files[0].name;
             notify.info(`Display proxy "${files[0].name}" ready — will be included in archive exports.`);
         },
-        onSourceFiles: async (files) => {
-            const category = document.getElementById('source-files-category')?.value || '';
+        onSourceFiles: async (files: any[]) => {
+            const category = (document.getElementById('source-files-category') as HTMLInputElement)?.value || '';
             for (const file of files) { assets.sourceFiles.push({ file, name: file.name, size: file.size, category, fromArchive: false }); }
             updateSourceFilesUI();
             notify.info(`Added ${files.length} source file(s) for archival.`);
         },
-        onBgImageFiles: async (files) => {
+        onBgImageFiles: async (files: any[]) => {
             if (!sceneManager) return;
             try {
                 await sceneManager.loadBackgroundImageFromFile(files[0]);
                 const filenameEl = document.getElementById('bg-image-filename');
                 if (filenameEl) { filenameEl.textContent = files[0].name; filenameEl.style.display = ''; }
-                const envBgToggle = document.getElementById('toggle-env-background');
+                const envBgToggle = document.getElementById('toggle-env-background') as HTMLInputElement | null;
                 if (envBgToggle) envBgToggle.checked = false;
                 document.querySelectorAll('.color-preset').forEach(b => b.classList.remove('active'));
                 const clearBtn = document.getElementById('btn-clear-bg-image');
                 if (clearBtn) clearBtn.style.display = '';
             } catch (err) { notify.error('Failed to load background image: ' + err.message); }
         },
-        onHdrFiles: async (files) => {
+        onHdrFiles: async (files: any[]) => {
             showLoading('Loading HDR environment...');
             try {
                 await sceneManager.loadHDREnvironmentFromFile(files[0]);
                 const filenameEl = document.getElementById('hdr-filename');
                 if (filenameEl) { filenameEl.textContent = files[0].name; filenameEl.style.display = ''; }
-                const select = document.getElementById('env-map-select');
+                const select = document.getElementById('env-map-select') as HTMLSelectElement | null;
                 if (select) select.value = '';
                 hideLoading();
                 notify.success('HDR environment loaded');
@@ -1143,164 +1090,39 @@ function wireNativeFileDialogs() {
     });
 }
 
-async function handleSplatFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    document.getElementById('splat-filename').textContent = file.name;
-    showLoading('Loading Gaussian Splat...');
-
-    try {
-        await loadSplatFromFileHandler(file, createFileHandlerDeps());
-        hideLoading();
-    } catch (error) {
-        log.error('Error loading splat:', error);
-        hideLoading();
-        notify.error('Error loading Gaussian Splat: ' + error.message);
-    }
+async function handleSplatFile(event: Event) {
+    return handleSplatFileCtrl(event, createFileInputDeps());
 }
 
-async function handleModelFile(event) {
-    const files = event.target.files;
-    if (!files.length) return;
-
-    const mainFile = files[0];
-    document.getElementById('model-filename').textContent = mainFile.name;
-    showLoading('Loading 3D Model...');
-
-    try {
-        await loadModelFromFileHandler(files, createFileHandlerDeps());
-        hideLoading();
-    } catch (error) {
-        log.error('Error loading model:', error);
-        hideLoading();
-        notify.error('Error loading model: ' + error.message);
-    }
+async function handleModelFile(event: Event) {
+    return handleModelFileCtrl(event, createFileInputDeps());
 }
 
-async function handleSTLFile(event) {
-    const files = event.target.files;
-    if (!files.length) return;
-
-    const mainFile = files[0];
-    document.getElementById('stl-filename').textContent = mainFile.name;
-    showLoading('Loading STL Model...');
-
-    try {
-        await loadSTLFileHandler(files, createFileHandlerDeps());
-        hideLoading();
-    } catch (error) {
-        log.error('Error loading STL:', error);
-        hideLoading();
-        notify.error('Error loading STL: ' + error.message);
-    }
+async function handleSTLFile(event: Event) {
+    return handleSTLFileCtrl(event, createFileInputDeps());
 }
 
 function handleLoadSTLFromUrlPrompt() {
-    log.info(' handleLoadSTLFromUrlPrompt called');
-    const url = prompt('Enter STL Model URL (.stl):');
-    log.info(' User entered:', url);
-    if (!url) return;
-
-    const validation = validateUserUrl(url, 'stl');
-    if (!validation.valid) {
-        notify.error('Cannot load STL: ' + validation.error);
-        return;
-    }
-
-    loadSTLFromUrl(validation.url);
+    handleLoadSTLFromUrlPromptCtrl(createFileInputDeps());
 }
 
-async function loadSTLFromUrl(url) {
-    showLoading('Downloading STL Model...', true);
-
-    try {
-        await loadSTLFromUrlWithDepsHandler(url, createFileHandlerDeps());
-        hideLoading();
-    } catch (error) {
-        log.error('Error loading STL from URL:', error);
-        hideLoading();
-        notify.error('Error loading STL: ' + error.message);
-    }
+async function loadSTLFromUrl(url: string) {
+    return loadSTLFromUrlCtrl(url, createFileInputDeps());
 }
 
-async function handleProxyMeshFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    assets.proxyMeshBlob = file;
-    document.getElementById('proxy-mesh-filename').textContent = file.name;
-    notify.info(`Display proxy "${file.name}" ready — will be included in archive exports.`);
+async function handleProxyMeshFile(event: Event) {
+    return handleProxyMeshFileCtrl(event, createFileInputDeps());
 }
 
-async function handleProxySplatFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    assets.proxySplatBlob = file;
-    document.getElementById('proxy-splat-filename').textContent = file.name;
-    notify.info(`Splat display proxy "${file.name}" ready — will be included in archive exports.`);
+async function handleProxySplatFile(event: Event) {
+    return handleProxySplatFileCtrl(event, createFileInputDeps());
 }
 
 // Switch quality tier (delegated to archive-pipeline.ts)
-async function switchQualityTier(newTier) { return switchQualityTierCtrl(newTier, createArchivePipelineDeps()); }
+async function switchQualityTier(newTier: string) { return switchQualityTierCtrl(newTier, createArchivePipelineDeps()); }
 
 // ==================== Source Files ====================
-
-function handleSourceFilesInput(event) {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    const category = document.getElementById('source-files-category')?.value || '';
-
-    for (const file of files) {
-        assets.sourceFiles.push({ file, name: file.name, size: file.size, category, fromArchive: false });
-    }
-
-    updateSourceFilesUI();
-    notify.info(`Added ${files.length} source file(s) for archival.`);
-
-    // Reset input so the same files can be re-added if needed
-    event.target.value = '';
-}
-
-function removeSourceFile(index) {
-    assets.sourceFiles.splice(index, 1);
-    updateSourceFilesUI();
-}
-
-function updateSourceFilesUI() {
-    const listEl = document.getElementById('source-files-list');
-    const summaryEl = document.getElementById('source-files-summary');
-    const countEl = document.getElementById('source-files-count');
-    const sizeEl = document.getElementById('source-files-size');
-
-    if (!listEl) return;
-
-    listEl.innerHTML = '';
-
-    assets.sourceFiles.forEach((sf, i) => {
-        const item = document.createElement('div');
-        item.className = 'source-file-item';
-        item.innerHTML = `<span class="source-file-name" title="${sf.name}">${sf.name}</span>` +
-            `<span class="source-file-size">${formatFileSize(sf.size)}</span>` +
-            (sf.fromArchive ? '' : `<span class="source-file-remove" data-index="${i}" title="Remove">\u00d7</span>`);
-        listEl.appendChild(item);
-    });
-
-    // Wire up remove buttons
-    listEl.querySelectorAll('.source-file-remove').forEach(btn => {
-        btn.addEventListener('click', () => removeSourceFile(parseInt(btn.dataset.index)));
-    });
-
-    const totalSize = assets.sourceFiles.reduce((sum, sf) => sum + sf.size, 0);
-
-    if (summaryEl) {
-        summaryEl.style.display = assets.sourceFiles.length > 0 ? '' : 'none';
-    }
-    if (countEl) countEl.textContent = assets.sourceFiles.length;
-    if (sizeEl) sizeEl.textContent = formatFileSize(totalSize);
-}
+// Extracted to source-files-manager.ts
 
 // Handle load full res mesh (delegated to archive-pipeline.ts)
 async function handleLoadFullResMesh() { return handleLoadFullResMeshCtrl(createArchivePipelineDeps()); }
@@ -1320,26 +1142,18 @@ function updateModelMetalnessView() { updateModelMetalnessFn(modelGroup, state.m
 function updateModelSpecularF0View() { updateModelSpecularF0Fn(modelGroup, state.modelSpecularF0); }
 
 // Alignment I/O (delegated to alignment.js)
-function createAlignmentIODeps() {
+function createAlignmentIODeps(): any {
     return {
         splatMesh, modelGroup, pointcloudGroup, tauriBridge,
         updateTransformInputs, storeLastPositions
     };
 }
 
-function saveAlignment() {
-    return saveAlignmentHandler(createAlignmentIODeps());
-}
-
-function applyAlignmentData(data) {
+function applyAlignmentData(data: any) {
     applyAlignmentDataHandler(data, createAlignmentIODeps());
 }
 
-function loadAlignment(event) {
-    loadAlignmentHandler(event, createAlignmentIODeps());
-}
-
-function loadAlignmentFromUrl(url) {
+function loadAlignmentFromUrl(url: string) {
     return loadAlignmentFromUrlHandler(url, createAlignmentIODeps());
 }
 
@@ -1411,7 +1225,7 @@ function fitToView() {
 }
 
 // Controls panel visibility (delegated to ui-controller.js)
-function createControlsDeps() {
+function createControlsDeps(): any {
     return { state, config, onWindowResize };
 }
 
@@ -1419,7 +1233,7 @@ function toggleControlsPanel() {
     toggleControlsPanelHandler(createControlsDeps());
 }
 
-function applyControlsVisibility(shouldShowOverride) {
+function applyControlsVisibility(shouldShowOverride?: boolean) {
     applyControlsVisibilityHandler(createControlsDeps(), shouldShowOverride);
 }
 
@@ -1485,52 +1299,25 @@ async function loadDefaultFiles() {
 }
 
 // URL loaders — thin wrappers around file-handlers.js with progress UI
-async function loadSplatFromUrl(url) {
-    showLoading('Downloading Gaussian Splat...', true);
-    try {
-        await loadSplatFromUrlHandler(url, createFileHandlerDeps(), (received, total) => {
-            const percent = Math.round((received / total) * 90);
-            updateProgress(percent, `Downloading Gaussian Splat... ${formatFileSize(received)} / ${formatFileSize(total)}`);
-        });
-        const filename = url.split('/').pop() || 'URL';
-        document.getElementById('splat-filename').textContent = filename;
-        hideLoading();
-    } catch (error) {
-        log.error('Error loading splat from URL:', error);
-        hideLoading();
-    }
+async function loadSplatFromUrl(url: string) {
+    return loadSplatFromUrlCtrl(url, createFileInputDeps());
 }
 
-async function loadModelFromUrl(url) {
-    showLoading('Downloading 3D Model...', true);
-    try {
-        const loadedObject = await loadModelFromUrlHandler(url, createFileHandlerDeps(), (received, total) => {
-            const percent = Math.round((received / total) * 90);
-            updateProgress(percent, `Downloading 3D Model... ${formatFileSize(received)} / ${formatFileSize(total)}`);
-        });
-        if (loadedObject && sceneManager) {
-            sceneManager.applyShadowProperties(loadedObject);
-        }
-        const filename = url.split('/').pop() || 'URL';
-        document.getElementById('model-filename').textContent = filename;
-        hideLoading();
-    } catch (error) {
-        log.error('Error loading model from URL:', error);
-        hideLoading();
-    }
+async function loadModelFromUrl(url: string) {
+    return loadModelFromUrlCtrl(url, createFileInputDeps());
 }
 
 // ============================================================
 // Point cloud loading - URL wrapper
 // ============================================================
 
-function createPointcloudDeps() {
+function createPointcloudDeps(): any {
     return {
         pointcloudGroup,
         state,
         archiveCreator,
         callbacks: {
-            onPointcloudLoaded: (object, file, pointCount, blob) => {
+            onPointcloudLoaded: (object: any, file: any, pointCount: number, blob: Blob) => {
                 assets.pointcloudBlob = blob;
                 updateVisibility();
                 updateTransformInputs();
@@ -1545,22 +1332,8 @@ function createPointcloudDeps() {
     };
 }
 
-async function loadPointcloudFromUrl(url) {
-    showLoading('Downloading Point Cloud...', true);
-
-    try {
-        log.info(' Fetching point cloud from URL:', url);
-        await loadPointcloudFromUrlHandler(url, createPointcloudDeps(), (received, total) => {
-            const percent = Math.round((received / total) * 90);
-            updateProgress(percent, `Downloading Point Cloud... ${formatFileSize(received)} / ${formatFileSize(total)}`);
-        });
-        state.currentPointcloudUrl = url;
-        hideLoading();
-    } catch (error) {
-        log.error('Error loading point cloud from URL:', error);
-        hideLoading();
-        notify.error('Error loading point cloud: ' + error.message);
-    }
+async function loadPointcloudFromUrl(url: string) {
+    return loadPointcloudFromUrlCtrl(url, createFileInputDeps());
 }
 
 // ============================================================

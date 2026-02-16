@@ -170,7 +170,7 @@ interface PointcloudLoadResult {
     pointCount: number;
 }
 
-type ProgressCallback = ((percent: number) => void) | null;
+type ProgressCallback = ((received: number, total: number) => void) | null;
 
 // =============================================================================
 // SPLAT LOADING
@@ -759,7 +759,7 @@ export async function loadArchiveFromFile(file: File, deps: LoadArchiveDeps): Pr
 /**
  * Load archive from URL
  */
-export async function loadArchiveFromUrl(url: string, deps: LoadArchiveDeps, onProgress: ProgressCallback = null): Promise<ArchiveLoader> {
+export async function loadArchiveFromUrl(url: string, deps: LoadArchiveDeps, onProgress: ((progress: number) => void) | null = null): Promise<ArchiveLoader> {
     const { state } = deps;
 
     // Clean up previous archive
