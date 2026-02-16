@@ -4,7 +4,7 @@ import { SplatMesh } from '@sparkjsdev/spark';
 import { ArchiveLoader, isArchiveFile } from './modules/archive-loader.js';
 // hasAnyProxy moved to archive-pipeline.ts (Phase 2.2)
 import { AnnotationSystem } from './modules/annotation-system.js';
-import { ArchiveCreator, captureScreenshot, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
+import { ArchiveCreator, captureScreenshot, CRYPTO_AVAILABLE } from './modules/archive-creator.ts';
 import { CAMERA, TIMING, ASSET_STATE, MESH_LOD } from './modules/constants.js';
 import { Logger, notify } from './modules/utilities.js';
 import { FlyControls } from './modules/fly-controls.js';

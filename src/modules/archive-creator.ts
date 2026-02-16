@@ -2,15 +2,16 @@
 // Handles creating .a3d/.a3z archive containers
 // Based on the U3DP Creator Python tool manifest schema
 
-import { zip, strToU8 } from 'fflate';
+import { zip, strToU8, type AsyncZipOptions } from 'fflate';
 import { Logger } from './utilities.js';
+import type { Annotation } from '../types.js';
 
 // Create logger for this module
 const log = Logger.getLogger('archive-creator');
 
 // Pre-computed hex lookup table for faster conversion
 const HEX_CHARS = '0123456789abcdef';
-const HEX_TABLE = new Array(256);
+const HEX_TABLE = new Array<string>(256);
 for (let i = 0; i < 256; i++) {
     HEX_TABLE[i] = HEX_CHARS[i >> 4] + HEX_CHARS[i & 0x0f];
 }
@@ -18,20 +19,403 @@ for (let i = 0; i < 256; i++) {
 // Check if Web Crypto API is available (requires secure context)
 export const CRYPTO_AVAILABLE = typeof crypto !== 'undefined' && crypto.subtle;
 
-/**
- * Calculate SHA-256 hash of a Blob or ArrayBuffer
- * Uses streaming for large blobs to reduce memory pressure
- * @param {Blob|ArrayBuffer} data - The data to hash
- * @param {Function} onProgress - Optional progress callback
- * @returns {Promise<string>} Hex string of hash, or null if crypto unavailable
- */
-async function calculateSHA256(data, onProgress = null) {
+// ===== Type Definitions =====
+
+export interface ProjectInfo {
+    title: string;
+    id: string;
+    license: string;
+    description: string;
+}
+
+export interface ProvenanceInfo {
+    captureDate?: string;
+    captureDevice?: string;
+    deviceSerial?: string;
+    operator?: string;
+    operatorOrcid?: string;
+    location?: string;
+    conventions?: string[] | string;
+    processingSoftware?: string[];
+    processingNotes?: string;
+}
+
+export interface QualityMetrics {
+    tier?: string;
+    accuracyGrade?: string;
+    scaleVerification?: string;
+    captureResolution?: {
+        value?: number | null;
+        unit?: string;
+        type?: string;
+    };
+    alignmentError?: {
+        value?: number | null;
+        unit?: string;
+        method?: string;
+    };
+    dataQuality?: {
+        coverageGaps?: string;
+        reconstructionAreas?: string;
+        colorCalibration?: string;
+        measurementUncertainty?: string;
+    };
+}
+
+export interface ArchivalRecord {
+    standard?: string;
+    title?: string;
+    alternateTitles?: string[];
+    provenance?: string;
+    ids?: {
+        accessionNumber?: string;
+        sirisId?: string;
+        uri?: string;
+    };
+    creation?: {
+        creator?: string;
+        dateCreated?: string;
+        period?: string;
+        culture?: string;
+    };
+    physicalDescription?: {
+        medium?: string;
+        condition?: string;
+        dimensions?: {
+            height?: string;
+            width?: string;
+            depth?: string;
+        };
+    };
+    rights?: {
+        copyrightStatus?: string;
+        creditLine?: string;
+    };
+    context?: {
+        description?: string;
+        locationHistory?: string;
+    };
+    coverage?: {
+        spatial?: {
+            locationName?: string;
+            coordinates?: {
+                latitude?: string;
+                longitude?: string;
+            };
+        };
+        temporal?: {
+            subjectPeriod?: string;
+            subjectDateCirca?: boolean;
+        };
+    };
+}
+
+export interface ViewerSettings {
+    singleSided?: boolean;
+    backgroundColor?: string | null;
+}
+
+export interface MaterialStandard {
+    workflow?: string;
+    occlusionPacked?: boolean;
+    colorSpace?: string;
+    normalSpace?: string;
+}
+
+export interface Relationships {
+    partOf?: string;
+    derivedFrom?: string;
+    replaces?: string;
+    relatedObjects?: string[];
+}
+
+export interface Preservation {
+    formatRegistry?: {
+        glb?: string;
+        obj?: string;
+        ply?: string;
+        e57?: string;
+    };
+    significantProperties?: string[];
+    renderingRequirements?: string;
+    renderingNotes?: string;
+}
+
+export interface DataEntryParameters {
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: number;
+    [key: string]: any;
+}
+
+export interface DataEntry {
+    file_name: string;
+    created_by: string;
+    _created_by_version?: string;
+    _source_notes?: string;
+    role?: string;
+    lod?: string;
+    derived_from?: string;
+    face_count?: number;
+    original_name?: string;
+    source_category?: string;
+    size_bytes?: number;
+    _parameters?: DataEntryParameters;
+}
+
+export interface IntegrityData {
+    algorithm: string;
+    manifest_hash: string | null;
+    assets: Record<string, string>;
+}
+
+export interface Manifest {
+    container_version: string;
+    packer: string;
+    packer_version: string;
+    _creation_date: string;
+    project: ProjectInfo;
+    relationships: {
+        part_of: string;
+        derived_from: string;
+        replaces: string;
+        related_objects: string[];
+    };
+    provenance: {
+        capture_date: string;
+        capture_device: string;
+        device_serial: string;
+        operator: string;
+        operator_orcid: string;
+        location: string;
+        convention_hints: string[];
+        processing_software: string[];
+        processing_notes: string;
+    };
+    quality_metrics: {
+        tier: string;
+        accuracy_grade: string;
+        capture_resolution: {
+            value: number | null;
+            unit: string;
+            type: string;
+        };
+        alignment_error: {
+            value: number | null;
+            unit: string;
+            method: string;
+        };
+        scale_verification: string;
+        data_quality: {
+            coverage_gaps: string;
+            reconstruction_areas: string;
+            color_calibration: string;
+            measurement_uncertainty: string;
+        };
+    };
+    archival_record: {
+        standard: string;
+        title: string;
+        alternate_titles: string[];
+        ids: {
+            accession_number: string;
+            siris_id: string;
+            uri: string;
+        };
+        creation: {
+            creator: string;
+            date_created: string;
+            period: string;
+            culture: string;
+        };
+        physical_description: {
+            medium: string;
+            dimensions: {
+                height: string;
+                width: string;
+                depth: string;
+            };
+            condition: string;
+        };
+        provenance: string;
+        rights: {
+            copyright_status: string;
+            credit_line: string;
+        };
+        context: {
+            description: string;
+            location_history: string;
+        };
+        coverage: {
+            spatial: {
+                location_name: string;
+                coordinates: {
+                    latitude: string;
+                    longitude: string;
+                };
+            };
+            temporal: {
+                subject_period: string;
+                subject_date_circa: boolean;
+            };
+        };
+    };
+    material_standard: {
+        workflow: string;
+        occlusion_packed: boolean;
+        color_space: string;
+        normal_space: string;
+    };
+    viewer_settings: {
+        single_sided: boolean;
+        background_color: string | null;
+    };
+    preservation: {
+        format_registry: {
+            glb: string;
+            obj: string;
+            ply: string;
+            e57: string;
+        };
+        significant_properties: string[];
+        rendering_requirements: string;
+        rendering_notes: string;
+    };
+    data_entries: Record<string, DataEntry>;
+    annotations: Annotation[];
+    version_history: VersionHistoryEntry[];
+    integrity?: IntegrityData;
+    _meta: {
+        quality?: QualityStats;
+        custom_fields?: Record<string, any>;
+        [key: string]: any;
+    };
+}
+
+export interface VersionHistoryEntry {
+    version: string;
+    date: string;
+    description: string;
+}
+
+export interface QualityStats {
+    splat_count?: number;
+    mesh_polygons?: number;
+    mesh_vertices?: number;
+    splat_file_size?: number;
+    mesh_file_size?: number;
+    pointcloud_points?: number;
+    pointcloud_file_size?: number;
+}
+
+export interface FileInfo {
+    blob: Blob;
+    originalName: string;
+    hash?: string;
+}
+
+export interface AddAssetOptions {
+    position?: [number, number, number];
+    rotation?: [number, number, number];
+    scale?: number;
+    created_by?: string;
+    created_by_version?: string;
+    source_notes?: string;
+    role?: string;
+    parameters?: Record<string, any>;
+}
+
+export interface AddProxyOptions extends AddAssetOptions {
+    derived_from?: string;
+    face_count?: number;
+}
+
+export interface AddSourceFileOptions {
+    category?: string;
+}
+
+export interface UpdateAssetMetadata {
+    createdBy?: string;
+    version?: string;
+    sourceNotes?: string;
+    role?: string;
+}
+
+export interface ViewerState {
+    splatBlob?: Blob | null;
+    splatFileName?: string | null;
+    splatTransform?: { position?: [number, number, number]; rotation?: [number, number, number]; scale?: number };
+    splatMetadata?: { createdBy?: string; version?: string; sourceNotes?: string };
+    meshBlob?: Blob | null;
+    meshFileName?: string | null;
+    meshTransform?: { position?: [number, number, number]; rotation?: [number, number, number]; scale?: number };
+    meshMetadata?: { createdBy?: string; version?: string; sourceNotes?: string };
+    pointcloudBlob?: Blob | null;
+    pointcloudFileName?: string | null;
+    pointcloudTransform?: { position?: [number, number, number]; rotation?: [number, number, number]; scale?: number };
+    pointcloudMetadata?: { createdBy?: string; version?: string; sourceNotes?: string };
+    annotations?: Annotation[];
+    qualityStats?: QualityStats;
+}
+
+export interface MetadataInput {
+    project?: Partial<ProjectInfo>;
+    relationships?: Partial<Relationships>;
+    provenance?: ProvenanceInfo;
+    qualityMetrics?: QualityMetrics;
+    archivalRecord?: ArchivalRecord;
+    materialStandard?: MaterialStandard;
+    viewerSettings?: ViewerSettings;
+    preservation?: Preservation;
+    splatMetadata?: UpdateAssetMetadata;
+    meshMetadata?: UpdateAssetMetadata;
+    pointcloudMetadata?: UpdateAssetMetadata;
+    customFields?: Record<string, any>;
+    versionHistory?: VersionHistoryEntry[];
+    qualityStats?: QualityStats;
+}
+
+export interface MetadataSummary {
+    project: ProjectInfo;
+    provenance: Manifest['provenance'];
+    annotationCount: number;
+    fileCount: number;
+    hasIntegrity: boolean;
+    customFields: Record<string, any>;
+    quality: QualityStats;
+}
+
+export interface CreateArchiveOptions {
+    format?: 'a3d' | 'a3z';
+    includeHashes?: boolean;
+    compression?: 'DEFLATE' | 'STORE';
+}
+
+export interface DownloadArchiveOptions extends CreateArchiveOptions {
+    filename?: string;
+}
+
+export interface ValidationResult {
+    valid: boolean;
+    errors: string[];
+}
+
+export interface CaptureScreenshotOptions {
+    width?: number;
+    height?: number;
+    format?: string;
+    quality?: number;
+}
+
+// ===== Hash Calculation Functions =====
+
+async function calculateSHA256(data: Blob | ArrayBuffer, onProgress: ((progress: number) => void) | null = null): Promise<string | null> {
     if (!CRYPTO_AVAILABLE) {
-        log.warn(' crypto.subtle not available (requires HTTPS). Skipping hash.');
+        log.warn('✗ crypto.subtle not available (requires HTTPS). Skipping hash.');
         return null;
     }
 
-    let buffer;
+    let buffer: ArrayBuffer;
     if (data instanceof Blob) {
         // For large blobs, read in chunks to reduce memory pressure
         if (data.size > 10 * 1024 * 1024 && data.stream) {
@@ -54,26 +438,21 @@ async function calculateSHA256(data, onProgress = null) {
     return hex;
 }
 
-/**
- * Calculate SHA-256 using streaming for large files
- * This reduces peak memory usage
- */
-async function calculateSHA256Streaming(blob, onProgress = null) {
+async function calculateSHA256Streaming(blob: Blob, onProgress: ((progress: number) => void) | null = null): Promise<string | null> {
     if (!CRYPTO_AVAILABLE) {
-        log.warn(' crypto.subtle not available (requires HTTPS). Skipping hash.');
+        log.warn('✗ crypto.subtle not available (requires HTTPS). Skipping hash.');
         return null;
     }
 
     const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks
     const totalSize = blob.size;
-    let processedSize = 0;
 
     // We need to accumulate chunks and hash at the end
     // Unfortunately, SubtleCrypto doesn't support incremental hashing
     // So we read in chunks but still need full buffer for hashing
     // The benefit is more responsive UI during the read phase
 
-    const chunks = [];
+    const chunks: Uint8Array[] = [];
     let offset = 0;
 
     while (offset < totalSize) {
@@ -82,9 +461,8 @@ async function calculateSHA256Streaming(blob, onProgress = null) {
         const arrayBuffer = await chunk.arrayBuffer();
         chunks.push(new Uint8Array(arrayBuffer));
 
-        processedSize = end;
         if (onProgress) {
-            onProgress(processedSize / totalSize);
+            onProgress(end / totalSize);
         }
 
         offset = end;
@@ -114,21 +492,22 @@ async function calculateSHA256Streaming(blob, onProgress = null) {
     return hex;
 }
 
-/**
- * Archive Creator class for building .a3d/.a3z files
- */
+// ===== Archive Creator Class =====
+
 export class ArchiveCreator {
+    manifest: Manifest;
+    files: Map<string, FileInfo>;
+    annotations: Annotation[];
+    hashCache: Map<Blob, string>;
+
     constructor() {
         this.manifest = this._createEmptyManifest();
-        this.files = new Map(); // path -> { blob, originalName, hash? }
+        this.files = new Map();
         this.annotations = [];
-        this.hashCache = new Map(); // blob -> hash (for pre-computed hashes)
+        this.hashCache = new Map();
     }
 
-    /**
-     * Create an empty manifest with default structure
-     */
-    _createEmptyManifest() {
+    private _createEmptyManifest(): Manifest {
         return {
             container_version: "1.0",
             packer: "simple-splat-mesh-viewer",
@@ -253,16 +632,9 @@ export class ArchiveCreator {
         };
     }
 
-    /**
-     * Generate a plain-text README for inclusion in the archive.
-     * Written for maximum longevity: pure ASCII, no markup, no Unicode.
-     * A reader in 50 or 200 years should be able to understand the archive
-     * contents without any knowledge of this software.
-     * @returns {string} Plain-text README content
-     */
-    _generateReadme() {
+    private _generateReadme(): string {
         const m = this.manifest;
-        const lines = [];
+        const lines: string[] = [];
         const W = 68; // line width for separators
         const sep = '='.repeat(W);
         const subsep = '-'.repeat(W);
@@ -309,7 +681,7 @@ export class ArchiveCreator {
         lines.push('manifest.json    Structured metadata (JSON format)');
 
         // List data entry files with descriptions
-        const formatLabels = {
+        const formatLabels: Record<string, string> = {
             ply: 'Gaussian splat data (PLY format)',
             splat: 'Gaussian splat data',
             ksplat: 'Gaussian splat data',
@@ -326,7 +698,7 @@ export class ArchiveCreator {
 
         for (const [key, entry] of Object.entries(m.data_entries)) {
             const fname = entry.file_name;
-            const ext = fname.split('.').pop().toLowerCase();
+            const ext = fname.split('.').pop()?.toLowerCase() || '';
             let label = formatLabels[ext] || 'Data file';
             if (key.startsWith('thumbnail_')) label = 'Thumbnail preview';
             if (key.startsWith('image_')) label = 'Embedded image';
@@ -365,7 +737,7 @@ export class ArchiveCreator {
             lines.push(subsep);
             lines.push(`This archive contains ${sourceEntries.length} source file(s) preserved for archival:`);
             let totalSourceBytes = 0;
-            const categoryLabels = {
+            const categoryLabels: Record<string, string> = {
                 raw_photography: 'Raw Photography',
                 processing_report: 'Processing Report',
                 ground_control: 'Ground Control Points',
@@ -401,9 +773,9 @@ export class ArchiveCreator {
         lines.push('');
 
         // Only list formats that are actually present
-        const presentExts = new Set();
+        const presentExts = new Set<string>();
         for (const entry of Object.values(m.data_entries)) {
-            presentExts.add(entry.file_name.split('.').pop().toLowerCase());
+            presentExts.add(entry.file_name.split('.').pop()?.toLowerCase() || '');
         }
 
         if (presentExts.has('glb') || presentExts.has('gltf')) {
@@ -495,64 +867,41 @@ export class ArchiveCreator {
         return lines.join('\n');
     }
 
-    /**
-     * Reset the creator to empty state
-     * Note: hashCache is preserved to allow reuse of pre-computed hashes
-     */
-    reset() {
+    reset(): void {
         this.manifest = this._createEmptyManifest();
         this.files.clear();
         this.annotations = [];
         // Don't clear hashCache - it can be reused across exports
     }
 
-    /**
-     * Pre-compute and cache a hash for a blob
-     * Call this when loading files to speed up later export
-     * @param {Blob} blob - The blob to hash
-     * @returns {Promise<string|null>} The hash, or null if crypto unavailable
-     */
-    async precomputeHash(blob) {
+    async precomputeHash(blob: Blob): Promise<string | null> {
         if (!CRYPTO_AVAILABLE) {
             return null;
         }
         if (this.hashCache.has(blob)) {
-            return this.hashCache.get(blob);
+            return this.hashCache.get(blob)!;
         }
-        log.debug(' Pre-computing hash for blob, size:', blob.size);
+        log.debug('✓ Pre-computing hash for blob, size:', blob.size);
         const hash = await calculateSHA256(blob);
         if (hash) {
             this.hashCache.set(blob, hash);
-            log.debug(' Hash pre-computed and cached');
+            log.debug('✓ Hash pre-computed and cached');
         }
         return hash;
     }
 
-    /**
-     * Get cached hash for a blob, or null if not cached
-     * @param {Blob} blob
-     * @returns {string|null}
-     */
-    getCachedHash(blob) {
+    getCachedHash(blob: Blob): string | null {
         return this.hashCache.get(blob) || null;
     }
 
-    /**
-     * Set project information
-     * @param {Object} info - Project info
-     */
-    setProjectInfo({ title, id, license, description }) {
+    setProjectInfo({ title, id, license, description }: Partial<ProjectInfo>): void {
         if (title !== undefined) this.manifest.project.title = title;
         if (id !== undefined) this.manifest.project.id = id;
         if (license !== undefined) this.manifest.project.license = license;
         if (description !== undefined) this.manifest.project.description = description;
     }
 
-    /**
-     * Set provenance information
-     * @param {Object} info - Provenance info
-     */
-    setProvenance({ captureDate, captureDevice, deviceSerial, operator, operatorOrcid, location, conventions, processingSoftware, processingNotes }) {
+    setProvenance({ captureDate, captureDevice, deviceSerial, operator, operatorOrcid, location, conventions, processingSoftware, processingNotes }: ProvenanceInfo): void {
         if (captureDate !== undefined) this.manifest.provenance.capture_date = captureDate;
         if (captureDevice !== undefined) this.manifest.provenance.capture_device = captureDevice;
         if (deviceSerial !== undefined) this.manifest.provenance.device_serial = deviceSerial;
@@ -572,11 +921,7 @@ export class ArchiveCreator {
         if (processingNotes !== undefined) this.manifest.provenance.processing_notes = processingNotes;
     }
 
-    /**
-     * Set quality metrics
-     * @param {Object} metrics - Quality metrics from form
-     */
-    setQualityMetrics(metrics) {
+    setQualityMetrics(metrics: QualityMetrics): void {
         if (!metrics) return;
 
         if (metrics.tier !== undefined) this.manifest.quality_metrics.tier = metrics.tier;
@@ -624,11 +969,7 @@ export class ArchiveCreator {
         }
     }
 
-    /**
-     * Set archival record (Dublin Core)
-     * @param {Object} record - Archival record from form
-     */
-    setArchivalRecord(record) {
+    setArchivalRecord(record: ArchivalRecord): void {
         if (!record) return;
 
         if (record.standard !== undefined) this.manifest.archival_record.standard = record.standard;
@@ -731,22 +1072,14 @@ export class ArchiveCreator {
         }
     }
 
-    /**
-     * Set viewer settings (display defaults)
-     * @param {Object} settings - Viewer settings from form
-     */
-    setViewerSettings(settings) {
+    setViewerSettings(settings: ViewerSettings): void {
         if (!settings) return;
 
         if (settings.singleSided !== undefined) this.manifest.viewer_settings.single_sided = settings.singleSided;
         if (settings.backgroundColor !== undefined) this.manifest.viewer_settings.background_color = settings.backgroundColor;
     }
 
-    /**
-     * Set material standard (PBR)
-     * @param {Object} material - Material standard from form
-     */
-    setMaterialStandard(material) {
+    setMaterialStandard(material: MaterialStandard): void {
         if (!material) return;
 
         if (material.workflow !== undefined) this.manifest.material_standard.workflow = material.workflow;
@@ -755,11 +1088,7 @@ export class ArchiveCreator {
         if (material.normalSpace !== undefined) this.manifest.material_standard.normal_space = material.normalSpace;
     }
 
-    /**
-     * Set relationship links
-     * @param {Object} relationships - Relationship data from form
-     */
-    setRelationships(relationships) {
+    setRelationships(relationships: Relationships): void {
         if (!relationships) return;
 
         if (relationships.partOf !== undefined) this.manifest.relationships.part_of = relationships.partOf;
@@ -772,11 +1101,7 @@ export class ArchiveCreator {
         }
     }
 
-    /**
-     * Set preservation metadata (PREMIS-inspired)
-     * @param {Object} preservation - Preservation data from form
-     */
-    setPreservation(preservation) {
+    setPreservation(preservation: Preservation): void {
         if (!preservation) return;
 
         if (preservation.formatRegistry) {
@@ -808,52 +1133,29 @@ export class ArchiveCreator {
         }
     }
 
-    /**
-     * Set custom fields in _meta
-     * @param {Object} customFields - Key-value pairs
-     */
-    setCustomFields(customFields) {
+    setCustomFields(customFields: Record<string, any>): void {
         this.manifest._meta.custom_fields = { ...customFields };
     }
 
-    /**
-     * Add a custom field
-     * @param {string} key - Field key
-     * @param {string} value - Field value
-     */
-    addCustomField(key, value) {
+    addCustomField(key: string, value: any): void {
         if (!this.manifest._meta.custom_fields) {
             this.manifest._meta.custom_fields = {};
         }
         this.manifest._meta.custom_fields[key] = value;
     }
 
-    /**
-     * Set container version
-     * @param {string} version
-     */
-    setVersion(version) {
+    setVersion(version: string): void {
         this.manifest.container_version = version;
     }
 
-    /**
-     * Set custom metadata
-     * @param {Object} meta
-     */
-    setMeta(meta) {
+    setMeta(meta: Record<string, any>): void {
         this.manifest._meta = { ...this.manifest._meta, ...meta };
     }
 
-    /**
-     * Add a scene entry (splat file)
-     * @param {Blob} blob - The file data
-     * @param {string} fileName - Original filename
-     * @param {Object} options - Additional options
-     */
-    addScene(blob, fileName, options = {}) {
+    addScene(blob: Blob, fileName: string, options: AddAssetOptions = {}): string {
         const index = this._countEntriesOfType('scene_');
         const entryKey = `scene_${index}`;
-        const ext = fileName.split('.').pop().toLowerCase();
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
         const archivePath = `assets/scene_${index}.${ext}`;
 
         this.files.set(archivePath, { blob, originalName: fileName });
@@ -875,12 +1177,7 @@ export class ArchiveCreator {
         return entryKey;
     }
 
-    /**
-     * Update an existing scene entry's metadata
-     * @param {number} index - Scene index (0-based)
-     * @param {Object} metadata - Metadata to update
-     */
-    updateSceneMetadata(index, { createdBy, version, sourceNotes, role }) {
+    updateSceneMetadata(index: number, { createdBy, version, sourceNotes, role }: UpdateAssetMetadata): boolean {
         const entryKey = `scene_${index}`;
         if (!this.manifest.data_entries[entryKey]) return false;
 
@@ -891,16 +1188,10 @@ export class ArchiveCreator {
         return true;
     }
 
-    /**
-     * Add a display proxy scene (splat) entry (pre-simplified LOD variant)
-     * @param {Blob} blob - The proxy splat file data
-     * @param {string} fileName - Original filename
-     * @param {Object} options - Additional options (derived_from, etc.)
-     */
-    addSceneProxy(blob, fileName, options = {}) {
+    addSceneProxy(blob: Blob, fileName: string, options: AddProxyOptions = {}): string {
         const derivedFrom = options.derived_from || 'scene_0';
         const entryKey = `${derivedFrom}_proxy`;
-        const ext = fileName.split('.').pop().toLowerCase();
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
         const archivePath = `assets/${entryKey}.${ext}`;
 
         this.files.set(archivePath, { blob, originalName: fileName });
@@ -924,16 +1215,10 @@ export class ArchiveCreator {
         return entryKey;
     }
 
-    /**
-     * Add a mesh entry
-     * @param {Blob} blob - The file data
-     * @param {string} fileName - Original filename
-     * @param {Object} options - Additional options
-     */
-    addMesh(blob, fileName, options = {}) {
+    addMesh(blob: Blob, fileName: string, options: AddAssetOptions = {}): string {
         const index = this._countEntriesOfType('mesh_');
         const entryKey = `mesh_${index}`;
-        const ext = fileName.split('.').pop().toLowerCase();
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
         const archivePath = `assets/mesh_${index}.${ext}`;
 
         this.files.set(archivePath, { blob, originalName: fileName });
@@ -955,12 +1240,7 @@ export class ArchiveCreator {
         return entryKey;
     }
 
-    /**
-     * Update an existing mesh entry's metadata
-     * @param {number} index - Mesh index (0-based)
-     * @param {Object} metadata - Metadata to update
-     */
-    updateMeshMetadata(index, { createdBy, version, sourceNotes, role }) {
+    updateMeshMetadata(index: number, { createdBy, version, sourceNotes, role }: UpdateAssetMetadata): boolean {
         const entryKey = `mesh_${index}`;
         if (!this.manifest.data_entries[entryKey]) return false;
 
@@ -971,17 +1251,10 @@ export class ArchiveCreator {
         return true;
     }
 
-    /**
-     * Add a display proxy mesh entry (pre-simplified LOD variant)
-     * @param {Blob} blob - The proxy mesh file data
-     * @param {string} fileName - Original filename
-     * @param {Object} options - Additional options (derived_from, face_count, etc.)
-     */
-    addMeshProxy(blob, fileName, options = {}) {
-        // Find the primary mesh index this proxy derives from
+    addMeshProxy(blob: Blob, fileName: string, options: AddProxyOptions = {}): string {
         const derivedFrom = options.derived_from || 'mesh_0';
         const entryKey = `${derivedFrom}_proxy`;
-        const ext = fileName.split('.').pop().toLowerCase();
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
         const archivePath = `assets/${entryKey}.${ext}`;
 
         this.files.set(archivePath, { blob, originalName: fileName });
@@ -1009,16 +1282,10 @@ export class ArchiveCreator {
         return entryKey;
     }
 
-    /**
-     * Add a point cloud entry (E57 file)
-     * @param {Blob} blob - The file data
-     * @param {string} fileName - Original filename
-     * @param {Object} options - Additional options
-     */
-    addPointcloud(blob, fileName, options = {}) {
+    addPointcloud(blob: Blob, fileName: string, options: AddAssetOptions = {}): string {
         const index = this._countEntriesOfType('pointcloud_');
         const entryKey = `pointcloud_${index}`;
-        const ext = fileName.split('.').pop().toLowerCase();
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
         const archivePath = `assets/pointcloud_${index}.${ext}`;
 
         this.files.set(archivePath, { blob, originalName: fileName });
@@ -1040,12 +1307,7 @@ export class ArchiveCreator {
         return entryKey;
     }
 
-    /**
-     * Update an existing point cloud entry's metadata
-     * @param {number} index - Pointcloud index (0-based)
-     * @param {Object} metadata - Metadata to update
-     */
-    updatePointcloudMetadata(index, { createdBy, version, sourceNotes, role }) {
+    updatePointcloudMetadata(index: number, { createdBy, version, sourceNotes, role }: UpdateAssetMetadata): boolean {
         const entryKey = `pointcloud_${index}`;
         if (!this.manifest.data_entries[entryKey]) return false;
 
@@ -1056,14 +1318,7 @@ export class ArchiveCreator {
         return true;
     }
 
-    /**
-     * Add a source file for archival preservation (not rendered in viewer)
-     * @param {Blob} blob - The file data
-     * @param {string} fileName - Original filename
-     * @param {Object} options - Additional options (category, etc.)
-     * @returns {string} The entry key
-     */
-    addSourceFile(blob, fileName, options = {}) {
+    addSourceFile(blob: Blob, fileName: string, options: AddSourceFileOptions = {}): string {
         const index = this._countEntriesOfType('source_');
         const entryKey = `source_${index}`;
 
@@ -1086,21 +1341,17 @@ export class ArchiveCreator {
             original_name: fileName,
             role: "source",
             source_category: options.category || "",
-            size_bytes: blob.size
+            size_bytes: blob.size,
+            created_by: "unknown"
         };
 
         return entryKey;
     }
 
-    /**
-     * Add a thumbnail/preview image
-     * @param {Blob} blob - The image data
-     * @param {string} fileName - Original filename
-     */
-    addThumbnail(blob, fileName) {
+    addThumbnail(blob: Blob, fileName: string): string {
         const index = this._countEntriesOfType('thumbnail_');
         const entryKey = `thumbnail_${index}`;
-        const ext = fileName.split('.').pop().toLowerCase();
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
         const archivePath = `preview.${ext}`;
 
         this.files.set(archivePath, { blob, originalName: fileName });
@@ -1113,15 +1364,10 @@ export class ArchiveCreator {
         return entryKey;
     }
 
-    /**
-     * Add a screenshot to the archive
-     * @param {Blob} blob - The image data
-     * @param {string} fileName - Original filename
-     */
-    addScreenshot(blob, fileName) {
+    addScreenshot(blob: Blob, fileName: string): string {
         const index = this._countEntriesOfType('screenshot_');
         const entryKey = `screenshot_${index}`;
-        const ext = fileName.split('.').pop().toLowerCase();
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
         const archivePath = `screenshots/${entryKey}.${ext}`;
 
         this.files.set(archivePath, { blob, originalName: fileName });
@@ -1134,12 +1380,7 @@ export class ArchiveCreator {
         return entryKey;
     }
 
-    /**
-     * Add an embedded image (used in annotation/description markdown)
-     * @param {Blob} blob - The image data
-     * @param {string} archivePath - Path within archive (e.g., 'images/photo.jpg')
-     */
-    addImage(blob, archivePath) {
+    addImage(blob: Blob, archivePath: string): string {
         const index = this._countEntriesOfType('image_');
         const entryKey = `image_${index}`;
 
@@ -1153,79 +1394,48 @@ export class ArchiveCreator {
         return entryKey;
     }
 
-    /**
-     * Count entries of a specific type
-     */
-    _countEntriesOfType(prefix) {
+    private _countEntriesOfType(prefix: string): number {
         return Object.keys(this.manifest.data_entries)
             .filter(k => k.startsWith(prefix))
             .length;
     }
 
-    /**
-     * Set quality statistics in _meta
-     * @param {Object} stats - Quality statistics
-     */
-    setQualityStats({ splatCount, meshPolys, meshVerts, splatFileSize, meshFileSize, pointcloudPoints, pointcloudFileSize }) {
+    setQualityStats(stats: QualityStats): void {
         if (!this.manifest._meta.quality) {
             this.manifest._meta.quality = {};
         }
-        if (splatCount !== undefined) this.manifest._meta.quality.splat_count = splatCount;
-        if (meshPolys !== undefined) this.manifest._meta.quality.mesh_polygons = meshPolys;
-        if (meshVerts !== undefined) this.manifest._meta.quality.mesh_vertices = meshVerts;
-        if (splatFileSize !== undefined) this.manifest._meta.quality.splat_file_size = splatFileSize;
-        if (meshFileSize !== undefined) this.manifest._meta.quality.mesh_file_size = meshFileSize;
-        if (pointcloudPoints !== undefined) this.manifest._meta.quality.pointcloud_points = pointcloudPoints;
-        if (pointcloudFileSize !== undefined) this.manifest._meta.quality.pointcloud_file_size = pointcloudFileSize;
+        if (stats.splat_count !== undefined) this.manifest._meta.quality.splat_count = stats.splat_count;
+        if (stats.mesh_polygons !== undefined) this.manifest._meta.quality.mesh_polygons = stats.mesh_polygons;
+        if (stats.mesh_vertices !== undefined) this.manifest._meta.quality.mesh_vertices = stats.mesh_vertices;
+        if (stats.splat_file_size !== undefined) this.manifest._meta.quality.splat_file_size = stats.splat_file_size;
+        if (stats.mesh_file_size !== undefined) this.manifest._meta.quality.mesh_file_size = stats.mesh_file_size;
+        if (stats.pointcloud_points !== undefined) this.manifest._meta.quality.pointcloud_points = stats.pointcloud_points;
+        if (stats.pointcloud_file_size !== undefined) this.manifest._meta.quality.pointcloud_file_size = stats.pointcloud_file_size;
     }
 
-    /**
-     * Get current quality stats from _meta
-     * @returns {Object} Quality stats
-     */
-    getQualityStats() {
+    getQualityStats(): QualityStats {
         return this.manifest._meta.quality || {};
     }
 
-    /**
-     * Get integrity data (hashes)
-     * @returns {Object|null} Integrity data or null if not calculated
-     */
-    getIntegrity() {
+    getIntegrity(): IntegrityData | null {
         return this.manifest.integrity || null;
     }
 
-    /**
-     * Set annotations
-     * @param {Array} annotations - Array of annotation objects
-     */
-    setAnnotations(annotations) {
+    setAnnotations(annotations: Annotation[]): void {
         this.annotations = [...annotations];
         this.manifest.annotations = this.annotations;
     }
 
-    /**
-     * Add a single annotation
-     * @param {Object} annotation
-     */
-    addAnnotation(annotation) {
+    addAnnotation(annotation: Annotation): void {
         this.annotations.push(annotation);
         this.manifest.annotations = this.annotations;
     }
 
-    /**
-     * Set version history entries
-     * @param {Array} entries - Array of {version, date, description}
-     */
-    setVersionHistory(entries) {
+    setVersionHistory(entries: VersionHistoryEntry[]): void {
         this.manifest.version_history = Array.isArray(entries) ? [...entries] : [];
     }
 
-    /**
-     * Add a single version history entry
-     * @param {Object} entry - {version, date, description}
-     */
-    addVersionHistoryEntry(entry) {
+    addVersionHistoryEntry(entry: VersionHistoryEntry): void {
         if (!this.manifest.version_history) {
             this.manifest.version_history = [];
         }
@@ -1236,11 +1446,7 @@ export class ArchiveCreator {
         });
     }
 
-    /**
-     * Capture current scene from viewer
-     * @param {Object} viewerState - State from the viewer
-     */
-    captureFromViewer(viewerState) {
+    captureFromViewer(viewerState: ViewerState): void {
         const { splatBlob, splatFileName, splatTransform, splatMetadata,
                 meshBlob, meshFileName, meshTransform, meshMetadata,
                 pointcloudBlob, pointcloudFileName, pointcloudTransform, pointcloudMetadata,
@@ -1288,11 +1494,7 @@ export class ArchiveCreator {
         }
     }
 
-    /**
-     * Apply all metadata from a metadata panel form
-     * @param {Object} metadata - Collected metadata from form
-     */
-    applyMetadata(metadata) {
+    applyMetadata(metadata: MetadataInput): void {
         // Project info
         if (metadata.project) {
             this.setProjectInfo(metadata.project);
@@ -1360,11 +1562,7 @@ export class ArchiveCreator {
         }
     }
 
-    /**
-     * Get a summary of current metadata for display
-     * @returns {Object} Metadata summary
-     */
-    getMetadataSummary() {
+    getMetadataSummary(): MetadataSummary {
         return {
             project: { ...this.manifest.project },
             provenance: { ...this.manifest.provenance },
@@ -1376,19 +1574,13 @@ export class ArchiveCreator {
         };
     }
 
-    /**
-     * Calculate integrity hashes for all files
-     * Runs hashes in parallel for better performance
-     * @param {Function} onProgress - Optional progress callback
-     * @returns {Promise<Object|null>} Hash mapping, or null if crypto unavailable
-     */
-    async calculateHashes(onProgress = null) {
-        log.debug(' calculateHashes started, files:', this.files.size);
+    async calculateHashes(onProgress: ((progress: number) => void) | null = null): Promise<Record<string, string> | null> {
+        log.debug('✓ calculateHashes started, files:', this.files.size);
 
         // Check if crypto is available
         if (!CRYPTO_AVAILABLE) {
-            log.warn(' crypto.subtle not available - skipping integrity hashes');
-            log.warn(' Archive will be created without integrity verification');
+            log.warn('✗ crypto.subtle not available - skipping integrity hashes');
+            log.warn('✗ Archive will be created without integrity verification');
             return null;
         }
 
@@ -1398,17 +1590,17 @@ export class ArchiveCreator {
 
         // Check which files have cached hashes
         const cachedCount = entries.filter(([, { blob }]) => this.hashCache.has(blob)).length;
-        log.debug(' Cached hashes available:', cachedCount, '/', entries.length);
+        log.debug('✓ Cached hashes available:', cachedCount, '/', entries.length);
 
         // Calculate all hashes in parallel (using cache when available)
-        log.debug(' Starting hash calculations, total size:', totalSize);
+        log.debug('✓ Starting hash calculations, total size:', totalSize);
         const startTime = performance.now();
 
         const hashPromises = entries.map(async ([path, { blob }]) => {
             // Check cache first
             const cachedHash = this.hashCache.get(blob);
             if (cachedHash) {
-                log.debug(' Using cached hash for:', path);
+                log.debug('✓ Using cached hash for:', path);
                 processedSize += blob.size;
                 if (onProgress) {
                     onProgress(processedSize / totalSize);
@@ -1416,8 +1608,8 @@ export class ArchiveCreator {
                 return { path, hash: cachedHash };
             }
 
-            log.debug(' Computing hash for:', path, 'size:', blob.size);
-            const hash = await calculateSHA256(blob, (progress) => {
+            log.debug('✓ Computing hash for:', path, 'size:', blob.size);
+            const hash = await calculateSHA256(blob, (_progress) => {
                 // Individual file progress (for streaming)
             });
 
@@ -1430,13 +1622,13 @@ export class ArchiveCreator {
             if (onProgress) {
                 onProgress(processedSize / totalSize);
             }
-            log.debug(' Hash complete for:', path);
+            log.debug('✓ Hash complete for:', path);
             return { path, hash };
         });
 
         const results = await Promise.all(hashPromises);
 
-        const hashes = {};
+        const hashes: Record<string, string> = {};
         for (const { path, hash } of results) {
             if (hash) {
                 hashes[path] = hash;
@@ -1444,12 +1636,12 @@ export class ArchiveCreator {
         }
 
         const elapsed = performance.now() - startTime;
-        log.debug(` All file hashes calculated in ${elapsed.toFixed(0)}ms`);
+        log.debug(`✓ All file hashes calculated in ${elapsed.toFixed(0)}ms`);
 
         // Calculate manifest hash from all asset hashes
-        log.debug(' Calculating manifest hash');
+        log.debug('✓ Calculating manifest hash');
         const allHashes = Object.values(hashes).sort().join('');
-        const manifestHash = await calculateSHA256(new TextEncoder().encode(allHashes));
+        const manifestHash = await calculateSHA256(new TextEncoder().encode(allHashes).buffer);
 
         this.manifest.integrity = {
             algorithm: "SHA-256",
@@ -1457,37 +1649,23 @@ export class ArchiveCreator {
             assets: hashes
         };
 
-        log.debug(' All hashes calculated');
+        log.debug('✓ All hashes calculated');
         return hashes;
     }
 
-    /**
-     * Generate the manifest JSON
-     * @returns {string} JSON string
-     */
-    generateManifest() {
+    generateManifest(): string {
         // Update creation date
         this.manifest._creation_date = new Date().toISOString();
 
         return JSON.stringify(this.manifest, null, 2);
     }
 
-    /**
-     * Preview the manifest (for UI display)
-     * @returns {Object} The manifest object
-     */
-    previewManifest() {
+    previewManifest(): Manifest {
         return JSON.parse(this.generateManifest());
     }
 
-    /**
-     * Create the archive file using fflate for fast ZIP creation
-     * @param {Object} options - Creation options
-     * @param {Function} onProgress - Progress callback (percent, stage)
-     * @returns {Promise<Blob>} The archive blob
-     */
-    async createArchive(options = {}, onProgress = null) {
-        log.debug(' createArchive called with options:', options);
+    async createArchive(options: CreateArchiveOptions = {}, onProgress: ((percent: number, stage: string) => void) | null = null): Promise<Blob> {
+        log.debug('✓ createArchive called with options:', options);
         const {
             format = 'a3d',
             includeHashes = true,
@@ -1496,25 +1674,25 @@ export class ArchiveCreator {
 
         // Compression level: 0 = STORE, 6 = good balance for DEFLATE
         const defaultLevel = compression === 'DEFLATE' ? 6 : 0;
-        log.debug(' Using compression:', compression, 'level:', defaultLevel);
+        log.debug('✓ Using compression:', compression, 'level:', defaultLevel);
 
         // Calculate hashes if requested (0-20% of progress)
         if (includeHashes) {
-            log.debug(' Calculating hashes...');
+            log.debug('✓ Calculating hashes...');
             if (onProgress) onProgress(0, 'Calculating hashes...');
             await this.calculateHashes();
-            log.debug(' Hashes calculated');
+            log.debug('✓ Hashes calculated');
             if (onProgress) onProgress(20, 'Hashes complete');
         }
 
         // Build the fflate file structure
-        log.debug(' Preparing files for fflate');
+        log.debug('✓ Preparing files for fflate');
         if (onProgress) onProgress(includeHashes ? 20 : 0, 'Preparing archive...');
 
-        const zipData = {};
+        const zipData: Record<string, [Uint8Array, AsyncZipOptions]> = {};
 
         // Add manifest (always use light compression for JSON)
-        log.debug(' Generating manifest');
+        log.debug('✓ Generating manifest');
         const manifestJson = this.generateManifest();
         zipData['manifest.json'] = [strToU8(manifestJson), { level: 6 }];
 
@@ -1523,7 +1701,7 @@ export class ArchiveCreator {
         zipData['README.txt'] = [strToU8(readmeText), { level: 6 }];
 
         // Convert blobs to Uint8Array and add to structure
-        log.debug(' Converting files, count:', this.files.size);
+        log.debug('✓ Converting files, count:', this.files.size);
         const entries = Array.from(this.files.entries());
         const totalSize = entries.reduce((sum, [, { blob }]) => sum + blob.size, 0);
         let convertedSize = 0;
@@ -1533,11 +1711,11 @@ export class ArchiveCreator {
 
         for (const [path, { blob }] of entries) {
             // Use STORE (level 0) for already-compressed formats
-            const ext = path.split('.').pop().toLowerCase();
+            const ext = path.split('.').pop()?.toLowerCase() || '';
             const alreadyCompressed = ['glb', 'spz', 'sog', 'jpg', 'jpeg', 'png', 'webp', 'e57'].includes(ext);
             const fileLevel = alreadyCompressed ? 0 : defaultLevel;
 
-            log.debug(' Converting file:', path, 'size:', blob.size, 'level:', fileLevel);
+            log.debug('✓ Converting file:', path, 'size:', blob.size, 'level:', fileLevel);
 
             // Convert blob to Uint8Array
             const arrayBuffer = await blob.arrayBuffer();
@@ -1553,16 +1731,16 @@ export class ArchiveCreator {
         }
 
         // Generate the archive using fflate (40-100% of progress)
-        log.debug(' Generating zip archive with fflate...');
+        log.debug('✓ Generating zip archive with fflate...');
         if (onProgress) onProgress(baseProgress + conversionRange, 'Generating archive...');
 
         const startZipTime = performance.now();
 
         // fflate's zip() is callback-based, wrap in promise
-        const zipResult = await new Promise((resolve, reject) => {
-            zip(zipData, { level: defaultLevel }, (err, data) => {
+        const zipResult = await new Promise<Uint8Array>((resolve, reject) => {
+            zip(zipData, { level: defaultLevel as AsyncZipOptions['level'] }, (err, data) => {
                 if (err) {
-                    log.error(' fflate error:', err);
+                    log.error('✗ fflate error:', err);
                     reject(err);
                 } else {
                     resolve(data);
@@ -1571,40 +1749,35 @@ export class ArchiveCreator {
         });
 
         const zipElapsed = performance.now() - startZipTime;
-        log.debug(` fflate ZIP generation took ${zipElapsed.toFixed(0)}ms`);
+        log.debug(`✓ fflate ZIP generation took ${zipElapsed.toFixed(0)}ms`);
 
         // Convert Uint8Array to Blob
-        const archiveBlob = new Blob([zipResult], { type: 'application/zip' });
+        const archiveBlob = new Blob([zipResult as any], { type: 'application/zip' });
 
-        log.debug(' Archive generated, size:', archiveBlob.size);
+        log.debug('✓ Archive generated, size:', archiveBlob.size);
         if (onProgress) onProgress(100, 'Complete');
         return archiveBlob;
     }
 
-    /**
-     * Download the archive
-     * @param {Object} options - Creation options plus filename
-     * @param {Function} onProgress - Progress callback (percent, stage)
-     */
-    async downloadArchive(options = {}, onProgress = null) {
-        log.debug(' downloadArchive called with options:', options);
+    async downloadArchive(options: DownloadArchiveOptions = {}, onProgress: ((percent: number, stage: string) => void) | null = null): Promise<void> {
+        log.debug('✓ downloadArchive called with options:', options);
         const {
             filename = 'archive',
             format = 'a3d',
             ...createOptions
         } = options;
 
-        log.debug(' Creating archive blob...');
+        log.debug('✓ Creating archive blob...');
         const blob = await this.createArchive({ format, ...createOptions }, onProgress);
-        log.debug(' Archive blob created, size:', blob.size);
+        log.debug('✓ Archive blob created, size:', blob.size);
 
         const downloadName = `${filename}.${format}`;
 
         // Try Tauri native save dialog first
-        if (window.__TAURI__) {
+        if ((window as any).__TAURI__) {
             try {
-                const { save } = window.__TAURI__.dialog;
-                const { writeFile } = window.__TAURI__.fs;
+                const { save } = (window as any).__TAURI__.dialog;
+                const { writeFile } = (window as any).__TAURI__.fs;
                 const path = await save({
                     title: 'Save Archive',
                     defaultPath: downloadName,
@@ -1623,33 +1796,25 @@ export class ArchiveCreator {
 
         // Browser fallback: anchor-click download
         const url = URL.createObjectURL(blob);
-        log.debug(' Blob URL created:', url);
+        log.debug('✓ Blob URL created:', url);
 
         const a = document.createElement('a');
         a.href = url;
         a.download = downloadName;
         document.body.appendChild(a);
-        log.debug(' Triggering download:', a.download);
+        log.debug('✓ Triggering download:', a.download);
         a.click();
         document.body.removeChild(a);
 
         URL.revokeObjectURL(url);
-        log.debug(' Download triggered, URL revoked');
+        log.debug('✓ Download triggered, URL revoked');
     }
 
-    /**
-     * Get file count
-     * @returns {number}
-     */
-    getFileCount() {
+    getFileCount(): number {
         return this.files.size;
     }
 
-    /**
-     * Get list of files in the archive
-     * @returns {Array<{path: string, size: number, originalName: string}>}
-     */
-    getFileList() {
+    getFileList(): Array<{ path: string; size: number; originalName: string }> {
         return Array.from(this.files.entries()).map(([path, { blob, originalName }]) => ({
             path,
             size: blob.size,
@@ -1657,12 +1822,8 @@ export class ArchiveCreator {
         }));
     }
 
-    /**
-     * Check if archive is valid (has minimum required content)
-     * @returns {{valid: boolean, errors: string[]}}
-     */
-    validate() {
-        const errors = [];
+    validate(): ValidationResult {
+        const errors: string[] = [];
 
         // Check for at least one viewable asset
         const hasScene = Object.keys(this.manifest.data_entries).some(k => k.startsWith('scene_'));
@@ -1692,13 +1853,9 @@ export class ArchiveCreator {
     }
 }
 
-/**
- * Capture a screenshot from a canvas element
- * @param {HTMLCanvasElement} canvas - The canvas to capture
- * @param {Object} options - Capture options
- * @returns {Promise<Blob>} The image blob
- */
-export async function captureScreenshot(canvas, options = {}) {
+// ===== Standalone Functions =====
+
+export async function captureScreenshot(canvas: HTMLCanvasElement, options: CaptureScreenshotOptions = {}): Promise<Blob> {
     const {
         width = 1024,
         height = 1024,
@@ -1711,6 +1868,10 @@ export async function captureScreenshot(canvas, options = {}) {
     tempCanvas.width = width;
     tempCanvas.height = height;
     const ctx = tempCanvas.getContext('2d');
+
+    if (!ctx) {
+        throw new Error('Failed to get 2D context from temporary canvas');
+    }
 
     // Draw the source canvas, cropping to square from center
     const srcWidth = canvas.width;
@@ -1726,7 +1887,9 @@ export async function captureScreenshot(canvas, options = {}) {
     );
 
     return new Promise(resolve => {
-        tempCanvas.toBlob(resolve, format, quality);
+        tempCanvas.toBlob((blob) => {
+            resolve(blob!);
+        }, format, quality);
     });
 }
 

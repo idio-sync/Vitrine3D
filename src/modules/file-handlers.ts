@@ -17,26 +17,27 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { SplatMesh } from '@sparkjsdev/spark';
 import { ArchiveLoader } from './archive-loader.js';
 import { TIMING, ASSET_STATE } from './constants.js';
+import { Logger, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject, fetchWithProgress } from './utilities.js';
+import type { AppState, QualityTier } from '../types.js';
+
 // E57Loader is loaded lazily via dynamic import to allow graceful degradation
 // when the three-e57-loader CDN module is unavailable (e.g., offline kiosk viewer).
-import { Logger, notify, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, disposeObject, fetchWithProgress } from './utilities.js';
 
 // Lazy-loaded E57 support
-let _E57Loader = null;
+let _E57Loader: any = null;
 let _e57Checked = false;
 
 /**
  * Lazily load the E57Loader. Returns null if unavailable (e.g., offline).
- * @returns {Promise<Function|null>}
  */
-async function getE57Loader() {
+async function getE57Loader(): Promise<any | null> {
     if (_e57Checked) return _E57Loader;
     _e57Checked = true;
     try {
         const mod = await import('three-e57-loader');
         _E57Loader = mod.E57Loader;
         log.info('E57 loader available');
-    } catch (e) {
+    } catch (e: any) {
         log.warn('E57 loader not available:', e.message);
         _E57Loader = null;
     }
@@ -46,16 +47,139 @@ async function getE57Loader() {
 const log = Logger.getLogger('file-handlers');
 
 // =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
+
+interface LoadSplatDeps {
+    scene: THREE.Scene;
+    getSplatMesh: () => any;
+    setSplatMesh: (mesh: any) => void;
+    state: AppState;
+    archiveCreator?: any;
+    callbacks?: {
+        onSplatLoaded?: (mesh: any, file: File | Blob) => void;
+        onApplySplatTransform?: (transform: any) => void;
+        [key: string]: any;
+    };
+}
+
+interface LoadModelDeps {
+    modelGroup: THREE.Group;
+    state: AppState;
+    archiveCreator?: any;
+    callbacks?: {
+        onModelLoaded?: (object: THREE.Object3D, file: File | Blob, faceCount: number) => void;
+    };
+}
+
+interface LoadSTLDeps {
+    stlGroup: THREE.Group;
+    state: AppState;
+    callbacks?: {
+        onSTLLoaded?: (object: THREE.Mesh, file: File | Blob, faceCount: number) => void;
+    };
+}
+
+interface LoadArchiveDeps {
+    state: AppState;
+}
+
+interface ProcessArchiveDeps {
+    scene: THREE.Scene;
+    getSplatMesh: () => any;
+    setSplatMesh: (mesh: any) => void;
+    modelGroup: THREE.Group;
+    state: AppState;
+    callbacks?: {
+        onApplySplatTransform?: (transform: any) => void;
+        onApplyModelTransform?: (transform: any) => void;
+        onApplyPointcloudTransform?: (transform: any) => void;
+    };
+}
+
+interface LoadArchiveAssetDeps {
+    scene: THREE.Scene;
+    getSplatMesh: () => any;
+    setSplatMesh: (mesh: any) => void;
+    modelGroup: THREE.Group;
+    pointcloudGroup: THREE.Group;
+    state: AppState;
+    qualityTier?: QualityTier | string;
+    callbacks?: {
+        onApplySplatTransform?: (transform: any) => void;
+        onApplyModelTransform?: (transform: any) => void;
+        onApplyPointcloudTransform?: (transform: any) => void;
+    };
+}
+
+interface LoadFullResDeps {
+    scene: THREE.Scene;
+    getSplatMesh: () => any;
+    setSplatMesh: (mesh: any) => void;
+    modelGroup: THREE.Group;
+    state: AppState;
+    callbacks?: {
+        onApplySplatTransform?: (transform: any) => void;
+        onApplyModelTransform?: (transform: any) => void;
+    };
+}
+
+interface LoadPointcloudDeps {
+    pointcloudGroup: THREE.Group;
+    state: AppState;
+    archiveCreator?: any;
+    callbacks?: {
+        onPointcloudLoaded?: (object: THREE.Object3D, file: File | { name: string }, pointCount: number, blob: Blob) => void;
+    };
+}
+
+interface ProcessArchiveResult {
+    manifest: any;
+    archiveLoader: ArchiveLoader;
+    loadedSplat: boolean;
+    loadedMesh: boolean;
+    splatBlob: Blob | null;
+    meshBlob: Blob | null;
+    errors: string[];
+    globalAlignment: any;
+    annotations: any[];
+}
+
+interface Phase1Result {
+    manifest: any;
+    contentInfo: any;
+    thumbnailUrl: string | null;
+}
+
+interface AssetLoadResult {
+    loaded: boolean;
+    blob: Blob | null;
+    error: string | null;
+    faceCount?: number;
+    pointCount?: number;
+    isProxy?: boolean;
+}
+
+interface ModelLoadResult {
+    object: THREE.Object3D;
+    faceCount: number;
+}
+
+interface PointcloudLoadResult {
+    object: THREE.Group;
+    pointCount: number;
+}
+
+type ProgressCallback = ((percent: number) => void) | null;
+
+// =============================================================================
 // SPLAT LOADING
 // =============================================================================
 
 /**
  * Load splat from a file
- * @param {File} file - The splat file
- * @param {Object} deps - Dependencies
- * @returns {Promise<Object>} The loaded splat mesh
  */
-export async function loadSplatFromFile(file, deps) {
+export async function loadSplatFromFile(file: File, deps: LoadSplatDeps): Promise<any> {
     const { scene, getSplatMesh, setSplatMesh, state, archiveCreator, callbacks } = deps;
 
     // Remove existing splat
@@ -101,13 +225,13 @@ export async function loadSplatFromFile(file, deps) {
 
     // Pre-compute hash in background
     if (archiveCreator) {
-        archiveCreator.precomputeHash(file).catch(e => {
+        archiveCreator.precomputeHash(file).catch((e: Error) => {
             log.warn('Background hash precompute failed:', e);
         });
     }
 
     // Call callbacks
-    if (callbacks.onSplatLoaded) {
+    if (callbacks?.onSplatLoaded) {
         callbacks.onSplatLoaded(splatMesh, file);
     }
 
@@ -116,11 +240,8 @@ export async function loadSplatFromFile(file, deps) {
 
 /**
  * Load splat from a URL
- * @param {string} url - The splat URL
- * @param {Object} deps - Dependencies
- * @returns {Promise<Object>} The loaded splat mesh
  */
-export async function loadSplatFromUrl(url, deps, onProgress = null) {
+export async function loadSplatFromUrl(url: string, deps: LoadSplatDeps, onProgress: ProgressCallback = null): Promise<any> {
     const { scene, getSplatMesh, setSplatMesh, state, archiveCreator, callbacks } = deps;
 
     log.info('Fetching splat from URL:', url);
@@ -129,7 +250,7 @@ export async function loadSplatFromUrl(url, deps, onProgress = null) {
 
     // Pre-compute hash in background
     if (archiveCreator) {
-        archiveCreator.precomputeHash(blob).catch(e => {
+        archiveCreator.precomputeHash(blob).catch((e: Error) => {
             log.warn('Background hash precompute failed:', e);
         });
     }
@@ -172,7 +293,7 @@ export async function loadSplatFromUrl(url, deps, onProgress = null) {
     state.currentSplatUrl = url;
 
     // Call callbacks
-    if (callbacks.onSplatLoaded) {
+    if (callbacks?.onSplatLoaded) {
         callbacks.onSplatLoaded(splatMesh, blob);
     }
 
@@ -181,12 +302,8 @@ export async function loadSplatFromUrl(url, deps, onProgress = null) {
 
 /**
  * Load splat from a blob URL (used by archive loader)
- * @param {string} blobUrl - The blob URL
- * @param {string} fileName - Original filename
- * @param {Object} deps - Dependencies
- * @returns {Promise<Object>} The loaded splat mesh
  */
-export async function loadSplatFromBlobUrl(blobUrl, fileName, deps) {
+export async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: LoadSplatDeps): Promise<any> {
     const { scene, getSplatMesh, setSplatMesh, state } = deps;
 
     // Remove existing splat
@@ -231,10 +348,8 @@ export async function loadSplatFromBlobUrl(blobUrl, fileName, deps) {
 
 /**
  * Load GLTF/GLB model
- * @param {File|string} source - File object or URL
- * @returns {Promise<THREE.Group>}
  */
-export function loadGLTF(source) {
+export function loadGLTF(source: File | string): Promise<THREE.Group> {
     return new Promise((resolve, reject) => {
         const loader = new GLTFLoader();
         const url = source instanceof File ? URL.createObjectURL(source) : source;
@@ -258,11 +373,8 @@ export function loadGLTF(source) {
 
 /**
  * Load OBJ model (with optional MTL)
- * @param {File} objFile - The OBJ file
- * @param {File|null} mtlFile - Optional MTL file
- * @returns {Promise<THREE.Group>}
  */
-export function loadOBJ(objFile, mtlFile) {
+export function loadOBJ(objFile: File, mtlFile: File | null): Promise<THREE.Group> {
     const objUrl = URL.createObjectURL(objFile);
 
     return new Promise((resolve, reject) => {
@@ -309,7 +421,12 @@ export function loadOBJ(objFile, mtlFile) {
 /**
  * Load OBJ without materials
  */
-function loadOBJWithoutMaterials(loader, url, resolve, reject) {
+function loadOBJWithoutMaterials(
+    loader: OBJLoader,
+    url: string,
+    resolve: (value: THREE.Group) => void,
+    reject: (reason?: any) => void
+): void {
     loader.load(
         url,
         (object) => {
@@ -327,10 +444,8 @@ function loadOBJWithoutMaterials(loader, url, resolve, reject) {
 
 /**
  * Load OBJ from URL
- * @param {string} url - The URL
- * @returns {Promise<THREE.Group>}
  */
-export function loadOBJFromUrl(url) {
+export function loadOBJFromUrl(url: string): Promise<THREE.Group> {
     return new Promise((resolve, reject) => {
         const loader = new OBJLoader();
         loader.load(
@@ -348,10 +463,8 @@ export function loadOBJFromUrl(url) {
 /**
  * Load STL from a File object
  * STLLoader returns a BufferGeometry, so we wrap it in a Mesh.
- * @param {File|string} fileOrUrl - File object or blob URL
- * @returns {Promise<THREE.Mesh>}
  */
-export function loadSTL(fileOrUrl) {
+export function loadSTL(fileOrUrl: File | string): Promise<THREE.Mesh> {
     return new Promise((resolve, reject) => {
         const loader = new STLLoader();
         const url = typeof fileOrUrl === 'string' ? fileOrUrl : URL.createObjectURL(fileOrUrl);
@@ -381,10 +494,8 @@ export function loadSTL(fileOrUrl) {
 
 /**
  * Load STL from URL (no blob URL revocation needed)
- * @param {string} url - The URL
- * @returns {Promise<THREE.Mesh>}
  */
-export function loadSTLFromUrl(url) {
+export function loadSTLFromUrl(url: string): Promise<THREE.Mesh> {
     return new Promise((resolve, reject) => {
         const loader = new STLLoader();
         loader.load(
@@ -409,11 +520,8 @@ export function loadSTLFromUrl(url) {
 
 /**
  * Load STL from a file into the STL group (separate asset type)
- * @param {FileList} files - The file list
- * @param {Object} deps - Dependencies (must include stlGroup)
- * @returns {Promise<THREE.Mesh>}
  */
-export async function loadSTLFile(files, deps) {
+export async function loadSTLFile(files: FileList, deps: LoadSTLDeps): Promise<THREE.Mesh> {
     const { stlGroup, state, callbacks } = deps;
     const mainFile = files[0];
 
@@ -432,7 +540,7 @@ export async function loadSTLFile(files, deps) {
 
         const faceCount = computeMeshFaceCount(loadedObject);
 
-        if (callbacks.onSTLLoaded) {
+        if (callbacks?.onSTLLoaded) {
             callbacks.onSTLLoaded(loadedObject, mainFile, faceCount);
         }
     }
@@ -442,11 +550,8 @@ export async function loadSTLFile(files, deps) {
 
 /**
  * Load STL from URL into the STL group (separate asset type)
- * @param {string} url - The STL URL
- * @param {Object} deps - Dependencies (must include stlGroup)
- * @returns {Promise<THREE.Mesh>}
  */
-export async function loadSTLFromUrlWithDeps(url, deps) {
+export async function loadSTLFromUrlWithDeps(url: string, deps: LoadSTLDeps): Promise<THREE.Mesh> {
     const { stlGroup, state, callbacks } = deps;
 
     log.info('Fetching STL from URL:', url);
@@ -471,7 +576,7 @@ export async function loadSTLFromUrlWithDeps(url, deps) {
 
         const faceCount = computeMeshFaceCount(loadedObject);
 
-        if (callbacks.onSTLLoaded) {
+        if (callbacks?.onSTLLoaded) {
             callbacks.onSTLLoaded(loadedObject, blob, faceCount);
         }
     }
@@ -481,11 +586,8 @@ export async function loadSTLFromUrlWithDeps(url, deps) {
 
 /**
  * Load model from a file
- * @param {FileList} files - The file list (may include MTL)
- * @param {Object} deps - Dependencies
- * @returns {Promise<THREE.Group>}
  */
-export async function loadModelFromFile(files, deps) {
+export async function loadModelFromFile(files: FileList, deps: LoadModelDeps): Promise<THREE.Object3D | undefined> {
     const { modelGroup, state, archiveCreator, callbacks } = deps;
     const mainFile = files[0];
 
@@ -496,14 +598,14 @@ export async function loadModelFromFile(files, deps) {
         modelGroup.remove(child);
     }
 
-    const extension = mainFile.name.split('.').pop().toLowerCase();
-    let loadedObject;
+    const extension = mainFile.name.split('.').pop()?.toLowerCase();
+    let loadedObject: THREE.Object3D | undefined;
 
     if (extension === 'glb' || extension === 'gltf') {
         loadedObject = await loadGLTF(mainFile);
     } else if (extension === 'obj') {
-        let mtlFile = null;
-        for (const f of files) {
+        let mtlFile: File | null = null;
+        for (const f of Array.from(files)) {
             if (f.name.toLowerCase().endsWith('.mtl')) {
                 mtlFile = f;
                 break;
@@ -521,7 +623,7 @@ export async function loadModelFromFile(files, deps) {
 
         // Pre-compute hash in background
         if (archiveCreator) {
-            archiveCreator.precomputeHash(mainFile).catch(e => {
+            archiveCreator.precomputeHash(mainFile).catch((e: Error) => {
                 log.warn('Background hash precompute failed:', e);
             });
         }
@@ -530,7 +632,7 @@ export async function loadModelFromFile(files, deps) {
         const faceCount = computeMeshFaceCount(loadedObject);
 
         // Call callbacks
-        if (callbacks.onModelLoaded) {
+        if (callbacks?.onModelLoaded) {
             callbacks.onModelLoaded(loadedObject, mainFile, faceCount);
         }
     }
@@ -540,11 +642,8 @@ export async function loadModelFromFile(files, deps) {
 
 /**
  * Load model from URL
- * @param {string} url - The model URL
- * @param {Object} deps - Dependencies
- * @returns {Promise<THREE.Group>}
  */
-export async function loadModelFromUrl(url, deps, onProgress = null) {
+export async function loadModelFromUrl(url: string, deps: LoadModelDeps, onProgress: ProgressCallback = null): Promise<THREE.Object3D | undefined> {
     const { modelGroup, state, archiveCreator, callbacks } = deps;
 
     log.info('Fetching model from URL:', url);
@@ -553,7 +652,7 @@ export async function loadModelFromUrl(url, deps, onProgress = null) {
 
     // Pre-compute hash in background
     if (archiveCreator) {
-        archiveCreator.precomputeHash(blob).catch(e => {
+        archiveCreator.precomputeHash(blob).catch((e: Error) => {
             log.warn('Background hash precompute failed:', e);
         });
     }
@@ -568,8 +667,8 @@ export async function loadModelFromUrl(url, deps, onProgress = null) {
         modelGroup.remove(child);
     }
 
-    const extension = url.split('.').pop().toLowerCase().split('?')[0];
-    let loadedObject;
+    const extension = url.split('.').pop()?.toLowerCase().split('?')[0];
+    let loadedObject: THREE.Object3D | undefined;
 
     if (extension === 'glb' || extension === 'gltf') {
         loadedObject = await loadGLTF(blobUrl);
@@ -589,7 +688,7 @@ export async function loadModelFromUrl(url, deps, onProgress = null) {
         state.meshVertexCount = computeMeshVertexCount(loadedObject);
 
         // Call callbacks
-        if (callbacks.onModelLoaded) {
+        if (callbacks?.onModelLoaded) {
             callbacks.onModelLoaded(loadedObject, blob, faceCount);
         }
     }
@@ -599,12 +698,8 @@ export async function loadModelFromUrl(url, deps, onProgress = null) {
 
 /**
  * Load model from a blob URL (used by archive loader)
- * @param {string} blobUrl - The blob URL
- * @param {string} fileName - Original filename
- * @param {Object} deps - Dependencies
- * @returns {Promise<THREE.Group>}
  */
-export async function loadModelFromBlobUrl(blobUrl, fileName, deps) {
+export async function loadModelFromBlobUrl(blobUrl: string, fileName: string, deps: Pick<LoadModelDeps, 'modelGroup' | 'state'>): Promise<ModelLoadResult> {
     const { modelGroup, state } = deps;
 
     // Clear existing model
@@ -614,8 +709,8 @@ export async function loadModelFromBlobUrl(blobUrl, fileName, deps) {
         modelGroup.remove(child);
     }
 
-    const extension = fileName.split('.').pop().toLowerCase();
-    let loadedObject;
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    let loadedObject: THREE.Object3D | undefined;
 
     if (extension === 'glb' || extension === 'gltf') {
         loadedObject = await loadGLTF(blobUrl);
@@ -635,7 +730,7 @@ export async function loadModelFromBlobUrl(blobUrl, fileName, deps) {
         return { object: loadedObject, faceCount };
     }
 
-    return { object: loadedObject, faceCount: 0 };
+    return { object: loadedObject!, faceCount: 0 };
 }
 
 // =============================================================================
@@ -644,11 +739,8 @@ export async function loadModelFromBlobUrl(blobUrl, fileName, deps) {
 
 /**
  * Load archive from a file
- * @param {File} file - The archive file
- * @param {Object} deps - Dependencies
- * @returns {Promise<Object>} Archive loader and manifest
  */
-export async function loadArchiveFromFile(file, deps) {
+export async function loadArchiveFromFile(file: File, deps: LoadArchiveDeps): Promise<ArchiveLoader> {
     const { state } = deps;
 
     // Clean up previous archive
@@ -666,12 +758,8 @@ export async function loadArchiveFromFile(file, deps) {
 
 /**
  * Load archive from URL
- * @param {string} url - The archive URL
- * @param {Object} deps - Dependencies
- * @param {Function} onProgress - Progress callback
- * @returns {Promise<Object>} Archive loader
  */
-export async function loadArchiveFromUrl(url, deps, onProgress = null) {
+export async function loadArchiveFromUrl(url: string, deps: LoadArchiveDeps, onProgress: ProgressCallback = null): Promise<ArchiveLoader> {
     const { state } = deps;
 
     // Clean up previous archive
@@ -689,12 +777,8 @@ export async function loadArchiveFromUrl(url, deps, onProgress = null) {
 
 /**
  * Process loaded archive - extract and load splat/mesh
- * @param {ArchiveLoader} archiveLoader - The archive loader
- * @param {string} archiveName - Archive filename
- * @param {Object} deps - Dependencies
- * @returns {Promise<Object>} Processing results
  */
-export async function processArchive(archiveLoader, archiveName, deps) {
+export async function processArchive(archiveLoader: ArchiveLoader, archiveName: string, deps: ProcessArchiveDeps): Promise<ProcessArchiveResult> {
     const { state, callbacks } = deps;
 
     const manifest = await archiveLoader.parseManifest();
@@ -706,11 +790,11 @@ export async function processArchive(archiveLoader, archiveName, deps) {
     state.archiveLoaded = true;
 
     const contentInfo = archiveLoader.getContentInfo();
-    const errors = [];
+    const errors: string[] = [];
     let loadedSplat = false;
     let loadedMesh = false;
-    let splatBlob = null;
-    let meshBlob = null;
+    let splatBlob: Blob | null = null;
+    let meshBlob: Blob | null = null;
 
     // Load splat (scene_0) if present
     const sceneEntry = archiveLoader.getSceneEntry();
@@ -724,11 +808,11 @@ export async function processArchive(archiveLoader, archiveName, deps) {
 
                 // Apply transform from entry parameters if present
                 const transform = archiveLoader.getEntryTransform(sceneEntry);
-                if (callbacks.onApplySplatTransform) {
+                if (callbacks?.onApplySplatTransform) {
                     callbacks.onApplySplatTransform(transform);
                 }
             }
-        } catch (e) {
+        } catch (e: any) {
             errors.push(`Failed to load splat: ${e.message}`);
             log.error('Error loading splat from archive:', e);
         }
@@ -740,17 +824,17 @@ export async function processArchive(archiveLoader, archiveName, deps) {
         try {
             const meshData = await archiveLoader.extractFile(meshEntry.file_name);
             if (meshData) {
-                const result = await loadModelFromBlobUrl(meshData.url, meshEntry.file_name, deps);
+                await loadModelFromBlobUrl(meshData.url, meshEntry.file_name, deps);
                 loadedMesh = true;
                 meshBlob = meshData.blob;
 
                 // Apply transform from entry parameters if present
                 const transform = archiveLoader.getEntryTransform(meshEntry);
-                if (callbacks.onApplyModelTransform) {
+                if (callbacks?.onApplyModelTransform) {
                     callbacks.onApplyModelTransform(transform);
                 }
             }
-        } catch (e) {
+        } catch (e: any) {
             errors.push(`Failed to load mesh: ${e.message}`);
             log.error('Error loading mesh from archive:', e);
         }
@@ -782,12 +866,8 @@ export async function processArchive(archiveLoader, archiveName, deps) {
 /**
  * Phase 1: Fast archive processing — manifest + metadata only, no 3D asset decompression.
  * Typically completes in ~50ms. Extracts thumbnail if present.
- * @param {ArchiveLoader} archiveLoader - The archive loader (already loaded)
- * @param {string} archiveName - Archive filename
- * @param {Object} deps - Dependencies { state }
- * @returns {Promise<Object>} { manifest, contentInfo, thumbnailUrl }
  */
-export async function processArchivePhase1(archiveLoader, archiveName, deps) {
+export async function processArchivePhase1(archiveLoader: ArchiveLoader, archiveName: string, deps: Pick<ProcessArchiveDeps, 'state'>): Promise<Phase1Result> {
     const { state } = deps;
 
     const manifest = await archiveLoader.parseManifest();
@@ -801,7 +881,7 @@ export async function processArchivePhase1(archiveLoader, archiveName, deps) {
     const contentInfo = archiveLoader.getContentInfo();
 
     // Extract thumbnail (small file, fast)
-    let thumbnailUrl = null;
+    let thumbnailUrl: string | null = null;
     const thumbnailEntry = archiveLoader.getThumbnailEntry();
     if (thumbnailEntry) {
         try {
@@ -809,7 +889,7 @@ export async function processArchivePhase1(archiveLoader, archiveName, deps) {
             if (thumbData) {
                 thumbnailUrl = thumbData.url;
             }
-        } catch (e) {
+        } catch (e: any) {
             log.warn('Failed to extract thumbnail:', e.message);
         }
     }
@@ -819,12 +899,8 @@ export async function processArchivePhase1(archiveLoader, archiveName, deps) {
 
 /**
  * Load a single archive asset type on demand.
- * @param {ArchiveLoader} archiveLoader - The archive loader
- * @param {'splat'|'mesh'|'pointcloud'} assetType - Which asset to load
- * @param {Object} deps - Dependencies { state, scene, getSplatMesh, setSplatMesh, modelGroup, pointcloudGroup, callbacks }
- * @returns {Promise<Object>} { loaded, blob, error, faceCount?, pointCount? }
  */
-export async function loadArchiveAsset(archiveLoader, assetType, deps) {
+export async function loadArchiveAsset(archiveLoader: ArchiveLoader, assetType: 'splat' | 'mesh' | 'pointcloud', deps: LoadArchiveAssetDeps): Promise<AssetLoadResult> {
     const { state, callbacks = {} } = deps;
 
     // Initialize assetStates if not present
@@ -927,7 +1003,7 @@ export async function loadArchiveAsset(archiveLoader, assetType, deps) {
                 return { loaded: false, blob: null, error: 'No pointcloud entries found' };
             }
 
-            const pcEntry = pcEntries[0];
+            const pcEntry = pcEntries[0].entry;
             const pcData = await archiveLoader.extractFile(pcEntry.file_name);
             if (!pcData) {
                 state.assetStates[assetType] = ASSET_STATE.ERROR;
@@ -948,7 +1024,7 @@ export async function loadArchiveAsset(archiveLoader, assetType, deps) {
 
         return { loaded: false, blob: null, error: `Unknown asset type: ${assetType}` };
 
-    } catch (e) {
+    } catch (e: any) {
         state.assetStates[assetType] = ASSET_STATE.ERROR;
         log.error(`Error loading ${assetType} from archive:`, e);
         return { loaded: false, blob: null, error: e.message };
@@ -958,11 +1034,8 @@ export async function loadArchiveAsset(archiveLoader, assetType, deps) {
 /**
  * Load the full-resolution mesh from an archive, replacing the currently displayed proxy.
  * Clears the existing modelGroup contents before loading.
- * @param {ArchiveLoader} archiveLoader - The archive loader
- * @param {Object} deps - Dependencies { state, modelGroup, callbacks }
- * @returns {Promise<Object>} { loaded, blob, error, faceCount }
  */
-export async function loadArchiveFullResMesh(archiveLoader, deps) {
+export async function loadArchiveFullResMesh(archiveLoader: ArchiveLoader, deps: LoadFullResDeps): Promise<AssetLoadResult> {
     const { state, callbacks = {} } = deps;
     const meshEntry = archiveLoader.getMeshEntry();
     if (!meshEntry) {
@@ -999,11 +1072,8 @@ export async function loadArchiveFullResMesh(archiveLoader, deps) {
 
 /**
  * Load the full-resolution splat from an archive, replacing the currently displayed proxy.
- * @param {ArchiveLoader} archiveLoader - The archive loader
- * @param {Object} deps - Dependencies { state, scene, getSplatMesh, setSplatMesh, callbacks }
- * @returns {Promise<Object>} { loaded, blob, error }
  */
-export async function loadArchiveFullResSplat(archiveLoader, deps) {
+export async function loadArchiveFullResSplat(archiveLoader: ArchiveLoader, deps: LoadFullResDeps): Promise<AssetLoadResult> {
     const { state, scene, getSplatMesh, setSplatMesh, callbacks = {} } = deps;
     const sceneEntry = archiveLoader.getSceneEntry();
     if (!sceneEntry) {
@@ -1038,11 +1108,8 @@ export async function loadArchiveFullResSplat(archiveLoader, deps) {
 
 /**
  * Load the proxy splat from an archive, replacing the currently displayed full-res.
- * @param {ArchiveLoader} archiveLoader - The archive loader
- * @param {Object} deps - Dependencies { state, scene, getSplatMesh, setSplatMesh, callbacks }
- * @returns {Promise<Object>} { loaded, blob, error }
  */
-export async function loadArchiveProxySplat(archiveLoader, deps) {
+export async function loadArchiveProxySplat(archiveLoader: ArchiveLoader, deps: LoadFullResDeps): Promise<AssetLoadResult> {
     const { state, scene, getSplatMesh, setSplatMesh, callbacks = {} } = deps;
     const proxyEntry = archiveLoader.getSceneProxyEntry();
     if (!proxyEntry) {
@@ -1078,11 +1145,8 @@ export async function loadArchiveProxySplat(archiveLoader, deps) {
 
 /**
  * Load the proxy mesh from an archive, replacing the currently displayed full-res.
- * @param {ArchiveLoader} archiveLoader - The archive loader
- * @param {Object} deps - Dependencies { state, modelGroup, callbacks }
- * @returns {Promise<Object>} { loaded, blob, error, faceCount }
  */
-export async function loadArchiveProxyMesh(archiveLoader, deps) {
+export async function loadArchiveProxyMesh(archiveLoader: ArchiveLoader, deps: LoadFullResDeps): Promise<AssetLoadResult> {
     const { state, callbacks = {} } = deps;
     const proxyEntry = archiveLoader.getMeshProxyEntry();
     if (!proxyEntry) {
@@ -1120,10 +1184,8 @@ export async function loadArchiveProxyMesh(archiveLoader, deps) {
 
 /**
  * Determine which asset types are needed for a given display mode.
- * @param {string} mode - Display mode ('splat', 'model', 'both', 'split', 'pointcloud')
- * @returns {string[]} Array of asset type strings
  */
-export function getAssetTypesForMode(mode) {
+export function getAssetTypesForMode(mode: string): string[] {
     switch (mode) {
         case 'splat': return ['splat'];
         case 'model': return ['mesh'];
@@ -1138,11 +1200,8 @@ export function getAssetTypesForMode(mode) {
 /**
  * Determine the primary asset type to load first based on display mode and available content.
  * Priority: splat > mesh > pointcloud (splat gives fastest visual feedback).
- * @param {string} displayMode - Current display mode
- * @param {Object} contentInfo - Content info from archiveLoader.getContentInfo()
- * @returns {string} Primary asset type
  */
-export function getPrimaryAssetType(displayMode, contentInfo) {
+export function getPrimaryAssetType(displayMode: string, contentInfo: any): string {
     const modeTypes = getAssetTypesForMode(displayMode);
 
     // Try mode-preferred types first
@@ -1166,15 +1225,13 @@ export function getPrimaryAssetType(displayMode, contentInfo) {
 
 /**
  * Update model opacity
- * @param {THREE.Group} modelGroup - The model group
- * @param {number} opacity - Opacity value (0-1)
  */
-export function updateModelOpacity(modelGroup, opacity) {
+export function updateModelOpacity(modelGroup: THREE.Group, opacity: number): void {
     if (modelGroup) {
         modelGroup.traverse((child) => {
-            if (child.isMesh && child.material) {
-                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach(mat => {
+            if ((child as any).isMesh && (child as any).material) {
+                const materials = Array.isArray((child as any).material) ? (child as any).material : [(child as any).material];
+                materials.forEach((mat: any) => {
                     mat.transparent = opacity < 1;
                     mat.opacity = opacity;
                     mat.needsUpdate = true;
@@ -1186,15 +1243,13 @@ export function updateModelOpacity(modelGroup, opacity) {
 
 /**
  * Update model wireframe mode
- * @param {THREE.Group} modelGroup - The model group
- * @param {boolean} wireframe - Wireframe mode
  */
-export function updateModelWireframe(modelGroup, wireframe) {
+export function updateModelWireframe(modelGroup: THREE.Group, wireframe: boolean): void {
     if (modelGroup) {
         modelGroup.traverse((child) => {
-            if (child.isMesh && child.material) {
-                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach(mat => {
+            if ((child as any).isMesh && (child as any).material) {
+                const materials = Array.isArray((child as any).material) ? (child as any).material : [(child as any).material];
+                materials.forEach((mat: any) => {
                     mat.wireframe = wireframe;
                     mat.needsUpdate = true;
                 });
@@ -1207,19 +1262,17 @@ export function updateModelWireframe(modelGroup, wireframe) {
 // MODEL TEXTURE TOGGLE
 // =============================================================================
 
-const _storedTextures = new WeakMap();
+const _storedTextures = new WeakMap<any, any>();
 
 /**
  * Toggle model textures on/off
- * @param {THREE.Group} modelGroup - The model group
- * @param {boolean} showTextures - Whether to show textures
  */
-export function updateModelTextures(modelGroup, showTextures) {
+export function updateModelTextures(modelGroup: THREE.Group, showTextures: boolean): void {
     if (!modelGroup) return;
     modelGroup.traverse((child) => {
-        if (child.isMesh && child.material) {
-            const materials = Array.isArray(child.material) ? child.material : [child.material];
-            materials.forEach(mat => {
+        if ((child as any).isMesh && (child as any).material) {
+            const materials = Array.isArray((child as any).material) ? (child as any).material : [(child as any).material];
+            materials.forEach((mat: any) => {
                 if (!showTextures) {
                     if (!_storedTextures.has(mat)) {
                         _storedTextures.set(mat, {
@@ -1255,25 +1308,23 @@ export function updateModelTextures(modelGroup, showTextures) {
 // MATCAP RENDERING MODE
 // =============================================================================
 
-const _storedMaterials = new WeakMap();
-const _matcapTextureCache = new Map();
+const _storedMaterials = new WeakMap<any, any>();
+const _matcapTextureCache = new Map<string, THREE.CanvasTexture>();
 
 /**
  * Generate a matcap texture procedurally using canvas gradients.
- * @param {string} style - Preset name ('clay', 'chrome', 'pearl', 'jade', 'copper')
- * @returns {THREE.CanvasTexture}
  */
-function generateMatcapTexture(style) {
-    if (_matcapTextureCache.has(style)) return _matcapTextureCache.get(style);
+function generateMatcapTexture(style: string): THREE.CanvasTexture {
+    if (_matcapTextureCache.has(style)) return _matcapTextureCache.get(style)!;
 
     const size = 256;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d')!;
     const cx = size / 2, cy = size / 2, r = size / 2;
 
-    const presets = {
+    const presets: Record<string, { stops: Array<[number, string]> }> = {
         clay:   { stops: [[0, '#d4c8b8'], [0.5, '#a89880'], [0.85, '#6b5d4f'], [1, '#3a3028']] },
         chrome: { stops: [[0, '#ffffff'], [0.3, '#e0e0e0'], [0.6, '#888888'], [0.85, '#333333'], [1, '#111111']] },
         pearl:  { stops: [[0, '#faf0f0'], [0.4, '#e8d8e0'], [0.7, '#c0a8b8'], [0.9, '#8a7088'], [1, '#504058']] },
@@ -1305,9 +1356,8 @@ function generateMatcapTexture(style) {
 
 /**
  * Return the list of available matcap preset names.
- * @returns {string[]}
  */
-export function getMatcapPresets() {
+export function getMatcapPresets(): string[] {
     return ['clay', 'chrome', 'pearl', 'jade', 'copper'];
 }
 
@@ -1315,20 +1365,16 @@ export function getMatcapPresets() {
  * Toggle matcap rendering mode on all meshes in a model group.
  * When enabled, replaces materials with MeshMatcapMaterial.
  * When disabled, restores original materials.
- *
- * @param {THREE.Group} modelGroup - The model group
- * @param {boolean} enabled - Whether matcap mode is active
- * @param {string} [style='clay'] - Matcap preset name
  */
-export function updateModelMatcap(modelGroup, enabled, style = 'clay') {
+export function updateModelMatcap(modelGroup: THREE.Group, enabled: boolean, style: string = 'clay'): void {
     if (!modelGroup) return;
     const matcapTexture = enabled ? generateMatcapTexture(style) : null;
 
     modelGroup.traverse((child) => {
-        if (!child.isMesh || !child.material) return;
+        if (!(child as any).isMesh || !(child as any).material) return;
 
-        const isArray = Array.isArray(child.material);
-        const materials = isArray ? child.material : [child.material];
+        const isArray = Array.isArray((child as any).material);
+        const materials = isArray ? (child as any).material : [(child as any).material];
 
         if (enabled) {
             // Store originals (only on first enable, not on style change)
@@ -1336,25 +1382,25 @@ export function updateModelMatcap(modelGroup, enabled, style = 'clay') {
                 _storedMaterials.set(child, isArray ? [...materials] : materials[0]);
             }
 
-            const matcapMats = materials.map(mat => {
+            const matcapMats = materials.map((mat: any) => {
                 const matcapMat = new THREE.MeshMatcapMaterial({
-                    matcap: matcapTexture,
+                    matcap: matcapTexture!,
                     color: mat.color ? mat.color.clone() : new THREE.Color(0xffffff),
                     flatShading: false,
                 });
                 return matcapMat;
             });
 
-            child.material = isArray ? matcapMats : matcapMats[0];
+            (child as any).material = isArray ? matcapMats : matcapMats[0];
         } else {
             // Restore originals
             const stored = _storedMaterials.get(child);
             if (stored) {
                 // Dispose the matcap materials
-                const currentMats = isArray ? child.material : [child.material];
-                currentMats.forEach(m => { if (m && m.dispose) m.dispose(); });
+                const currentMats = isArray ? (child as any).material : [(child as any).material];
+                currentMats.forEach((m: any) => { if (m && m.dispose) m.dispose(); });
 
-                child.material = stored;
+                (child as any).material = stored;
                 _storedMaterials.delete(child);
             }
         }
@@ -1370,18 +1416,15 @@ export function updateModelMatcap(modelGroup, enabled, style = 'clay') {
  * When enabled, replaces materials with MeshNormalMaterial (RGB = XYZ normals).
  * When disabled, restores original materials.
  * Mutually exclusive with matcap mode (shares _storedMaterials).
- *
- * @param {THREE.Group} modelGroup - The model group
- * @param {boolean} enabled - Whether normals visualization is active
  */
-export function updateModelNormals(modelGroup, enabled) {
+export function updateModelNormals(modelGroup: THREE.Group, enabled: boolean): void {
     if (!modelGroup) return;
 
     modelGroup.traverse((child) => {
-        if (!child.isMesh || !child.material) return;
+        if (!(child as any).isMesh || !(child as any).material) return;
 
-        const isArray = Array.isArray(child.material);
-        const materials = isArray ? child.material : [child.material];
+        const isArray = Array.isArray((child as any).material);
+        const materials = isArray ? (child as any).material : [(child as any).material];
 
         if (enabled) {
             // Store originals (only if not already stored by matcap)
@@ -1393,15 +1436,15 @@ export function updateModelNormals(modelGroup, enabled) {
                 return new THREE.MeshNormalMaterial({ flatShading: false });
             });
 
-            child.material = isArray ? normalMats : normalMats[0];
+            (child as any).material = isArray ? normalMats : normalMats[0];
         } else {
             // Restore originals
             const stored = _storedMaterials.get(child);
             if (stored) {
-                const currentMats = isArray ? child.material : [child.material];
-                currentMats.forEach(m => { if (m && m.dispose) m.dispose(); });
+                const currentMats = isArray ? (child as any).material : [(child as any).material];
+                currentMats.forEach((m: any) => { if (m && m.dispose) m.dispose(); });
 
-                child.material = stored;
+                (child as any).material = stored;
                 _storedMaterials.delete(child);
             }
         }
@@ -1452,11 +1495,8 @@ void main() {
 
 /**
  * Create a ShaderMaterial that visualises a single PBR channel.
- * @param {THREE.Material} mat - Original PBR material
- * @param {number} mode - 0 = roughness, 1 = metalness, 2 = specular F0
- * @returns {THREE.ShaderMaterial}
  */
-function _createPBRDebugMaterial(mat, mode) {
+function _createPBRDebugMaterial(mat: any, mode: number): THREE.ShaderMaterial {
     const roughness = mat.roughness !== undefined ? mat.roughness : 0.8;
     const metalness = mat.metalness !== undefined ? mat.metalness : 0.1;
     const ior = mat.ior !== undefined ? mat.ior : 1.5;
@@ -1484,32 +1524,29 @@ function _createPBRDebugMaterial(mat, mode) {
 
 /**
  * Generic PBR debug view toggle. Saves/restores originals via _storedMaterials.
- * @param {THREE.Group} modelGroup
- * @param {boolean} enabled
- * @param {number} mode - 0 = roughness, 1 = metalness, 2 = specular F0
  */
-function _togglePBRDebugView(modelGroup, enabled, mode) {
+function _togglePBRDebugView(modelGroup: THREE.Group, enabled: boolean, mode: number): void {
     if (!modelGroup) return;
 
     modelGroup.traverse((child) => {
-        if (!child.isMesh || !child.material) return;
+        if (!(child as any).isMesh || !(child as any).material) return;
 
-        const isArray = Array.isArray(child.material);
-        const materials = isArray ? child.material : [child.material];
+        const isArray = Array.isArray((child as any).material);
+        const materials = isArray ? (child as any).material : [(child as any).material];
 
         if (enabled) {
             if (!_storedMaterials.has(child)) {
                 _storedMaterials.set(child, isArray ? [...materials] : materials[0]);
             }
 
-            const debugMats = materials.map(mat => _createPBRDebugMaterial(mat, mode));
-            child.material = isArray ? debugMats : debugMats[0];
+            const debugMats = materials.map((mat: any) => _createPBRDebugMaterial(mat, mode));
+            (child as any).material = isArray ? debugMats : debugMats[0];
         } else {
             const stored = _storedMaterials.get(child);
             if (stored) {
-                const currentMats = isArray ? child.material : [child.material];
-                currentMats.forEach(m => { if (m && m.dispose) m.dispose(); });
-                child.material = stored;
+                const currentMats = isArray ? (child as any).material : [(child as any).material];
+                currentMats.forEach((m: any) => { if (m && m.dispose) m.dispose(); });
+                (child as any).material = stored;
                 _storedMaterials.delete(child);
             }
         }
@@ -1519,20 +1556,16 @@ function _togglePBRDebugView(modelGroup, enabled, mode) {
 /**
  * Toggle roughness debug view — grayscale visualisation of roughness values.
  * Mutually exclusive with matcap, normals, and other debug views (shares _storedMaterials).
- * @param {THREE.Group} modelGroup
- * @param {boolean} enabled
  */
-export function updateModelRoughness(modelGroup, enabled) {
+export function updateModelRoughness(modelGroup: THREE.Group, enabled: boolean): void {
     _togglePBRDebugView(modelGroup, enabled, 0);
 }
 
 /**
  * Toggle metalness debug view — grayscale visualisation of metalness values.
  * Mutually exclusive with matcap, normals, and other debug views (shares _storedMaterials).
- * @param {THREE.Group} modelGroup
- * @param {boolean} enabled
  */
-export function updateModelMetalness(modelGroup, enabled) {
+export function updateModelMetalness(modelGroup: THREE.Group, enabled: boolean): void {
     _togglePBRDebugView(modelGroup, enabled, 1);
 }
 
@@ -1540,10 +1573,8 @@ export function updateModelMetalness(modelGroup, enabled) {
  * Toggle specular F0 debug view — shows Fresnel reflectance at normal incidence.
  * Dielectrics show a dark ~0.04 value; metals show their base color.
  * Mutually exclusive with matcap, normals, and other debug views (shares _storedMaterials).
- * @param {THREE.Group} modelGroup
- * @param {boolean} enabled
  */
-export function updateModelSpecularF0(modelGroup, enabled) {
+export function updateModelSpecularF0(modelGroup: THREE.Group, enabled: boolean): void {
     _togglePBRDebugView(modelGroup, enabled, 2);
 }
 
@@ -1555,10 +1586,8 @@ export function updateModelSpecularF0(modelGroup, enabled) {
  * Load an E57 file and return a THREE.Group containing THREE.Points.
  * E57 files from surveying/scanning use Z-up convention, so we rotate
  * the geometry to Three.js Y-up coordinate system.
- * @param {string} url - URL or blob URL to the E57 file
- * @returns {Promise<THREE.Group>} Group containing the point cloud
  */
-export async function loadE57(url) {
+export async function loadE57(url: string): Promise<THREE.Group> {
     const E57Loader = await getE57Loader();
     if (!E57Loader) {
         throw new Error('E57 point cloud loading is not available. The three-e57-loader module could not be loaded (requires network access).');
@@ -1567,7 +1596,7 @@ export async function loadE57(url) {
         const loader = new E57Loader();
         loader.load(
             url,
-            (geometry) => {
+            (geometry: THREE.BufferGeometry) => {
                 // Convert from Z-up (E57/surveying) to Y-up (Three.js)
                 geometry.rotateX(-Math.PI / 2);
 
@@ -1582,7 +1611,7 @@ export async function loadE57(url) {
                 resolve(group);
             },
             undefined,
-            (error) => {
+            (error: any) => {
                 reject(error);
             }
         );
@@ -1591,10 +1620,8 @@ export async function loadE57(url) {
 
 /**
  * Load a point cloud from a File object
- * @param {File} file - The E57 file
- * @param {Object} deps - Dependencies
  */
-export async function loadPointcloudFromFile(file, deps) {
+export async function loadPointcloudFromFile(file: File, deps: LoadPointcloudDeps): Promise<void> {
     const {
         pointcloudGroup,
         state,
@@ -1624,14 +1651,14 @@ export async function loadPointcloudFromFile(file, deps) {
         // Compute point count
         let pointCount = 0;
         loadedObject.traverse((child) => {
-            if (child.isPoints && child.geometry) {
-                const posAttr = child.geometry.getAttribute('position');
+            if ((child as any).isPoints && (child as any).geometry) {
+                const posAttr = (child as any).geometry.getAttribute('position');
                 if (posAttr) pointCount += posAttr.count;
             }
         });
 
         // Pre-compute hash for archive export
-        const blob = file.slice ? file : new Blob([file]);
+        const blob = (file as any).slice ? file : new Blob([file]);
         if (archiveCreator) {
             archiveCreator.precomputeHash(blob).catch(() => {});
         }
@@ -1648,11 +1675,8 @@ export async function loadPointcloudFromFile(file, deps) {
 
 /**
  * Load a point cloud from a URL
- * @param {string} url - The URL to the E57 file
- * @param {Object} deps - Dependencies
- * @param {Function} onProgress - Progress callback
  */
-export async function loadPointcloudFromUrl(url, deps, onProgress = null) {
+export async function loadPointcloudFromUrl(url: string, deps: LoadPointcloudDeps, onProgress: ProgressCallback = null): Promise<void> {
     const {
         pointcloudGroup,
         state,
@@ -1689,8 +1713,8 @@ export async function loadPointcloudFromUrl(url, deps, onProgress = null) {
         // Compute point count
         let pointCount = 0;
         loadedObject.traverse((child) => {
-            if (child.isPoints && child.geometry) {
-                const posAttr = child.geometry.getAttribute('position');
+            if ((child as any).isPoints && (child as any).geometry) {
+                const posAttr = (child as any).geometry.getAttribute('position');
                 if (posAttr) pointCount += posAttr.count;
             }
         });
@@ -1709,12 +1733,8 @@ export async function loadPointcloudFromUrl(url, deps, onProgress = null) {
 
 /**
  * Load a point cloud from a blob URL (used by archive loader)
- * @param {string} blobUrl - The blob URL
- * @param {string} fileName - Original filename
- * @param {Object} deps - Dependencies
- * @returns {Promise<{object: THREE.Group, pointCount: number}>}
  */
-export async function loadPointcloudFromBlobUrl(blobUrl, fileName, deps) {
+export async function loadPointcloudFromBlobUrl(blobUrl: string, fileName: string, deps: Pick<LoadPointcloudDeps, 'pointcloudGroup'>): Promise<PointcloudLoadResult> {
     const { pointcloudGroup } = deps;
 
     log.info('Loading point cloud from blob URL:', fileName);
@@ -1734,8 +1754,8 @@ export async function loadPointcloudFromBlobUrl(blobUrl, fileName, deps) {
     // Compute point count
     let pointCount = 0;
     loadedObject.traverse((child) => {
-        if (child.isPoints && child.geometry) {
-            const posAttr = child.geometry.getAttribute('position');
+        if ((child as any).isPoints && (child as any).geometry) {
+            const posAttr = (child as any).geometry.getAttribute('position');
             if (posAttr) pointCount += posAttr.count;
         }
     });
@@ -1745,15 +1765,13 @@ export async function loadPointcloudFromBlobUrl(blobUrl, fileName, deps) {
 
 /**
  * Update point cloud point size
- * @param {THREE.Group} pointcloudGroup - The point cloud group
- * @param {number} size - Point size
  */
-export function updatePointcloudPointSize(pointcloudGroup, size) {
+export function updatePointcloudPointSize(pointcloudGroup: THREE.Group, size: number): void {
     if (pointcloudGroup) {
         pointcloudGroup.traverse((child) => {
-            if (child.isPoints && child.material) {
-                child.material.size = size;
-                child.material.needsUpdate = true;
+            if ((child as any).isPoints && (child as any).material) {
+                (child as any).material.size = size;
+                (child as any).material.needsUpdate = true;
             }
         });
     }
@@ -1761,18 +1779,15 @@ export function updatePointcloudPointSize(pointcloudGroup, size) {
 
 /**
  * Update point cloud opacity
- * @param {THREE.Group} pointcloudGroup - The point cloud group
- * @param {number} opacity - Opacity value (0-1)
  */
-export function updatePointcloudOpacity(pointcloudGroup, opacity) {
+export function updatePointcloudOpacity(pointcloudGroup: THREE.Group, opacity: number): void {
     if (pointcloudGroup) {
         pointcloudGroup.traverse((child) => {
-            if (child.isPoints && child.material) {
-                child.material.transparent = opacity < 1;
-                child.material.opacity = opacity;
-                child.material.needsUpdate = true;
+            if ((child as any).isPoints && (child as any).material) {
+                (child as any).material.transparent = opacity < 1;
+                (child as any).material.opacity = opacity;
+                (child as any).material.needsUpdate = true;
             }
         });
     }
 }
-

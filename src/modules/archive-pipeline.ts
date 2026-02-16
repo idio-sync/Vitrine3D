@@ -393,6 +393,22 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
 
         const contentInfo = archiveLoader.getContentInfo();
 
+        // Populate proxy filenames in the file menu (even when loading at HD quality)
+        if (contentInfo.hasMeshProxy) {
+            const proxyMeshEntry = archiveLoader.getMeshProxyEntry();
+            if (proxyMeshEntry) {
+                const proxyFilenameEl = document.getElementById('proxy-mesh-filename');
+                if (proxyFilenameEl) proxyFilenameEl.textContent = proxyMeshEntry.file_name.split('/').pop() || proxyMeshEntry.file_name;
+            }
+        }
+        if (contentInfo.hasSceneProxy) {
+            const proxySplatEntry = archiveLoader.getSceneProxyEntry();
+            if (proxySplatEntry) {
+                const proxyFilenameEl = document.getElementById('proxy-splat-filename');
+                if (proxyFilenameEl) proxyFilenameEl.textContent = proxySplatEntry.file_name.split('/').pop() || proxySplatEntry.file_name;
+            }
+        }
+
         // Update archive metadata UI
         updateArchiveMetadataUI(manifest, archiveLoader);
 
@@ -508,20 +524,23 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
                     }
                 }
                 // Release raw ZIP data after all assets are extracted,
-                // but keep it if archive has source files (needed for re-export).
+                // but keep it if archive has source files (needed for re-export)
+                // or proxies (needed for on-demand quality switching).
                 // For file-based archives, _file is just a File handle — no memory cost.
-                if (!archiveLoader.hasSourceFiles()) {
+                const hasProxies = hasAnyProxy(contentInfoFinal);
+                if (!archiveLoader.hasSourceFiles() && !hasProxies) {
                     archiveLoader.releaseRawData();
                     log.info('All archive assets loaded, raw data released');
                 } else {
-                    log.info('All archive assets loaded, raw data retained for source file re-export');
+                    log.info(`All archive assets loaded, raw data retained (source files: ${archiveLoader.hasSourceFiles()}, proxies: ${hasProxies})`);
                 }
             }, 100);
         } else {
-            if (!archiveLoader.hasSourceFiles()) {
+            const hasProxiesElse = hasAnyProxy(contentInfoFinal);
+            if (!archiveLoader.hasSourceFiles() && !hasProxiesElse) {
                 archiveLoader.releaseRawData();
             } else {
-                log.info('Raw data retained for source file re-export');
+                log.info(`Raw data retained (source files: ${archiveLoader.hasSourceFiles()}, proxies: ${hasProxiesElse})`);
             }
         }
     } catch (error: any) {

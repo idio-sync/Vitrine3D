@@ -10,7 +10,7 @@ const KIOSK_MODULES = [
     'constants.ts', 'logger.ts', 'utilities.ts', 'archive-loader.js',
     'ui-controller.js', 'scene-manager.js', 'fly-controls.ts',
     'annotation-system.js', 'file-handlers.js', 'metadata-manager.js',
-    'theme-loader.js', 'quality-tier.ts', 'kiosk-main.js'
+    'theme-loader.js', 'quality-tier.ts', 'kiosk-main.ts'
 ];
 
 /**

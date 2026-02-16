@@ -2,13 +2,13 @@
 
 **Date:** 2026-02-06 (original), **Updated:** 2026-02-15
 **Scope:** Full assessment of converting simple-splat-mesh-viewer from JavaScript to TypeScript
-**Codebase:** ~20,000 lines across 30 source files (8 `.js` + 21 `.ts` modules + shared types + tests)
+**Codebase:** ~20,000 lines across 30 source files (3 `.js` + 26 `.ts` modules + shared types + tests)
 
 ---
 
 ## Executive Summary
 
-Converting this project to TypeScript is **feasible, in progress, and recommended to continue**. The original assessment identified the CDN import map architecture as the primary blocker — that has been fully resolved. Vite is in place, TypeScript is configured, shared types exist, and 21 modules are already `.ts` (Phases 0-1 complete, Phase 2 complete). The remaining work is converting 5 `.js` modules incrementally (Phases 3-4).
+Converting this project to TypeScript is **feasible, nearly complete, and recommended to finish**. The original assessment identified the CDN import map architecture as the primary blocker — that has been fully resolved. Vite is in place, TypeScript is configured, shared types exist, and 26 modules are already `.ts` (Phases 0-3 complete). The remaining work is converting `main.js` and optionally `config.js` (Phase 4).
 
 ### Feasibility Rating: **Very High** (9/10)
 
@@ -19,7 +19,7 @@ Converting this project to TypeScript is **feasible, in progress, and recommende
 | Dependency typing | 7/10 | `@types/three` excellent; spark.js still has no types |
 | Build complexity | 9/10 | ~~Requires bundler~~ Vite already in place, TS compiles cleanly |
 | Data model complexity | 7/10 | Complex nested metadata, but well-documented structures |
-| Risk level | Low | Tests exist (31), ESLint configured, phased approach proven |
+| Risk level | Low | Tests exist (90), ESLint configured, phased approach proven |
 
 ### Progress Summary
 
@@ -37,8 +37,8 @@ Converting this project to TypeScript is **feasible, in progress, and recommende
 | Phase 2 batch 2 conversions | **Done** — `share-dialog`, `ui-controller`, `annotation-system` |
 | Phase 2 batch 3 conversions | **Done** — `scene-manager`, `alignment`, `archive-loader` |
 | `@types/three` installation | **Done** — installed for batch 3 (Three.js-heavy modules) |
-| Remaining 5 `.js` modules (Phase 3-4) | **Not started** |
-| `strict: true` | **Not started** |
+| Phase 3 complex conversions | **Done** — `archive-creator`, `file-handlers`, `metadata-manager`, `kiosk-viewer`, `kiosk-main` |
+| Phase 4 — `main.js` + strict mode | **Not started** |
 
 ---
 
@@ -48,7 +48,7 @@ Converting this project to TypeScript is **feasible, in progress, and recommende
 - **Pure ES Modules** with `"type": "module"` in `package.json`
 - **Vite 7.3** — dev server, production bundler, TypeScript compilation
 - **npm dependencies** — bare specifiers resolved from `node_modules/` (CDN import map removed)
-- **Hybrid `.js`/`.ts`** — `allowJs: true`, `checkJs: false`, `strict: false`
+- **Hybrid `.js`/`.ts`** — `allowJs: true`, `checkJs: false`, `strict: false` (only 3 `.js` files remain)
 - All inter-module imports use `.js` extensions (Vite resolves `.ts` from `.js` imports)
 
 ### File Inventory
@@ -79,27 +79,22 @@ Converting this project to TypeScript is **feasible, in progress, and recommende
 | `modules/scene-manager.ts` | 836 | Phase 2 — Three.js scene/camera/renderer class with proper types |
 | `modules/alignment.ts` | 940 | Phase 2 — landmark alignment, ICP, fit-to-view with deps interfaces |
 | `modules/archive-loader.ts` | 908 | Phase 2 — ZIP parsing with CentralDirEntry, ArchiveManifest interfaces |
+| `modules/archive-creator.ts` | 1,896 | Phase 3 — 26 interfaces for manifest schema, ZIP building |
+| `modules/file-handlers.ts` | 1,793 | Phase 3 — typed deps interfaces for all asset loaders |
+| `modules/metadata-manager.ts` | 1,800 | Phase 3 — 15 interfaces for Dublin Core metadata |
+| `modules/kiosk-viewer.ts` | 470 | Phase 3 — HTML string generation, typed CDN deps |
+| `modules/kiosk-main.ts` | 3,115 | Phase 3 — KioskState interface, typed Three.js scene |
 
 **Remaining JavaScript (to convert):**
 
 | File | Lines | Complexity | Type Difficulty |
 |------|-------|-----------|-----------------|
 | `main.js` | 1,681 | High | Hard — orchestrator with state, deps factories, animation loop |
-| `modules/file-handlers.js` | 1,778 | High | Medium — dependency injection pattern helps |
-| `modules/metadata-manager.js` | 1,743 | High | Medium — mostly DOM operations with known shapes |
-| `modules/archive-creator.js` | 1,733 | High | Medium — well-documented JSDoc, clear data flow |
-| `modules/kiosk-main.js` | 3,108 | High | Medium — kiosk entry point, Three.js scene setup |
-| `modules/kiosk-viewer.js` | 456 | Medium | Medium — generates HTML strings, limited JSDoc |
 | `config.js` | 208 | Low | Special — IIFE, must remain JS (see Section 3) |
 | `pre-module.js` | 15 | Low | Trivial |
 
 ### Existing JSDoc Coverage (Remaining `.js` Files)
-Modules with strong JSDoc (easier conversion):
-- `archive-creator.js` — 43 doc blocks with `@param`/`@returns` types
-- `file-handlers.js` — 26 doc blocks
-Modules with weak/no JSDoc (more manual work):
 - `main.js` — has JSDoc `@returns` on deps factories pointing to shared types, but most functions lack annotations
-- `kiosk-main.js` — limited annotations
 
 ---
 
@@ -345,15 +340,17 @@ Convert standalone modules with clean APIs and good JSDoc:
 
 **Phase 2 complete.** `@types/three` was installed for batch 3, enabling proper Three.js types in `scene-manager.ts` and `alignment.ts`.
 
-### Phase 3 — Complex Module Conversion (Higher-Risk Files)
+### Phase 3 — Complex Module Conversion (Higher-Risk Files) — **DONE**
 
 | File | Lines | Approach |
 |------|-------|----------|
-| `archive-creator.js` → `archive-creator.ts` | 1,733 | Large but well-documented JSDoc |
-| `file-handlers.js` → `file-handlers.ts` | 1,778 | Dependency injection pattern helps |
-| `metadata-manager.js` → `metadata-manager.ts` | 1,743 | Add `ProjectMetadata` + `ArchiveManifest` interfaces |
-| `kiosk-viewer.js` → `kiosk-viewer.ts` | 456 | HTML string generation |
-| `kiosk-main.js` → `kiosk-main.ts` | 3,108 | Kiosk entry point; largest single file |
+| ~~`archive-creator.js`~~ → `archive-creator.ts` | 1,896 | 26 interfaces for manifest schema, ZIP building, hashing |
+| ~~`file-handlers.js`~~ → `file-handlers.ts` | 1,793 | Typed deps interfaces for all asset loading functions |
+| ~~`metadata-manager.js`~~ → `metadata-manager.ts` | 1,800 | 15 interfaces for Dublin Core metadata, DOM typed |
+| ~~`kiosk-viewer.js`~~ → `kiosk-viewer.ts` | 470 | HTML string generation with typed CDN deps |
+| ~~`kiosk-main.js`~~ → `kiosk-main.ts` | 3,115 | KioskState interface, Three.js typed scene, 176 errors fixed |
+
+**Phase 3 complete.** All 5 complex modules converted. `src/modules/` is now 100% TypeScript (0 `.js` files remain).
 
 ### Phase 4 — Main Module + Strict Mode
 
@@ -369,11 +366,11 @@ Convert standalone modules with clean APIs and good JSDoc:
 
 ### Low Risk
 - **Module structure is clean** — dependency injection pattern means modules don't need to know about each other's internals
-- **Test suite exists** — 31 tests covering security-critical code (URL validation, filename sanitization, theme parsing) catch regressions during conversion
+- **Test suite exists** — 90 tests across 5 suites (URL validation, filename sanitization, theme parsing, utility functions, quality-tier) catch regressions during conversion
 - **ESLint configured** — catches common issues during conversion
 - **Well-separated concerns** — each module has a clear API surface
 - **ESM already in use** — no CommonJS conversion needed
-- **Hybrid `.ts`/`.js` proven** — 4 modules already TypeScript, interop is seamless
+- **Hybrid `.ts`/`.js` proven** — 26 modules already TypeScript, interop is seamless
 
 ### Medium Risk
 - **`main.js` complexity** — at ~1,680 lines with deps factories and state management, this is still the hardest file to type correctly (though reduced from ~4,000)
@@ -402,11 +399,12 @@ Convert standalone modules with clean APIs and good JSDoc:
 | 0.5 — Quality infrastructure | Types + linter + tests | **DONE** | — |
 | 1 — Foundation | 6 files + declaration stubs | **DONE** | Low |
 | 2 — Modules | 11 files + `@types/three` | **DONE** (11/11) | Medium |
-| 3 — Complex modules | 5 files | Not started | Medium-High |
+| 3 — Complex modules | 5 files | **DONE** (5/5) | Medium-High |
 | 4 — Main + strict | 1-2 files + strict audit | Not started | High |
 
-**Remaining files to convert:** 5 `.js` modules + `main.js` + `config.js` (excluding `pre-module.js`)
-**Already TypeScript:** 21 modules + shared types (22 files, ~9,311 lines)
+**Remaining files to convert:** `main.js` + optionally `config.js` (excluding `pre-module.js`)
+**Already TypeScript:** 26 modules + shared types (27 files, ~18,000+ lines)
+**`src/modules/` directory:** 100% TypeScript (0 `.js` files remain)
 **Additional type definitions needed:** ~10 interfaces (ArchiveManifest, ProjectMetadata, and module-specific types added during conversion)
 
 ---
@@ -479,14 +477,14 @@ GitHub Actions workflow already includes install, build, and Docker steps. Add `
 5. **Catches real bugs** — common issues like passing `null` where `Object3D` is expected, or misspelling metadata field names, will be caught before runtime
 6. **Future-proofing** — TypeScript makes onboarding new developers significantly faster
 7. **Aligns with code review findings** — the existing CODE_REVIEW.md identifies "Missing Type Safety" as HIGH priority item 1.1
-8. **Proven feasible** — 21 modules already converted successfully with zero runtime regressions
+8. **Proven feasible** — 26 modules already converted successfully with zero runtime regressions
 
 ---
 
 ## 10. Conclusion
 
-This project is **actively being converted** to TypeScript with strong results so far. The original blockers (no bundler, CDN import map, no tests) have all been resolved. The hybrid `.js`/`.ts` approach is proven — 21 modules and shared types are already TypeScript, interoperating seamlessly with the remaining JavaScript. `@types/three` is installed and providing full Three.js type coverage.
+This project's TypeScript conversion is **nearly complete**. The original blockers (no bundler, CDN import map, no tests) have all been resolved. All 26 modules in `src/modules/` are now TypeScript — zero `.js` files remain in the modules directory. `@types/three` is installed and providing full Three.js type coverage. 90 tests across 5 suites verify correctness.
 
-The recommended next step is **Phase 3** — converting the 5 complex modules (`archive-creator`, `file-handlers`, `metadata-manager`, `kiosk-viewer`, `kiosk-main`). These are larger files (1,700-3,100 lines) with more DOM interaction but well-documented JSDoc.
+The recommended next step is **Phase 4** — converting `main.js` (1,681 lines) to TypeScript, optionally converting `config.js`, then enabling `strict: true` globally.
 
-**Key change from original assessment:** The risk profile has dropped significantly. What was originally rated Low-Medium risk with a "requires bundler" caveat is now Low risk with infrastructure fully in place, Phases 0-2 complete, `@types/three` installed, and a proven track record of 21 successful module conversions.
+**Key change from original assessment:** The risk profile has dropped to minimal. What was originally rated Low-Medium risk with a "requires bundler" caveat is now Low risk with infrastructure fully in place, Phases 0-3 complete, `@types/three` installed, and a proven track record of 26 successful module conversions across 4 phases.

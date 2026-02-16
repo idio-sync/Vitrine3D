@@ -72,16 +72,16 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [ ] Replace `setTimeout`-based async sequencing with proper promise chains or event-driven patterns
 
 ### Testing
-- [x] **Done** — Add a testing framework (Vitest) with 31 tests across 3 suites (url-validation, theme-loader, archive-loader)
-- [x] **Done** — Prioritize tests for: filename sanitization, URL validation, theme metadata parsing
+- [x] **Done** — Add a testing framework (Vitest) with 90 tests across 5 suites (url-validation, theme-loader, archive-loader, utilities, quality-tier)
+- [x] **Done** — Prioritize tests for: filename sanitization, URL validation, theme metadata parsing, utilities, quality-tier detection
 - [ ] Add tests for: archive parsing/creation, alignment algorithms
 - [ ] Add E2E smoke tests for archive round-trip (create, load, verify metadata)
 
 ### Type Safety
 - [x] **Done** — Add shared TypeScript types (`src/types.ts`): `AppState`, `SceneRefs`, deps interfaces with JSDoc `@returns` on factory functions
-- [x] **Done** — TypeScript migration in progress: 4 new `.ts` modules (`export-controller`, `archive-pipeline`, `event-wiring`, `url-validation`), hybrid `allowJs: true` setup
-- [ ] Add comprehensive JSDoc type annotations to remaining `.js` exported functions
-- [ ] Install `@types/three` and progressively fix type errors (currently blocked — would surface hundreds of errors)
+- [x] **Done** — TypeScript migration Phases 1–3 complete: 26 of 29 modules converted to `.ts`, hybrid `allowJs: true` setup, `@types/three` installed
+- [ ] Phase 4: Convert `main.js` (final `.js` module) and enable `strict: true`
+- [ ] Add comprehensive JSDoc type annotations to any remaining `.js` exported functions
 
 ### Versioning & Collaboration
 - [x] **Done** — Version history array in manifest with UI for adding entries

@@ -9,7 +9,11 @@
  */
 
 import * as THREE from 'three';
+import type { Annotation, DisplayMode } from '../types.js';
 import { SceneManager } from './scene-manager.js';
+
+// Local AssetType (not exported from types.ts)
+type AssetType = 'splat' | 'mesh' | 'pointcloud';
 import { FlyControls } from './fly-controls.js';
 import { AnnotationSystem } from './annotation-system.js';
 import { CAMERA, ASSET_STATE, QUALITY_TIER } from './constants.js';
@@ -22,7 +26,7 @@ import {
     showInlineLoading, hideInlineLoading
 } from './ui-controller.js';
 import {
-    loadArchiveFromFile, processArchive,
+    loadArchiveFromFile,
     processArchivePhase1, loadArchiveAsset,
     getAssetTypesForMode, getPrimaryAssetType,
     updateModelOpacity, updateModelWireframe, updateModelTextures, updateModelMatcap, updateModelNormals,
@@ -43,6 +47,61 @@ import {
 import { loadTheme } from './theme-loader.js';
 import { ArchiveLoader } from './archive-loader.js';
 
+
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
+
+type FileCategory = 'splat' | 'model' | 'pointcloud' | 'archive';
+type SheetSnap = 'peek' | 'half' | 'full';
+
+interface KioskState {
+    displayMode: string;
+    controlsVisible: boolean;
+    splatLoaded: boolean;
+    modelLoaded: boolean;
+    pointcloudLoaded: boolean;
+    archiveLoaded: boolean;
+    archiveLoader: ArchiveLoader | null;
+    archiveManifest: any;
+    archiveFileName: string | null;
+    currentArchiveUrl: string | null;
+    currentSplatUrl: string | null;
+    currentModelUrl: string | null;
+    flyModeActive: boolean;
+    annotationsVisible: boolean;
+    assetStates: Record<string, string>;
+    imageAssets: Map<string, any>;
+    qualityTier: string;
+    qualityResolved: string;
+    archiveSourceUrl?: string | null;
+}
+
+interface AppConfig {
+    theme?: string;
+    layout?: string;
+    defaultArchiveUrl?: string;
+    autoload?: boolean;
+    defaultSplatUrl?: string;
+    defaultModelUrl?: string;
+    defaultPointcloudUrl?: string;
+    initialViewMode?: string;
+    inlineAlignment?: {
+        splat?: { position?: number[]; rotation?: number[]; scale?: number };
+        model?: { position?: number[]; rotation?: number[]; scale?: number };
+        pointcloud?: { position?: number[]; rotation?: number[]; scale?: number };
+    };
+    _resolvedLayout?: string;
+    _themeMeta?: any;
+}
+
+interface WindowWithConfig extends Window {
+    APP_CONFIG?: AppConfig;
+    __TAURI__?: any;
+    __KIOSK_THEME_ASSETS__?: Record<string, any>;
+}
+
+declare const window: WindowWithConfig;
 const log = Logger.getLogger('kiosk-main');
 
 // =============================================================================
@@ -50,12 +109,12 @@ const log = Logger.getLogger('kiosk-main');
 // =============================================================================
 
 /** Convert a camelCase string to snake_case */
-function camelToSnake(str) {
+function camelToSnake(str: string): string {
     return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 }
 
 /** Recursively convert all object keys from camelCase to snake_case */
-function deepSnakeKeys(obj) {
+function deepSnakeKeys(obj: any): any {
     if (Array.isArray(obj)) return obj.map(deepSnakeKeys);
     if (obj !== null && typeof obj === 'object') {
         const result = {};
@@ -71,7 +130,7 @@ function deepSnakeKeys(obj) {
  * Normalize a manifest to canonical snake_case keys and lift common fields.
  * Handles manifests created with either camelCase or snake_case conventions.
  */
-function normalizeManifest(raw) {
+function normalizeManifest(raw: any): any {
     const m = deepSnakeKeys(raw);
     // Lift project fields to top level for convenient access
     if (m.project) {
@@ -86,18 +145,17 @@ function normalizeManifest(raw) {
 // MODULE STATE
 // =============================================================================
 
-let sceneManager = null;
-let scene, camera, renderer, controls, modelGroup, pointcloudGroup;
-let flyControls = null;
-let annotationSystem = null;
-let splatMesh = null;
-let fpsElement = null;
-let currentPopupAnnotationId = null;
-let annotationLineEl = null;
-let entryTransitionActive = false;
-let currentSheetSnap = 'peek'; // 'peek' | 'half' | 'full'
+let sceneManager: SceneManager | null = null;
+let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, controls: any, modelGroup: THREE.Group, pointcloudGroup: THREE.Group;
+let flyControls: FlyControls | null = null;
+let annotationSystem: AnnotationSystem | null = null;
+let splatMesh: any = null; // TODO: SplatMesh type
+let fpsElement: HTMLElement | null = null;
+let currentPopupAnnotationId: string | null = null;
+let annotationLineEl: SVGLineElement | null = null;
+let currentSheetSnap: SheetSnap = 'peek'; // 'peek' | 'half' | 'full'
 
-const state = {
+const state: KioskState = {
     displayMode: 'both',
     controlsVisible: false,
     splatLoaded: false,
@@ -128,17 +186,15 @@ const FILE_CATEGORIES = {
     splat:      ['.ply', '.splat', '.ksplat', '.spz', '.sog'],
     pointcloud: ['.e57']
 };
-const ALL_SUPPORTED_EXTENSIONS = Object.values(FILE_CATEGORIES).flat();
-
 /**
  * Classify a filename into its asset category.
  * @param {string} filename
  * @returns {'splat'|'model'|'pointcloud'|'archive'|null}
  */
-function classifyFile(filename) {
+function classifyFile(filename: string): FileCategory | null {
     const ext = '.' + filename.split('.').pop().toLowerCase();
     for (const [category, extensions] of Object.entries(FILE_CATEGORIES)) {
-        if (extensions.includes(ext)) return category;
+        if (extensions.includes(ext)) return category as FileCategory;
     }
     return null;
 }
@@ -147,7 +203,7 @@ function classifyFile(filename) {
 // INITIALIZATION
 // =============================================================================
 
-export async function init() {
+export async function init(): Promise<void> {
     log.info('Kiosk viewer initializing...');
     document.body.classList.add('kiosk-mode');
 
@@ -155,7 +211,7 @@ export async function init() {
     const canvasRight = document.getElementById('viewer-canvas-right');
 
     sceneManager = new SceneManager();
-    if (!sceneManager.init(canvas, canvasRight)) {
+    if (!sceneManager.init(canvas as HTMLCanvasElement, canvasRight as HTMLCanvasElement)) {
         log.error('Scene initialization failed');
         return;
     }
@@ -237,7 +293,7 @@ export async function init() {
             const overlay = document.getElementById('loading-overlay');
             if (overlay) {
                 themeMeta.layoutModule.initLoadingScreen(overlay, {
-                    themeAssets: themeMeta.themeAssets || {},
+                    themeAssets: (themeMeta as any).themeAssets || {},
                     themeBaseUrl: `themes/${config.theme}/`
                 });
             }
@@ -248,7 +304,7 @@ export async function init() {
             const gate = document.getElementById('kiosk-click-gate');
             if (gate) {
                 themeMeta.layoutModule.initClickGate(gate, {
-                    themeAssets: themeMeta.themeAssets || {},
+                    themeAssets: (themeMeta as any).themeAssets || {},
                     themeBaseUrl: `themes/${config.theme}/`
                 });
             }
@@ -258,7 +314,7 @@ export async function init() {
             const picker = document.getElementById('kiosk-file-picker');
             if (picker) {
                 themeMeta.layoutModule.initFilePicker(picker, {
-                    themeAssets: themeMeta.themeAssets || {},
+                    themeAssets: (themeMeta as any).themeAssets || {},
                     themeBaseUrl: `themes/${config.theme}/`
                 });
             }
@@ -270,7 +326,7 @@ export async function init() {
     // Wire up UI
     setupViewerUI();
     // Always set up sidebar (editorial hides it via CSS but needs it as mobile fallback)
-    setupMetadataSidebar({ state, annotationSystem, imageAssets: state.imageAssets });
+    setupMetadataSidebar({ state: state as any, annotationSystem, imageAssets: state.imageAssets });
     setupCollapsibles();
     setupViewerKeyboardShortcuts();
 
@@ -278,7 +334,7 @@ export async function init() {
     if (config.initialViewMode) {
         state.displayMode = config.initialViewMode;
     }
-    setDisplayMode(state.displayMode, createDisplayModeDeps());
+    setDisplayMode(state.displayMode as DisplayMode, createDisplayModeDeps());
 
     // Hide editor-only UI
     hideEditorOnlyUI();
@@ -303,7 +359,7 @@ export async function init() {
 // FILE PICKER
 // =============================================================================
 
-function setupFilePicker() {
+function setupFilePicker(): void {
     const picker = document.getElementById('kiosk-file-picker');
 
     // Check for URL-based archive loading (e.g. ?kiosk=true&archive=URL)
@@ -360,8 +416,9 @@ function setupFilePicker() {
         }
         // Browser file input still needed as fallback
         input.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handlePickedFiles(e.target.files, picker);
+            const target = e.target as HTMLInputElement;
+            if (target.files && target.files.length > 0) {
+                handlePickedFiles(target.files, picker);
             }
         });
     }
@@ -383,9 +440,6 @@ function setupFilePicker() {
         });
     }
 
-    function hidePicker() {
-        if (picker) picker.classList.add('hidden');
-    }
 }
 
 // =============================================================================
@@ -396,7 +450,7 @@ function setupFilePicker() {
  * Route picked/dropped files to the correct loader.
  * Handles: archives, direct splats, models (with OBJ+MTL), point clouds.
  */
-function handlePickedFiles(fileList, pickerElement) {
+function handlePickedFiles(fileList: FileList | File[], pickerElement: HTMLElement | null): void {
     const files = Array.from(fileList);
     const mainFile = files[0];
     const category = classifyFile(mainFile.name);
@@ -426,7 +480,7 @@ function handlePickedFiles(fileList, pickerElement) {
  * @param {'splat'|'model'|'pointcloud'} category - Detected category
  * @param {File[]} allFiles - All dropped files (for OBJ+MTL pairs)
  */
-async function handleDirectFile(mainFile, category, allFiles) {
+async function handleDirectFile(mainFile: File, category: FileCategory, allFiles: File[]): Promise<void> {
     log.info(`Loading direct ${category} file:`, mainFile.name);
     showLoading(`Loading ${category}...`, true);
 
@@ -436,7 +490,7 @@ async function handleDirectFile(mainFile, category, allFiles) {
         if (category === 'splat') {
             await loadSplatFromFile(mainFile, createSplatDeps());
         } else if (category === 'model') {
-            await loadModelFromFile(allFiles || [mainFile], createModelDeps());
+            await loadModelFromFile(allFiles as any || [mainFile], createModelDeps());
         } else if (category === 'pointcloud') {
             await loadPointcloudFromFile(mainFile, createPointcloudDeps());
         }
@@ -456,38 +510,38 @@ async function handleDirectFile(mainFile, category, allFiles) {
 /**
  * Load direct files from URL params (?splat=, ?model=, ?pointcloud=).
  */
-async function loadDirectFilesFromUrls(config) {
+async function loadDirectFilesFromUrls(config: AppConfig): Promise<void> {
     showLoading('Loading 3D data...', true);
 
     try {
         if (config.defaultSplatUrl) {
             updateProgress(10, 'Loading splat...');
-            await loadSplatFromUrl(config.defaultSplatUrl, createSplatDeps(), (received, totalBytes) => {
+            await loadSplatFromUrl(config.defaultSplatUrl, createSplatDeps(), ((received: number, totalBytes: number) => {
                 if (totalBytes > 0) {
                     const pct = Math.round((received / totalBytes) * 100);
                     updateProgress(pct * 0.3, `Downloading splat... ${(received / 1048576).toFixed(1)} MB`);
                 }
-            });
+            }) as any);
         }
 
         if (config.defaultModelUrl) {
             updateProgress(40, 'Loading model...');
-            await loadModelFromUrl(config.defaultModelUrl, createModelDeps(), (received, totalBytes) => {
+            await loadModelFromUrl(config.defaultModelUrl, createModelDeps(), ((received: number, totalBytes: number) => {
                 if (totalBytes > 0) {
                     const pct = Math.round((received / totalBytes) * 100);
                     updateProgress(40 + pct * 0.3, `Downloading model... ${(received / 1048576).toFixed(1)} MB`);
                 }
-            });
+            }) as any);
         }
 
         if (config.defaultPointcloudUrl) {
             updateProgress(70, 'Loading point cloud...');
-            await loadPointcloudFromUrl(config.defaultPointcloudUrl, createPointcloudDeps(), (received, totalBytes) => {
+            await loadPointcloudFromUrl(config.defaultPointcloudUrl, createPointcloudDeps(), ((received: number, totalBytes: number) => {
                 if (totalBytes > 0) {
                     const pct = Math.round((received / totalBytes) * 100);
                     updateProgress(70 + pct * 0.2, `Downloading point cloud... ${(received / 1048576).toFixed(1)} MB`);
                 }
-            });
+            }) as any);
         }
 
         // Apply inline alignment if provided via URL params (?sp=, ?sr=, ?ss=, ?mp=, etc.)
@@ -495,17 +549,17 @@ async function loadDirectFilesFromUrls(config) {
             const alignment = config.inlineAlignment;
             if (alignment.splat && splatMesh) {
                 if (alignment.splat.position) splatMesh.position.fromArray(alignment.splat.position);
-                if (alignment.splat.rotation) splatMesh.rotation.set(...alignment.splat.rotation);
+                if (alignment.splat.rotation) splatMesh.rotation.set(...alignment.splat.rotation as [number, number, number]);
                 if (alignment.splat.scale != null) splatMesh.scale.setScalar(alignment.splat.scale);
             }
             if (alignment.model && modelGroup) {
                 if (alignment.model.position) modelGroup.position.fromArray(alignment.model.position);
-                if (alignment.model.rotation) modelGroup.rotation.set(...alignment.model.rotation);
+                if (alignment.model.rotation) modelGroup.rotation.set(...alignment.model.rotation as [number, number, number]);
                 if (alignment.model.scale != null) modelGroup.scale.setScalar(alignment.model.scale);
             }
             if (alignment.pointcloud && pointcloudGroup) {
                 if (alignment.pointcloud.position) pointcloudGroup.position.fromArray(alignment.pointcloud.position);
-                if (alignment.pointcloud.rotation) pointcloudGroup.rotation.set(...alignment.pointcloud.rotation);
+                if (alignment.pointcloud.rotation) pointcloudGroup.rotation.set(...alignment.pointcloud.rotation as [number, number, number]);
                 if (alignment.pointcloud.scale != null) pointcloudGroup.scale.setScalar(alignment.pointcloud.scale);
             }
         }
@@ -526,7 +580,7 @@ async function loadDirectFilesFromUrls(config) {
  * Simplified version of the post-archive flow — no manifest, no branded loading,
  * no annotations, no metadata.
  */
-function onDirectFileLoaded(fileName) {
+function onDirectFileLoaded(fileName: string | null): void {
     // Set display mode based on what loaded
     if (state.modelLoaded) {
         state.displayMode = 'model';
@@ -535,7 +589,7 @@ function onDirectFileLoaded(fileName) {
     } else if (state.pointcloudLoaded) {
         state.displayMode = 'pointcloud';
     }
-    setDisplayMode(state.displayMode, createDisplayModeDeps());
+    setDisplayMode(state.displayMode as DisplayMode, createDisplayModeDeps());
 
     // Show only relevant settings sections
     showRelevantSettings(state.splatLoaded, state.modelLoaded, state.pointcloudLoaded);
@@ -596,7 +650,7 @@ function onDirectFileLoaded(fileName) {
  * Show click-to-load overlay with poster extracted from archive via Range requests.
  * Only downloads the ZIP central directory + thumbnail (~100KB), not the full archive.
  */
-async function showClickGate(archiveUrl) {
+async function showClickGate(archiveUrl: string): Promise<void> {
     const gate = document.getElementById('kiosk-click-gate');
     if (!gate) {
         log.warn('Click gate element not found, falling back to auto-load');
@@ -625,7 +679,7 @@ async function showClickGate(archiveUrl) {
             const thumbData = await loader.extractFile(thumbEntry.file_name);
             if (thumbData) {
                 posterBlobUrl = thumbData.url;
-                const posterImg = document.getElementById('kiosk-gate-poster');
+                const posterImg = document.getElementById('kiosk-gate-poster') as HTMLImageElement;
                 if (posterImg) posterImg.src = posterBlobUrl;
             }
         }
@@ -659,7 +713,7 @@ async function showClickGate(archiveUrl) {
     }, { once: true });
 }
 
-async function loadArchiveFromUrl(url) {
+async function loadArchiveFromUrl(url: string): Promise<void> {
     showLoading('Downloading archive...', true);
     try {
         const blob = await fetchWithProgress(url, (received, total) => {
@@ -692,7 +746,7 @@ async function loadArchiveFromUrl(url) {
  * Bypasses HTTP fetch entirely — no "Downloading..." phase.
  * @param {string} filePath - Local filesystem path to the archive
  */
-async function loadArchiveFromTauri(filePath) {
+async function loadArchiveFromTauri(filePath: string): Promise<void> {
     showLoading('Loading archive...', true);
     try {
         const { readFile } = window.__TAURI__.fs;
@@ -716,7 +770,7 @@ async function loadArchiveFromTauri(filePath) {
 // =============================================================================
 
 // Ensure a single archive asset type is loaded on demand (kiosk version).
-async function ensureAssetLoaded(assetType) {
+async function ensureAssetLoaded(assetType: AssetType): Promise<boolean> {
     if (!state.archiveLoader) return false;
 
     if (state.assetStates[assetType] === ASSET_STATE.LOADED) return true;
@@ -751,12 +805,12 @@ async function ensureAssetLoaded(assetType) {
 }
 
 // Trigger lazy loading of assets needed for a display mode
-function triggerLazyLoad(mode) {
+function triggerLazyLoad(mode: string): void {
     if (!state.archiveLoaded || !state.archiveLoader) return;
     const neededTypes = getAssetTypesForMode(mode);
     for (const type of neededTypes) {
         if (state.assetStates[type] === ASSET_STATE.UNLOADED) {
-            ensureAssetLoaded(type).then(loaded => {
+            ensureAssetLoaded(type as AssetType).then(loaded => {
                 if (loaded) {
                     const deps = createDisplayModeDeps();
                     if (deps.updateVisibility) deps.updateVisibility();
@@ -766,21 +820,21 @@ function triggerLazyLoad(mode) {
     }
 }
 
-async function handleArchiveFile(file) {
+async function handleArchiveFile(file: File): Promise<void> {
     log.info('Loading archive:', file.name);
     showLoading('Loading archive...', true);
 
     try {
         // === Phase 1: Read file + index ZIP directory (no decompression) ===
         updateProgress(5, 'Reading archive...');
-        const archiveLoader = await loadArchiveFromFile(file, { state });
+        const archiveLoader = await loadArchiveFromFile(file, { state: state as any });
 
         // Reset asset states for new archive
         state.assetStates = { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED };
 
         // Parse manifest + extract thumbnail (small files only)
         updateProgress(15, 'Reading metadata...');
-        const phase1 = await processArchivePhase1(archiveLoader, file.name, { state });
+        const phase1 = await processArchivePhase1(archiveLoader, file.name, { state: state as any });
         const { contentInfo } = phase1;
         const manifest = normalizeManifest(phase1.manifest);
 
@@ -803,14 +857,14 @@ async function handleArchiveFile(file) {
         }
         updateProgress(30, 'Loading 3D data...');
         const primaryType = getPrimaryAssetType(state.displayMode, contentInfo);
-        const primaryLoaded = await ensureAssetLoaded(primaryType);
+        const primaryLoaded = await ensureAssetLoaded(primaryType as AssetType);
 
         if (!primaryLoaded) {
             // Try any available type as fallback
             const fallbackTypes = ['splat', 'mesh', 'pointcloud'].filter(t => t !== primaryType);
             let anyLoaded = false;
             for (const type of fallbackTypes) {
-                if (await ensureAssetLoaded(type)) { anyLoaded = true; break; }
+                if (await ensureAssetLoaded(type as AssetType)) { anyLoaded = true; break; }
             }
             if (!anyLoaded) {
                 hideLoading();
@@ -854,7 +908,7 @@ async function handleArchiveFile(file) {
         updateProgress(80, 'Loading metadata...');
         updateArchiveMetadataUI(manifest, archiveLoader);
         prefillMetadataFromArchive(manifest);
-        populateMetadataDisplay({ state, annotationSystem, imageAssets: state.imageAssets });
+        populateMetadataDisplay({ state: state as any, annotationSystem, imageAssets: state.imageAssets });
 
         // In kiosk/offline mode the edit form fields (#meta-title etc.) are stripped,
         // so populateMetadataDisplay reads empty values from collectMetadata().
@@ -899,7 +953,7 @@ async function handleArchiveFile(file) {
         } else if (state.pointcloudLoaded) {
             state.displayMode = 'pointcloud';
         }
-        setDisplayMode(state.displayMode, createDisplayModeDeps());
+        setDisplayMode(state.displayMode as DisplayMode, createDisplayModeDeps());
 
         // Show only relevant settings
         showRelevantSettings(state.splatLoaded, state.modelLoaded, state.pointcloudLoaded);
@@ -943,10 +997,10 @@ async function handleArchiveFile(file) {
             if (manifest.viewer_settings.single_sided !== undefined) {
                 const side = manifest.viewer_settings.single_sided ? THREE.FrontSide : THREE.DoubleSide;
                 if (modelGroup) {
-                    modelGroup.traverse(child => {
+                    modelGroup.traverse((child: any) => {
                         if (child.isMesh && child.material) {
                             const mats = Array.isArray(child.material) ? child.material : [child.material];
-                            mats.forEach(m => { m.side = side; m.needsUpdate = true; });
+                            mats.forEach((m: any) => { m.side = side; m.needsUpdate = true; });
                         }
                     });
                 }
@@ -964,7 +1018,7 @@ async function handleArchiveFile(file) {
 
         if (isEditorial) {
             // Populate sidebar content for mobile fallback (hidden on desktop by CSS)
-            showMetadataSidebar('view', { state, annotationSystem, imageAssets: state.imageAssets });
+            showMetadataSidebar('view', { state: state as any, annotationSystem, imageAssets: state.imageAssets });
             populateAnnotationList();
         } else {
             // Show toolbar now that archive is loaded
@@ -986,7 +1040,7 @@ async function handleArchiveFile(file) {
             }
 
             // Open metadata sidebar by default
-            showMetadataSidebar('view', { state, annotationSystem, imageAssets: state.imageAssets });
+            showMetadataSidebar('view', { state: state as any, annotationSystem, imageAssets: state.imageAssets });
         }
 
         // Show quality toggle if archive has any proxies (editorial handles its own)
@@ -1009,16 +1063,16 @@ async function handleArchiveFile(file) {
                                           (type === 'pointcloud' && contentInfo.hasPointcloud);
                     if (typeAvailable) {
                         log.info(`Background loading: ${type}`);
-                        await ensureAssetLoaded(type);
+                        await ensureAssetLoaded(type as AssetType);
                         // Update settings visibility after background load
                         showRelevantSettings(state.splatLoaded, state.modelLoaded, state.pointcloudLoaded);
                         // Re-apply viewer settings to newly loaded meshes
                         if (type === 'mesh' && manifest.viewer_settings?.single_sided !== undefined) {
                             const side = manifest.viewer_settings.single_sided ? THREE.FrontSide : THREE.DoubleSide;
-                            modelGroup.traverse(child => {
+                            modelGroup.traverse((child: any) => {
                                 if (child.isMesh && child.material) {
                                     const mats = Array.isArray(child.material) ? child.material : [child.material];
-                                    mats.forEach(m => { m.side = side; m.needsUpdate = true; });
+                                    mats.forEach((m: any) => { m.side = side; m.needsUpdate = true; });
                                 }
                             });
                         }
@@ -1049,7 +1103,7 @@ async function handleArchiveFile(file) {
  * Show the SD/HD quality toggle. Uses existing HTML element if present,
  * otherwise creates one dynamically (for kiosk/editorial without index.html).
  */
-function showQualityToggle() {
+function showQualityToggle(): void {
     let container = document.getElementById('quality-toggle-container');
     if (!container) {
         // Dynamically create toggle (kiosk offline HTML won't have it)
@@ -1064,26 +1118,26 @@ function showQualityToggle() {
         container.classList.remove('hidden');
         // Set initial active state
         container.querySelectorAll('.quality-toggle-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.tier === state.qualityResolved);
+            btn.classList.toggle('active', (btn as HTMLElement).dataset.tier === state.qualityResolved);
         });
     }
 
     // Wire click handlers
     container.querySelectorAll('.quality-toggle-btn').forEach(btn => {
-        btn.addEventListener('click', () => switchQualityTier(btn.dataset.tier));
+        btn.addEventListener('click', () => switchQualityTier((btn as HTMLElement).dataset.tier!));
     });
 }
 
 /**
  * Switch between SD and HD quality tiers, swapping proxy/full-res assets.
  */
-async function switchQualityTier(newTier) {
+async function switchQualityTier(newTier: string): Promise<void> {
     if (newTier === state.qualityResolved) return;
     state.qualityResolved = newTier;
 
     // Update button states
     document.querySelectorAll('.quality-toggle-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tier === newTier);
+        btn.classList.toggle('active', (btn as HTMLElement).dataset.tier === newTier);
         btn.classList.add('loading');
     });
 
@@ -1125,7 +1179,7 @@ async function switchQualityTier(newTier) {
 // DEPS BUILDERS (matching the deps pattern used by file-handlers.js)
 // =============================================================================
 
-function createArchiveDeps() {
+function createArchiveDeps(): any {
     return {
         scene,
         modelGroup,
@@ -1163,7 +1217,7 @@ function createArchiveDeps() {
     };
 }
 
-function createSplatDeps() {
+function createSplatDeps(): any {
     return {
         scene,
         getSplatMesh: () => splatMesh,
@@ -1174,7 +1228,7 @@ function createSplatDeps() {
     };
 }
 
-function createModelDeps() {
+function createModelDeps(): any {
     return {
         modelGroup,
         state,
@@ -1183,7 +1237,7 @@ function createModelDeps() {
     };
 }
 
-function createPointcloudDeps() {
+function createPointcloudDeps(): any {
     return {
         pointcloudGroup,
         state,
@@ -1192,7 +1246,7 @@ function createPointcloudDeps() {
     };
 }
 
-function createDisplayModeDeps() {
+function createDisplayModeDeps(): any {
     const canvasRight = document.getElementById('viewer-canvas-right');
     return {
         state,
@@ -1213,7 +1267,7 @@ function createDisplayModeDeps() {
  * Build the dependency object for theme layout modules.
  * Layout modules receive everything via this object — no ES imports.
  */
-function createLayoutDeps() {
+function createLayoutDeps(): any {
     return {
         Logger,
         escapeHtml,
@@ -1250,18 +1304,18 @@ function createLayoutDeps() {
 // UI SETUP
 // =============================================================================
 
-function setupViewerUI() {
+function setupViewerUI(): void {
     // Display mode buttons (with lazy loading trigger)
     ['model', 'splat', 'pointcloud', 'both', 'split'].forEach(mode => {
         addListener(`btn-${mode}`, 'click', () => {
             state.displayMode = mode;
-            setDisplayMode(mode, createDisplayModeDeps());
+            setDisplayMode(mode as DisplayMode, createDisplayModeDeps());
             // Lazy-load any needed assets not yet loaded
             if (state.archiveLoaded && state.archiveLoader) {
                 const neededTypes = getAssetTypesForMode(mode);
                 for (const type of neededTypes) {
                     if (state.assetStates[type] === ASSET_STATE.UNLOADED) {
-                        ensureAssetLoaded(type).then(loaded => {
+                        ensureAssetLoaded(type as AssetType).then(loaded => {
                             if (loaded) {
                                 const deps = createDisplayModeDeps();
                                 if (deps.updateVisibility) deps.updateVisibility();
@@ -1298,191 +1352,198 @@ function setupViewerUI() {
         if (sidebar && !sidebar.classList.contains('hidden')) {
             hideMetadataSidebar();
         } else {
-            showMetadataSidebar('view', { state, annotationSystem, imageAssets: state.imageAssets });
+            showMetadataSidebar('view', { state: state as any, annotationSystem, imageAssets: state.imageAssets });
             if (isMobileKiosk()) setSheetSnap('half');
         }
     });
 
     // Grid toggle
     addListener('toggle-gridlines', 'change', (e) => {
-        sceneManager.toggleGrid(e.target.checked);
+        sceneManager.toggleGrid((e.target as HTMLInputElement).checked);
     });
 
     // Background color presets
     document.querySelectorAll('.color-preset').forEach(btn => {
         btn.addEventListener('click', () => {
-            const color = btn.dataset.color;
-            sceneManager.setBackgroundColor(color);
+            const color = (btn as HTMLElement).dataset.color;
+            sceneManager.setBackgroundColor(color!);
             document.querySelectorAll('.color-preset').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            const picker = document.getElementById('bg-color-picker');
-            if (picker) picker.value = color;
+            const picker = document.getElementById('bg-color-picker') as HTMLInputElement;
+            if (picker) picker.value = color!;
         });
     });
 
     // Custom background color
     addListener('bg-color-picker', 'input', (e) => {
-        sceneManager.setBackgroundColor(e.target.value);
+        sceneManager.setBackgroundColor((e.target as HTMLInputElement).value);
         document.querySelectorAll('.color-preset').forEach(b => b.classList.remove('active'));
     });
 
     // Model settings
     addListener('model-scale', 'input', (e) => {
-        const val = parseFloat(e.target.value);
+        const val = parseFloat((e.target as HTMLInputElement).value);
         if (modelGroup) modelGroup.scale.setScalar(val);
         const label = document.getElementById('model-scale-value');
         if (label) label.textContent = val.toFixed(1);
     });
     addListener('model-opacity', 'input', (e) => {
-        const val = parseFloat(e.target.value);
+        const val = parseFloat((e.target as HTMLInputElement).value);
         updateModelOpacity(modelGroup, val);
         const label = document.getElementById('model-opacity-value');
         if (label) label.textContent = val.toFixed(1);
     });
     addListener('model-wireframe', 'change', (e) => {
-        if (e.target.checked) {
-            const matcapCb = document.getElementById('model-matcap');
+        const target = e.target as HTMLInputElement;
+        if (target.checked) {
+            const matcapCb = document.getElementById('model-matcap') as HTMLInputElement;
             if (matcapCb?.checked) {
                 matcapCb.checked = false;
-                const styleGroup = document.getElementById('matcap-style-group');
+                const styleGroup = document.getElementById('matcap-style-group') as HTMLElement;
                 if (styleGroup) styleGroup.style.display = 'none';
                 updateModelMatcap(modelGroup, false);
             }
-            const normalsCb = document.getElementById('model-normals');
+            const normalsCb = document.getElementById('model-normals') as HTMLInputElement;
             if (normalsCb?.checked) {
                 normalsCb.checked = false;
                 updateModelNormals(modelGroup, false);
             }
-            const roughCb = document.getElementById('model-roughness');
+            const roughCb = document.getElementById('model-roughness') as HTMLInputElement;
             if (roughCb?.checked) { roughCb.checked = false; updateModelRoughness(modelGroup, false); }
-            const metalCb = document.getElementById('model-metalness');
+            const metalCb = document.getElementById('model-metalness') as HTMLInputElement;
             if (metalCb?.checked) { metalCb.checked = false; updateModelMetalness(modelGroup, false); }
-            const f0Cb = document.getElementById('model-specular-f0');
+            const f0Cb = document.getElementById('model-specular-f0') as HTMLInputElement;
             if (f0Cb?.checked) { f0Cb.checked = false; updateModelSpecularF0(modelGroup, false); }
         }
-        updateModelWireframe(modelGroup, e.target.checked);
+        updateModelWireframe(modelGroup, target.checked);
     });
     addListener('model-matcap', 'change', (e) => {
-        const styleGroup = document.getElementById('matcap-style-group');
-        if (styleGroup) styleGroup.style.display = e.target.checked ? '' : 'none';
-        if (e.target.checked) {
-            const wireCb = document.getElementById('model-wireframe');
+        const target = e.target as HTMLInputElement;
+        const styleGroup = document.getElementById('matcap-style-group') as HTMLElement;
+        if (styleGroup) styleGroup.style.display = target.checked ? '' : 'none';
+        if (target.checked) {
+            const wireCb = document.getElementById('model-wireframe') as HTMLInputElement;
             if (wireCb?.checked) {
                 wireCb.checked = false;
                 updateModelWireframe(modelGroup, false);
             }
-            const normalsCb = document.getElementById('model-normals');
+            const normalsCb = document.getElementById('model-normals') as HTMLInputElement;
             if (normalsCb?.checked) {
                 normalsCb.checked = false;
                 updateModelNormals(modelGroup, false);
             }
-            const roughCb = document.getElementById('model-roughness');
+            const roughCb = document.getElementById('model-roughness') as HTMLInputElement;
             if (roughCb?.checked) { roughCb.checked = false; updateModelRoughness(modelGroup, false); }
-            const metalCb = document.getElementById('model-metalness');
+            const metalCb = document.getElementById('model-metalness') as HTMLInputElement;
             if (metalCb?.checked) { metalCb.checked = false; updateModelMetalness(modelGroup, false); }
-            const f0Cb = document.getElementById('model-specular-f0');
+            const f0Cb = document.getElementById('model-specular-f0') as HTMLInputElement;
             if (f0Cb?.checked) { f0Cb.checked = false; updateModelSpecularF0(modelGroup, false); }
         }
-        updateModelMatcap(modelGroup, e.target.checked, document.getElementById('matcap-style')?.value || 'clay');
+        const matcapStyle = (document.getElementById('matcap-style') as HTMLInputElement)?.value || 'clay';
+        updateModelMatcap(modelGroup, target.checked, matcapStyle);
     });
     addListener('matcap-style', 'change', (e) => {
-        const matcapCb = document.getElementById('model-matcap');
+        const matcapCb = document.getElementById('model-matcap') as HTMLInputElement;
         if (matcapCb?.checked) {
-            updateModelMatcap(modelGroup, true, e.target.value);
+            updateModelMatcap(modelGroup, true, (e.target as HTMLInputElement).value);
         }
     });
     addListener('model-normals', 'change', (e) => {
-        if (e.target.checked) {
-            const wireCb = document.getElementById('model-wireframe');
+        const target = e.target as HTMLInputElement;
+        if (target.checked) {
+            const wireCb = document.getElementById('model-wireframe') as HTMLInputElement;
             if (wireCb?.checked) {
                 wireCb.checked = false;
                 updateModelWireframe(modelGroup, false);
             }
-            const matcapCb = document.getElementById('model-matcap');
+            const matcapCb = document.getElementById('model-matcap') as HTMLInputElement;
             if (matcapCb?.checked) {
                 matcapCb.checked = false;
-                const styleGroup = document.getElementById('matcap-style-group');
+                const styleGroup = document.getElementById('matcap-style-group') as HTMLElement;
                 if (styleGroup) styleGroup.style.display = 'none';
                 updateModelMatcap(modelGroup, false);
             }
-            const roughCb = document.getElementById('model-roughness');
+            const roughCb = document.getElementById('model-roughness') as HTMLInputElement;
             if (roughCb?.checked) { roughCb.checked = false; updateModelRoughness(modelGroup, false); }
-            const metalCb = document.getElementById('model-metalness');
+            const metalCb = document.getElementById('model-metalness') as HTMLInputElement;
             if (metalCb?.checked) { metalCb.checked = false; updateModelMetalness(modelGroup, false); }
-            const f0Cb = document.getElementById('model-specular-f0');
+            const f0Cb = document.getElementById('model-specular-f0') as HTMLInputElement;
             if (f0Cb?.checked) { f0Cb.checked = false; updateModelSpecularF0(modelGroup, false); }
         }
-        updateModelNormals(modelGroup, e.target.checked);
+        updateModelNormals(modelGroup, target.checked);
     });
     addListener('model-roughness', 'change', (e) => {
-        if (e.target.checked) {
-            const wireCb = document.getElementById('model-wireframe');
+        const target = e.target as HTMLInputElement;
+        if (target.checked) {
+            const wireCb = document.getElementById('model-wireframe') as HTMLInputElement;
             if (wireCb?.checked) { wireCb.checked = false; updateModelWireframe(modelGroup, false); }
-            const matcapCb = document.getElementById('model-matcap');
+            const matcapCb = document.getElementById('model-matcap') as HTMLInputElement;
             if (matcapCb?.checked) {
                 matcapCb.checked = false;
-                const styleGroup = document.getElementById('matcap-style-group');
+                const styleGroup = document.getElementById('matcap-style-group') as HTMLElement;
                 if (styleGroup) styleGroup.style.display = 'none';
                 updateModelMatcap(modelGroup, false);
             }
-            const normalsCb = document.getElementById('model-normals');
+            const normalsCb = document.getElementById('model-normals') as HTMLInputElement;
             if (normalsCb?.checked) { normalsCb.checked = false; updateModelNormals(modelGroup, false); }
-            const metalCb = document.getElementById('model-metalness');
+            const metalCb = document.getElementById('model-metalness') as HTMLInputElement;
             if (metalCb?.checked) { metalCb.checked = false; updateModelMetalness(modelGroup, false); }
-            const f0Cb = document.getElementById('model-specular-f0');
+            const f0Cb = document.getElementById('model-specular-f0') as HTMLInputElement;
             if (f0Cb?.checked) { f0Cb.checked = false; updateModelSpecularF0(modelGroup, false); }
         }
-        updateModelRoughness(modelGroup, e.target.checked);
+        updateModelRoughness(modelGroup, target.checked);
     });
     addListener('model-metalness', 'change', (e) => {
-        if (e.target.checked) {
-            const wireCb = document.getElementById('model-wireframe');
+        const target = e.target as HTMLInputElement;
+        if (target.checked) {
+            const wireCb = document.getElementById('model-wireframe') as HTMLInputElement;
             if (wireCb?.checked) { wireCb.checked = false; updateModelWireframe(modelGroup, false); }
-            const matcapCb = document.getElementById('model-matcap');
+            const matcapCb = document.getElementById('model-matcap') as HTMLInputElement;
             if (matcapCb?.checked) {
                 matcapCb.checked = false;
-                const styleGroup = document.getElementById('matcap-style-group');
+                const styleGroup = document.getElementById('matcap-style-group') as HTMLElement;
                 if (styleGroup) styleGroup.style.display = 'none';
                 updateModelMatcap(modelGroup, false);
             }
-            const normalsCb = document.getElementById('model-normals');
+            const normalsCb = document.getElementById('model-normals') as HTMLInputElement;
             if (normalsCb?.checked) { normalsCb.checked = false; updateModelNormals(modelGroup, false); }
-            const roughCb = document.getElementById('model-roughness');
+            const roughCb = document.getElementById('model-roughness') as HTMLInputElement;
             if (roughCb?.checked) { roughCb.checked = false; updateModelRoughness(modelGroup, false); }
-            const f0Cb = document.getElementById('model-specular-f0');
+            const f0Cb = document.getElementById('model-specular-f0') as HTMLInputElement;
             if (f0Cb?.checked) { f0Cb.checked = false; updateModelSpecularF0(modelGroup, false); }
         }
-        updateModelMetalness(modelGroup, e.target.checked);
+        updateModelMetalness(modelGroup, target.checked);
     });
     addListener('model-specular-f0', 'change', (e) => {
-        if (e.target.checked) {
-            const wireCb = document.getElementById('model-wireframe');
+        const target = e.target as HTMLInputElement;
+        if (target.checked) {
+            const wireCb = document.getElementById('model-wireframe') as HTMLInputElement;
             if (wireCb?.checked) { wireCb.checked = false; updateModelWireframe(modelGroup, false); }
-            const matcapCb = document.getElementById('model-matcap');
+            const matcapCb = document.getElementById('model-matcap') as HTMLInputElement;
             if (matcapCb?.checked) {
                 matcapCb.checked = false;
-                const styleGroup = document.getElementById('matcap-style-group');
+                const styleGroup = document.getElementById('matcap-style-group') as HTMLElement;
                 if (styleGroup) styleGroup.style.display = 'none';
                 updateModelMatcap(modelGroup, false);
             }
-            const normalsCb = document.getElementById('model-normals');
+            const normalsCb = document.getElementById('model-normals') as HTMLInputElement;
             if (normalsCb?.checked) { normalsCb.checked = false; updateModelNormals(modelGroup, false); }
-            const roughCb = document.getElementById('model-roughness');
+            const roughCb = document.getElementById('model-roughness') as HTMLInputElement;
             if (roughCb?.checked) { roughCb.checked = false; updateModelRoughness(modelGroup, false); }
-            const metalCb = document.getElementById('model-metalness');
+            const metalCb = document.getElementById('model-metalness') as HTMLInputElement;
             if (metalCb?.checked) { metalCb.checked = false; updateModelMetalness(modelGroup, false); }
         }
-        updateModelSpecularF0(modelGroup, e.target.checked);
+        updateModelSpecularF0(modelGroup, target.checked);
     });
     addListener('model-no-texture', 'change', (e) => {
-        updateModelTextures(modelGroup, !e.target.checked);
+        updateModelTextures(modelGroup, !(e.target as HTMLInputElement).checked);
     });
 
     // Camera FOV
     addListener('camera-fov', 'input', (e) => {
-        const fov = parseInt(e.target.value, 10);
+        const fov = parseInt((e.target as HTMLInputElement).value, 10);
         const valueEl = document.getElementById('camera-fov-value');
-        if (valueEl) valueEl.textContent = fov;
+        if (valueEl) valueEl.textContent = String(fov);
         if (sceneManager && sceneManager.camera) {
             sceneManager.camera.fov = fov;
             sceneManager.camera.updateProjectionMatrix();
@@ -1498,7 +1559,7 @@ function setupViewerUI() {
     };
     Object.entries(lightMap).forEach(([id, type]) => {
         addListener(id, 'input', (e) => {
-            const val = parseFloat(e.target.value);
+            const val = parseFloat((e.target as HTMLInputElement).value);
             sceneManager.setLightIntensity(type, val);
             const label = document.getElementById(`${id}-value`);
             if (label) label.textContent = val.toFixed(1);
@@ -1507,19 +1568,19 @@ function setupViewerUI() {
 
     // Point cloud settings
     addListener('pointcloud-scale', 'input', (e) => {
-        const val = parseFloat(e.target.value);
+        const val = parseFloat((e.target as HTMLInputElement).value);
         if (pointcloudGroup) pointcloudGroup.scale.setScalar(val);
         const label = document.getElementById('pointcloud-scale-value');
         if (label) label.textContent = val.toFixed(1);
     });
     addListener('pointcloud-point-size', 'input', (e) => {
-        const val = parseFloat(e.target.value);
+        const val = parseFloat((e.target as HTMLInputElement).value);
         updatePointcloudPointSize(pointcloudGroup, val);
         const label = document.getElementById('pointcloud-point-size-value');
         if (label) label.textContent = val.toFixed(3);
     });
     addListener('pointcloud-opacity', 'input', (e) => {
-        const val = parseFloat(e.target.value);
+        const val = parseFloat((e.target as HTMLInputElement).value);
         updatePointcloudOpacity(pointcloudGroup, val);
         const label = document.getElementById('pointcloud-opacity-value');
         if (label) label.textContent = val.toFixed(1);
@@ -1527,7 +1588,7 @@ function setupViewerUI() {
 
     // Splat settings
     addListener('splat-scale', 'input', (e) => {
-        const val = parseFloat(e.target.value);
+        const val = parseFloat((e.target as HTMLInputElement).value);
         if (splatMesh) splatMesh.scale.setScalar(val);
         const label = document.getElementById('splat-scale-value');
         if (label) label.textContent = val.toFixed(1);
@@ -1580,7 +1641,7 @@ function setupViewerUI() {
 // See: themes/editorial/layout.css, layout.js, theme.css
 // =============================================================================
 
-function setupViewerKeyboardShortcuts() {
+function setupViewerKeyboardShortcuts(): void {
     const isEditorial = (window.APP_CONFIG || {})._resolvedLayout === 'editorial';
     setupKeyboardShortcuts({
         'f': () => toggleFlyMode(),
@@ -1598,7 +1659,7 @@ function setupViewerKeyboardShortcuts() {
                 if (sidebar && !sidebar.classList.contains('hidden')) {
                     hideMetadataSidebar();
                 } else {
-                    showMetadataSidebar('view', { state, annotationSystem, imageAssets: state.imageAssets });
+                    showMetadataSidebar('view', { state: state as any, annotationSystem, imageAssets: state.imageAssets });
                 }
             }
         },
@@ -1606,7 +1667,7 @@ function setupViewerKeyboardShortcuts() {
         '2': () => switchViewMode('splat'),
         '3': () => switchViewMode('pointcloud'),
         'g': () => {
-            const cb = document.getElementById('toggle-gridlines');
+            const cb = document.getElementById('toggle-gridlines') as HTMLInputElement;
             if (cb) { cb.checked = !cb.checked; sceneManager.toggleGrid(cb.checked); }
         },
         'escape': () => {
@@ -1629,22 +1690,22 @@ function setupViewerKeyboardShortcuts() {
 // VIEW SWITCHER
 // =============================================================================
 
-function switchViewMode(mode) {
+function switchViewMode(mode: string): void {
     state.displayMode = mode;
-    setDisplayMode(mode, createDisplayModeDeps());
+    setDisplayMode(mode as DisplayMode, createDisplayModeDeps());
     triggerLazyLoad(mode);
 
     // Update active button state (sidebar layout)
     document.querySelectorAll('.kiosk-view-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === mode);
+        btn.classList.toggle('active', (btn as HTMLElement).dataset.mode === mode);
     });
     // Update active state (editorial layout)
     document.querySelectorAll('.editorial-view-mode-link').forEach(link => {
-        link.classList.toggle('active', link.dataset.mode === mode);
+        link.classList.toggle('active', (link as HTMLElement).dataset.mode === mode);
     });
 }
 
-function createViewSwitcher() {
+function createViewSwitcher(): void {
     // Remove existing switcher if recreating
     const existing = document.getElementById('kiosk-view-switcher');
     if (existing) existing.remove();
@@ -1690,7 +1751,7 @@ function createViewSwitcher() {
     }
 }
 
-function repositionViewSwitcher() {
+function repositionViewSwitcher(): void {
     const pill = document.getElementById('kiosk-view-switcher');
     if (!pill) return;
 
@@ -1706,7 +1767,7 @@ function repositionViewSwitcher() {
 // VIEWER FEATURES
 // =============================================================================
 
-function toggleFlyMode() {
+function toggleFlyMode(): void {
     state.flyModeActive = !state.flyModeActive;
     const hint = document.getElementById('fly-mode-hint');
     const btn = document.getElementById('btn-fly-mode');
@@ -1731,7 +1792,7 @@ function toggleFlyMode() {
     }
 }
 
-function fitCameraToScene() {
+function fitCameraToScene(): void {
     const box = new THREE.Box3();
     let hasContent = false;
 
@@ -1773,7 +1834,7 @@ function fitCameraToScene() {
     controls.update();
 }
 
-function applyGlobalAlignment(alignment) {
+function applyGlobalAlignment(alignment: any): void {
     if (!alignment) return;
     // Global alignment adjusts the orbit controls target and camera
     if (alignment.target) {
@@ -1790,7 +1851,7 @@ function applyGlobalAlignment(alignment) {
  *   Title > Description > Annotations > Detail collapsibles > Creator/Date/Location/Device/License
  * Called after all sidebar sections have been populated.
  */
-function reorderKioskSidebar() {
+function reorderKioskSidebar(): void {
     const viewContent = document.querySelector('#sidebar-view .display-content');
     if (!viewContent) return;
 
@@ -1843,12 +1904,12 @@ function reorderKioskSidebar() {
 
     // 3. Details (Creator/Date/Location/Device), License, Stats — stay at the end
     // They're already at the end by default, just add a divider before them
-    if (details && details.style.display !== 'none') {
+    if (details && (details as HTMLElement).style.display !== 'none') {
         addDivider(details);
     }
 }
 
-function populateAnnotationList() {
+function populateAnnotationList(): void {
     const annotations = annotationSystem.getAnnotations();
     if (annotations.length === 0) return;
 
@@ -1876,7 +1937,7 @@ function populateAnnotationList() {
 
         const badge = document.createElement('span');
         badge.className = 'kiosk-anno-badge';
-        badge.textContent = i + 1;
+        badge.textContent = String(i + 1);
         item.appendChild(badge);
 
         const info = document.createElement('div');
@@ -1891,7 +1952,7 @@ function populateAnnotationList() {
             const preview = document.createElement('span');
             preview.className = 'kiosk-anno-preview';
             // Strip markdown-like formatting for preview
-            const plainText = anno.body.replace(/[*_#\[\]()]/g, '');
+            const plainText = anno.body.replace(/[*_#[\]()]/g, '');
             preview.textContent = plainText.substring(0, 80) + (plainText.length > 80 ? '...' : '');
             info.appendChild(preview);
         }
@@ -1938,7 +1999,7 @@ function populateAnnotationList() {
 
 // --- Detailed metadata helpers ---
 
-function hasValue(val) {
+function hasValue(val: any): boolean {
     if (val === null || val === undefined || val === '') return false;
     if (Array.isArray(val)) return val.length > 0;
     if (typeof val === 'object') {
@@ -1947,12 +2008,12 @@ function hasValue(val) {
     return true;
 }
 
-function escapeHtml(str) {
+function escapeHtml(str: any): string {
     if (typeof str !== 'string') str = String(str);
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function createDetailSection(title) {
+function createDetailSection(title: string): { section: HTMLElement; content: HTMLElement } {
     const section = document.createElement('div');
     section.className = 'kiosk-detail-section';
 
@@ -1974,7 +2035,7 @@ function createDetailSection(title) {
     return { section, content };
 }
 
-function addDetailRow(container, label, value) {
+function addDetailRow(container: HTMLElement, label: string, value: any): void {
     if (!hasValue(value)) return;
     const row = document.createElement('div');
     row.className = 'display-detail';
@@ -1983,7 +2044,7 @@ function addDetailRow(container, label, value) {
     container.appendChild(row);
 }
 
-function populateDetailedMetadata(manifest) {
+function populateDetailedMetadata(manifest: any): void {
     if (!manifest) return;
 
     const viewContent = document.querySelector('#sidebar-view .display-content');
@@ -2193,14 +2254,14 @@ function populateDetailedMetadata(manifest) {
     log.info(`Populated ${sections.length} detailed metadata sections`);
 }
 
-function formatBytes(bytes) {
+function formatBytes(bytes: number): string {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
 }
 
-function populateSourceFilesList(archiveLoader) {
+function populateSourceFilesList(archiveLoader: ArchiveLoader): void {
     const sourceEntries = archiveLoader.getSourceFileEntries();
     if (sourceEntries.length === 0) return;
 
@@ -2253,7 +2314,7 @@ function populateSourceFilesList(archiveLoader) {
     log.info(`Populated source files list: ${sourceEntries.length} files, ${formatBytes(totalSize)}`);
 }
 
-function updateInfoPanel() {
+function updateInfoPanel(): void {
     const setInfo = (id, text) => {
         const el = document.getElementById(id);
         if (el) el.textContent = text;
@@ -2264,7 +2325,7 @@ function updateInfoPanel() {
     }
     if (modelGroup && modelGroup.children.length > 0) {
         let faceCount = 0;
-        modelGroup.traverse(child => {
+        modelGroup.traverse((child: any) => {
             if (child.isMesh && child.geometry) {
                 const idx = child.geometry.index;
                 faceCount += idx ? idx.count / 3 : (child.geometry.getAttribute('position')?.count || 0) / 3;
@@ -2274,7 +2335,7 @@ function updateInfoPanel() {
     }
     if (pointcloudGroup && pointcloudGroup.children.length > 0) {
         let pointCount = 0;
-        pointcloudGroup.traverse(child => {
+        pointcloudGroup.traverse((child: any) => {
             if (child.isPoints && child.geometry) {
                 const pos = child.geometry.getAttribute('position');
                 if (pos) pointCount += pos.count;
@@ -2288,7 +2349,7 @@ function updateInfoPanel() {
 // HIDE EDITOR-ONLY UI
 // =============================================================================
 
-function hideEditorOnlyUI() {
+function hideEditorOnlyUI(): void {
     // Hide entire toolbar until archive is loaded
     hideEl('left-toolbar');
 
@@ -2304,7 +2365,7 @@ function hideEditorOnlyUI() {
     hideEl('load-files-section');
 
     // Uncheck grid checkbox — grid is never created in kiosk mode
-    const gridCb = document.getElementById('toggle-gridlines');
+    const gridCb = document.getElementById('toggle-gridlines') as HTMLInputElement;
     if (gridCb) gridCb.checked = false;
 
     // Hide Alignment and Share sections (no IDs, find by header text)
@@ -2313,14 +2374,14 @@ function hideEditorOnlyUI() {
         const header = section.querySelector('h3');
         const text = header?.textContent?.trim().toLowerCase() || '';
         if (text.startsWith('alignment') || text.startsWith('share')) {
-            section.style.display = 'none';
+            (section as HTMLElement).style.display = 'none';
         }
     });
 
     // Hide editor-only sidebar tabs
-    const editTab = document.querySelector('.sidebar-mode-tab[data-mode="edit"]');
+    const editTab = document.querySelector('.sidebar-mode-tab[data-mode="edit"]') as HTMLElement;
     if (editTab) editTab.style.display = 'none';
-    const annoTab = document.querySelector('.sidebar-mode-tab[data-mode="annotations"]');
+    const annoTab = document.querySelector('.sidebar-mode-tab[data-mode="annotations"]') as HTMLElement;
     if (annoTab) annoTab.style.display = 'none';
 
     // Rename View tab to Info
@@ -2331,7 +2392,7 @@ function hideEditorOnlyUI() {
     moveSettingsToSidebar();
 }
 
-function hideEl(id) {
+function hideEl(id: string): void {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
 }
@@ -2341,7 +2402,7 @@ function hideEl(id) {
  * Uses DOM appendChild which preserves all event listeners attached by
  * setupViewerUI() and setupCollapsibles().
  */
-function moveSettingsToSidebar() {
+function moveSettingsToSidebar(): void {
     const sidebar = document.getElementById('metadata-sidebar');
     const controlsPanel = document.getElementById('controls-panel');
     if (!sidebar || !controlsPanel) return;
@@ -2372,7 +2433,7 @@ function moveSettingsToSidebar() {
 
     // 4. Hide position/rotation inputs (editor-only repositioning)
     settingsContent.querySelectorAll('.position-inputs').forEach(el => {
-        el.style.display = 'none';
+        (el as HTMLElement).style.display = 'none';
     });
 
     // 5. Insert into sidebar before footer
@@ -2392,7 +2453,7 @@ function moveSettingsToSidebar() {
  * Build the "Export" collapsible section and append it to the settings tab.
  * Called after archive is fully loaded so state.archiveLoader/archiveManifest are available.
  */
-function createExportSection() {
+function createExportSection(): void {
     const settingsContainer = document.getElementById('sidebar-settings');
     if (!settingsContainer || !state.archiveLoader) return;
 
@@ -2431,7 +2492,7 @@ function createExportSection() {
         const archiveBtn = createExportButton(
             'Download Full Archive (.a3d)',
             `${baseName}.a3d`,
-            async (btn) => {
+            async (_btn) => {
                 const a = document.createElement('a');
                 a.href = state.archiveSourceUrl;
                 a.download = `${baseName}.a3d`;
@@ -2471,7 +2532,7 @@ function createExportSection() {
         content.appendChild(subHeader);
 
         for (const asset of assets) {
-            const btn = createExportButton(asset.label, asset.filename, async (btnEl) => {
+            const btn = createExportButton(asset.label, asset.filename, async (_btnEl) => {
                 const result = await state.archiveLoader.extractFile(asset.entry.file_name);
                 if (result) {
                     downloadBlob(result.blob, asset.filename);
@@ -2490,7 +2551,7 @@ function createExportSection() {
 /**
  * Create a styled export button with loading state handling.
  */
-function createExportButton(label, filename, onClick) {
+function createExportButton(label: string, filename: string, onClick: (btn: HTMLButtonElement) => Promise<void>): HTMLButtonElement {
     const btn = document.createElement('button');
     btn.className = 'export-btn';
     btn.textContent = label;
@@ -2512,17 +2573,17 @@ function createExportButton(label, filename, onClick) {
 }
 
 /** Sanitize a string for use as a filename */
-function sanitizeFilename(name) {
+function sanitizeFilename(name: string): string {
     return name.replace(/[<>:"/\\|?*]/g, '-').replace(/\s+/g, ' ').trim() || 'archive';
 }
 
 /** Strip file extension from a filename */
-function stripExtension(filename) {
+function stripExtension(filename: string): string {
     return filename.replace(/\.[^.]+$/, '');
 }
 
 /** Get file extension including the dot (e.g. ".glb") */
-function getFileExtension(filename) {
+function getFileExtension(filename: string): string {
     const match = filename.match(/\.[^.]+$/);
     return match ? match[0] : '';
 }
@@ -2530,7 +2591,7 @@ function getFileExtension(filename) {
 /**
  * Show only settings sections and display mode buttons relevant to the loaded data.
  */
-function showRelevantSettings(hasSplat, hasMesh, hasPointcloud) {
+function showRelevantSettings(hasSplat: boolean, hasMesh: boolean, hasPointcloud: boolean): void {
     // After DOM move, sections live in #sidebar-settings
     const container = document.getElementById('sidebar-settings')
                    || document.getElementById('controls-panel');
@@ -2539,9 +2600,9 @@ function showRelevantSettings(hasSplat, hasMesh, hasPointcloud) {
     sections.forEach(section => {
         const header = section.querySelector('h3');
         const text = header?.textContent?.trim().toLowerCase() || '';
-        if (text.startsWith('model settings') && !hasMesh) section.style.display = 'none';
-        if (text.startsWith('splat settings') && !hasSplat) section.style.display = 'none';
-        if (text.startsWith('point cloud settings') && !hasPointcloud) section.style.display = 'none';
+        if (text.startsWith('model settings') && !hasMesh) (section as HTMLElement).style.display = 'none';
+        if (text.startsWith('splat settings') && !hasSplat) (section as HTMLElement).style.display = 'none';
+        if (text.startsWith('point cloud settings') && !hasPointcloud) (section as HTMLElement).style.display = 'none';
     });
 
     // In kiosk mode, hide editing controls (scale, opacity, position, rotation)
@@ -2552,18 +2613,18 @@ function showRelevantSettings(hasSplat, hasMesh, hasPointcloud) {
     ];
     hideByIds.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.closest('.slider-group')?.style.setProperty('display', 'none');
+        if (el) (el.closest('.slider-group') as HTMLElement)?.style.setProperty('display', 'none');
     });
     // Hide all position/rotation inputs
     container.querySelectorAll('.position-inputs').forEach(el => {
-        el.style.display = 'none';
+        (el as HTMLElement).style.display = 'none';
     });
     // Hide entire splat and pointcloud settings (no useful kiosk controls remain)
     sections.forEach(section => {
         const header = section.querySelector('h3');
         const text = header?.textContent?.trim().toLowerCase() || '';
-        if (text.startsWith('splat settings')) section.style.display = 'none';
-        if (text.startsWith('point cloud settings')) section.style.display = 'none';
+        if (text.startsWith('splat settings')) (section as HTMLElement).style.display = 'none';
+        if (text.startsWith('point cloud settings')) (section as HTMLElement).style.display = 'none';
     });
 
     // Hide display mode buttons for absent data types
@@ -2578,11 +2639,11 @@ function showRelevantSettings(hasSplat, hasMesh, hasPointcloud) {
     if (!isSTL) hideEl('btn-stl');
 
     // Hide entire Display Mode section if 0 or 1 button visible
-    const displaySection = [...container.querySelectorAll('.control-section')]
+    const displaySection = Array.from(container.querySelectorAll('.control-section'))
         .find(s => s.querySelector('h3')?.textContent?.trim() === 'Display Mode');
     if (displaySection) {
         const visibleButtons = displaySection.querySelectorAll('.toggle-btn:not([style*="display: none"])');
-        if (visibleButtons.length <= 1) displaySection.style.display = 'none';
+        if (visibleButtons.length <= 1) (displaySection as HTMLElement).style.display = 'none';
     }
 }
 
@@ -2590,11 +2651,11 @@ function showRelevantSettings(hasSplat, hasMesh, hasPointcloud) {
 // WINDOW RESIZE
 // =============================================================================
 
-function isMobileKiosk() {
+function isMobileKiosk(): boolean {
     return window.innerWidth <= 768 && document.body.classList.contains('kiosk-mode');
 }
 
-function setSheetSnap(snap) {
+function setSheetSnap(snap: SheetSnap): void {
     const sidebar = document.getElementById('metadata-sidebar');
     if (!sidebar) return;
     sidebar.classList.remove('sheet-peek', 'sheet-half', 'sheet-full');
@@ -2602,7 +2663,7 @@ function setSheetSnap(snap) {
     currentSheetSnap = snap;
 }
 
-function setupBottomSheetDrag() {
+function setupBottomSheetDrag(): void {
     const handle = document.getElementById('sidebar-drag-handle');
     const sidebar = document.getElementById('metadata-sidebar');
     if (!handle || !sidebar) return;
@@ -2688,7 +2749,7 @@ function setupBottomSheetDrag() {
     handle.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 }
 
-function showMobileAnnotationInSheet(annotationId) {
+function showMobileAnnotationInSheet(annotationId: string): void {
     const sidebar = document.getElementById('metadata-sidebar');
     if (!sidebar) return;
 
@@ -2712,12 +2773,12 @@ function showMobileAnnotationInSheet(annotationId) {
     if (item) item.classList.add('active');
 }
 
-function showMobileAnnotationDetail(annotation) {
+function showMobileAnnotationDetail(annotation: Annotation): void {
     const sidebarView = document.getElementById('sidebar-view');
     if (!sidebarView) return;
 
     // Hide normal sidebar content
-    const displayContent = sidebarView.querySelector('.display-content');
+    const displayContent = sidebarView.querySelector('.display-content') as HTMLElement;
     if (displayContent) displayContent.style.display = 'none';
 
     // Create or reuse detail container
@@ -2781,16 +2842,16 @@ function showMobileAnnotationDetail(annotation) {
     sidebarView.scrollTop = 0;
 }
 
-function hideMobileAnnotationDetail() {
+function hideMobileAnnotationDetail(): void {
     const detail = document.getElementById('mobile-anno-detail');
     if (detail) detail.style.display = 'none';
 
     // Show normal sidebar content again
-    const displayContent = document.querySelector('#sidebar-view .display-content');
+    const displayContent = document.querySelector('#sidebar-view .display-content') as HTMLElement;
     if (displayContent) displayContent.style.display = '';
 
     // Re-render metadata to restore asset images (blob URLs may need re-resolving)
-    populateMetadataDisplay({ state, annotationSystem, imageAssets: state.imageAssets });
+    populateMetadataDisplay({ state: state as any, annotationSystem, imageAssets: state.imageAssets });
 
     // Clear active annotation state
     currentPopupAnnotationId = null;
@@ -2799,7 +2860,7 @@ function hideMobileAnnotationDetail() {
     document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
 }
 
-function navigateAnnotation(direction) {
+function navigateAnnotation(direction: number): void {
     const annotations = annotationSystem.getAnnotations();
     if (!annotations || annotations.length === 0) return;
 
@@ -2827,7 +2888,7 @@ function navigateAnnotation(direction) {
     showMobileAnnotationDetail(newAnno);
 }
 
-function repositionAnnotationToggle() {
+function repositionAnnotationToggle(): void {
     const annoBtn = document.getElementById('btn-toggle-annotations');
     if (!annoBtn) return;
     if (isMobileKiosk()) {
@@ -2844,7 +2905,7 @@ function repositionAnnotationToggle() {
     }
 }
 
-function onWindowResize() {
+function onWindowResize(): void {
     const container = document.getElementById('viewer-container');
     if (!container) return;
     sceneManager.onWindowResize(state.displayMode, container);
@@ -2876,13 +2937,13 @@ function onWindowResize() {
  * Show branded loading screen with thumbnail, title, and content types.
  * Called after archive extraction but before 3D asset loading.
  */
-async function showBrandedLoading(archiveLoader) {
+async function showBrandedLoading(archiveLoader: ArchiveLoader): Promise<void> {
     try {
         const manifest = await archiveLoader.parseManifest();
         const contentInfo = archiveLoader.getContentInfo();
 
         const brandEl = document.getElementById('loading-brand');
-        const thumbEl = document.getElementById('loading-thumbnail');
+        const thumbEl = document.getElementById('loading-thumbnail') as HTMLImageElement;
         const titleEl = document.getElementById('loading-title');
         const typesEl = document.getElementById('loading-content-types');
 
@@ -2929,7 +2990,7 @@ async function showBrandedLoading(archiveLoader) {
  * Smooth entry transition: fade out loading overlay while easing camera in.
  * Camera starts 15% further back than the fit position and eases to target.
  */
-function smoothTransitionIn() {
+function smoothTransitionIn(): void {
     const overlay = document.getElementById('loading-overlay');
     const targetPos = camera.position.clone();
     const targetTarget = controls.target.clone();
@@ -2942,8 +3003,6 @@ function smoothTransitionIn() {
     const startPos = camera.position.clone();
     const startTime = performance.now();
     const duration = 1200;
-    entryTransitionActive = true;
-
     // Fade out the loading overlay with CSS transition
     if (overlay) {
         overlay.classList.add('fade-out');
@@ -2967,8 +3026,6 @@ function smoothTransitionIn() {
 
         if (t < 1) {
             requestAnimationFrame(animateEntry);
-        } else {
-            entryTransitionActive = false;
         }
     }
 
@@ -2979,7 +3036,7 @@ function smoothTransitionIn() {
  * Trigger the intro glow animation on all annotation markers.
  * Adds glow-intro class, removes it after the animation completes (~6s).
  */
-function triggerMarkerGlowIntro() {
+function triggerMarkerGlowIntro(): void {
     const markers = document.querySelectorAll('.annotation-marker');
     markers.forEach(m => m.classList.add('glow-intro'));
     setTimeout(() => {
@@ -2990,28 +3047,28 @@ function triggerMarkerGlowIntro() {
 /**
  * Show only the marker for a specific annotation ID when annotations are globally hidden.
  */
-function showSingleMarker(annotationId) {
-    const markersContainer = document.getElementById('annotation-markers');
+function showSingleMarker(annotationId: string): void {
+    const markersContainer = document.getElementById('annotation-markers') as HTMLElement;
     if (!markersContainer) return;
     // Temporarily show the container
     markersContainer.style.display = '';
     // Hide all markers, then show only the target
     markersContainer.querySelectorAll('.annotation-marker').forEach(m => {
-        m.style.display = 'none';
+        (m as HTMLElement).style.display = 'none';
     });
-    const target = markersContainer.querySelector(`.annotation-marker[data-annotation-id="${annotationId}"]`);
+    const target = markersContainer.querySelector(`.annotation-marker[data-annotation-id="${annotationId}"]`) as HTMLElement;
     if (target) target.style.display = 'flex';
 }
 
 /**
  * Re-hide markers container when in globally-hidden mode.
  */
-function hideSingleMarker() {
-    const markersContainer = document.getElementById('annotation-markers');
+function hideSingleMarker(): void {
+    const markersContainer = document.getElementById('annotation-markers') as HTMLElement;
     if (markersContainer) {
         // Restore all markers to default display so toggle-on works correctly
         markersContainer.querySelectorAll('.annotation-marker').forEach(m => {
-            m.style.display = '';
+            (m as HTMLElement).style.display = '';
         });
         markersContainer.style.display = 'none';
     }
@@ -3020,13 +3077,13 @@ function hideSingleMarker() {
 /**
  * Update the SVG connecting line from marker to popup.
  */
-function updateAnnotationLine(annotationId) {
+function updateAnnotationLine(annotationId: string | null): void {
     if (!annotationLineEl || !annotationId) {
         hideAnnotationLine();
         return;
     }
 
-    const marker = document.querySelector(`.annotation-marker[data-annotation-id="${annotationId}"]`);
+    const marker = document.querySelector(`.annotation-marker[data-annotation-id="${annotationId}"]`) as HTMLElement;
     const popup = document.getElementById('annotation-info-popup');
 
     if (!marker || !popup || popup.classList.contains('hidden') ||
@@ -3075,7 +3132,7 @@ function updateAnnotationLine(annotationId) {
     annotationLineEl.style.display = '';
 }
 
-function hideAnnotationLine() {
+function hideAnnotationLine(): void {
     if (annotationLineEl) {
         annotationLineEl.style.display = 'none';
     }
@@ -3085,7 +3142,7 @@ function hideAnnotationLine() {
 // ANIMATION LOOP
 // =============================================================================
 
-function animate() {
+function animate(): void {
     requestAnimationFrame(animate);
 
     try {
@@ -3095,7 +3152,7 @@ function animate() {
             controls.update();
         }
 
-        sceneManager.render(state.displayMode, splatMesh, modelGroup, pointcloudGroup);
+        sceneManager.render(state.displayMode as any, splatMesh, modelGroup, pointcloudGroup, null);
 
         // Update annotation marker screen positions (skip when globally hidden, unless single-marker is shown)
         if (annotationSystem.hasAnnotations()) {
@@ -3109,7 +3166,7 @@ function animate() {
         }
 
         sceneManager.updateFPS(fpsElement);
-    } catch (e) {
+    } catch {
         // Silently handle animation errors to keep the loop running
     }
 }

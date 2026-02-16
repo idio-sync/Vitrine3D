@@ -30,7 +30,7 @@ const log = Logger.getLogger('kiosk-viewer');
 // fflate from jsDelivr (self-contained ESM browser build).
 //
 // Keys are the import specifiers as they appear in module import statements.
-const CDN_DEPS = {
+const CDN_DEPS: Record<string, string> = {
     'three':
         'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js',
     'three/addons/controls/OrbitControls.js':
@@ -55,9 +55,14 @@ const CDN_DEPS = {
 // LOCAL MODULES (in topological dependency order)
 // =============================================================================
 
+interface LocalModule {
+    specifier: string;
+    path: string;
+}
+
 // Each module's imports are rewritten BEFORE creating its blob URL, so
 // dependencies must appear earlier in this list.
-const LOCAL_MODULES = [
+const LOCAL_MODULES: LocalModule[] = [
     { specifier: './constants.js',         path: 'constants.js' },
     { specifier: './logger.js',            path: 'logger.js' },
     { specifier: './utilities.js',         path: 'utilities.js' },
@@ -74,13 +79,45 @@ const LOCAL_MODULES = [
 ];
 
 // =============================================================================
+// TYPES
+// =============================================================================
+
+interface ModuleData {
+    specifier: string;
+    b64: string;
+}
+
+interface BundleData {
+    cdn: Record<string, string>;
+    modules: ModuleData[];
+}
+
+interface ThemeAssets {
+    [key: string]: string;
+}
+
+export interface FetchDependenciesResult {
+    indexHTML: string;
+    stylesCSS: string;
+    preModuleJS: string;
+    themeCSS: string | null;
+    layoutCSS: string | null;
+    layoutJS: string | null;
+    themeAssets: ThemeAssets;
+    themeName: string;
+    bundleData: BundleData;
+}
+
+export type ProgressCallback = (message: string) => void;
+
+// =============================================================================
 // HELPERS
 // =============================================================================
 
 /**
  * Fetch a URL as text with one retry.
  */
-async function fetchText(url) {
+async function fetchText(url: string): Promise<string> {
     for (let attempt = 0; attempt < 2; attempt++) {
         try {
             const resp = await fetch(url);
@@ -91,6 +128,8 @@ async function fetchText(url) {
             await new Promise(r => setTimeout(r, 1000));
         }
     }
+    // TypeScript needs this even though the loop always returns or throws
+    throw new Error('Unreachable');
 }
 
 /**
@@ -98,7 +137,7 @@ async function fetchText(url) {
  * esm.sh returns tiny wrappers like: export * from "/three@0.170.0/X-.../Module.mjs"
  * The actual bundled module is at that internal path on the same origin.
  */
-async function fetchResolved(url) {
+async function fetchResolved(url: string): Promise<string> {
     const src = await fetchText(url);
     if (src.length < 500) {
         const match = src.match(/export\s*\*\s*from\s*["'](\/[^"']+)["']/);
@@ -114,17 +153,17 @@ async function fetchResolved(url) {
 /**
  * Base64-encode a UTF-8 string.
  */
-function toBase64(str) {
+function toBase64(str: string): string {
     return btoa(unescape(encodeURIComponent(str)));
 }
 
 /**
  * Convert a Blob to a data: URL.
  */
-function blobToDataUrl(blob) {
+function blobToDataUrl(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
+        reader.onload = () => resolve(reader.result as string);
         reader.onerror = reject;
         reader.readAsDataURL(blob);
     });
@@ -136,23 +175,21 @@ function blobToDataUrl(blob) {
 
 /**
  * Fetch all dependencies (CDN + local modules + HTML/CSS/JS).
- * @param {Function} onProgress - Progress callback (message string)
- * @returns {Object} Bundle data for generateGenericViewer
  */
-export async function fetchDependencies(onProgress) {
+export async function fetchDependencies(onProgress?: ProgressCallback): Promise<FetchDependenciesResult> {
     const cdnEntries = Object.entries(CDN_DEPS);
     const totalSteps = cdnEntries.length + LOCAL_MODULES.length + 3;
     let step = 0;
 
-    function progress(msg) {
+    function progress(msg: string): void {
         step++;
         if (onProgress) onProgress(`${msg} (${step}/${totalSteps})`);
     }
 
     // 1. Fetch CDN dependencies
-    const cdn = {};
+    const cdn: Record<string, string> = {};
     for (const [specifier, url] of cdnEntries) {
-        const shortName = specifier.split('/').pop().replace(/\.js.*$/, '') || specifier;
+        const shortName = specifier.split('/').pop()?.replace(/\.js.*$/, '') || specifier;
         progress(`Fetching ${shortName}...`);
         log.info(`Fetching CDN: ${specifier}`);
         const src = await fetchResolved(url);
@@ -164,7 +201,7 @@ export async function fetchDependencies(onProgress) {
     // Use document location (not import.meta.url) so paths resolve correctly
     // whether served raw (dev) or from a Vite bundle chunk (production).
     const appBase = window.location.href.replace(/[^/]*$/, '');
-    const modules = [];
+    const modules: ModuleData[] = [];
     for (const mod of LOCAL_MODULES) {
         progress(`Fetching ${mod.path}...`);
         const url = appBase + 'modules/' + mod.path;
@@ -187,18 +224,18 @@ export async function fetchDependencies(onProgress) {
     const preModuleJS = await fetchText(new URL('pre-module.js', baseUrl).href);
 
     // 4. Fetch theme files if a theme is active
-    const config = window.APP_CONFIG || {};
-    const themeName = config.theme || '';
-    let themeCSS = null;
-    let layoutCSS = null;
-    let layoutJS = null;
-    const themeAssets = {};
+    const config = (window as any).APP_CONFIG || {};
+    const themeName: string = config.theme || '';
+    let themeCSS: string | null = null;
+    let layoutCSS: string | null = null;
+    let layoutJS: string | null = null;
+    const themeAssets: ThemeAssets = {};
     if (themeName) {
         try {
             progress(`Fetching theme: ${themeName}...`);
             themeCSS = await fetchText(new URL(`themes/${themeName}/theme.css`, baseUrl).href);
             log.info(`Fetched theme CSS: ${themeName} (${(themeCSS.length / 1024).toFixed(1)} KB)`);
-        } catch (err) {
+        } catch (err: any) {
             log.warn(`Theme "${themeName}" not found, skipping: ${err.message}`);
         }
 
@@ -207,12 +244,12 @@ export async function fetchDependencies(onProgress) {
             try {
                 layoutCSS = await fetchText(new URL(`themes/${themeName}/layout.css`, baseUrl).href);
                 log.info(`Fetched layout CSS: ${themeName} (${(layoutCSS.length / 1024).toFixed(1)} KB)`);
-            } catch (e) { /* no layout.css — fine */ }
+            } catch { /* no layout.css — fine */ }
 
             try {
                 layoutJS = await fetchText(new URL(`themes/${themeName}/layout.js`, baseUrl).href);
                 log.info(`Fetched layout JS: ${themeName} (${(layoutJS.length / 1024).toFixed(1)} KB)`);
-            } catch (e) { /* no layout.js — fine */ }
+            } catch { /* no layout.js — fine */ }
 
             // Try to fetch theme image assets (logo, etc.) as data URLs for offline use
             try {
@@ -222,7 +259,7 @@ export async function fetchDependencies(onProgress) {
                     themeAssets['logo.png'] = await blobToDataUrl(blob);
                     log.info(`Fetched theme logo: ${themeName}`);
                 }
-            } catch (e) { /* no logo — fine */ }
+            } catch { /* no logo — fine */ }
         }
     }
 
@@ -245,7 +282,7 @@ export async function fetchDependencies(onProgress) {
 // KIOSK CONFIG (replaces config.js in the generated HTML)
 // =============================================================================
 
-function makeKioskConfig(themeName) {
+function makeKioskConfig(themeName: string): string {
     const escaped = (themeName || '').replace(/'/g, "\\'");
     return `(function() {
     var params = new URLSearchParams(window.location.search);
@@ -377,11 +414,8 @@ const KIOSK_BOOTSTRAP = `(async function() {
  * Takes the real index.html, strips editor-only sections (KIOSK-STRIP markers),
  * inlines CSS and dependencies, and adds a bootstrap script that loads the
  * application modules via blob URLs with import rewriting.
- *
- * @param {Object} deps - Bundle data from fetchDependencies
- * @returns {string} Complete HTML string for the offline viewer
  */
-export function generateGenericViewer(deps) {
+export function generateGenericViewer(deps: FetchDependenciesResult): string {
     let html = deps.indexHTML;
 
     // 1. Strip editor-only sections marked with KIOSK-STRIP comments
@@ -427,7 +461,7 @@ export function generateGenericViewer(deps) {
         : '';
     html = html.replace(
         /<script\s+src="config\.js"\s*><\/script>/,
-        '<script>\n' + makeKioskConfig(deps.themeName) + themeAssetsScript + '\n<\/script>'
+        '<script>\n' + makeKioskConfig(deps.themeName) + themeAssetsScript + '\n</script>'
     );
 
     // 6. Remove import map (blob URLs replace it)
@@ -436,19 +470,19 @@ export function generateGenericViewer(deps) {
     // 7. Inline pre-module.js
     html = html.replace(
         /<script\s+src="pre-module\.js"\s*><\/script>/,
-        '<script>\n' + deps.preModuleJS + '\n<\/script>'
+        '<script>\n' + deps.preModuleJS + '\n</script>'
     );
 
     // 8. Replace main.js module with deps data + bootstrap script
-    const bundlePayload = { ...deps.bundleData };
+    const bundlePayload: any = { ...deps.bundleData };
     if (deps.layoutJS) {
         bundlePayload.layoutModule = toBase64(deps.layoutJS);
     }
     const bundleJSON = JSON.stringify(bundlePayload);
     html = html.replace(
         /<script\s+type="module"\s+src="main\.js"\s*><\/script>/,
-        '<script>\nwindow.__KIOSK_DEPS__ = ' + bundleJSON + ';\n<\/script>\n' +
-        '<script type="module">\n' + KIOSK_BOOTSTRAP + '\n<\/script>'
+        '<script>\nwindow.__KIOSK_DEPS__ = ' + bundleJSON + ';\n</script>\n' +
+        '<script type="module">\n' + KIOSK_BOOTSTRAP + '\n</script>'
     );
 
     log.info('Generated kiosk HTML: ' + (html.length / 1024).toFixed(0) + ' KB');
