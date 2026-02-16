@@ -210,7 +210,7 @@ export async function handleArchiveFile(event: Event, deps: ArchivePipelineDeps)
  * Load archive from URL.
  */
 export async function loadArchiveFromUrl(url: string, deps: ArchivePipelineDeps): Promise<void> {
-    deps.ui.showLoading('Downloading archive...');
+    deps.ui.showLoading('Downloading archive...', true);
 
     try {
         // Clean up previous archive if any
@@ -220,7 +220,7 @@ export async function loadArchiveFromUrl(url: string, deps: ArchivePipelineDeps)
 
         const archiveLoader = new ArchiveLoader();
         await archiveLoader.loadFromUrl(url, (progress: number) => {
-            deps.ui.showLoading(`Downloading archive... ${Math.round(progress * 100)}%`);
+            deps.ui.updateProgress(Math.round(progress * 100), 'Downloading archive...');
         });
 
         const fileName = url.split('/').pop() || 'archive.a3d';

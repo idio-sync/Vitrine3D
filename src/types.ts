@@ -139,6 +139,7 @@ export interface ArchivePipelineDeps {
     ui: {
         showLoading: (msg: string, withProgress?: boolean) => void;
         hideLoading: () => void;
+        updateProgress: (percent: number, stage?: string | null) => void;
         showInlineLoading: (type: string) => void;
         hideInlineLoading: (type: string) => void;
         updateVisibility: () => void;

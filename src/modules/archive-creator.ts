@@ -2,7 +2,7 @@
 // Handles creating .a3d/.a3z archive containers
 // Based on the U3DP Creator Python tool manifest schema
 
-import { zip, strToU8, type AsyncZipOptions } from 'fflate';
+import { Zip, ZipDeflate, ZipPassThrough, strToU8 } from 'fflate';
 import { Logger } from './utilities.js';
 import type { Annotation } from '@/types.js';
 
@@ -1685,29 +1685,40 @@ export class ArchiveCreator {
             if (onProgress) onProgress(20, 'Hashes complete');
         }
 
-        // Build the fflate file structure
+        // Build and compress files using fflate streaming Zip (per-file progress)
         log.debug('✓ Preparing files for fflate');
         if (onProgress) onProgress(includeHashes ? 20 : 0, 'Preparing archive...');
 
-        const zipData: Record<string, [Uint8Array, AsyncZipOptions]> = {};
+        const baseProgress = includeHashes ? 25 : 5;
+        const progressRange = 70; // 25-95% for convert+compress per file
+
+        // Collect ZIP output chunks
+        const chunks: Uint8Array[] = [];
+        const zipStream = new Zip((err, chunk, _final) => {
+            if (err) throw err;
+            chunks.push(chunk);
+        });
 
         // Add manifest (always use light compression for JSON)
         log.debug('✓ Generating manifest');
         const manifestJson = this.generateManifest();
-        zipData['manifest.json'] = [strToU8(manifestJson), { level: 6 }];
+        const manifestEntry = new ZipDeflate('manifest.json', { level: 6 });
+        zipStream.add(manifestEntry);
+        manifestEntry.push(strToU8(manifestJson), true);
 
         // Add plain-text README for long-term discoverability
         const readmeText = this._generateReadme();
-        zipData['README.txt'] = [strToU8(readmeText), { level: 6 }];
+        const readmeEntry = new ZipDeflate('README.txt', { level: 6 });
+        zipStream.add(readmeEntry);
+        readmeEntry.push(strToU8(readmeText), true);
 
-        // Convert blobs to Uint8Array and add to structure
-        log.debug('✓ Converting files, count:', this.files.size);
+        // Convert and compress each file with per-file progress
+        log.debug('✓ Processing files, count:', this.files.size);
         const entries = Array.from(this.files.entries());
         const totalSize = entries.reduce((sum, [, { blob }]) => sum + blob.size, 0);
-        let convertedSize = 0;
+        let processedSize = 0;
 
-        const baseProgress = includeHashes ? 25 : 5;
-        const conversionRange = 15; // 25-40% for file conversion
+        const startZipTime = performance.now();
 
         for (const [path, { blob }] of entries) {
             // Use STORE (level 0) for already-compressed formats
@@ -1715,44 +1726,47 @@ export class ArchiveCreator {
             const alreadyCompressed = ['glb', 'spz', 'sog', 'jpg', 'jpeg', 'png', 'webp', 'e57'].includes(ext);
             const fileLevel = alreadyCompressed ? 0 : defaultLevel;
 
-            log.debug('✓ Converting file:', path, 'size:', blob.size, 'level:', fileLevel);
+            log.debug('✓ Processing file:', path, 'size:', blob.size, 'level:', fileLevel);
 
             // Convert blob to Uint8Array
             const arrayBuffer = await blob.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
 
-            zipData[path] = [uint8Array, { level: fileLevel }];
+            // Add to ZIP stream: ZipPassThrough for STORE, ZipDeflate for compression
+            const entry = fileLevel === 0
+                ? new ZipPassThrough(path)
+                : new ZipDeflate(path, { level: fileLevel });
+            zipStream.add(entry);
+            entry.push(uint8Array, true);
 
-            convertedSize += blob.size;
+            processedSize += blob.size;
             if (onProgress) {
-                const conversionProgress = (convertedSize / totalSize) * conversionRange;
-                onProgress(Math.round(baseProgress + conversionProgress), `Preparing: ${path}`);
+                const pct = baseProgress + (processedSize / totalSize) * progressRange;
+                onProgress(Math.round(pct), `Compressing: ${path}`);
             }
+
+            // Yield to event loop so browser repaints the progress bar
+            await new Promise(r => setTimeout(r, 0));
         }
 
-        // Generate the archive using fflate (40-100% of progress)
-        log.debug('✓ Generating zip archive with fflate...');
-        if (onProgress) onProgress(baseProgress + conversionRange, 'Generating archive...');
+        // Finalize the ZIP stream
+        zipStream.end();
 
-        const startZipTime = performance.now();
-
-        // fflate's zip() is callback-based, wrap in promise
-        const zipResult = await new Promise<Uint8Array>((resolve, reject) => {
-            zip(zipData, { level: defaultLevel as AsyncZipOptions['level'] }, (err, data) => {
-                if (err) {
-                    log.error('✗ fflate error:', err);
-                    reject(err);
-                } else {
-                    resolve(data);
-                }
-            });
-        });
+        // Concatenate output chunks into a single Uint8Array
+        let totalLen = 0;
+        for (const c of chunks) totalLen += c.length;
+        const zipResult = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const c of chunks) {
+            zipResult.set(c, offset);
+            offset += c.length;
+        }
 
         const zipElapsed = performance.now() - startZipTime;
         log.debug(`✓ fflate ZIP generation took ${zipElapsed.toFixed(0)}ms`);
 
         // Convert Uint8Array to Blob
-        const archiveBlob = new Blob([zipResult as any], { type: 'application/zip' });
+        const archiveBlob = new Blob([zipResult], { type: 'application/zip' });
 
         log.debug('✓ Archive generated, size:', archiveBlob.size);
         if (onProgress) onProgress(100, 'Complete');

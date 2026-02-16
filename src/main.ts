@@ -489,6 +489,7 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
         ui: {
             showLoading,
             hideLoading,
+            updateProgress,
             showInlineLoading,
             hideInlineLoading,
             updateVisibility,
