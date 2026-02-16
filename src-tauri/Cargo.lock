@@ -3066,7 +3066,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "splat-mesh-viewer"
+name = "vitrine3d"
 version = "1.0.0"
 dependencies = [
  "serde",

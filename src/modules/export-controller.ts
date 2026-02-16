@@ -402,7 +402,7 @@ export async function exportMetadataManifest(deps: ExportDeps): Promise<void> {
     const metadata = metadataFns.collectMetadata();
     const manifest: any = {
         container_version: '1.0',
-        packer: 'simple-splat-mesh-viewer',
+        packer: 'vitrine3d',
         packer_version: '1.0.0',
         _creation_date: new Date().toISOString(),
         ...metadata

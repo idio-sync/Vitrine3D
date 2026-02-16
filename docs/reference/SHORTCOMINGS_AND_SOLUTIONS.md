@@ -473,7 +473,7 @@
 
 ### 11.1 The Archive Format Is Coupled to the Viewer
 
-**Problem:** `packer: "simple-splat-mesh-viewer"` in the manifest, and the absence of an independent specification, means the format is defined by this specific tool. If the project is abandoned, the format specification effectively dies with it. Contrast with IIIF (independent spec, consortium governance, multiple implementations) or E57 (ASTM standard).
+**Problem:** `packer: "vitrine3d"` in the manifest, and the absence of an independent specification, means the format is defined by this specific tool. If the project is abandoned, the format specification effectively dies with it. Contrast with IIIF (independent spec, consortium governance, multiple implementations) or E57 (ASTM standard).
 
 **Solutions:**
 - **Short-term:** Give the format its own identity separate from the viewer. The `archive-3d` repository is a start — flesh it out with a standalone specification, examples, and a validator. Change `packer` to reference the tool, but add a `format` field that references the spec:
@@ -482,7 +482,7 @@
     "format": "archive-3d",
     "format_version": "1.0",
     "format_spec": "https://archive-3d.org/spec/1.0",
-    "packer": "simple-splat-mesh-viewer",
+    "packer": "vitrine3d",
     "packer_version": "1.0.0"
   }
   ```

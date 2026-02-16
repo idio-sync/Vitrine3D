@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    splat_mesh_viewer_lib::run()
+    vitrine3d_lib::run()
 }

@@ -425,7 +425,7 @@ export function generateGenericViewer(deps: FetchDependenciesResult): string {
     );
 
     // 2. Update page title
-    html = html.replace(/<title>.*?<\/title>/, '<title>3D Archive Viewer</title>');
+    html = html.replace(/<title>.*?<\/title>/, '<title>Vitrine3D</title>');
 
     // 3. Relax CSP for offline viewer (inline scripts + blob URLs)
     html = html.replace(

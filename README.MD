@@ -1,4 +1,4 @@
-# Proof of Concept 3D viewer
+# Vitrine3D
 
 A web-based viewer for viewing Gaussian splats, 3D models, and E57 point clouds, powered by [Three.js](https://github.com/mrdoob/three.js/) and [Spark](https://sparkjs.dev/). Designed for cultural heritage, surveying, and digital preservation workflows, with a standards-based archive container format for long-term archival of real-world 3D captures.
 
@@ -41,7 +41,7 @@ The kiosk viewer supports themes — self-contained packages that control colors
 
 ### Using Python (simplest)
 ```bash
-cd simple-splat-mesh-viewer/src
+cd Vitrine3D/src
 python3 -m http.server 8080
 ```
 Then open http://localhost:8080 in your browser.
@@ -54,22 +54,22 @@ npx serve src
 ### Using Docker
 ```bash
 # Build the image
-docker build -t splat-mesh-viewer -f docker/Dockerfile .
+docker build -t vitrine3d -f docker/Dockerfile .
 
 # Run with default settings
-docker run -p 8080:80 splat-mesh-viewer
+docker run -p 8080:80 vitrine3d
 
 # Run with pre-loaded archive
 docker run -p 8080:80 \
   -e DEFAULT_ARCHIVE_URL="https://example.com/scene.a3d" \
-  splat-mesh-viewer
+  vitrine3d
 
 # Run with pre-loaded files
 docker run -p 8080:80 \
   -e DEFAULT_SPLAT_URL="https://example.com/model.ply" \
   -e DEFAULT_MODEL_URL="https://example.com/model.glb" \
   -e DEFAULT_POINTCLOUD_URL="https://example.com/scan.e57" \
-  splat-mesh-viewer
+  vitrine3d
 ```
 
 ## Supported Formats
@@ -110,7 +110,7 @@ docker run -p 8080:80 \
 ## Project Structure
 
 ```
-simple-splat-mesh-viewer/
+Vitrine3D/
 ├── src/
 │   ├── index.html                  # Main HTML file with UI structure
 │   ├── main.js                     # Core application logic and event handling

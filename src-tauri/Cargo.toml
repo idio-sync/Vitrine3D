@@ -1,11 +1,11 @@
 [package]
-name = "splat-mesh-viewer"
+name = "vitrine3d"
 version = "1.0.0"
-description = "3D Archive Viewer - Desktop"
+description = "Vitrine3D - Desktop"
 edition = "2021"
 
 [lib]
-name = "splat_mesh_viewer_lib"
+name = "vitrine3d_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]

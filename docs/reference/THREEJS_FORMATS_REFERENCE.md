@@ -2,9 +2,9 @@
 
 A comprehensive catalog of every 3D file format loadable in Three.js — core, official addons, and community ecosystem — ranked by relevance to DDI's cultural heritage, precision scanning, and client delivery work.
 
-**Ranking Scale (1–10):** How useful each format is for DDI specifically, considering your client base (Smithsonian, Lockheed Martin, museums), your workflows (micron-level 3D scanning, photogrammetry, archival documentation), and your web-based presentation goals (simple-splat-mesh-viewer, interactive project showcases).
+**Ranking Scale (1–10):** How useful each format is for DDI specifically, considering your client base (Smithsonian, Lockheed Martin, museums), your workflows (micron-level 3D scanning, photogrammetry, archival documentation), and your web-based presentation goals (Vitrine3D, interactive project showcases).
 
-**Status Key:** Formats marked with `✅` are currently loaded and working in simple-splat-mesh-viewer. All others are not yet integrated.
+**Status Key:** Formats marked with `✅` are currently loaded and working in Vitrine3D. All others are not yet integrated.
 
 ---
 

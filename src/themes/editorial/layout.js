@@ -764,7 +764,7 @@ function initFilePicker(container, deps) {
         </div>
         <div class="editorial-picker-center">
             <div class="editorial-picker-eyebrow">Open File</div>
-            <h1 class="editorial-picker-title">3D Viewer</h1>
+            <h1 class="editorial-picker-title">Vitrine3D</h1>
             <div class="editorial-loading-title-bar"></div>
             <p class="editorial-picker-desc">Open a 3D file or archive to view its content.</p>
             <div class="kiosk-picker-box" id="kiosk-drop-zone">

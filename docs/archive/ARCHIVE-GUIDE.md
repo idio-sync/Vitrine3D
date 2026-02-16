@@ -60,7 +60,7 @@ https://viewer.example.com?archive=/path/to/scene.a3d
 
 **Via Docker**:
 ```bash
-docker run -p 8080:80 -e DEFAULT_ARCHIVE_URL="/assets/scene.a3d" splat-mesh-viewer
+docker run -p 8080:80 -e DEFAULT_ARCHIVE_URL="/assets/scene.a3d" vitrine3d
 ```
 
 When an archive is loaded:

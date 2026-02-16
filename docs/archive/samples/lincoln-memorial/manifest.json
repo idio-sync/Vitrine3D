@@ -1,6 +1,6 @@
 {
   "container_version": "1.0",
-  "packer": "simple-splat-mesh-viewer",
+  "packer": "vitrine3d",
   "packer_version": "1.0.0",
   "_creation_date": "2025-03-15T14:22:08.000Z",
   "project": {
@@ -186,7 +186,7 @@
     },
     "thumbnail_0": {
       "file_name": "preview.jpg",
-      "created_by": "simple-splat-mesh-viewer"
+      "created_by": "vitrine3d"
     }
   },
   "annotations": [

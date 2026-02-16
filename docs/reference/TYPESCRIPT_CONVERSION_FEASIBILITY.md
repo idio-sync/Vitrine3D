@@ -1,7 +1,7 @@
 # TypeScript Conversion Feasibility Evaluation
 
 **Date:** 2026-02-06 (original), **Updated:** 2026-02-15
-**Scope:** Full assessment of converting simple-splat-mesh-viewer from JavaScript to TypeScript
+**Scope:** Full assessment of converting vitrine3d from JavaScript to TypeScript
 **Codebase:** ~20,000 lines across 33 source files (0 `.js` modules + 31 `.ts` modules + shared types + tests + 2 non-module scripts)
 
 ---

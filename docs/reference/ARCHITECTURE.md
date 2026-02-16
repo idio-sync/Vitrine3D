@@ -2,7 +2,7 @@
 
 ## What This Project Is
 
-Simple Splat Mesh Viewer is a browser-based tool for viewing and comparing three kinds of 3D data side-by-side: Gaussian splats (a photogrammetry format), traditional 3D meshes (GLB/OBJ), and E57 point clouds. It targets cultural-heritage, surveying, and digital-preservation workflows. The app also defines a custom ZIP-based archive format (.a3d/.a3z) for bundling assets with metadata, and can generate a fully offline self-contained HTML viewer.
+Vitrine3D is a browser-based tool for viewing and comparing three kinds of 3D data side-by-side: Gaussian splats (a photogrammetry format), traditional 3D meshes (GLB/OBJ), and E57 point clouds. It targets cultural-heritage, surveying, and digital-preservation workflows. The app also defines a custom ZIP-based archive format (.a3d/.a3z) for bundling assets with metadata, and can generate a fully offline self-contained HTML viewer.
 
 There is **no build step**. The `src/` directory is served directly by nginx (Docker) or `npx serve` (development). All JavaScript uses native ES modules loaded by the browser via import maps defined in `index.html`.
 

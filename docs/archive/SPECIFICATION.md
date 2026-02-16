@@ -792,7 +792,7 @@ The following is a complete manifest demonstrating all sections at Conformance L
 ```json
 {
     "container_version": "1.0",
-    "packer": "simple-splat-mesh-viewer",
+    "packer": "vitrine3d",
     "packer_version": "1.0.0",
     "_creation_date": "2026-02-05T12:00:00.000Z",
 
@@ -936,7 +936,7 @@ The following is a complete manifest demonstrating all sections at Conformance L
         },
         "mesh_0_proxy": {
             "file_name": "assets/mesh_0_proxy.glb",
-            "created_by": "simple-splat-mesh-viewer",
+            "created_by": "vitrine3d",
             "role": "derived",
             "lod": "proxy",
             "derived_from": "mesh_0",
@@ -956,7 +956,7 @@ The following is a complete manifest demonstrating all sections at Conformance L
         },
         "thumbnail_0": {
             "file_name": "preview.jpg",
-            "created_by": "simple-splat-mesh-viewer"
+            "created_by": "vitrine3d"
         }
     },
 
@@ -1011,4 +1011,4 @@ The following is a complete manifest demonstrating all sections at Conformance L
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0 (Draft) | 2026-02-06 | Initial specification derived from the simple-splat-mesh-viewer reference implementation. |
+| 1.0 (Draft) | 2026-02-06 | Initial specification derived from the vitrine3d reference implementation. |

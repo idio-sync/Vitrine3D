@@ -33,7 +33,7 @@ The viewer is a fully client-side static application. The production deployment 
 ```bash
 # Clone and deploy
 git clone <repo-url>
-cd simple-splat-mesh-viewer
+cd Vitrine3D
 
 # Configure environment
 cp .env.example .env
@@ -62,7 +62,7 @@ docker compose up -d
 version: "3.8"
 services:
   viewer:
-    image: youruser/splat-mesh-compare:latest
+    image: youruser/vitrine3d:latest
     restart: unless-stopped
     ports:
       - "80:80"

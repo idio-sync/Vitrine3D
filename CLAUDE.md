@@ -1,4 +1,4 @@
-# CLAUDE.md — Simple Splat Mesh Viewer
+# CLAUDE.md — Vitrine3D
 
 ## What This Project Is
 

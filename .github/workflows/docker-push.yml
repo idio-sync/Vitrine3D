@@ -39,7 +39,7 @@ jobs:
         id: build_image
         run: |
           # Define variables for cleaner commands
-          IMAGE_NAME="${{ secrets.DOCKERHUB_USER }}/splat-mesh-compare"
+          IMAGE_NAME="${{ secrets.DOCKERHUB_USER }}/vitrine3d"
           BRANCH_TAG="${{ steps.extract_branch.outputs.branch }}"
 
           # Build the image with the specific branch tag (Dockerfile is in docker/ directory)
@@ -52,7 +52,7 @@ jobs:
 
       - name: Push Docker image
         run: |
-          IMAGE_NAME="${{ secrets.DOCKERHUB_USER }}/splat-mesh-compare"
+          IMAGE_NAME="${{ secrets.DOCKERHUB_USER }}/vitrine3d"
           BRANCH_TAG="${{ steps.extract_branch.outputs.branch }}"
 
           # Push the specific branch tag

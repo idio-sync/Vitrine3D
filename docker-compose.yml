@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   viewer:
-    image: ${DOCKERHUB_USER:-splat-mesh-viewer}/splat-mesh-compare:latest
+    image: ${DOCKERHUB_USER:-vitrine3d}/vitrine3d:latest
     build:
       context: .
       dockerfile: docker/Dockerfile

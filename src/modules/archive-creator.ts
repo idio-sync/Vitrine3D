@@ -510,7 +510,7 @@ export class ArchiveCreator {
     private _createEmptyManifest(): Manifest {
         return {
             container_version: "1.0",
-            packer: "simple-splat-mesh-viewer",
+            packer: "vitrine3d",
             packer_version: "1.0.0",
             _creation_date: new Date().toISOString(),
             project: {

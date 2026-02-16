@@ -1,7 +1,7 @@
 {
-  "name": "simple-splat-mesh-viewer",
+  "name": "vitrine3d",
   "version": "1.0.0",
-  "description": "A simple web viewer for comparing Gaussian splats with 3D models",
+  "description": "Browser-based 3D viewer for assembling and delivering scan data — Gaussian splats, meshes, and point clouds",
   "main": "src/main.ts",
   "type": "module",
   "scripts": {
@@ -13,8 +13,8 @@
     "tauri:dev": "npx tauri dev",
     "tauri:build": "npx tauri build",
     "branded": "node scripts/build-branded.mjs",
-    "docker:build": "vite build && docker build -f docker/Dockerfile -t splat-mesh-viewer .",
-    "docker:run": "docker run -p 8080:80 splat-mesh-viewer",
+    "docker:build": "vite build && docker build -f docker/Dockerfile -t vitrine3d .",
+    "docker:run": "docker run -p 8080:80 vitrine3d",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.{js,ts,css,html}\"",
