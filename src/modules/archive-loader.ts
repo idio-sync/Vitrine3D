@@ -120,8 +120,9 @@ interface ArchiveManifest {
 /**
  * Sanitizes a filename from an archive to prevent path traversal attacks.
  * This is critical because archive manifests are untrusted user data.
+ * Exported for direct unit testing.
  */
-function sanitizeArchiveFilename(filename: string): SanitizationResult {
+export function sanitizeArchiveFilename(filename: string): SanitizationResult {
     if (!filename || typeof filename !== 'string') {
         return { safe: false, sanitized: '', error: 'Filename is empty or not a string' };
     }

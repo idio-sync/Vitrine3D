@@ -1,72 +1,12 @@
+// @vitest-environment jsdom
 /**
- * Tests for sanitizeArchiveFilename from archive-loader.js.
+ * Tests for sanitizeArchiveFilename from archive-loader.ts.
  *
- * sanitizeArchiveFilename is not exported, so we test it indirectly
- * by importing and testing the module's ArchiveLoader.extractFile behavior,
- * or we re-implement the pure logic here for unit testing.
- *
- * For now, we extract the sanitization logic into a testable form.
+ * The function is exported from archive-loader.ts so these tests exercise
+ * the actual production implementation directly.
  */
 import { describe, it, expect } from 'vitest';
-
-// Since sanitizeArchiveFilename is not exported from archive-loader.ts,
-// we replicate the core sanitization logic here for testing.
-// This ensures the algorithm is correct; integration tests would cover the actual module.
-function sanitizeArchiveFilename(filename: string | null | undefined): { safe: boolean; sanitized: string; error: string } {
-    if (!filename || typeof filename !== 'string') {
-        return { safe: false, sanitized: '', error: 'Filename is empty or not a string' };
-    }
-
-    let sanitized = filename.trim();
-
-    // Check for null bytes
-    if (sanitized.includes('\0')) {
-        return { safe: false, sanitized: '', error: 'Filename contains null bytes' };
-    }
-
-    // Normalize path separators
-    sanitized = sanitized.replace(/\\/g, '/');
-
-    // Remove path traversal sequences
-    const originalFilename = sanitized;
-    sanitized = sanitized
-        .replace(/%252e/gi, '.')
-        .replace(/%2e/gi, '.')
-        .replace(/\.\.\//g, '')
-        .replace(/\.\./g, '')
-        .replace(/\/\.\//g, '/')
-        .replace(/^\.\//g, '');
-
-    // Remove leading slashes
-    sanitized = sanitized.replace(/^\/+/, '');
-
-    // Check if path traversal was attempted
-    if (originalFilename !== sanitized && originalFilename.includes('..')) {
-        return { safe: false, sanitized: '', error: 'Path traversal attempt detected' };
-    }
-
-    // Validate characters
-    if (!/^[a-zA-Z0-9_\-./]+$/.test(sanitized)) {
-        return { safe: false, sanitized: '', error: 'Filename contains invalid characters' };
-    }
-
-    // Block hidden files
-    if (sanitized.startsWith('.') && !sanitized.startsWith('./')) {
-        return { safe: false, sanitized: '', error: 'Hidden files are not allowed' };
-    }
-
-    // Check empty
-    if (sanitized.length === 0) {
-        return { safe: false, sanitized: '', error: 'Filename is empty after sanitization' };
-    }
-
-    // Check length
-    if (sanitized.length > 255) {
-        return { safe: false, sanitized: '', error: 'Filename exceeds maximum length (255 characters)' };
-    }
-
-    return { safe: true, sanitized, error: '' };
-}
+import { sanitizeArchiveFilename } from '../archive-loader.js';
 
 describe('sanitizeArchiveFilename', () => {
     it('accepts a normal filename', () => {
