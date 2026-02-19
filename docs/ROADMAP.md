@@ -36,8 +36,8 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [x] **Done** — Inline field validation (ORCID, coordinates, dates, PRONOM IDs)
 - [ ] Add tooltips/help text to every metadata field explaining purpose and format
 - [ ] Implement metadata templates for common scenarios (Heritage Survey, Research Capture, Quick Archive)
-- [ ] Auto-detect and pre-fill: file format PRONOM IDs, mesh statistics (face/vertex count, bounding box)
-- [ ] Validate entire manifest against JSON Schema before export with error/warning report
+- [x] **Done** — Auto-detect PRONOM format IDs from loaded assets; mesh face/vertex counts displayed as read-only statistics
+- [x] **Done** — SIP compliance validation at export time: required/recommended field checking, format validation (ORCID, dates, coordinates), compliance scoring, and manifest audit trail
 
 ### Annotation Enhancements
 - [x] **Done** — Image attachments in annotations via `asset:` protocol

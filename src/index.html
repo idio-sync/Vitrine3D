@@ -1801,19 +1801,38 @@
     </div>
     <!-- KIOSK-STRIP-END: annotation creation panel -->
 
-        <!-- Export Validation Dialog -->
+        <!-- SIP Compliance Dialog -->
         <div id="export-validation-overlay" class="validation-overlay hidden">
             <div class="validation-dialog">
                 <div class="validation-header">
-                    <h3>Missing Metadata</h3>
+                    <div class="validation-header-row">
+                        <span id="validation-status-icon" class="validation-status-icon"></span>
+                        <h3>Export Compliance</h3>
+                    </div>
+                    <div class="validation-score-row">
+                        <span>Profile: <strong id="validation-profile-name"></strong></span>
+                        <span>Score: <strong id="validation-score">0%</strong></span>
+                    </div>
+                    <div class="validation-score-track">
+                        <div id="validation-score-bar" class="validation-score-fill"></div>
+                    </div>
                 </div>
                 <div class="validation-body">
-                    <p class="validation-message">The following fields are empty for your <strong id="validation-profile-name"></strong> profile:</p>
-                    <ul id="validation-missing-list" class="validation-list"></ul>
+                    <div id="validation-error-section" class="validation-section hidden">
+                        <h4 class="validation-section-title section-error">Required Fields</h4>
+                        <ul id="validation-error-list" class="validation-list error-list"></ul>
+                    </div>
+                    <div id="validation-warning-section" class="validation-section hidden">
+                        <h4 class="validation-section-title section-warning">Recommended Fields</h4>
+                        <ul id="validation-warning-list" class="validation-list warning-list"></ul>
+                    </div>
+                    <div class="validation-pass-row">
+                        <span id="validation-pass-count"></span>
+                    </div>
                 </div>
                 <div class="validation-footer">
                     <button id="btn-validation-back" class="action-btn">Go Back</button>
-                    <button id="btn-validation-export" class="action-btn secondary">Export Anyway</button>
+                    <button id="btn-validation-export" class="action-btn secondary">Continue Export</button>
                 </div>
             </div>
         </div>

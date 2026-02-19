@@ -21,6 +21,13 @@ Structured metadata fields are validated on blur with inline error indicators:
 - **Dates**: ISO 8601 format
 - **PRONOM IDs**: format `fmt/000` or `x-fmt/000`
 
-Validation is advisory — it highlights problems but does not block export.
+### Export Compliance Check
+
+At export time, a SIP (Submission Information Package) compliance check runs against all tier-appropriate fields for the active metadata profile. Fields are classified as:
+
+- **Required** (errors if empty or invalid format) — fields essential at the active profile tier (e.g., Title, Capture Date, Scan Operator at Basic; adds Description, Quality Tier at Standard; adds Catalog Title, Copyright at Archival)
+- **Recommended** (warnings if empty) — all other tier-appropriate fields
+
+A pre-flight dialog shows the compliance score, required-field errors (red), and recommended-field warnings (yellow). Users can go back to fix issues or proceed with export. The compliance result is stamped into the manifest's `compliance` block (see [SPECIFICATION.md — Section 5.14](SPECIFICATION.md#514-compliance)).
 
 All metadata is saved into the archive's `manifest.json` on export.

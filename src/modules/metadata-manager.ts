@@ -202,7 +202,7 @@ export interface CollectedMetadata {
     viewerSettings: ViewerSettings;
 }
 
-interface ValidationRule {
+export interface ValidationRule {
     pattern?: RegExp;
     validate?: (value: string) => boolean;
     message: string;
@@ -978,7 +978,7 @@ export function addVersionEntry(): void {
 // METADATA VALIDATION (ADVISORY)
 // =============================================================================
 
-const VALIDATION_RULES: Record<string, ValidationRule> = {
+export const VALIDATION_RULES: Record<string, ValidationRule> = {
     'meta-operator-orcid': {
         pattern: /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/,
         message: 'ORCID must be in format 0000-0000-0000-000X',

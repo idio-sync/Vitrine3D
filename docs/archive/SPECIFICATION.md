@@ -35,6 +35,7 @@ The format uses ZIP as its physical container and JSON as its metadata language.
    - 5.11 [integrity](#511-integrity)
    - 5.12 [_meta](#512-_meta)
    - 5.13 [version_history](#513-version_history)
+   - 5.14 [compliance](#514-compliance)
 6. [Supported Asset Formats](#6-supported-asset-formats)
 7. [Integrity Verification](#7-integrity-verification)
 8. [Compatibility and Extensibility](#8-compatibility-and-extensibility)
@@ -189,6 +190,7 @@ The notation `string | ""` indicates a string field that MAY be an empty string 
 | `integrity` | object | OPTIONAL | Integrity verification hashes. See [5.11](#511-integrity). |
 | `version_history` | array | OPTIONAL | Ordered list of version entries. See [5.13](#513-version_history). |
 | `_meta` | object | OPTIONAL | Implementation-specific metadata. See [5.12](#512-_meta). |
+| `compliance` | object | OPTIONAL | SIP compliance validation results. See [5.14](#514-compliance). |
 
 ### 5.2 project
 
@@ -584,6 +586,32 @@ An OPTIONAL array of version entries tracking the history of the archive. Entrie
 ]
 ```
 
+### 5.14 compliance
+
+OPTIONAL. Records the result of SIP (Submission Information Package) compliance validation performed at export time. This section is informative — readers MUST NOT reject archives based on compliance status.
+
+| Field | Type | Status | Description |
+|-------|------|--------|-------------|
+| `profile` | string | REQUIRED | Metadata profile used for validation. Values: `"basic"`, `"standard"`, `"archival"`. |
+| `status` | string | REQUIRED | Overall result. Values: `"pass"` (no findings), `"warnings"` (recommended fields empty), `"override"` (exported despite required field errors). |
+| `score` | number | REQUIRED | Completeness percentage (0–100) of tier-appropriate fields that passed validation. |
+| `checked_at` | string | REQUIRED | ISO 8601 datetime when validation was performed. |
+| `errors` | array of strings | REQUIRED | Human-readable descriptions of required-field errors. Empty array if none. |
+| `warnings` | array of strings | REQUIRED | Human-readable descriptions of recommended-field warnings. Empty array if none. |
+| `overridden` | boolean | REQUIRED | `true` if the user explicitly chose to export despite errors. |
+
+```json
+"compliance": {
+    "profile": "standard",
+    "status": "pass",
+    "score": 92,
+    "checked_at": "2026-02-19T15:30:00.000Z",
+    "errors": [],
+    "warnings": ["Processing Notes: Recommended field is empty"],
+    "overridden": false
+}
+```
+
 ---
 
 ## 6. Supported Asset Formats
@@ -784,6 +812,7 @@ The following table maps manifest fields to established metadata standards. This
 | `preservation.format_registry.*` | `dc:format` | — | `formatRegistryKey` | PRONOM ID |
 | `integrity.algorithm` | — | — | `fixity.messageDigestAlgorithm` | — |
 | `integrity.assets.*` | — | — | `fixity.messageDigest` | — |
+| `compliance.status` | — | — | `eventOutcome` | — |
 
 ---
 
@@ -990,6 +1019,16 @@ The following is a complete manifest demonstrating all sections at Conformance L
             "assets/pointcloud_0.e57": "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3",
             "preview.jpg": "e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5"
         }
+    },
+
+    "compliance": {
+        "profile": "archival",
+        "status": "pass",
+        "score": 100,
+        "checked_at": "2026-02-05T12:00:00.000Z",
+        "errors": [],
+        "warnings": [],
+        "overridden": false
     },
 
     "_meta": {

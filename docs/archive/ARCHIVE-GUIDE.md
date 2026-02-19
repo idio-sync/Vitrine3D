@@ -81,6 +81,7 @@ Click the **Export Archive** toolbar button to save the current scene:
 4. A preview thumbnail is auto-captured from the current viewport (or uses a manual preview if one was set via the viewfinder)
 5. Any captured screenshots are exported to a `screenshots/` directory in the archive
 6. Version history entries and data entry roles are preserved in the manifest
+7. A SIP compliance check validates required and recommended fields for the active metadata profile — a pre-flight dialog shows any errors or warnings before finalizing
 
 ## Designing for Long-Term Preservation
 

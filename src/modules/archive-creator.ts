@@ -5,6 +5,7 @@
 import { Zip, ZipDeflate, ZipPassThrough, strToU8 } from 'fflate';
 import { Logger } from './utilities.js';
 import type { Annotation } from '@/types.js';
+import type { ManifestCompliance } from './sip-validator.js';
 
 // Create logger for this module
 const log = Logger.getLogger('archive-creator');
@@ -283,6 +284,7 @@ export interface Manifest {
     annotations: Annotation[];
     version_history: VersionHistoryEntry[];
     integrity?: IntegrityData;
+    compliance?: ManifestCompliance;
     _meta: {
         quality?: QualityStats;
         custom_fields?: Record<string, any>;
@@ -1403,6 +1405,10 @@ export class ArchiveCreator {
         if (['basic', 'standard', 'archival'].includes(profile)) {
             this.manifest.metadata_profile = profile;
         }
+    }
+
+    setCompliance(compliance: ManifestCompliance): void {
+        this.manifest.compliance = compliance;
     }
 
     setQualityStats(stats: QualityStats): void {

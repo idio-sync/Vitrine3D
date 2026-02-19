@@ -7,8 +7,9 @@
 
 import { captureScreenshot } from './archive-creator.js';
 import { Logger, notify } from './utilities.js';
-import { formatFileSize, getActiveProfile } from './metadata-manager.js';
-import { getMissingCriticalFields } from './metadata-profile.js';
+import { formatFileSize, getActiveProfile, VALIDATION_RULES } from './metadata-manager.js';
+import { validateSIP, toManifestCompliance } from './sip-validator.js';
+import type { SIPValidationResult } from './sip-validator.js';
 import { getStore } from './asset-store.js';
 import type { ExportDeps } from '@/types.js';
 
@@ -45,26 +46,75 @@ export function updateArchiveAssetCheckboxes(deps: ExportDeps): void {
 }
 
 /**
- * Show the validation dialog and return true if user chooses to export anyway.
+ * Show the SIP compliance dialog and return true if user chooses to proceed with export.
  */
-function showValidationDialog(missing: Array<{ id: string; label: string }>, profileName: string): Promise<boolean> {
+function showComplianceDialog(result: SIPValidationResult): Promise<boolean> {
     return new Promise(resolve => {
         const overlay = document.getElementById('export-validation-overlay');
-        const list = document.getElementById('validation-missing-list');
+        const errorList = document.getElementById('validation-error-list');
+        const warningList = document.getElementById('validation-warning-list');
         const profileEl = document.getElementById('validation-profile-name');
+        const scoreEl = document.getElementById('validation-score');
+        const scoreBarEl = document.getElementById('validation-score-bar') as HTMLElement | null;
+        const errorSection = document.getElementById('validation-error-section');
+        const warningSection = document.getElementById('validation-warning-section');
+        const passCountEl = document.getElementById('validation-pass-count');
         const backBtn = document.getElementById('btn-validation-back');
         const exportBtn = document.getElementById('btn-validation-export');
+        const statusIcon = document.getElementById('validation-status-icon');
 
-        if (!overlay || !list || !backBtn || !exportBtn) {
-            resolve(true); // If dialog elements missing, proceed with export
+        if (!overlay || !backBtn || !exportBtn) {
+            resolve(true);
             return;
         }
 
-        // Populate
-        if (profileEl) profileEl.textContent = profileName;
-        list.innerHTML = missing.map(f => `<li>${f.label}</li>`).join('');
+        // Profile name
+        const profileLabels: Record<string, string> = { basic: 'Basic', standard: 'Standard', archival: 'Archival' };
+        if (profileEl) profileEl.textContent = profileLabels[result.profile] || result.profile;
 
-        // Show
+        // Score
+        if (scoreEl) scoreEl.textContent = `${result.score}%`;
+        if (scoreBarEl) {
+            scoreBarEl.style.width = `${result.score}%`;
+            scoreBarEl.className = 'validation-score-fill' +
+                (result.score >= 80 ? ' score-good' : result.score >= 50 ? ' score-fair' : ' score-low');
+        }
+
+        // Pass count
+        if (passCountEl) passCountEl.textContent = `${result.passCount} of ${result.totalChecked} fields passed`;
+
+        // Errors
+        if (errorSection) errorSection.classList.toggle('hidden', result.errors.length === 0);
+        if (errorList) {
+            errorList.innerHTML = result.errors
+                .map(f => `<li><span class="finding-label">${f.label}</span><span class="finding-msg">${f.message}</span></li>`)
+                .join('');
+        }
+
+        // Warnings
+        if (warningSection) warningSection.classList.toggle('hidden', result.warnings.length === 0);
+        if (warningList) {
+            warningList.innerHTML = result.warnings
+                .map(f => `<li><span class="finding-label">${f.label}</span><span class="finding-msg">${f.message}</span></li>`)
+                .join('');
+        }
+
+        // Status icon
+        if (statusIcon) {
+            statusIcon.className = 'validation-status-icon ' +
+                (result.errors.length > 0 ? 'status-error' :
+                 result.warnings.length > 0 ? 'status-warning' : 'status-pass');
+        }
+
+        // Export button text
+        if (result.errors.length > 0) {
+            exportBtn.textContent = 'Export Anyway';
+            exportBtn.classList.add('override-btn');
+        } else {
+            exportBtn.textContent = 'Continue Export';
+            exportBtn.classList.remove('override-btn');
+        }
+
         overlay.classList.remove('hidden');
 
         const cleanup = () => {
@@ -125,17 +175,19 @@ export async function downloadArchive(deps: ExportDeps): Promise<void> {
         return;
     }
 
-    // Profile-aware metadata validation
+    // SIP compliance validation
     const profile = getActiveProfile();
-    const missing = getMissingCriticalFields(profile);
-    if (missing.length > 0) {
-        const profileLabels: Record<string, string> = { basic: 'Basic', standard: 'Standard', archival: 'Archival' };
-        const proceed = await showValidationDialog(missing, profileLabels[profile] || profile);
+    const sipResult = validateSIP(metadata, profile, VALIDATION_RULES);
+
+    if (sipResult.errors.length > 0 || sipResult.warnings.length > 0) {
+        const proceed = await showComplianceDialog(sipResult);
         if (!proceed) {
             ui.showMetadataPanel();
             return;
         }
     }
+    const overridden = sipResult.errors.length > 0;
+    const compliance = toManifestCompliance(sipResult, overridden);
 
     // Apply project info
     log.info(' Setting project info');
@@ -323,6 +375,9 @@ export async function downloadArchive(deps: ExportDeps): Promise<void> {
 
     // Apply metadata profile
     archiveCreator.setMetadataProfile(getActiveProfile());
+
+    // Stamp SIP compliance record
+    archiveCreator.setCompliance(compliance);
 
     // Set quality stats
     log.info(' Setting quality stats');

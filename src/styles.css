@@ -4140,6 +4140,97 @@ input[type="range"]::-webkit-slider-thumb:hover {
     border-radius: 6px;
 }
 
+/* --- SIP Compliance Dialog Enhancements --- */
+.validation-header-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.validation-status-icon {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.validation-status-icon.status-pass { background: #4caf50; }
+.validation-status-icon.status-warning { background: #ff9800; }
+.validation-status-icon.status-error { background: #f44336; }
+.validation-score-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-secondary, #888);
+}
+.validation-score-row strong {
+    color: var(--text-primary, #eee);
+}
+.validation-score-track {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    margin-top: 6px;
+    overflow: hidden;
+}
+.validation-score-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+.validation-score-fill.score-good { background: #4caf50; }
+.validation-score-fill.score-fair { background: #ff9800; }
+.validation-score-fill.score-low { background: #f44336; }
+.validation-section {
+    margin-bottom: 10px;
+}
+.validation-section.hidden {
+    display: none;
+}
+.validation-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    margin: 0 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.validation-section-title.section-error { color: #f44336; }
+.validation-section-title.section-warning { color: #ff9800; }
+.validation-list.error-list li {
+    background: rgba(244, 67, 54, 0.1);
+    border-color: rgba(244, 67, 54, 0.25);
+    color: #ef9a9a;
+}
+.validation-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+.finding-label {
+    font-weight: 500;
+}
+.finding-msg {
+    font-size: 10px;
+    opacity: 0.7;
+    text-align: right;
+    flex-shrink: 0;
+}
+.validation-pass-row {
+    text-align: center;
+    padding: 4px 0;
+    font-size: 11px;
+    color: #4caf50;
+}
+.validation-footer .override-btn {
+    background: rgba(244, 67, 54, 0.15);
+    border-color: rgba(244, 67, 54, 0.3);
+    color: #ef9a9a;
+}
+.validation-footer .override-btn:hover {
+    background: rgba(244, 67, 54, 0.25);
+}
+
 /* Responsive */
 @media (max-width: 500px) {
     .share-options {
