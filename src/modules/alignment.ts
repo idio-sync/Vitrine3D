@@ -565,7 +565,7 @@ export class LandmarkAlignment {
         this._clearMarkers();
 
         // Attach listeners
-        this.renderer.domElement.addEventListener('click', this._onClickBound);
+        this.renderer.domElement.addEventListener('click', this._onClickBound, { capture: true });
         document.addEventListener('keydown', this._onKeyDownBound);
         this.renderer.domElement.style.cursor = 'crosshair';
 
@@ -574,6 +574,29 @@ export class LandmarkAlignment {
         if (this._indicatorEl) this._indicatorEl.classList.remove('hidden');
 
         log.info(`[LandmarkAlignment] Started — anchor: ${this._anchorType}, mover: ${this._moverType}`);
+    }
+
+    /**
+     * Update the renderer reference after a renderer switch (WebGPU <-> WebGL).
+     * If alignment mode is active, re-attach the click listener to the new canvas.
+     */
+    updateRenderer(newRenderer: any): void {
+        const wasActive = this._active;
+
+        // If alignment mode is active, cancel it first (removes old listener)
+        if (wasActive) {
+            this.cancel();
+        }
+
+        // Update renderer reference
+        this.renderer = newRenderer;
+
+        // If it was active, restart it (attaches to new canvas)
+        if (wasActive) {
+            this.start();
+        }
+
+        log.info('[updateRenderer] Renderer updated, alignment mode', wasActive ? 'restarted' : 'updated');
     }
 
     /**
@@ -642,6 +665,8 @@ export class LandmarkAlignment {
      * Handle click during alignment mode
      */
     private _onClick(event: MouseEvent): void {
+        log.info('[_onClick] Click detected, active:', this._active, 'target:', event.target);
+
         if (!this._active) return;
 
         // Ignore clicks on UI overlays
@@ -657,24 +682,15 @@ export class LandmarkAlignment {
 
         // Filter: only accept hits on the current target object
         const targetObj = this._phase === 'anchor' ? this._anchorObj : this._moverObj;
-        const targetType = this._phase === 'anchor' ? this._anchorType : this._moverType;
-
-        log.info(`[_onClick] Phase: ${this._phase}, target: ${targetType}, isSplatMesh: ${this._isSplatMesh(targetObj || this.splatMesh)}`);
 
         let hit = intersects.find(h => this._isDescendantOf(h.object, targetObj));
 
         // If no hit via standard raycasting and target is a splat mesh, try custom splat raycasting
         if (!hit && targetObj && this._isSplatMesh(targetObj)) {
-            log.info('[_onClick] No standard raycast hit, trying custom splat raycasting...');
             hit = this._raycastSplatMesh(targetObj);
         }
 
-        if (!hit) {
-            log.info('[_onClick] No hit found');
-            return;
-        }
-
-        log.info(`[_onClick] Hit at [${hit.point.x.toFixed(3)}, ${hit.point.y.toFixed(3)}, ${hit.point.z.toFixed(3)}]`);
+        if (!hit) return;
 
         const point = hit.point.clone();
 

@@ -658,6 +658,9 @@ async function init() {
             flyControls.dispose();
             flyControls = new FlyControls(camera, newRenderer.domElement);
         }
+        if (landmarkAlignment) {
+            landmarkAlignment.updateRenderer(newRenderer);
+        }
         log.info('Renderer changed, module-scope references updated');
     };
 
