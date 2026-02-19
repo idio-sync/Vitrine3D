@@ -169,7 +169,7 @@ export interface ArchivePipelineDeps {
 }
 
 export interface EventWiringDeps {
-    sceneRefs: Pick<SceneRefs, 'scene' | 'camera' | 'controls' | 'splatMesh' | 'modelGroup' | 'pointcloudGroup' | 'flyControls' | 'ambientLight' | 'hemisphereLight' | 'directionalLight1' | 'directionalLight2'>;
+    sceneRefs: Pick<SceneRefs, 'scene' | 'camera' | 'controls' | 'transformControls' | 'splatMesh' | 'modelGroup' | 'pointcloudGroup' | 'stlGroup' | 'flyControls' | 'ambientLight' | 'hemisphereLight' | 'directionalLight1' | 'directionalLight2'>;
     state: AppState;
     sceneManager: any;
     files: {
@@ -241,6 +241,15 @@ export interface EventWiringDeps {
         setSelectedObject: (selection: SelectedObject) => void;
         setTransformMode: (mode: TransformMode) => void;
         resetTransform: () => void;
+    };
+    crossSection: {
+        active: boolean;
+        start: (center: import('three').Vector3) => void;
+        stop: () => void;
+        setMode: (mode: 'translate' | 'rotate') => void;
+        setAxis: (axis: 'x' | 'y' | 'z') => void;
+        flip: () => void;
+        reset: (center: import('three').Vector3) => void;
     };
     tauri: {
         wireNativeDialogsIfAvailable: () => void;

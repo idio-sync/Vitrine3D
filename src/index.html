@@ -120,6 +120,16 @@
                 </svg>
             </button>
 
+            <!-- Cross-Section — Clip with a movable plane -->
+            <button class="tool-btn" data-tool="crosssection" data-tooltip="Cross-Section  X" title="Clip the scene with a movable plane">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 12h20"/>
+                    <path d="M12 2v20" stroke-dasharray="3 2"/>
+                    <path d="M6 7l6-5 6 5"/>
+                    <path d="M6 17l6 5 6-5"/>
+                </svg>
+            </button>
+
             <div class="rail-spacer"></div>
             <div class="rail-sep"></div>
 
@@ -700,6 +710,43 @@
                                 <button class="prop-btn danger small" id="btn-sidebar-delete-anno" title="Delete this annotation">Delete</button>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+            </div>
+
+
+            <!-- ========================================================
+                 CROSS-SECTION PANE
+                 ======================================================== -->
+            <div class="props-pane" id="pane-crosssection">
+
+                <div class="prop-section open">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Clipping Plane</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <p class="prop-hint mb4">Drag the gizmo in the viewport to position and rotate the cutting plane. Meshes and point clouds are clipped; splat is unaffected.</p>
+
+                        <div class="prop-label mb4">Gizmo Mode</div>
+                        <div class="seg-ctrl mb4">
+                            <button class="seg-btn active" id="cs-mode-translate">Translate</button>
+                            <button class="seg-btn" id="cs-mode-rotate">Rotate</button>
+                        </div>
+
+                        <div class="prop-label mb4">Snap to Axis</div>
+                        <div class="seg-ctrl mb4">
+                            <button class="seg-btn" id="cs-axis-x">X</button>
+                            <button class="seg-btn" id="cs-axis-y">Y</button>
+                            <button class="seg-btn" id="cs-axis-z">Z</button>
+                        </div>
+
+                        <button class="prop-btn mt4" id="cs-flip">Flip Direction</button>
+                        <button class="prop-btn danger mt4" id="cs-reset">Reset Plane</button>
+
+                        <!-- Hidden button referenced by kiosk toolbar -->
+                        <button id="btn-toggle-crosssection" style="display:none;">Cross-Section</button>
                     </div>
                 </div>
 

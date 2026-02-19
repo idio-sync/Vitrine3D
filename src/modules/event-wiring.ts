@@ -64,6 +64,21 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                     deps.transform.setSelectedObject('model' as any);
                 }
             }
+            // Cross-section: activate when entering, deactivate when leaving
+            if (tool === 'crosssection') {
+                if (!deps.crossSection.active) {
+                    const box = new THREE.Box3();
+                    box.expandByObject(sceneRefs.modelGroup);
+                    box.expandByObject(sceneRefs.pointcloudGroup);
+                    const center = box.isEmpty() ? new THREE.Vector3() : new THREE.Vector3();
+                    if (!box.isEmpty()) box.getCenter(center);
+                    sceneManager.setLocalClippingEnabled(true);
+                    deps.crossSection.start(center);
+                }
+            } else if (deps.crossSection.active) {
+                deps.crossSection.stop();
+                sceneManager.setLocalClippingEnabled(false);
+            }
         });
     });
 
@@ -310,6 +325,30 @@ export function setupUIEvents(deps: EventWiringDeps): void {
 
     // ─── Reset transform button ──────────────────────────────
     addListener('btn-reset-transform', 'click', deps.transform.resetTransform);
+
+    // ─── Cross-section controls ──────────────────────────────
+    addListener('cs-mode-translate', 'click', () => {
+        deps.crossSection.setMode('translate');
+        document.getElementById('cs-mode-translate')?.classList.add('active');
+        document.getElementById('cs-mode-rotate')?.classList.remove('active');
+    });
+    addListener('cs-mode-rotate', 'click', () => {
+        deps.crossSection.setMode('rotate');
+        document.getElementById('cs-mode-rotate')?.classList.add('active');
+        document.getElementById('cs-mode-translate')?.classList.remove('active');
+    });
+    addListener('cs-axis-x', 'click', () => deps.crossSection.setAxis('x'));
+    addListener('cs-axis-y', 'click', () => deps.crossSection.setAxis('y'));
+    addListener('cs-axis-z', 'click', () => deps.crossSection.setAxis('z'));
+    addListener('cs-flip',   'click', () => deps.crossSection.flip());
+    addListener('cs-reset',  'click', () => {
+        const box = new THREE.Box3();
+        box.expandByObject(sceneRefs.modelGroup);
+        box.expandByObject(sceneRefs.pointcloudGroup);
+        const center = new THREE.Vector3();
+        if (!box.isEmpty()) box.getCenter(center);
+        deps.crossSection.reset(center);
+    });
 
     // ─── Alignment (landmark) ────────────────────────────────
     addListener('btn-align', 'click', deps.alignment.toggleAlignment);
@@ -582,6 +621,18 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 }
                 break;
             case 'n': activateTool('annotate'); activatedTool = 'annotate'; break;
+            case 'x':
+                activateTool('crosssection'); activatedTool = 'crosssection';
+                if (!deps.crossSection.active) {
+                    const box = new THREE.Box3();
+                    box.expandByObject(sceneRefs.modelGroup);
+                    box.expandByObject(sceneRefs.pointcloudGroup);
+                    const center = new THREE.Vector3();
+                    if (!box.isEmpty()) box.getCenter(center);
+                    sceneManager.setLocalClippingEnabled(true);
+                    deps.crossSection.start(center);
+                }
+                break;
             case 'm': activateTool('measure'); activatedTool = 'measure'; break;
             case 'c': activateTool('capture'); activatedTool = 'capture'; break;
             case 'd': activateTool('metadata'); activatedTool = 'metadata'; break;
@@ -595,6 +646,11 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 sceneRefs.transformControls.getHelper().visible = (activatedTool === 'transform');
                 sceneRefs.transformControls.enabled = (activatedTool === 'transform');
             } catch { /* ignore */ }
+        }
+        // Stop cross-section when switching away via keyboard
+        if (activatedTool && activatedTool !== 'crosssection' && deps.crossSection.active) {
+            deps.crossSection.stop();
+            sceneManager.setLocalClippingEnabled(false);
         }
 
         if (e.key === 'Escape') {

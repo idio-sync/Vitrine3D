@@ -4,6 +4,7 @@ import { SplatMesh } from '@sparkjsdev/spark';
 import { ArchiveLoader } from './modules/archive-loader.js';
 // hasAnyProxy moved to archive-pipeline.ts (Phase 2.2)
 import { AnnotationSystem } from './modules/annotation-system.js';
+import { CrossSectionTool } from './modules/cross-section.js';
 import { MeasurementSystem } from './modules/measurement-system.js';
 import { ArchiveCreator, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
 import { CAMERA, TIMING, ASSET_STATE, MESH_LOD } from './modules/constants.js';
@@ -288,6 +289,7 @@ let annotationSystem: any = null;
 let measurementSystem: any = null;
 let landmarkAlignment: any = null;
 let archiveCreator: any = null;
+let crossSection: CrossSectionTool | null = null;
 
 // Asset blob store (ES module singleton — shared with archive-pipeline, export-controller, etc.)
 const assets = getStore();
@@ -588,6 +590,7 @@ function createEventWiringDeps(): EventWiringDeps {
         metadata: { hideMetadataPanel, toggleMetadataDisplay, setupMetadataSidebar },
         share: { copyShareLink },
         transform: { setSelectedObject, setTransformMode, resetTransform },
+        crossSection: crossSection!,
         tauri: {
             wireNativeDialogsIfAvailable: () => {
                 if (window.__TAURI__ && tauriBridge) {
@@ -694,6 +697,9 @@ async function init() {
 
     // Initialize archive creator
     archiveCreator = new ArchiveCreator();
+
+    // Initialize cross-section tool
+    crossSection = new CrossSectionTool(scene, camera, renderer, controls, modelGroup, pointcloudGroup, stlGroup);
 
     // Check crypto availability and warn user
     if (!CRYPTO_AVAILABLE) {
@@ -1498,6 +1504,9 @@ function animate() {
 
         // Render using scene manager (handles split view)
         sceneManager.render(state.displayMode, splatMesh, modelGroup, pointcloudGroup, stlGroup);
+
+        // Update cross-section plane (syncs THREE.Plane with gizmo anchor each frame)
+        if (crossSection) crossSection.updatePlane();
 
         // Update annotation marker positions
         if (annotationSystem) {

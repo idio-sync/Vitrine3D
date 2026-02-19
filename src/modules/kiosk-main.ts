@@ -17,6 +17,7 @@ type AssetType = 'splat' | 'mesh' | 'pointcloud';
 import { FlyControls } from './fly-controls.js';
 import { AnnotationSystem } from './annotation-system.js';
 import { MeasurementSystem } from './measurement-system.js';
+import { CrossSectionTool } from './cross-section.js';
 import { CAMERA, ASSET_STATE, QUALITY_TIER } from './constants.js';
 import { resolveQualityTier, hasAnyProxy } from './quality-tier.js';
 import { Logger, notify, parseMarkdown, resolveAssetRefs, fetchWithProgress, downloadBlob } from './utilities.js';
@@ -169,6 +170,7 @@ let sceneManager: SceneManager | null = null;
 let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: any, controls: any, modelGroup: THREE.Group, pointcloudGroup: THREE.Group;
 let flyControls: FlyControls | null = null;
 let annotationSystem: AnnotationSystem | null = null;
+let crossSection: CrossSectionTool | null = null;
 let measurementSystem: MeasurementSystem | null = null;
 let splatMesh: any = null; // TODO: SplatMesh type
 let fpsElement: HTMLElement | null = null;
@@ -257,6 +259,9 @@ export async function init(): Promise<void> {
 
     // Create fly controls
     flyControls = new FlyControls(camera, renderer.domElement);
+
+    // Initialize cross-section tool (stlGroup not used in kiosk)
+    crossSection = new CrossSectionTool(scene, camera, renderer, controls, modelGroup, pointcloudGroup, null);
 
     // Register callback for renderer switches (WebGPU <-> WebGL)
     sceneManager.onRendererChanged = (newRenderer: any) => {
@@ -1826,6 +1831,26 @@ function setupViewerUI(): void {
         }
     });
 
+    // Cross-section toggle
+    addListener('btn-toggle-crosssection', 'click', () => {
+        const btn = document.getElementById('btn-toggle-crosssection');
+        if (!crossSection) return;
+        if (crossSection.active) {
+            crossSection.stop();
+            sceneManager!.setLocalClippingEnabled(false);
+            if (btn) btn.classList.remove('active');
+        } else {
+            const box = new THREE.Box3();
+            box.expandByObject(modelGroup);
+            box.expandByObject(pointcloudGroup);
+            const center = new THREE.Vector3();
+            if (!box.isEmpty()) box.getCenter(center);
+            sceneManager!.setLocalClippingEnabled(true);
+            crossSection.start(center);
+            if (btn) btn.classList.add('active');
+        }
+    });
+
     // Create SVG overlay for annotation connecting lines
     const svgOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svgOverlay.id = 'annotation-line-overlay';
@@ -2827,6 +2852,7 @@ const KIOSK_ICONS: Record<string, string> = {
     fullscreen: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>',
     pin: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
     ruler: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20l20-20"/><path d="M5.5 13.5L8 11"/><path d="M9.5 9.5L12 7"/><path d="M13.5 5.5L16 3"/></svg>',
+    scissors: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
 };
 
 function createKioskToolbar(): void {
@@ -2838,6 +2864,7 @@ function createKioskToolbar(): void {
         ['btn-metadata', 'Info', 'info'],
         ['btn-fullscreen', 'Fullscreen', 'fullscreen'],
         ['btn-toggle-annotations', 'Annotations', 'pin'],
+        ['btn-toggle-crosssection', 'Slice', 'scissors'],
         ['btn-measure', 'Measure', 'ruler'],
     ];
 
@@ -3610,6 +3637,9 @@ function animate(): void {
         }
 
         sceneManager.render(state.displayMode as any, splatMesh, modelGroup, pointcloudGroup, null);
+
+        // Update cross-section plane to track gizmo anchor
+        if (crossSection) crossSection.updatePlane();
 
         // Update annotation marker screen positions (skip when globally hidden, unless single-marker is shown)
         if (annotationSystem.hasAnnotations()) {

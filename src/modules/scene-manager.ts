@@ -1062,6 +1062,19 @@ export class SceneManager {
     }
 
     /**
+     * Enable or disable material-level clipping on both renderers.
+     * Must be true for material.clippingPlanes to take effect (Three.js requirement).
+     */
+    setLocalClippingEnabled(enabled: boolean): void {
+        if (this.renderer && 'localClippingEnabled' in this.renderer) {
+            this.renderer.localClippingEnabled = enabled;
+        }
+        if (this.rendererRight && 'localClippingEnabled' in this.rendererRight) {
+            this.rendererRight.localClippingEnabled = enabled;
+        }
+    }
+
+    /**
      * Add an object to the scene
      */
     addToScene(object: Object3D): void {

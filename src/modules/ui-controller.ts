@@ -199,15 +199,16 @@ export function hideLoading(): void {
 
 /** Map of tool names to their pane IDs and display titles */
 const TOOL_PANE_MAP: Record<string, { pane: string; title: string }> = {
-    scene:     { pane: 'pane-scene',     title: 'Scene' },
-    assets:    { pane: 'pane-assets',    title: 'Assets' },
-    transform: { pane: 'pane-transform', title: 'Transform' },
-    annotate:  { pane: 'pane-annotate',  title: 'Annotations' },
-    measure:   { pane: 'pane-measure',   title: 'Measurements' },
-    capture:   { pane: 'pane-capture',   title: 'Screenshots' },
-    metadata:  { pane: 'pane-metadata',  title: 'Metadata' },
-    export:    { pane: 'pane-export',    title: 'Export' },
-    settings:  { pane: 'pane-settings',  title: 'Settings' },
+    scene:        { pane: 'pane-scene',        title: 'Scene' },
+    assets:       { pane: 'pane-assets',       title: 'Assets' },
+    transform:    { pane: 'pane-transform',    title: 'Transform' },
+    annotate:     { pane: 'pane-annotate',     title: 'Annotations' },
+    crosssection: { pane: 'pane-crosssection', title: 'Cross-Section' },
+    measure:      { pane: 'pane-measure',      title: 'Measurements' },
+    capture:      { pane: 'pane-capture',      title: 'Screenshots' },
+    metadata:     { pane: 'pane-metadata',     title: 'Metadata' },
+    export:       { pane: 'pane-export',       title: 'Export' },
+    settings:     { pane: 'pane-settings',     title: 'Settings' },
 };
 
 /**
