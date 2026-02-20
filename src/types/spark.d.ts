@@ -43,6 +43,11 @@ declare module '@sparkjsdev/spark' {
             maxStdDev?: number;        // Controls Gaussian extent (√5 to √9)
             blurAmount?: number;       // Anti-aliasing blur
             originDistance?: number;   // Precision threshold
+            view?: {                   // SparkViewpoint options for default viewpoint
+                sortDistance?: number;  // Re-sort distance threshold (default: 0.01)
+                sortRadial?: boolean;   // Sort by radial distance vs Z-depth (default: true)
+                autoUpdate?: boolean;   // Auto-update sort each frame (default: false)
+            };
             [key: string]: any;
         });
 

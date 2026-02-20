@@ -73,6 +73,7 @@ export class SceneManager {
     webgpuSupported: boolean;
     private _canvas: HTMLCanvasElement | null;
     private _canvasRight: HTMLCanvasElement | null;
+    private _antialias: boolean;
     onRendererChanged: ((renderer: any) => void) | null;
 
     // Lighting
@@ -130,6 +131,7 @@ export class SceneManager {
         this.webgpuSupported = false;
         this._canvas = null;
         this._canvasRight = null;
+        this._antialias = true;
         this.onRendererChanged = null;
 
         // Lighting
@@ -181,9 +183,9 @@ export class SceneManager {
     private _createRenderer(canvas: HTMLCanvasElement, type: 'webgpu' | 'webgl'): any {
         let newRenderer: any;
         if (type === 'webgpu') {
-            newRenderer = new WebGPURendererClass!({ canvas, antialias: true });
+            newRenderer = new WebGPURendererClass!({ canvas, antialias: this._antialias });
         } else {
-            newRenderer = new WebGLRenderer({ canvas, antialias: true });
+            newRenderer = new WebGLRenderer({ canvas, antialias: this._antialias });
         }
         newRenderer.setPixelRatio(Math.min(window.devicePixelRatio, RENDERER.MAX_PIXEL_RATIO));
         newRenderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -368,9 +370,9 @@ export class SceneManager {
      * Switch between WebGPU and WebGL renderers.
      * Replaces the canvas in the DOM, recreates controls, and fires onRendererChanged.
      */
-    async switchRenderer(target: 'webgpu' | 'webgl'): Promise<void> {
+    async switchRenderer(target: 'webgpu' | 'webgl', force = false): Promise<void> {
         // No-op guards
-        if (this.rendererType === target) return;
+        if (this.rendererType === target && !force) return;
         if (target === 'webgpu' && !this.webgpuSupported) return;
 
         // Ensure WebGPU module is loaded if switching to it
@@ -556,6 +558,18 @@ export class SceneManager {
         if (this.rendererType !== 'webgpu') {
             await this.switchRenderer('webgpu');
         }
+    }
+
+    /**
+     * Enable or disable hardware antialiasing.
+     * Requires renderer recreation (WebGL AA is a context-creation flag).
+     * No-op if the value hasn't changed.
+     */
+    async setAntialias(enabled: boolean): Promise<void> {
+        if (enabled === this._antialias) return;
+        this._antialias = enabled;
+        log.info(`Antialiasing ${enabled ? 'enabled' : 'disabled'}, recreating renderer`);
+        await this.switchRenderer(this.rendererType, true);
     }
 
     /**

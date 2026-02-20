@@ -653,10 +653,12 @@ async function init() {
     sparkRenderer = new SparkRenderer({
         renderer: renderer,
         clipXY: 3.0,           // Prevent aggressive frustum culling (default: 1.4)
-        autoUpdate: true
+        autoUpdate: true,
+        minAlpha: 3 / 255,     // Cull near-invisible splats (default: ~0.002)
+        view: { sortDistance: 0.05 }  // Re-sort after 5cm movement (default: 0.01)
     });
     scene.add(sparkRenderer);
-    log.info('SparkRenderer created with clipXY=3.0 to prevent clipping');
+    log.info('SparkRenderer created with clipXY=3.0, minAlpha=3/255, sortDistance=0.05');
 
     // Register callback for renderer switches (WebGPU <-> WebGL)
     sceneManager.onRendererChanged = (newRenderer: any) => {
@@ -681,7 +683,9 @@ async function init() {
         sparkRenderer = new SparkRenderer({
             renderer: newRenderer,
             clipXY: 3.0,
-            autoUpdate: true
+            autoUpdate: true,
+            minAlpha: 3 / 255,
+            view: { sortDistance: 0.05 }
         });
         scene.add(sparkRenderer);
         log.info('Renderer changed, module-scope references updated - SparkRenderer recreated');
@@ -1507,6 +1511,17 @@ function autoCenterAlign() {
     autoCenterAlignHandler(createAlignmentDeps());
 }
 
+// Antialiasing toggle — enable AA when a model is on screen (meshes benefit
+// from MSAA), disable when only a splat is displayed (no visual benefit, pure
+// GPU cost).  Called at ~2 Hz from the status-bar update block.
+let _antialiasUpdatePending = false;
+function updateAntialias() {
+    if (_antialiasUpdatePending || !sceneManager) return;
+    const needsAA = state.modelLoaded;
+    _antialiasUpdatePending = true;
+    sceneManager.setAntialias(needsAA).finally(() => { _antialiasUpdatePending = false; });
+}
+
 // Animation loop
 let animationErrorCount = 0;
 const MAX_ANIMATION_ERRORS = 10;
@@ -1567,6 +1582,8 @@ function animate() {
                 cameraMode: (flyControls && flyControls.enabled) ? 'Fly' : 'Orbit',
                 filename: state.archiveFileName ?? ''
             });
+            // Toggle antialiasing based on content (model loaded → AA on)
+            updateAntialias();
         }
 
         // Reset error count on successful frame

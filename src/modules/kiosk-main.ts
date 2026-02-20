@@ -262,10 +262,12 @@ export async function init(): Promise<void> {
     sparkRenderer = new SparkRenderer({
         renderer: renderer,
         clipXY: 3.0,           // Prevent aggressive frustum culling (default: 1.4)
-        autoUpdate: true
+        autoUpdate: true,
+        minAlpha: 3 / 255,     // Cull near-invisible splats (default: ~0.002)
+        view: { sortDistance: 0.05 }  // Re-sort after 5cm movement (default: 0.01)
     });
     scene.add(sparkRenderer);
-    log.info('SparkRenderer created with clipXY=3.0 to prevent clipping');
+    log.info('SparkRenderer created with clipXY=3.0, minAlpha=3/255, sortDistance=0.05');
 
     // Disable transform controls (viewer only)
     sceneManager.detachTransformControls();
@@ -294,7 +296,9 @@ export async function init(): Promise<void> {
         sparkRenderer = new SparkRenderer({
             renderer: newRenderer,
             clipXY: 3.0,
-            autoUpdate: true
+            autoUpdate: true,
+            minAlpha: 3 / 255,
+            view: { sortDistance: 0.05 }
         });
         scene.add(sparkRenderer);
         log.info('Renderer changed to', sceneManager!.rendererType, '- SparkRenderer recreated');
