@@ -300,7 +300,7 @@ function makeKioskConfig(themeName: string): string {
         inlineAlignment: null,
         showControls: true,
         controlsMode: 'none',
-        initialViewMode: 'both',
+        initialViewMode: params.get('initialViewMode') || undefined,
         showToolbar: true,
         sidebarMode: 'closed',
         theme: params.get('theme') || '${escaped}',

@@ -19,6 +19,18 @@ Kiosk view mode is a read-only mode used for presentation of 3D data. It can be 
 - Lazy asset loading — the manifest loads first, then individual assets load on demand with inline progress indicators
 - Click-to-load gate for deferred archive download (`?autoload=false`)
 
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `1` | Switch to Model view |
+| `2` | Switch to Splat view |
+| `3` | Switch to Pointcloud view |
+| `F` | Toggle fly mode (first-person WASD camera) |
+| `M` | Toggle info overlay (metadata details panel) |
+| `G` | Toggle gridlines |
+| `Escape` | Close info overlay / hide annotation popup |
+
 ## Click-to-Load Gate
 
 When embedding multiple viewers on a single page, auto-downloading all archives wastes bandwidth. The `?autoload=false` URL parameter defers the archive download until the user clicks a play button — similar to Sketchfab's embed behavior.

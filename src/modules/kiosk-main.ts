@@ -1187,6 +1187,9 @@ async function handleArchiveFile(file: File): Promise<void> {
                         await ensureAssetLoaded(type as AssetType);
                         // Update settings visibility after background load
                         showRelevantSettings(state.splatLoaded, state.modelLoaded, state.pointcloudLoaded);
+                        // Update visibility to match current display mode
+                        const deps = createDisplayModeDeps();
+                        if (deps.updateVisibility) deps.updateVisibility();
                         // Re-apply viewer settings to newly loaded meshes
                         if (type === 'mesh' && manifest.viewer_settings?.single_sided !== undefined) {
                             const side = manifest.viewer_settings.single_sided ? THREE.FrontSide : THREE.DoubleSide;
