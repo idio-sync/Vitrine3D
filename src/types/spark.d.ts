@@ -11,6 +11,14 @@ declare module '@sparkjsdev/spark' {
         rotation: Euler;
         position: Vector3;
 
+        /** Resolves when this SplatMesh has finished loading/parsing. */
+        initialized: Promise<SplatMesh>;
+        isInitialized: boolean;
+
+        /** Resolves when WASM module is ready (required for compressed formats). */
+        static staticInitialized: Promise<void>;
+        static isStaticInitialized: boolean;
+
         constructor(config?: { url?: string; [key: string]: any });
 
         static NewAsync(config: {

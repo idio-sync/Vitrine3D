@@ -264,10 +264,10 @@ export async function init(): Promise<void> {
         clipXY: 3.0,           // Prevent aggressive frustum culling (default: 1.4)
         autoUpdate: true,
         minAlpha: 3 / 255,     // Cull near-invisible splats (default: ~0.002)
-        view: { sortDistance: 0.05 }  // Re-sort after 5cm movement (default: 0.01)
+        view: { sortDistance: 0.005 }  // Re-sort after 5mm movement (default: 0.01)
     });
     scene.add(sparkRenderer);
-    log.info('SparkRenderer created with clipXY=3.0, minAlpha=3/255, sortDistance=0.05');
+    log.info('SparkRenderer created with clipXY=3.0, minAlpha=3/255, sortDistance=0.005');
 
     // Disable transform controls (viewer only)
     sceneManager.detachTransformControls();
@@ -298,7 +298,7 @@ export async function init(): Promise<void> {
             clipXY: 3.0,
             autoUpdate: true,
             minAlpha: 3 / 255,
-            view: { sortDistance: 0.05 }
+            view: { sortDistance: 0.005 }
         });
         scene.add(sparkRenderer);
         log.info('Renderer changed to', sceneManager!.rendererType, '- SparkRenderer recreated');

@@ -201,6 +201,9 @@ export async function loadSplatFromFile(file: File, deps: LoadSplatDeps): Promis
     // Create object URL for the file
     const fileUrl = URL.createObjectURL(file);
 
+    // Ensure WASM is ready (required for compressed formats like .sog, .spz)
+    await SplatMesh.staticInitialized;
+
     // Create SplatMesh using Spark
     const splatMesh = new SplatMesh({ url: fileUrl });
 
@@ -220,8 +223,8 @@ export async function loadSplatFromFile(file: File, deps: LoadSplatDeps): Promis
         log.warn('This may indicate multiple THREE.js instances are loaded.');
     }
 
-    // Wait for initialization
-    await new Promise(resolve => setTimeout(resolve, TIMING.SPLAT_LOAD_DELAY));
+    // Wait for splat to finish loading/parsing
+    await splatMesh.initialized;
 
     try {
         scene.add(splatMesh);
@@ -284,6 +287,9 @@ export async function loadSplatFromUrl(url: string, deps: LoadSplatDeps, onProgr
         setSplatMesh(null);
     }
 
+    // Ensure WASM is ready (required for compressed formats like .sog, .spz)
+    await SplatMesh.staticInitialized;
+
     // Create SplatMesh using Spark
     const splatMesh = new SplatMesh({ url: blobUrl });
 
@@ -298,8 +304,8 @@ export async function loadSplatFromUrl(url: string, deps: LoadSplatDeps, onProgr
         log.warn('WARNING: SplatMesh is not an instance of THREE.Object3D!');
     }
 
-    // Wait for initialization
-    await new Promise(resolve => setTimeout(resolve, TIMING.SPLAT_LOAD_DELAY));
+    // Wait for splat to finish loading/parsing
+    await splatMesh.initialized;
 
     try {
         scene.add(splatMesh);
@@ -338,6 +344,9 @@ export async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, de
         setSplatMesh(null);
     }
 
+    // Ensure WASM is ready (required for compressed formats like .sog, .spz)
+    await SplatMesh.staticInitialized;
+
     // Create SplatMesh using Spark
     const splatMesh = new SplatMesh({ url: blobUrl });
 
@@ -352,8 +361,8 @@ export async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, de
         log.warn('WARNING: SplatMesh is not an instance of THREE.Object3D!');
     }
 
-    // Wait for initialization
-    await new Promise(resolve => setTimeout(resolve, TIMING.SPLAT_LOAD_DELAY));
+    // Wait for splat to finish loading/parsing
+    await splatMesh.initialized;
 
     try {
         scene.add(splatMesh);

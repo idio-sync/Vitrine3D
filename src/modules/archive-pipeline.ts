@@ -48,6 +48,9 @@ async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
         setSplatMesh(null);
     }
 
+    // Ensure WASM is ready (required for compressed formats like .sog, .spz)
+    await SplatMesh.staticInitialized;
+
     // Create SplatMesh using Spark
     const newSplatMesh = new SplatMesh({ url: blobUrl });
     setSplatMesh(newSplatMesh);
@@ -60,8 +63,8 @@ async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
         log.warn(' WARNING: SplatMesh is not an instance of THREE.Object3D!');
     }
 
-    // Wait for initialization
-    await new Promise(resolve => setTimeout(resolve, TIMING.SPLAT_LOAD_DELAY));
+    // Wait for splat to finish loading/parsing
+    await newSplatMesh.initialized;
 
     try {
         sceneRefs.scene.add(newSplatMesh);
