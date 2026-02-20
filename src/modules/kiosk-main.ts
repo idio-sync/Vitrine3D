@@ -241,9 +241,6 @@ export async function init(): Promise<void> {
     const canvasRight = document.getElementById('viewer-canvas-right');
 
     sceneManager = new SceneManager();
-    // Force WebGL in kiosk mode — splats require SparkRenderer (WebGL only),
-    // and switching WebGPU→WebGL at runtime fails on some browsers/GPUs.
-    sceneManager.webgpuSupported = false;
     if (!await sceneManager.init(canvas as HTMLCanvasElement, canvasRight as HTMLCanvasElement)) {
         log.error('Scene initialization failed');
         return;

@@ -622,10 +622,7 @@ async function init() {
     }
 
     // Create and initialize SceneManager
-    // Force WebGL — Three.js WebGPU renderer has texture lifecycle bugs, and
-    // switching WebGPU→WebGL at runtime fails on some browsers/GPUs.
     sceneManager = new SceneManager();
-    sceneManager.webgpuSupported = false;
     if (!await sceneManager.init(canvas as HTMLCanvasElement, canvasRight)) {
         log.error(' FATAL: SceneManager initialization failed!');
         return;

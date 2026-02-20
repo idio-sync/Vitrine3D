@@ -242,12 +242,13 @@ export class SceneManager {
         this._canvas = canvas;
         this._canvasRight = canvasRight;
 
-        // Detect WebGPU support and lazily load the renderer module
-        // (preserve false if explicitly disabled before init)
-        if (this.webgpuSupported !== false) {
-            this.webgpuSupported = !!navigator.gpu;
-        }
+        // WebGPU disabled — Three.js WebGPU renderer has texture lifecycle bugs
+        // and switching WebGPU→WebGL at runtime fails on some browsers/GPUs.
+        // To re-enable: replace the line below with `this.webgpuSupported = !!navigator.gpu;`
+        // and uncomment the WebGPU module loading block.
+        this.webgpuSupported = false;
         log.info('WebGPU supported:', this.webgpuSupported);
+        /* WebGPU module loading — disabled, see above
         if (this.webgpuSupported && !WebGPURendererClass) {
             try {
                 const mod = await import('three/webgpu');
@@ -257,6 +258,7 @@ export class SceneManager {
                 this.webgpuSupported = false;
             }
         }
+        */
 
         // Scene
         this.scene = new Scene();
