@@ -679,20 +679,25 @@ async function init() {
         if (landmarkAlignment) {
             landmarkAlignment.updateRenderer(newRenderer);
         }
-        // Recreate SparkRenderer with new renderer instance
+        // Recreate SparkRenderer only for WebGL — Spark.js requires WebGL context (.flush())
         if (sparkRenderer) {
             scene.remove(sparkRenderer);
             if (sparkRenderer.dispose) sparkRenderer.dispose();
+            sparkRenderer = null;
         }
-        sparkRenderer = new SparkRenderer({
-            renderer: newRenderer,
-            clipXY: 3.0,
-            autoUpdate: true,
-            minAlpha: 3 / 255,
-            view: { sortDistance: 0.005 }
-        });
-        scene.add(sparkRenderer);
-        log.info('Renderer changed, module-scope references updated - SparkRenderer recreated');
+        if (sceneManager.rendererType === 'webgl') {
+            sparkRenderer = new SparkRenderer({
+                renderer: newRenderer,
+                clipXY: 3.0,
+                autoUpdate: true,
+                minAlpha: 3 / 255,
+                view: { sortDistance: 0.005 }
+            });
+            scene.add(sparkRenderer);
+            log.info('Renderer changed, SparkRenderer recreated for WebGL');
+        } else {
+            log.info('Renderer changed to WebGPU, SparkRenderer removed');
+        }
     };
 
     // Set up SceneManager callbacks for transform controls
