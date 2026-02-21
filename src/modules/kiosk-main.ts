@@ -985,11 +985,13 @@ async function handleArchiveFile(file: File): Promise<void> {
         await showBrandedLoading(archiveLoader);
 
         // === Phase 2: Load primary asset for initial display ===
-        // Set intended display mode early so getPrimaryAssetType loads the right asset first
-        if (contentInfo.hasMesh) {
-            state.displayMode = 'model';
-        } else if (contentInfo.hasSplat) {
+        // Prefer splat first (matches main mode) so splatMesh exists when
+        // applyGlobalAlignment runs — otherwise splat alignment is silently
+        // skipped because splatMesh is still null.
+        if (contentInfo.hasSplat) {
             state.displayMode = 'splat';
+        } else if (contentInfo.hasMesh) {
+            state.displayMode = 'model';
         } else if (contentInfo.hasPointcloud) {
             state.displayMode = 'pointcloud';
         }
@@ -1241,6 +1243,12 @@ async function handleArchiveFile(file: File): Promise<void> {
                             });
                         }
                     }
+                }
+                // Re-apply global alignment to ensure late-loaded assets get
+                // correct transforms (alignment may have been skipped earlier
+                // when the asset didn't exist yet)
+                if (globalAlignment) {
+                    applyGlobalAlignment(globalAlignment);
                 }
                 // Keep archive data available for export downloads
                 log.info('All archive assets loaded, raw data retained for export');
