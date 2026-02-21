@@ -58,6 +58,11 @@ async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
     // Apply default rotation to correct upside-down orientation
     newSplatMesh.rotation.x = Math.PI;
 
+    // Match properties set in file-handlers.ts for consistency
+    newSplatMesh.frustumCulled = false;
+    newSplatMesh.matrixAutoUpdate = true;
+    newSplatMesh.renderOrder = 0;
+
     // Verify SplatMesh is a valid THREE.Object3D
     if (!(newSplatMesh instanceof THREE.Object3D)) {
         log.warn(' WARNING: SplatMesh is not an instance of THREE.Object3D!');

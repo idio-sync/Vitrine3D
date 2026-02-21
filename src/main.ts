@@ -658,13 +658,13 @@ async function init() {
     if (sceneManager.rendererType === 'webgl') {
         sparkRenderer = new SparkRenderer({
             renderer: renderer,
-            clipXY: 3.0,           // Prevent aggressive frustum culling (default: 1.4)
+            clipXY: 2.0,           // Prevent edge popping without excessive overdraw (default: 1.4)
             autoUpdate: true,
             minAlpha: 3 / 255,     // Cull near-invisible splats (default: ~0.002)
-            view: { sortDistance: 0.005 }  // Re-sort after 5mm movement (default: 0.01)
+            view: { sortDistance: 0.01 }  // Re-sort after 1cm movement (Spark.js default)
         });
         scene.add(sparkRenderer);
-        log.info('SparkRenderer created with clipXY=3.0, minAlpha=3/255, sortDistance=0.005');
+        log.info('SparkRenderer created with clipXY=2.0, minAlpha=3/255, sortDistance=0.01');
     } else {
         log.info('SparkRenderer deferred — will be created after WebGL switch');
     }
@@ -693,10 +693,10 @@ async function init() {
         if (sceneManager.rendererType === 'webgl') {
             sparkRenderer = new SparkRenderer({
                 renderer: newRenderer,
-                clipXY: 3.0,
+                clipXY: 2.0,
                 autoUpdate: true,
                 minAlpha: 3 / 255,
-                view: { sortDistance: 0.005 }
+                view: { sortDistance: 0.01 }
             });
             scene.add(sparkRenderer);
             log.info('Renderer changed, SparkRenderer recreated for WebGL');
@@ -1561,10 +1561,11 @@ function animate() {
             flyControls.update();
         } else {
             controls.update();
-            // Sync right controls target so it doesn't override the main
-            // camera orientation with a stale target after panning
-            controlsRight.target.copy(controls.target);
-            controlsRight.update();
+            // Only sync right controls when in split view (avoids unnecessary math per frame)
+            if (state.displayMode === 'split') {
+                controlsRight.target.copy(controls.target);
+                controlsRight.update();
+            }
         }
 
         // Render using scene manager (handles split view)

@@ -179,6 +179,7 @@ let fpsElement: HTMLElement | null = null;
 let currentPopupAnnotationId: string | null = null;
 let annotationLineEl: SVGLineElement | null = null;
 let currentSheetSnap: SheetSnap = 'peek'; // 'peek' | 'half' | 'full'
+let _markersContainerEl: HTMLElement | null = null; // Cached for animate loop
 
 /** Get the resolved layout module, if any. */
 function getLayoutModule(): LayoutModule | null {
@@ -262,13 +263,13 @@ export async function init(): Promise<void> {
     if (sceneManager.rendererType === 'webgl') {
         sparkRenderer = new SparkRenderer({
             renderer: renderer,
-            clipXY: 3.0,           // Prevent aggressive frustum culling (default: 1.4)
+            clipXY: 2.0,           // Prevent edge popping without excessive overdraw (default: 1.4)
             autoUpdate: true,
             minAlpha: 3 / 255,     // Cull near-invisible splats (default: ~0.002)
-            view: { sortDistance: 0.005 }  // Re-sort after 5mm movement (default: 0.01)
+            view: { sortDistance: 0.01 }  // Re-sort after 1cm movement (Spark.js default)
         });
         scene.add(sparkRenderer);
-        log.info('SparkRenderer created with clipXY=3.0, minAlpha=3/255, sortDistance=0.005');
+        log.info('SparkRenderer created with clipXY=2.0, minAlpha=3/255, sortDistance=0.01');
     } else {
         log.info('SparkRenderer deferred — will be created after WebGL switch');
     }
@@ -299,10 +300,10 @@ export async function init(): Promise<void> {
         }
         sparkRenderer = new SparkRenderer({
             renderer: newRenderer,
-            clipXY: 3.0,
+            clipXY: 2.0,
             autoUpdate: true,
             minAlpha: 3 / 255,
-            view: { sortDistance: 0.005 }
+            view: { sortDistance: 0.01 }
         });
         scene.add(sparkRenderer);
         log.info('Renderer changed to', sceneManager!.rendererType, '- SparkRenderer recreated');
@@ -3918,8 +3919,8 @@ function animate(): void {
 
         // Update annotation marker screen positions (skip when globally hidden, unless single-marker is shown)
         if (annotationSystem.hasAnnotations()) {
-            const markersContainer = document.getElementById('annotation-markers');
-            const markersShown = !markersContainer || markersContainer.style.display !== 'none';
+            if (!_markersContainerEl) _markersContainerEl = document.getElementById('annotation-markers');
+            const markersShown = !_markersContainerEl || _markersContainerEl.style.display !== 'none';
             if (markersShown) {
                 annotationSystem.updateMarkerPositions();
             }
