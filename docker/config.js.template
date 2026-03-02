@@ -6,7 +6,6 @@
 //   DEFAULT_SPLAT_URL      - Default splat file to load
 //   DEFAULT_MODEL_URL      - Default model file to load
 //   DEFAULT_POINTCLOUD_URL - Default E57 point cloud file to load
-//   SHOW_CONTROLS          - Show (true) or hide (false) the controls panel
 //   ALLOWED_DOMAINS        - Comma-separated list of trusted external domains
 //                            Supports wildcards: *.cdn.example.com
 //   KIOSK_LOCK             - When "true", forces kiosk mode and ignores privilege-escalating
@@ -181,7 +180,6 @@
     const envModel = "${DEFAULT_MODEL_URL}";
     const envPointcloud = "${DEFAULT_POINTCLOUD_URL}";
     const envAlignment = "";
-    const envShowControls = ${SHOW_CONTROLS}; // This becomes true/false
     const envLodBudgetSd = "${LOD_BUDGET_SD}";
     const envLodBudgetHd = "${LOD_BUDGET_HD}";
 
@@ -256,7 +254,7 @@
         inlineAlignment: inlineAlignment,
 
         // Logic: Show controls if Env says yes AND URL doesn't explicitly say 'none'
-        showControls: kioskMode ? true : (envShowControls && urlControls !== 'none'),
+        showControls: kioskMode ? true : (urlControls !== 'none'),
 
         // Control panel mode
         controlsMode: controlsMode,

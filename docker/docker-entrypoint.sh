@@ -1,8 +1,11 @@
 #!/bin/sh
 set -e
 
+# Defaults
+ADMIN_ENABLED="${ADMIN_ENABLED:-true}"
+
 # Substitute environment variables in the config template
-envsubst '${DEFAULT_ARCHIVE_URL} ${DEFAULT_SPLAT_URL} ${DEFAULT_MODEL_URL} ${DEFAULT_POINTCLOUD_URL} ${SHOW_CONTROLS} ${ALLOWED_DOMAINS} ${KIOSK_LOCK} ${ARCHIVE_PATH_PREFIX} ${LOD_BUDGET_SD} ${LOD_BUDGET_HD} ${ADMIN_ENABLED} ${CHUNKED_UPLOAD}' \
+envsubst '${DEFAULT_ARCHIVE_URL} ${DEFAULT_SPLAT_URL} ${DEFAULT_MODEL_URL} ${DEFAULT_POINTCLOUD_URL} ${ALLOWED_DOMAINS} ${KIOSK_LOCK} ${ARCHIVE_PATH_PREFIX} ${LOD_BUDGET_SD} ${LOD_BUDGET_HD} ${ADMIN_ENABLED} ${CHUNKED_UPLOAD}' \
     < /usr/share/nginx/html/config.js.template \
     > /usr/share/nginx/html/config.js
 
@@ -38,26 +41,15 @@ echo "  DEFAULT_ARCHIVE_URL: ${DEFAULT_ARCHIVE_URL:-<not set>}"
 echo "  DEFAULT_SPLAT_URL: ${DEFAULT_SPLAT_URL:-<not set>}"
 echo "  DEFAULT_MODEL_URL: ${DEFAULT_MODEL_URL:-<not set>}"
 echo "  DEFAULT_POINTCLOUD_URL: ${DEFAULT_POINTCLOUD_URL:-<not set>}"
-echo "  SHOW_CONTROLS: ${SHOW_CONTROLS}"
 echo "  ALLOWED_DOMAINS: ${ALLOWED_DOMAINS:-<not set>}"
 echo "  FRAME_ANCESTORS: ${FRAME_ANCESTORS}"
 echo "  SERVER_NAMES: ${SERVER_NAMES:-localhost}"
 echo "  CORS_ORIGINS: ${CORS_ORIGINS:-<not set, same-origin only>}"
 echo "  ARCHIVE_PATH_PREFIX: ${ARCHIVE_PATH_PREFIX:-<not set>}"
 
-# Generate kiosk-lock nginx rules
-if [ "${KIOSK_LOCK}" = "true" ]; then
-    cat > /etc/nginx/conf.d/kiosk-lock.conf.inc <<'LOCKEOF'
-# Block editor-only modules when KIOSK_LOCK is active
-location ~ /modules/(archive-creator|share-dialog|kiosk-viewer)\.js$ {
-    return 403;
-}
-LOCKEOF
-    echo "  KIOSK_LOCK: ACTIVE (legacy — editor modules are now separated at build time)"
-else
-    : > /etc/nginx/conf.d/kiosk-lock.conf.inc
-    echo "  KIOSK_LOCK: off"
-fi
+# kiosk-lock.conf.inc must exist (included by nginx.conf.template); always empty now
+# that editor modules are in a separate bundle at /editor/
+: > /etc/nginx/conf.d/kiosk-lock.conf.inc
 
 # Generate embed referer check rules
 if [ -n "${EMBED_REFERERS}" ]; then
