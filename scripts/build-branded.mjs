@@ -225,7 +225,7 @@ async function build({ archivePath, productName, iconPath, encrypt }) {
         const conf = JSON.parse(readFileSync(TAURI_CONF, 'utf8'));
         conf.productName = productName;
         conf.app.windows[0].title = productName;
-        conf.app.windows[0].url = `index.html?kiosk=true&theme=editorial&archive=${archiveFilename}`;
+        conf.app.windows[0].url = `index.html?theme=editorial&archive=${archiveFilename}`;
         // Skip beforeBuildCommand since we run vite build ourselves
         conf.build.beforeBuildCommand = '';
         writeFileSync(TAURI_CONF, JSON.stringify(conf, null, 2) + '\n', 'utf8');
