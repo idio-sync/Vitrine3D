@@ -27,7 +27,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const url = require('url');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 // --- Configuration from environment ---
 
@@ -513,8 +513,9 @@ function findArchiveByHash(hash) {
  */
 function runExtractMeta(absolutePath) {
     try {
-        execSync(
-            '/opt/extract-meta.sh "' + HTML_ROOT + '" "' + HTML_ROOT + '" "' + absolutePath + '"',
+        execFileSync(
+            '/opt/extract-meta.sh',
+            [HTML_ROOT, HTML_ROOT, absolutePath],
             { timeout: 30000, stdio: 'pipe' }
         );
     } catch (err) {
