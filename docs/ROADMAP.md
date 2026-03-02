@@ -69,6 +69,10 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 
 ## Medium Priority
 
+### Infrastructure
+- [x] **Done** — Split Vite build into minimal public kiosk bundle (`/`) and full editor bundle (`/editor/`); established `kiosk-main.ts` as the shared viewer layer
+- [ ] Auth gate for `/editor/`: add `auth_basic` to the nginx `/editor/` location block (env var `EDITOR_PASS`, mirrors existing `ADMIN_PASS` pattern)
+
 ### Code Quality (from Code Review)
 - [x] **Done** — Add ESLint 9 + Prettier linting (lenient baseline, 0 errors)
 - [x] **Done** — Refactor main.js from ~3,900 to ~1,680 lines (9 module extractions across Phase 1-2)
