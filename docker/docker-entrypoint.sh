@@ -73,47 +73,64 @@ fi
 if [ "${ADMIN_ENABLED}" = "true" ]; then
     echo ""
     echo "Admin panel: ENABLED"
-
-    if [ -z "${ADMIN_PASS}" ]; then
-        echo "ERROR: ADMIN_PASS is required when ADMIN_ENABLED=true"
-        exit 1
-    fi
-
-    # Generate htpasswd file using openssl (available in Alpine)
-    printf "%s:%s\n" "${ADMIN_USER:-admin}" "$(openssl passwd -apr1 "${ADMIN_PASS}")" > /etc/nginx/.htpasswd
-    echo "  ADMIN_USER: ${ADMIN_USER:-admin}"
     echo "  MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-1024}MB"
     echo "  CHUNKED_UPLOAD: ${CHUNKED_UPLOAD:-false}"
 
-    # Generate admin nginx config snippet
-    cat > /etc/nginx/conf.d/admin-auth.conf.inc <<ADMINEOF
-# Admin panel — proxied to meta-server, protected by basic auth
+    # Generate admin nginx config — forwards Cloudflare Access header to api
+    # Auth is enforced at the Cloudflare edge; no basic auth needed inside the container
+    if [ -n "${DEV_AUTH_USER}" ]; then
+        # Local dev: inject a static CF header so requireAuth() passes without real Cloudflare
+        cat > /etc/nginx/conf.d/admin-auth.conf.inc <<DEVADMINEOF
 location /admin {
-    auth_basic "Vitrine3D Admin";
-    auth_basic_user_file /etc/nginx/.htpasswd;
     proxy_pass http://127.0.0.1:3001;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header Cf-Access-Authenticated-User-Email "${DEV_AUTH_USER}";
 }
 
-# API routes — proxied to meta-server, protected by basic auth
 location /api/ {
-    auth_basic "Vitrine3D Admin";
-    auth_basic_user_file /etc/nginx/.htpasswd;
     proxy_pass http://127.0.0.1:3001;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header Cf-Access-Authenticated-User-Email "${DEV_AUTH_USER}";
+    client_max_body_size ${MAX_UPLOAD_SIZE:-1024}m;
+    proxy_request_buffering off;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+}
+DEVADMINEOF
+        echo ""
+        echo "  *** WARNING: DEV_AUTH_USER is set. All /admin and /api/ requests will authenticate"
+        echo "  *** as '${DEV_AUTH_USER}' regardless of actual credentials. REMOVE BEFORE PRODUCTION."
+        echo ""
+    else
+        cat > /etc/nginx/conf.d/admin-auth.conf.inc <<ADMINEOF
+location /admin {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    # Security: \$http_cf_access_authenticated_user_email reflects the incoming header.
+    # Header spoofing is prevented by the Cloudflare Tunnel — only Cloudflare can
+    # reach this container, so this header is always set by Cloudflare Access.
+    proxy_set_header Cf-Access-Authenticated-User-Email \$http_cf_access_authenticated_user_email;
+}
 
-    # Large upload support
+location /api/ {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    # Security: \$http_cf_access_authenticated_user_email reflects the incoming header.
+    # Header spoofing is prevented by the Cloudflare Tunnel — only Cloudflare can
+    # reach this container, so this header is always set by Cloudflare Access.
+    proxy_set_header Cf-Access-Authenticated-User-Email \$http_cf_access_authenticated_user_email;
     client_max_body_size ${MAX_UPLOAD_SIZE:-1024}m;
     proxy_request_buffering off;
     proxy_read_timeout 600s;
     proxy_send_timeout 600s;
 }
 ADMINEOF
+    fi
 
-    # Check archives directory is writable
     if [ ! -w "/usr/share/nginx/html/archives/" ]; then
         echo "  WARNING: /usr/share/nginx/html/archives/ is not writable."
         echo "  Mount with :rw for upload/delete/rename to work."
