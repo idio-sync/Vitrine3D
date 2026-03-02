@@ -53,7 +53,7 @@ location ~ /modules/(archive-creator|share-dialog|kiosk-viewer)\.js$ {
     return 403;
 }
 LOCKEOF
-    echo "  KIOSK_LOCK: ACTIVE (editor modules blocked)"
+    echo "  KIOSK_LOCK: ACTIVE (legacy — editor modules are now separated at build time)"
 else
     : > /etc/nginx/conf.d/kiosk-lock.conf.inc
     echo "  KIOSK_LOCK: off"

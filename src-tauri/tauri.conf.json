@@ -5,7 +5,7 @@
   "identifier": "com.vitrine3d.app",
   "build": {
     "beforeDevCommand": "npx vite --port 8080",
-    "devUrl": "http://localhost:8080/?kiosk=true&theme=editorial",
+    "devUrl": "http://localhost:8080/?theme=editorial",
     "beforeBuildCommand": "npx vite build",
     "frontendDist": "../dist"
   },
@@ -14,7 +14,7 @@
     "windows": [
       {
         "title": "Vitrine3D",
-        "url": "index.html?kiosk=true&theme=editorial",
+        "url": "index.html?theme=editorial",
         "width": 1400,
         "height": 900,
         "resizable": true,
