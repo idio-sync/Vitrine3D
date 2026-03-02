@@ -56,6 +56,7 @@ import {
 import { loadTheme } from './theme-loader.js';
 import type { LayoutModule } from './theme-loader.js';
 import { ArchiveLoader } from './archive-loader.js';
+import { loadCADFromBlobUrl } from './cad-loader.js';
 import { KIOSK_SECTION_TIERS, EDITORIAL_SECTION_TIERS, isTierVisible } from './metadata-profile.js';
 import type { MetadataProfile } from './metadata-profile.js';
 
@@ -1326,6 +1327,30 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 hideLoading();
                 notify.warning('Archive does not contain any viewable content.');
                 return;
+            }
+        }
+
+        // Load CAD asset if present
+        if (contentInfo.hasCAD && sceneManager.cadGroup) {
+            const cadEntry = archiveLoader.getCADEntry();
+            if (cadEntry) {
+                const cadData = await archiveLoader.extractFile(cadEntry.file_name);
+                if (cadData) {
+                    await loadCADFromBlobUrl(cadData.url, cadEntry.file_name, {
+                        cadGroup: sceneManager.cadGroup,
+                        state: state as any,
+                    });
+                    const cadTransform = archiveLoader.getEntryTransform(cadEntry);
+                    const cadGrp = sceneManager.cadGroup;
+                    const cs = normalizeScale(cadTransform.scale);
+                    if (cadTransform.position.some((v: number) => v !== 0) ||
+                        cadTransform.rotation.some((v: number) => v !== 0) ||
+                        cs.some((v: number) => v !== 1)) {
+                        cadGrp.position.fromArray(cadTransform.position);
+                        cadGrp.rotation.set(...cadTransform.rotation as [number, number, number]);
+                        cadGrp.scale.set(...cs as [number, number, number]);
+                    }
+                }
             }
         }
 
