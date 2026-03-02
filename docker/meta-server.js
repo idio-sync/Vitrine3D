@@ -50,6 +50,29 @@ const THUMBS_DIR = path.join(HTML_ROOT, 'thumbs');
 const ARCHIVES_DIR = path.join(HTML_ROOT, 'archives');
 const UUID_INDEX_PATH = path.join(META_DIR, '_uuid-index.json');
 
+// --- Cloudflare Access auth ---
+
+/**
+ * Verify Cloudflare Access header. Returns the authenticated user email,
+ * or sends 401 and returns null if the header is missing.
+ * Defense in depth: Cloudflare injects this header on every authenticated request.
+ */
+function requireAuth(req, res) {
+    const user = req.headers['cf-access-authenticated-user-email'];
+    if (!user) {
+        sendJson(res, 401, { error: 'Unauthorized' });
+        return null;
+    }
+    return user;
+}
+
+// GET /api/me — returns the authenticated user's email
+function handleMe(req, res) {
+    const user = requireAuth(req, res);
+    if (!user) return;
+    sendJson(res, 200, { email: user });
+}
+
 // Admin HTML (loaded at startup if enabled)
 const ADMIN_HTML = ADMIN_ENABLED ? (() => {
     try { return fs.readFileSync('/opt/admin.html', 'utf8'); }
@@ -742,6 +765,7 @@ function sendJson(res, status, data) {
  * GET /admin — serve the admin HTML page
  */
 function handleAdminPage(req, res) {
+    if (!requireAuth(req, res)) return;
     res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-cache'
@@ -753,6 +777,7 @@ function handleAdminPage(req, res) {
  * GET /api/archives — list all archives
  */
 function handleListArchives(req, res) {
+    if (!requireAuth(req, res)) return;
     try {
         const archives = listArchives();
         const storageUsed = archives.reduce((sum, a) => sum + a.size, 0);
@@ -766,6 +791,7 @@ function handleListArchives(req, res) {
  * POST /api/archives — upload a new archive
  */
 async function handleUploadArchive(req, res) {
+    if (!requireAuth(req, res)) return;
     try {
         const { tmpPath, filename } = await parseMultipartUpload(req);
         const finalPath = path.join(ARCHIVES_DIR, filename);
@@ -808,6 +834,7 @@ async function handleUploadArchive(req, res) {
  * DELETE /api/archives/:hash — delete an archive and its sidecars
  */
 function handleDeleteArchive(req, res, hash) {
+    if (!requireAuth(req, res)) return;
     const archive = findArchiveByHash(hash);
     if (!archive) return sendJson(res, 404, { error: 'Archive not found' });
 
@@ -837,6 +864,7 @@ function handleDeleteArchive(req, res, hash) {
  * POST /api/archives/:hash/regenerate — re-extract metadata and thumbnail
  */
 function handleRegenerateArchive(req, res, hash) {
+    if (!requireAuth(req, res)) return;
     const archive = findArchiveByHash(hash);
     if (!archive) return sendJson(res, 404, { error: 'Archive not found' });
 
@@ -853,6 +881,7 @@ function handleRegenerateArchive(req, res, hash) {
  * PATCH /api/archives/:hash — rename an archive
  */
 function handleRenameArchive(req, res, hash) {
+    if (!requireAuth(req, res)) return;
     let body = '';
     req.on('data', (chunk) => {
         body += chunk;
@@ -1036,6 +1065,7 @@ function cleanupStaleChunks() {
  * Streams each chunk to /tmp/v3d_chunks/{uploadId}/{chunkIndex}.part
  */
 async function handleUploadChunk(req, res) {
+    if (!requireAuth(req, res)) return;
     try {
         const parsed = url.parse(req.url, true);
         const uploadId = (parsed.query.uploadId || '').toString();
@@ -1097,6 +1127,7 @@ async function handleUploadChunk(req, res) {
  * Assembles all .part files in order into the final archive, then runs extract-meta.
  */
 async function handleCompleteChunk(req, res, uploadId) {
+    if (!requireAuth(req, res)) return;
     try {
         const chunkDir = path.join(CHUNKS_DIR, uploadId);
         const metaPath = path.join(chunkDir, 'meta.json');
@@ -1219,6 +1250,10 @@ const server = http.createServer((req, res) => {
             const hash = hashMatch[1];
             if (req.method === 'DELETE') return handleDeleteArchive(req, res, hash);
             if (req.method === 'PATCH') return handleRenameArchive(req, res, hash);
+        }
+
+        if (req.method === 'GET' && pathname === '/api/me') {
+            return handleMe(req, res);
         }
     }
 
