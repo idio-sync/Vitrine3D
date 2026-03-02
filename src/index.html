@@ -32,8 +32,7 @@
     <link rel="stylesheet" href="kiosk.css">
     <script src="config.js"></script>
 </head>
-<body>
-    <script>if(window.APP_CONFIG&&window.APP_CONFIG.kiosk)document.body.classList.add('kiosk-mode');</script>
+<body class="kiosk-mode">
     <!-- Hidden file input for annotation image insertion (used by metadata-manager) -->
     <input type="file" id="image-insert-input" accept=".png,.jpg,.jpeg,.webp,.gif" style="display:none">
 
@@ -2205,6 +2204,6 @@
         </div>
 
     <script src="pre-module.js"></script>
-    <script type="module" src="main.ts"></script>
+    <script type="module" src="kiosk-web.ts"></script>
 </body>
 </html>
