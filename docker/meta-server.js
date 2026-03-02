@@ -73,6 +73,48 @@ function handleMe(req, res) {
     sendJson(res, 200, { email: user });
 }
 
+// --- CSRF protection ---
+
+// Generated once at process start — not persisted, invalidates on restart (intentional)
+const CSRF_KEY = crypto.randomBytes(32);
+
+function csrfToken(user) {
+    return crypto.createHmac('sha256', CSRF_KEY).update(user).digest('hex');
+}
+
+/**
+ * Verify CSRF token on state-changing requests.
+ * Returns true if valid, sends 403 and returns false otherwise.
+ */
+function checkCsrf(req, res) {
+    const user = req.headers['cf-access-authenticated-user-email'];
+    const header = req.headers['x-csrf-token'];
+    const expected = user ? csrfToken(user) : null;
+    let valid = false;
+    try {
+        const headerBuf = Buffer.from(header || '', 'hex');
+        const expectedBuf = Buffer.from(expected || '', 'hex');
+        valid = !!(header && expected &&
+            headerBuf.length === expectedBuf.length &&
+            headerBuf.length > 0 &&
+            crypto.timingSafeEqual(headerBuf, expectedBuf));
+    } catch (_) {
+        // length mismatch or other crypto error — treat as invalid
+    }
+    if (!valid) {
+        sendJson(res, 403, { error: 'Invalid CSRF token' });
+        return false;
+    }
+    return true;
+}
+
+// GET /api/csrf-token — called by admin SPA on load
+function handleCsrfToken(req, res) {
+    const user = requireAuth(req, res);
+    if (!user) return;
+    sendJson(res, 200, { token: csrfToken(user) });
+}
+
 // Admin HTML (loaded at startup if enabled)
 const ADMIN_HTML = ADMIN_ENABLED ? (() => {
     try { return fs.readFileSync('/opt/admin.html', 'utf8'); }
@@ -792,6 +834,7 @@ function handleListArchives(req, res) {
  */
 async function handleUploadArchive(req, res) {
     if (!requireAuth(req, res)) return;
+    if (!checkCsrf(req, res)) return;
     try {
         const { tmpPath, filename } = await parseMultipartUpload(req);
         const finalPath = path.join(ARCHIVES_DIR, filename);
@@ -835,6 +878,7 @@ async function handleUploadArchive(req, res) {
  */
 function handleDeleteArchive(req, res, hash) {
     if (!requireAuth(req, res)) return;
+    if (!checkCsrf(req, res)) return;
     const archive = findArchiveByHash(hash);
     if (!archive) return sendJson(res, 404, { error: 'Archive not found' });
 
@@ -882,6 +926,7 @@ function handleRegenerateArchive(req, res, hash) {
  */
 function handleRenameArchive(req, res, hash) {
     if (!requireAuth(req, res)) return;
+    if (!checkCsrf(req, res)) return;
     let body = '';
     req.on('data', (chunk) => {
         body += chunk;
@@ -1066,6 +1111,7 @@ function cleanupStaleChunks() {
  */
 async function handleUploadChunk(req, res) {
     if (!requireAuth(req, res)) return;
+    if (!checkCsrf(req, res)) return;
     try {
         const parsed = url.parse(req.url, true);
         const uploadId = (parsed.query.uploadId || '').toString();
@@ -1128,6 +1174,7 @@ async function handleUploadChunk(req, res) {
  */
 async function handleCompleteChunk(req, res, uploadId) {
     if (!requireAuth(req, res)) return;
+    if (!checkCsrf(req, res)) return;
     try {
         const chunkDir = path.join(CHUNKS_DIR, uploadId);
         const metaPath = path.join(chunkDir, 'meta.json');
@@ -1254,6 +1301,9 @@ const server = http.createServer((req, res) => {
 
         if (req.method === 'GET' && pathname === '/api/me') {
             return handleMe(req, res);
+        }
+        if (req.method === 'GET' && pathname === '/api/csrf-token') {
+            return handleCsrfToken(req, res);
         }
     }
 
