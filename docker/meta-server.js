@@ -28,6 +28,7 @@ const path = require('path');
 const crypto = require('crypto');
 const url = require('url');
 const { execFileSync } = require('child_process');
+const busboy = require('busboy');
 const Database = require('/opt/node_modules/better-sqlite3');
 
 // --- Configuration from environment ---
@@ -494,182 +495,56 @@ function runExtractMeta(absolutePath) {
 // --- Streaming Multipart Parser ---
 
 /**
- * Find needle Buffer inside haystack Buffer. Returns index or -1.
- */
-function bufferIndexOf(haystack, needle) {
-    if (needle.length === 0) return 0;
-    const len = haystack.length - needle.length;
-    outer:
-    for (let i = 0; i <= len; i++) {
-        for (let j = 0; j < needle.length; j++) {
-            if (haystack[i + j] !== needle[j]) continue outer;
-        }
-        return i;
-    }
-    return -1;
-}
-
-/**
- * Parse a multipart/form-data upload, streaming file content to disk.
- * Returns { tmpPath, filename }.
+ * Parse a multipart/form-data upload using busboy, streaming the first file to disk.
+ * Returns { tmpPath, filename }. Rejects with Error('LIMIT') if MAX_UPLOAD_SIZE exceeded.
  */
 function parseMultipartUpload(req) {
     return new Promise((resolve, reject) => {
-        const contentType = req.headers['content-type'] || '';
-        const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/);
-        if (!boundaryMatch) return reject(new Error('No boundary in Content-Type'));
-
-        const boundary = boundaryMatch[1] || boundaryMatch[2];
-        const HEADER_END = Buffer.from('\r\n\r\n');
-        const endMarker = Buffer.from('\r\n--' + boundary);
-
         const tmpPath = path.join('/tmp', 'v3d_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex'));
-        let writeStream = null;
-        let totalSize = 0;
         let filename = '';
-        let buffer = Buffer.alloc(0);
-        let state = 'preamble'; // preamble | headers | body | done
-        let resolved = false;
-
-        function cleanup() {
-            if (writeStream) { try { writeStream.destroy(); } catch {} writeStream = null; }
-            try { fs.unlinkSync(tmpPath); } catch {}
-        }
+        let writeStream = null;
+        let settled = false;
 
         function finish(err, result) {
-            if (resolved) return;
-            resolved = true;
-            if (err) { cleanup(); reject(err); }
-            else resolve(result);
-        }
-
-        req.on('error', (err) => finish(err));
-
-        req.on('data', (chunk) => {
-            if (state === 'done') return;
-            totalSize += chunk.length;
-            if (totalSize > MAX_UPLOAD_SIZE) {
-                state = 'done';
-                req.destroy();
-                return finish(new Error('LIMIT'));
-            }
-            buffer = Buffer.concat([buffer, chunk]);
-            processBuffer();
-        });
-
-        req.on('end', () => {
-            if (state === 'done') return;
-            if (state === 'body' && writeStream) {
-                // Flush remaining — try to strip trailing boundary
-                flushBody(true);
-                writeStream.end(() => finish(null, { tmpPath, filename }));
-            } else if (resolved) {
-                // already finished
+            if (settled) return;
+            settled = true;
+            if (err) {
+                if (writeStream) { try { writeStream.destroy(); } catch {} }
+                try { fs.unlinkSync(tmpPath); } catch {}
+                reject(err);
             } else {
-                finish(new Error('Incomplete upload'));
+                resolve(result);
             }
+        }
+
+        let bb;
+        try {
+            bb = busboy({ headers: req.headers, limits: { fileSize: MAX_UPLOAD_SIZE } });
+        } catch (err) {
+            return reject(err);
+        }
+
+        bb.on('file', (_fieldname, file, info) => {
+            filename = sanitizeFilename(info.filename || '');
+            writeStream = fs.createWriteStream(tmpPath);
+            writeStream.on('error', finish);
+            file.on('limit', () => {
+                req.unpipe(bb);
+                bb.destroy();
+                finish(new Error('LIMIT'));
+            });
+            file.pipe(writeStream);
         });
 
-        function processBuffer() {
-            let iterations = 0;
-            while (iterations++ < 100) {
-                if (state === 'preamble') {
-                    const firstBoundary = Buffer.from('--' + boundary);
-                    const idx = bufferIndexOf(buffer, firstBoundary);
-                    if (idx === -1) {
-                        // Keep tail that might contain partial boundary
-                        if (buffer.length > firstBoundary.length) {
-                            buffer = buffer.slice(buffer.length - firstBoundary.length);
-                        }
-                        return;
-                    }
-                    buffer = buffer.slice(idx + firstBoundary.length);
-                    // Skip CRLF after boundary
-                    if (buffer.length >= 2 && buffer[0] === 0x0d && buffer[1] === 0x0a) {
-                        buffer = buffer.slice(2);
-                        state = 'headers';
-                    } else if (buffer.length < 2) {
-                        return;
-                    } else {
-                        // Might be end boundary (--), skip
-                        state = 'done';
-                        return finish(new Error('No file data received'));
-                    }
-                    continue;
-                }
+        bb.on('close', () => {
+            if (!filename) return finish(new Error('No file field in upload'));
+            if (!writeStream) return finish(new Error('No file data received'));
+            writeStream.end(() => finish(null, { tmpPath, filename }));
+        });
 
-                if (state === 'headers') {
-                    const idx = bufferIndexOf(buffer, HEADER_END);
-                    if (idx === -1) {
-                        // Need more data (headers should be small)
-                        if (buffer.length > 16384) {
-                            return finish(new Error('Headers too large'));
-                        }
-                        return;
-                    }
-
-                    const headerStr = buffer.slice(0, idx).toString('utf8');
-                    buffer = buffer.slice(idx + HEADER_END.length);
-
-                    // Parse Content-Disposition for filename
-                    const fnMatch = headerStr.match(/filename="([^"]+)"/i) ||
-                                    headerStr.match(/filename=([^\s;]+)/i);
-                    if (fnMatch) {
-                        filename = sanitizeFilename(fnMatch[1]);
-                        writeStream = fs.createWriteStream(tmpPath);
-                        writeStream.on('error', (err) => finish(err));
-                        state = 'body';
-                    } else {
-                        // Not a file field — skip to next boundary
-                        state = 'preamble';
-                    }
-                    continue;
-                }
-
-                if (state === 'body') {
-                    flushBody(false);
-                    return;
-                }
-
-                return;
-            }
-        }
-
-        function flushBody(isFinal) {
-            // Search for the closing boundary in buffer
-            const idx = bufferIndexOf(buffer, endMarker);
-
-            if (idx !== -1) {
-                // Found the boundary — write everything before it, we're done
-                if (idx > 0) writeStream.write(buffer.slice(0, idx));
-                buffer = Buffer.alloc(0);
-                state = 'done';
-                writeStream.end(() => finish(null, { tmpPath, filename }));
-                return;
-            }
-
-            if (isFinal) {
-                // End of request stream. Write remaining data.
-                // There might be a trailing boundary without the leading \r\n at very end.
-                // Best effort: check for partial boundary at tail.
-                const closingBoundary = Buffer.from('\r\n--' + boundary + '--');
-                const closeIdx = bufferIndexOf(buffer, closingBoundary);
-                if (closeIdx !== -1) {
-                    if (closeIdx > 0) writeStream.write(buffer.slice(0, closeIdx));
-                } else if (buffer.length > 0) {
-                    writeStream.write(buffer);
-                }
-                buffer = Buffer.alloc(0);
-                return;
-            }
-
-            // No boundary found yet — write safe portion, keep holdback for boundary detection
-            const holdback = endMarker.length + 2;
-            if (buffer.length > holdback) {
-                writeStream.write(buffer.slice(0, buffer.length - holdback));
-                buffer = buffer.slice(buffer.length - holdback);
-            }
-        }
+        bb.on('error', finish);
+        req.on('error', finish);
+        req.pipe(bb);
     });
 }
 
