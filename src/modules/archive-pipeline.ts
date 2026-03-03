@@ -7,7 +7,7 @@
  */
 
 import * as THREE from 'three';
-import { SplatMesh } from '@sparkjsdev/spark';
+import { SplatMesh, PackedSplats, unpackSplats } from '@sparkjsdev/spark';
 import { ArchiveLoader } from './archive-loader.js';
 import { hasAnyProxy } from './quality-tier.js';
 import { ASSET_STATE } from './constants.js';
@@ -56,9 +56,18 @@ async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
     // Ensure WASM is ready (required for compressed formats like .sog, .spz)
     await SplatMesh.staticInitialized;
 
-    // Pass fileType for blob URLs where Spark can't detect format from path
+    // .sog (pcsogszip) must be pre-decoded via legacy worker; new WASM path doesn't support it
     const fileType = getSplatFileType(fileName);
-    const newSplatMesh = new SplatMesh({ url: blobUrl, ...(fileType && { fileType }) });
+    let newSplatMesh: any;
+    if (fileType === 'pcsogszip') {
+        const response = await fetch(blobUrl);
+        const fileBytes = new Uint8Array(await response.arrayBuffer());
+        const decoded = await unpackSplats({ input: fileBytes, fileType: 'pcsogszip' });
+        const packedSplats = new PackedSplats(decoded);
+        newSplatMesh = new SplatMesh({ packedSplats });
+    } else {
+        newSplatMesh = new SplatMesh({ url: blobUrl, ...(fileType && { fileType }) });
+    }
     setSplatMesh(newSplatMesh);
 
     // Apply default rotation to correct upside-down orientation

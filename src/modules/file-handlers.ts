@@ -17,7 +17,7 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { SplatMesh } from '@sparkjsdev/spark';
+import { SplatMesh, PackedSplats, unpackSplats } from '@sparkjsdev/spark';
 import { ArchiveLoader } from './archive-loader.js';
 import { TIMING, ASSET_STATE } from './constants.js';
 import { Logger, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, computeTextureInfo, disposeObject, fetchWithProgress } from './utilities.js';
@@ -57,6 +57,25 @@ const SPLAT_FILE_TYPE_MAP: Record<string, string> = {
 export function getSplatFileType(fileNameOrUrl: string): string | undefined {
     const ext = fileNameOrUrl.split(/[?#]/)[0].split('.').pop()?.toLowerCase();
     return ext ? SPLAT_FILE_TYPE_MAP[ext] : undefined;
+}
+
+/**
+ * Create a SplatMesh from a URL (blob: or http:) with file type detection.
+ *
+ * .sog (pcsogszip) files require a workaround: Spark 2.0's new PackedSplats worker
+ * path uses decode_to_packedsplats WASM which doesn't support pcsogszip.
+ * We pre-decode via the exported unpackSplats() (old worker) then hand the
+ * decoded PackedSplats to SplatMesh directly.
+ */
+async function createSplatMesh(url: string, fileType?: string): Promise<any> {
+    if (fileType === 'pcsogszip') {
+        const response = await fetch(url);
+        const fileBytes = new Uint8Array(await response.arrayBuffer());
+        const decoded = await unpackSplats({ input: fileBytes, fileType: 'pcsogszip' });
+        const packedSplats = new PackedSplats(decoded);
+        return new SplatMesh({ packedSplats });
+    }
+    return new SplatMesh({ url, ...(fileType && { fileType }) });
 }
 
 // Lazy-loaded E57 support
@@ -243,8 +262,8 @@ export async function loadSplatFromFile(file: File, deps: LoadSplatDeps): Promis
     // Pass fileType for blob URLs where Spark 2.0 can't detect format from path
     const fileType = getSplatFileType(file.name);
 
-    // Create SplatMesh using Spark
-    const splatMesh = new SplatMesh({ url: fileUrl, ...(fileType && { fileType }) });
+    // Create SplatMesh (.sog pre-decoded via legacy worker; other formats use native path)
+    const splatMesh = await createSplatMesh(fileUrl, fileType);
 
     // Apply default rotation to correct upside-down orientation
     splatMesh.rotation.x = Math.PI;
@@ -332,8 +351,8 @@ export async function loadSplatFromUrl(url: string, deps: LoadSplatDeps, onProgr
     // Pass fileType for blob URLs where Spark 2.0 can't detect format from path
     const fileType = getSplatFileType(url);
 
-    // Create SplatMesh using Spark
-    const splatMesh = new SplatMesh({ url: blobUrl, ...(fileType && { fileType }) });
+    // Create SplatMesh (.sog pre-decoded via legacy worker; other formats use native path)
+    const splatMesh = await createSplatMesh(blobUrl, fileType);
 
     // Apply default rotation
     splatMesh.rotation.x = Math.PI;
@@ -392,8 +411,8 @@ export async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, de
     // Pass fileType for blob URLs where Spark 2.0 can't detect format from path
     const fileType = getSplatFileType(fileName);
 
-    // Create SplatMesh using Spark
-    const splatMesh = new SplatMesh({ url: blobUrl, ...(fileType && { fileType }) });
+    // Create SplatMesh (.sog pre-decoded via legacy worker; other formats use native path)
+    const splatMesh = await createSplatMesh(blobUrl, fileType);
 
     // Apply default rotation
     splatMesh.rotation.x = Math.PI;
