@@ -1932,6 +1932,29 @@ export function prefillMetadataFromArchive(manifest: any): void {
         // Annotations visible
         const annoVisEl = document.getElementById('meta-viewer-annotations-visible') as HTMLInputElement | null;
         if (annoVisEl) annoVisEl.checked = manifest.viewer_settings.annotations_visible ?? true;
+
+        // Camera constraints
+        const lockOrbitEl = document.getElementById('meta-viewer-lock-orbit') as HTMLInputElement | null;
+        if (lockOrbitEl) lockOrbitEl.checked = manifest.viewer_settings.lock_orbit ?? false;
+
+        const lockDistanceEl = document.getElementById('meta-viewer-lock-orbit-distance') as HTMLInputElement | null;
+        if (lockDistanceEl) lockDistanceEl.checked = manifest.viewer_settings.lock_distance != null;
+        const lockDistanceValEl = document.getElementById('meta-viewer-lock-distance-value') as HTMLInputElement | null;
+        if (lockDistanceValEl && manifest.viewer_settings.lock_distance != null) {
+            lockDistanceValEl.value = String(manifest.viewer_settings.lock_distance);
+        }
+
+        const lockAboveGroundEl = document.getElementById('meta-viewer-lock-above-ground') as HTMLInputElement | null;
+        if (lockAboveGroundEl) lockAboveGroundEl.checked = manifest.viewer_settings.lock_above_ground ?? false;
+
+        const lockMaxHeightEl = document.getElementById('meta-viewer-lock-max-height') as HTMLInputElement | null;
+        const maxHeightControls = document.getElementById('max-height-controls');
+        const maxHeightValEl = document.getElementById('meta-viewer-max-height-value') as HTMLInputElement | null;
+        if (lockMaxHeightEl) lockMaxHeightEl.checked = manifest.viewer_settings.max_camera_height != null;
+        if (maxHeightControls) maxHeightControls.style.display = manifest.viewer_settings.max_camera_height != null ? '' : 'none';
+        if (maxHeightValEl && manifest.viewer_settings.max_camera_height != null) {
+            maxHeightValEl.value = String(manifest.viewer_settings.max_camera_height);
+        }
     }
 
     // Custom fields from _meta

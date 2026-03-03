@@ -25,7 +25,7 @@ import {
 } from './file-handlers.js';
 import { loadCADFromBlobUrl } from './cad-loader.js';
 import { centerModelOnGrid } from './alignment.js';
-import { updatePronomRegistry } from './metadata-manager.js';
+import { updatePronomRegistry, applyCameraConstraints } from './metadata-manager.js';
 import type { ArchivePipelineDeps } from '@/types.js';
 import { normalizeScale } from '@/types.js';
 
@@ -739,6 +739,18 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
             controls.target.set(ct.x, ct.y, ct.z);
             controls.update();
         }
+    }
+
+    // Apply camera constraints
+    const lockControls = sceneRefs.controls;
+    const lockCamera = sceneRefs.camera;
+    if (lockControls && lockCamera) {
+        applyCameraConstraints(lockControls, lockCamera, {
+            lockOrbit: settings.lock_orbit ?? false,
+            lockDistance: settings.lock_distance ?? null,
+            lockAboveGround: settings.lock_above_ground ?? false,
+            maxCameraHeight: settings.max_camera_height ?? null,
+        });
     }
 
     log.info('Applied viewer settings:', settings);

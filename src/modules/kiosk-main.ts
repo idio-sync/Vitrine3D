@@ -1514,6 +1514,35 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 controls.target.set(savedCamTarget.x, savedCamTarget.y, savedCamTarget.z);
                 controls.update();
             }
+            // Apply camera constraints
+            if (controls) {
+                // Lock orbit point
+                if (manifest.viewer_settings.lock_orbit) {
+                    controls.enablePan = false;
+                }
+
+                // Lock camera distance
+                if (manifest.viewer_settings.lock_distance != null) {
+                    controls.minDistance = manifest.viewer_settings.lock_distance;
+                    controls.maxDistance = manifest.viewer_settings.lock_distance;
+                }
+
+                // Keep camera above ground
+                if (manifest.viewer_settings.lock_above_ground) {
+                    controls.maxPolarAngle = Math.PI / 2;
+                }
+
+                // Max camera height
+                if (manifest.viewer_settings.max_camera_height != null) {
+                    const maxY = manifest.viewer_settings.max_camera_height;
+                    controls.addEventListener('change', () => {
+                        if (camera && camera.position.y > maxY) {
+                            camera.position.y = maxY;
+                            controls.update();
+                        }
+                    });
+                }
+            }
             // Apply default matcap
             if (manifest.viewer_settings.default_matcap && modelGroup) {
                 updateModelMatcap(modelGroup, true, manifest.viewer_settings.default_matcap);
