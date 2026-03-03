@@ -34,6 +34,7 @@ COPY docker/meta-server.js /opt/meta-server.js
 COPY docker/admin.html /opt/admin.html
 COPY docker/extract-meta.sh /opt/extract-meta.sh
 RUN chmod +x /opt/extract-meta.sh
+COPY docker/migrate-to-sqlite.js /opt/migrate-to-sqlite.js
 
 # Create directories for archive metadata, thumbnails, and SQLite database
 RUN mkdir -p /usr/share/nginx/html/meta /usr/share/nginx/html/thumbs /data

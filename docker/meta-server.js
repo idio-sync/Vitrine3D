@@ -28,6 +28,7 @@ const path = require('path');
 const crypto = require('crypto');
 const url = require('url');
 const { execFileSync } = require('child_process');
+const Database = require('/opt/node_modules/better-sqlite3');
 
 // --- Configuration from environment ---
 
@@ -49,6 +50,7 @@ const META_DIR = path.join(HTML_ROOT, 'meta');
 const THUMBS_DIR = path.join(HTML_ROOT, 'thumbs');
 const ARCHIVES_DIR = path.join(HTML_ROOT, 'archives');
 const UUID_INDEX_PATH = path.join(META_DIR, '_uuid-index.json');
+const DB_PATH = process.env.DB_PATH || '/data/vitrine.db';
 
 // --- Cloudflare Access auth ---
 
@@ -129,6 +131,45 @@ function getIndexHtml() {
         catch { _indexHtml = ''; }
     }
     return _indexHtml;
+}
+
+// --- SQLite database ---
+
+let db;
+
+function initDb() {
+    db = new Database(DB_PATH);
+    db.pragma('journal_mode = WAL');
+    db.pragma('synchronous = NORMAL');
+
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS archives (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid         TEXT    UNIQUE NOT NULL,
+            hash         TEXT    UNIQUE NOT NULL,
+            filename     TEXT    UNIQUE NOT NULL,
+            title        TEXT,
+            description  TEXT,
+            thumbnail    TEXT,
+            asset_types  TEXT,
+            metadata_raw TEXT,
+            size         INTEGER,
+            created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+            updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_archives_uuid ON archives(uuid);
+        CREATE INDEX IF NOT EXISTS idx_archives_hash ON archives(hash);
+
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            actor      TEXT    NOT NULL,
+            action     TEXT    NOT NULL,
+            target     TEXT,
+            detail     TEXT,
+            ip         TEXT,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+    `);
 }
 
 // --- Helpers ---
@@ -1237,6 +1278,7 @@ async function handleCompleteChunk(req, res, uploadId) {
 
 // --- Server ---
 
+initDb();
 const server = http.createServer((req, res) => {
     const parsed = url.parse(req.url);
     const pathname = parsed.pathname;
