@@ -49,7 +49,6 @@ const HTML_ROOT = '/usr/share/nginx/html';
 const META_DIR = path.join(HTML_ROOT, 'meta');
 const THUMBS_DIR = path.join(HTML_ROOT, 'thumbs');
 const ARCHIVES_DIR = path.join(HTML_ROOT, 'archives');
-const UUID_INDEX_PATH = path.join(META_DIR, '_uuid-index.json');
 const DB_PATH = process.env.DB_PATH || '/data/vitrine.db';
 
 // --- Cloudflare Access auth ---
@@ -172,6 +171,24 @@ function initDb() {
     `);
 }
 
+/**
+ * Convert a SQLite row from the archives table into the API response object.
+ */
+function buildArchiveObjectFromRow(row) {
+    return {
+        uuid: row.uuid,
+        hash: row.hash,
+        filename: row.filename,
+        title: row.title || '',
+        description: row.description || '',
+        thumbnail: row.thumbnail || null,
+        asset_types: row.asset_types ? JSON.parse(row.asset_types) : [],
+        metadata: row.metadata_raw ? JSON.parse(row.metadata_raw) : {},
+        size: row.size || 0,
+        created_at: row.created_at,
+    };
+}
+
 // --- Helpers ---
 
 /**
@@ -182,21 +199,6 @@ function archiveHash(archiveUrl) {
     return crypto.createHash('sha256').update(archiveUrl).digest('hex').slice(0, 16);
 }
 
-/**
- * Read and parse a JSON metadata sidecar file for an archive.
- * Returns null if the file doesn't exist or is invalid.
- */
-function readMeta(archiveUrl) {
-    if (!archiveUrl) return null;
-    const hash = archiveHash(archiveUrl);
-    const metaPath = path.join(META_DIR, hash + '.json');
-    try {
-        const raw = fs.readFileSync(metaPath, 'utf8');
-        return JSON.parse(raw);
-    } catch {
-        return null;
-    }
-}
 
 /**
  * Resolve the thumbnail URL for an archive.
@@ -334,69 +336,6 @@ function serveOgHtml(res, title, description, thumb, canonicalUrl, oembedUrl) {
     res.end(html);
 }
 
-// --- UUID Index ---
-
-function loadUuidIndex() {
-    try { return JSON.parse(fs.readFileSync(UUID_INDEX_PATH, 'utf8')); }
-    catch { return {}; }
-}
-
-function saveUuidIndex(index) {
-    try {
-        if (!fs.existsSync(META_DIR)) fs.mkdirSync(META_DIR, { recursive: true });
-        fs.writeFileSync(UUID_INDEX_PATH, JSON.stringify(index, null, 2));
-    } catch (err) {
-        console.error('[meta-server] Failed to save UUID index:', err.message);
-    }
-}
-
-/**
- * Get or create a stable UUID for an archive URL.
- * UUIDs are persisted in _uuid-index.json so they survive server restarts.
- */
-function getOrCreateUuid(archiveUrl) {
-    const index = loadUuidIndex();
-    if (index[archiveUrl]) return index[archiveUrl];
-    const uuid = crypto.randomUUID();
-    index[archiveUrl] = uuid;
-    saveUuidIndex(index);
-    return uuid;
-}
-
-/**
- * Migrate a UUID from one archive URL to another (used on rename).
- */
-function migrateUuid(oldArchiveUrl, newArchiveUrl) {
-    const index = loadUuidIndex();
-    const uuid = index[oldArchiveUrl];
-    if (uuid) {
-        delete index[oldArchiveUrl];
-        index[newArchiveUrl] = uuid;
-        saveUuidIndex(index);
-    }
-}
-
-/**
- * Remove a UUID entry from the index (used on delete).
- */
-function deleteUuidEntry(archiveUrl) {
-    const index = loadUuidIndex();
-    if (index[archiveUrl]) {
-        delete index[archiveUrl];
-        saveUuidIndex(index);
-    }
-}
-
-/**
- * Find an archive by its UUID.
- */
-function findArchiveByUuid(uuid) {
-    const index = loadUuidIndex();
-    const archiveUrl = Object.keys(index).find(k => index[k] === uuid);
-    if (!archiveUrl) return null;
-    return findArchiveByHash(archiveHash(archiveUrl));
-}
-
 // --- OG/oEmbed Route Handlers ---
 
 /**
@@ -405,13 +344,17 @@ function findArchiveByUuid(uuid) {
 function handleBotRequest(req, res) {
     const parsed = url.parse(req.url, true);
     const archiveUrl = parsed.query.archive || '';
-    const meta = readMeta(archiveUrl);
+    const archiveFilename = path.basename(archiveUrl);
+    const metaRow = archiveFilename ? db.prepare('SELECT * FROM archives WHERE filename = ?').get(archiveFilename) : null;
+    const metaTitle = metaRow ? (metaRow.title || SITE_NAME) : SITE_NAME;
+    const metaDescription = metaRow ? (metaRow.description || SITE_DESCRIPTION) : SITE_DESCRIPTION;
+    const metaThumbnail = metaRow ? metaRow.thumbnail : null;
 
     serveOgHtml(
         res,
-        (meta && meta.title) || SITE_NAME,
-        (meta && meta.description) || SITE_DESCRIPTION,
-        thumbnailUrl(meta, archiveUrl),
+        metaTitle,
+        metaDescription,
+        metaThumbnail ? SITE_URL + metaThumbnail : thumbnailUrl(null, archiveUrl),
         SITE_URL + (req.url || '/'),
         SITE_URL + '/oembed?url=' + encodeURIComponent(SITE_URL + req.url) + '&format=json'
     );
@@ -438,7 +381,7 @@ function handleOembed(req, res) {
     }
 
     let archiveUrl = extractArchiveParam(viewerUrl);
-    let meta = readMeta(archiveUrl);
+    let dbRow = null;
 
     // For clean /view/{uuid|hash} URLs there is no ?archive= param — look up by path
     if (!archiveUrl) {
@@ -446,18 +389,17 @@ function handleOembed(req, res) {
             const parsedViewerUrl = new URL(viewerUrl);
             const uuidMatch = parsedViewerUrl.pathname.match(/^\/view\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
             const hashMatch = parsedViewerUrl.pathname.match(/^\/view\/([a-f0-9]{16})$/);
-            let found = null;
-            if (uuidMatch) found = findArchiveByUuid(uuidMatch[1]);
-            else if (hashMatch) found = findArchiveByHash(hashMatch[1]);
-            if (found) {
-                archiveUrl = '/archives/' + found.filename;
-                meta = found.meta;
-            }
+            if (uuidMatch) dbRow = db.prepare('SELECT * FROM archives WHERE uuid = ?').get(uuidMatch[1]);
+            else if (hashMatch) dbRow = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hashMatch[1]);
+            if (dbRow) archiveUrl = '/archives/' + dbRow.filename;
         } catch { /* ignore invalid URL */ }
+    } else {
+        const h = archiveHash(archiveUrl);
+        dbRow = db.prepare('SELECT * FROM archives WHERE hash = ?').get(h);
     }
 
-    const title = (meta && meta.title) || SITE_NAME;
-    const thumb = thumbnailUrl(meta, archiveUrl);
+    const title = (dbRow && dbRow.title) || SITE_NAME;
+    const thumb = dbRow && dbRow.thumbnail ? SITE_URL + dbRow.thumbnail : thumbnailUrl(null, archiveUrl);
 
     // Build iframe embed URL with autoload=false for click-to-load gate
     const embedParams = new URLSearchParams();
@@ -535,86 +477,6 @@ function sanitizeFilename(name) {
 }
 
 /**
- * List all archives in the archives directory with their metadata.
- */
-function listArchives() {
-    const results = [];
-    if (!fs.existsSync(ARCHIVES_DIR)) return results;
-
-    let files;
-    try { files = fs.readdirSync(ARCHIVES_DIR); }
-    catch { return results; }
-
-    for (const file of files) {
-        if (!/\.(a3d|a3z)$/i.test(file)) continue;
-        const filePath = path.join(ARCHIVES_DIR, file);
-        let stat;
-        try { stat = fs.statSync(filePath); }
-        catch { continue; }
-        if (!stat.isFile()) continue;
-
-        const archiveUrl = '/archives/' + file;
-        const hash = archiveHash(archiveUrl);
-        const meta = readMeta(archiveUrl);
-
-        results.push({
-            hash,
-            uuid: getOrCreateUuid(archiveUrl),
-            filename: file,
-            path: archiveUrl,
-            title: (meta && meta.title) || file.replace(/\.(a3d|a3z)$/i, ''),
-            description: (meta && meta.description) || '',
-            thumbnail: thumbnailUrl(meta, archiveUrl),
-            size: stat.size,
-            modified: stat.mtime.toISOString(),
-            viewerUrl: '/?archive=' + encodeURIComponent(archiveUrl),
-            assets: (meta && meta.assets) || [],
-            metadataFields: (meta && meta.metadata_fields) || {}
-        });
-    }
-
-    return results;
-}
-
-/**
- * Find an archive by its hash. Looks up the meta sidecar first, falls back to scanning.
- */
-function findArchiveByHash(hash) {
-    // Try meta sidecar lookup first
-    const metaPath = path.join(META_DIR, hash + '.json');
-    try {
-        const raw = fs.readFileSync(metaPath, 'utf8');
-        const meta = JSON.parse(raw);
-        if (meta.archive_url) {
-            const filename = path.basename(meta.archive_url);
-            const filePath = path.join(ARCHIVES_DIR, filename);
-            if (fs.existsSync(filePath)) {
-                return { meta, filename, filePath };
-            }
-        }
-    } catch { /* fall through to scan */ }
-
-    // Fallback: scan archives directory
-    if (!fs.existsSync(ARCHIVES_DIR)) return null;
-    let files;
-    try { files = fs.readdirSync(ARCHIVES_DIR); }
-    catch { return null; }
-
-    for (const file of files) {
-        if (!/\.(a3d|a3z)$/i.test(file)) continue;
-        const archiveUrl = '/archives/' + file;
-        if (archiveHash(archiveUrl) === hash) {
-            return {
-                meta: readMeta(archiveUrl),
-                filename: file,
-                filePath: path.join(ARCHIVES_DIR, file)
-            };
-        }
-    }
-    return null;
-}
-
-/**
  * Run extract-meta.sh on a single archive file to generate/regenerate sidecars.
  */
 function runExtractMeta(absolutePath) {
@@ -627,32 +489,6 @@ function runExtractMeta(absolutePath) {
     } catch (err) {
         console.error('[admin] extract-meta failed:', err.message);
     }
-}
-
-/**
- * Build a single archive JSON object from a file path.
- */
-function buildArchiveObject(filename) {
-    const filePath = path.join(ARCHIVES_DIR, filename);
-    const stat = fs.statSync(filePath);
-    const archiveUrl = '/archives/' + filename;
-    const hash = archiveHash(archiveUrl);
-    const meta = readMeta(archiveUrl);
-
-    return {
-        hash,
-        uuid: getOrCreateUuid(archiveUrl),
-        filename,
-        path: archiveUrl,
-        title: (meta && meta.title) || filename.replace(/\.(a3d|a3z)$/i, ''),
-        description: (meta && meta.description) || '',
-        thumbnail: thumbnailUrl(meta, archiveUrl),
-        size: stat.size,
-        modified: stat.mtime.toISOString(),
-        viewerUrl: '/?archive=' + encodeURIComponent(archiveUrl),
-        assets: (meta && meta.assets) || [],
-        metadataFields: (meta && meta.metadata_fields) || {}
-    };
 }
 
 // --- Streaming Multipart Parser ---
@@ -862,9 +698,8 @@ function handleAdminPage(req, res) {
 function handleListArchives(req, res) {
     if (!requireAuth(req, res)) return;
     try {
-        const archives = listArchives();
-        const storageUsed = archives.reduce((sum, a) => sum + a.size, 0);
-        sendJson(res, 200, { archives, total: archives.length, storageUsed });
+        const rows = db.prepare('SELECT * FROM archives ORDER BY created_at DESC').all();
+        sendJson(res, 200, rows.map(buildArchiveObjectFromRow));
     } catch (err) {
         sendJson(res, 500, { error: err.message });
     }
@@ -901,9 +736,42 @@ async function handleUploadArchive(req, res) {
         }
 
         // Extract metadata
+        const archiveUrl = '/archives/' + filename;
+        const hash = archiveHash(archiveUrl);
         runExtractMeta(finalPath);
 
-        sendJson(res, 201, buildArchiveObject(filename));
+        // Import extracted metadata into SQLite
+        let metaRaw = {};
+        const metaJsonPath = path.join(META_DIR, hash + '.json');
+        try { metaRaw = JSON.parse(fs.readFileSync(metaJsonPath, 'utf8')); } catch (_) {}
+
+        const thumbPath = '/thumbs/' + hash + '.jpg';
+        const thumbExists = fs.existsSync(path.join(HTML_ROOT, 'thumbs', hash + '.jpg'));
+
+        db.prepare(`
+            INSERT OR REPLACE INTO archives
+                (uuid, hash, filename, title, description, thumbnail, asset_types, metadata_raw, size, updated_at)
+            VALUES
+                (@uuid, @hash, @filename, @title, @description, @thumbnail, @asset_types, @metadata_raw, @size, datetime('now'))
+        `).run({
+            uuid: crypto.randomUUID(),
+            hash,
+            filename,
+            title: metaRaw.title || null,
+            description: metaRaw.description || null,
+            thumbnail: thumbExists ? thumbPath : null,
+            asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+            metadata_raw: JSON.stringify(metaRaw),
+            size: fs.statSync(finalPath).size,
+        });
+
+        // Audit log
+        const uploadActor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
+        db.prepare(`INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)`)
+          .run(uploadActor, 'upload', filename, JSON.stringify({ hash, size: fs.statSync(finalPath).size }), req.headers['x-real-ip'] || null);
+
+        const uploadedRow = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+        sendJson(res, 201, buildArchiveObjectFromRow(uploadedRow));
     } catch (err) {
         if (err.message === 'LIMIT') {
             sendJson(res, 413, { error: 'Upload exceeds maximum size (' + Math.round(MAX_UPLOAD_SIZE / 1024 / 1024) + ' MB)' });
@@ -920,12 +788,14 @@ async function handleUploadArchive(req, res) {
 function handleDeleteArchive(req, res, hash) {
     if (!requireAuth(req, res)) return;
     if (!checkCsrf(req, res)) return;
-    const archive = findArchiveByHash(hash);
-    if (!archive) return sendJson(res, 404, { error: 'Archive not found' });
+    const row = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+    if (!row) return sendJson(res, 404, { error: 'Archive not found' });
+
+    const filePath = path.join(ARCHIVES_DIR, row.filename);
 
     // Path traversal protection: verify resolved path is under ARCHIVES_DIR
     try {
-        const realPath = fs.realpathSync(archive.filePath);
+        const realPath = fs.realpathSync(filePath);
         const realArchivesDir = fs.realpathSync(ARCHIVES_DIR);
         if (!realPath.startsWith(realArchivesDir + '/') && realPath !== realArchivesDir) {
             return sendJson(res, 403, { error: 'Access denied' });
@@ -935,14 +805,20 @@ function handleDeleteArchive(req, res, hash) {
     }
 
     // Delete archive file
-    try { fs.unlinkSync(archive.filePath); } catch {}
-    // Remove UUID index entry
-    deleteUuidEntry('/archives/' + archive.filename);
+    try { fs.unlinkSync(filePath); } catch {}
     // Delete sidecar files
     try { fs.unlinkSync(path.join(META_DIR, hash + '.json')); } catch {}
     try { fs.unlinkSync(path.join(THUMBS_DIR, hash + '.jpg')); } catch {}
 
-    sendJson(res, 200, { deleted: true, path: '/archives/' + archive.filename });
+    // Delete from DB
+    db.prepare('DELETE FROM archives WHERE hash = ?').run(hash);
+
+    // Audit log
+    const deleteActor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
+    db.prepare(`INSERT INTO audit_log (actor, action, target, ip) VALUES (?, ?, ?, ?)`)
+      .run(deleteActor, 'delete', hash, req.headers['x-real-ip'] || null);
+
+    sendJson(res, 200, { deleted: true, path: '/archives/' + row.filename });
 }
 
 /**
@@ -950,16 +826,45 @@ function handleDeleteArchive(req, res, hash) {
  */
 function handleRegenerateArchive(req, res, hash) {
     if (!requireAuth(req, res)) return;
-    const archive = findArchiveByHash(hash);
-    if (!archive) return sendJson(res, 404, { error: 'Archive not found' });
+    const row = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+    if (!row) return sendJson(res, 404, { error: 'Archive not found' });
+
+    const filePath = path.join(ARCHIVES_DIR, row.filename);
 
     // Delete existing sidecar files so extract-meta.sh does a full re-extract
     try { fs.unlinkSync(path.join(META_DIR, hash + '.json')); } catch {}
     try { fs.unlinkSync(path.join(THUMBS_DIR, hash + '.jpg')); } catch {}
 
-    runExtractMeta(archive.filePath);
+    runExtractMeta(filePath);
 
-    sendJson(res, 200, buildArchiveObject(archive.filename));
+    // Re-import extracted metadata into SQLite
+    let metaRaw = {};
+    const metaJsonPath = path.join(META_DIR, hash + '.json');
+    try { metaRaw = JSON.parse(fs.readFileSync(metaJsonPath, 'utf8')); } catch (_) {}
+
+    const thumbPath = '/thumbs/' + hash + '.jpg';
+    const thumbExists = fs.existsSync(path.join(HTML_ROOT, 'thumbs', hash + '.jpg'));
+
+    db.prepare(`
+        UPDATE archives SET
+            title = @title,
+            description = @description,
+            thumbnail = @thumbnail,
+            asset_types = @asset_types,
+            metadata_raw = @metadata_raw,
+            updated_at = datetime('now')
+        WHERE hash = @hash
+    `).run({
+        title: metaRaw.title || null,
+        description: metaRaw.description || null,
+        thumbnail: thumbExists ? thumbPath : null,
+        asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+        metadata_raw: JSON.stringify(metaRaw),
+        hash,
+    });
+
+    const updatedRow = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+    sendJson(res, 200, buildArchiveObjectFromRow(updatedRow));
 }
 
 /**
@@ -982,12 +887,14 @@ function handleRenameArchive(req, res, hash) {
             const newName = parsed.filename;
             if (!newName) return sendJson(res, 400, { error: 'Missing filename' });
 
-            const archive = findArchiveByHash(hash);
-            if (!archive) return sendJson(res, 404, { error: 'Archive not found' });
+            const oldRow = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+            if (!oldRow) return sendJson(res, 404, { error: 'Archive not found' });
+
+            const oldFilePath = path.join(ARCHIVES_DIR, oldRow.filename);
 
             // Path traversal protection
             try {
-                const realPath = fs.realpathSync(archive.filePath);
+                const realPath = fs.realpathSync(oldFilePath);
                 const realArchivesDir = fs.realpathSync(ARCHIVES_DIR);
                 if (!realPath.startsWith(realArchivesDir + '/') && realPath !== realArchivesDir) {
                     return sendJson(res, 403, { error: 'Access denied' });
@@ -1004,10 +911,7 @@ function handleRenameArchive(req, res, hash) {
             }
 
             // Rename the file
-            fs.renameSync(archive.filePath, newPath);
-
-            // Migrate UUID to the new archive path so share links remain stable
-            migrateUuid('/archives/' + archive.filename, '/archives/' + sanitized);
+            fs.renameSync(oldFilePath, newPath);
 
             // Clean old sidecar files
             try { fs.unlinkSync(path.join(META_DIR, hash + '.json')); } catch {}
@@ -1016,7 +920,48 @@ function handleRenameArchive(req, res, hash) {
             // Regenerate metadata for the renamed file
             runExtractMeta(newPath);
 
-            sendJson(res, 200, buildArchiveObject(sanitized));
+            // Compute new hash based on new archive URL
+            const newArchiveUrl = '/archives/' + sanitized;
+            const newHash = archiveHash(newArchiveUrl);
+
+            // Re-import extracted metadata
+            let metaRaw = {};
+            const metaJsonPath = path.join(META_DIR, newHash + '.json');
+            try { metaRaw = JSON.parse(fs.readFileSync(metaJsonPath, 'utf8')); } catch (_) {}
+
+            const thumbPath = '/thumbs/' + newHash + '.jpg';
+            const thumbExists = fs.existsSync(path.join(HTML_ROOT, 'thumbs', newHash + '.jpg'));
+
+            // Update DB — preserve uuid, update hash, filename, and metadata
+            db.prepare(`
+                UPDATE archives SET
+                    hash = @newHash,
+                    filename = @filename,
+                    title = @title,
+                    description = @description,
+                    thumbnail = @thumbnail,
+                    asset_types = @asset_types,
+                    metadata_raw = @metadata_raw,
+                    updated_at = datetime('now')
+                WHERE hash = @oldHash
+            `).run({
+                newHash,
+                filename: sanitized,
+                title: metaRaw.title || null,
+                description: metaRaw.description || null,
+                thumbnail: thumbExists ? thumbPath : null,
+                asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+                metadata_raw: JSON.stringify(metaRaw),
+                oldHash: hash,
+            });
+
+            // Audit log
+            const renameActor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
+            db.prepare(`INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)`)
+              .run(renameActor, 'rename', hash, JSON.stringify({ old: oldRow.filename, new: sanitized }), req.headers['x-real-ip'] || null);
+
+            const renamedRow = db.prepare('SELECT * FROM archives WHERE hash = ?').get(newHash);
+            sendJson(res, 200, buildArchiveObjectFromRow(renamedRow));
         } catch (err) {
             sendJson(res, 500, { error: err.message });
         }
@@ -1031,21 +976,21 @@ function handleRenameArchive(req, res, hash) {
  * URL stays as /view/{hash} — no query params for archive/kiosk/autoload visible.
  */
 function handleViewArchive(req, res, hash) {
-    const archive = findArchiveByHash(hash);
-    if (!archive) {
+    const row = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+    if (!row) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Archive not found');
         return;
     }
 
     if (isBotRequest(req)) {
-        const archiveUrl = '/archives/' + archive.filename;
-        const meta = archive.meta;
+        const archiveUrl = '/archives/' + row.filename;
+        const thumb = row.thumbnail ? SITE_URL + row.thumbnail : thumbnailUrl(null, archiveUrl);
         return serveOgHtml(
             res,
-            (meta && meta.title) || SITE_NAME,
-            (meta && meta.description) || SITE_DESCRIPTION,
-            thumbnailUrl(meta, archiveUrl),
+            row.title || SITE_NAME,
+            row.description || SITE_DESCRIPTION,
+            thumb,
             SITE_URL + req.url,
             SITE_URL + '/oembed?url=' + encodeURIComponent(SITE_URL + req.url) + '&format=json'
         );
@@ -1058,7 +1003,7 @@ function handleViewArchive(req, res, hash) {
         return;
     }
 
-    const archiveUrl = '/archives/' + archive.filename;
+    const archiveUrl = '/archives/' + row.filename;
     const inject = { archive: archiveUrl, kiosk: true, autoload: false };
     inject.theme = DEFAULT_KIOSK_THEME || 'editorial';
     const injectTag = '<script>window.__VITRINE_CLEAN_URL=' + JSON.stringify(inject) + ';</script>\n';
@@ -1079,21 +1024,21 @@ function handleViewArchive(req, res, hash) {
  * GET /view/:uuid — serve the viewer via UUID-based clean URL.
  */
 function handleViewArchiveByUuid(req, res, uuid) {
-    const archive = findArchiveByUuid(uuid);
-    if (!archive) {
+    const row = db.prepare('SELECT * FROM archives WHERE uuid = ?').get(uuid);
+    if (!row) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Archive not found');
         return;
     }
 
     if (isBotRequest(req)) {
-        const archiveUrl = '/archives/' + archive.filename;
-        const meta = archive.meta;
+        const archiveUrl = '/archives/' + row.filename;
+        const thumb = row.thumbnail ? SITE_URL + row.thumbnail : thumbnailUrl(null, archiveUrl);
         return serveOgHtml(
             res,
-            (meta && meta.title) || SITE_NAME,
-            (meta && meta.description) || SITE_DESCRIPTION,
-            thumbnailUrl(meta, archiveUrl),
+            row.title || SITE_NAME,
+            row.description || SITE_DESCRIPTION,
+            thumb,
             SITE_URL + req.url,
             SITE_URL + '/oembed?url=' + encodeURIComponent(SITE_URL + req.url) + '&format=json'
         );
@@ -1106,7 +1051,7 @@ function handleViewArchiveByUuid(req, res, uuid) {
         return;
     }
 
-    const archiveUrl = '/archives/' + archive.filename;
+    const archiveUrl = '/archives/' + row.filename;
     const inject = { archive: archiveUrl, kiosk: true, autoload: false };
     inject.theme = DEFAULT_KIOSK_THEME || 'editorial';
     const injectTag = '<script>window.__VITRINE_CLEAN_URL=' + JSON.stringify(inject) + ';</script>\n';
@@ -1269,7 +1214,37 @@ async function handleCompleteChunk(req, res, uploadId) {
         }
 
         runExtractMeta(finalPath);
-        sendJson(res, 201, buildArchiveObject(filename));
+
+        // Import extracted metadata into SQLite
+        const chunkArchiveUrl = '/archives/' + filename;
+        const chunkHash = archiveHash(chunkArchiveUrl);
+
+        let metaRaw = {};
+        const metaJsonPath = path.join(META_DIR, chunkHash + '.json');
+        try { metaRaw = JSON.parse(fs.readFileSync(metaJsonPath, 'utf8')); } catch (_) {}
+
+        const thumbPath = '/thumbs/' + chunkHash + '.jpg';
+        const thumbExists = fs.existsSync(path.join(HTML_ROOT, 'thumbs', chunkHash + '.jpg'));
+
+        db.prepare(`
+            INSERT OR REPLACE INTO archives
+                (uuid, hash, filename, title, description, thumbnail, asset_types, metadata_raw, size, updated_at)
+            VALUES
+                (@uuid, @hash, @filename, @title, @description, @thumbnail, @asset_types, @metadata_raw, @size, datetime('now'))
+        `).run({
+            uuid: crypto.randomUUID(),
+            hash: chunkHash,
+            filename,
+            title: metaRaw.title || null,
+            description: metaRaw.description || null,
+            thumbnail: thumbExists ? thumbPath : null,
+            asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+            metadata_raw: JSON.stringify(metaRaw),
+            size: fs.statSync(finalPath).size,
+        });
+
+        const assembledRow = db.prepare('SELECT * FROM archives WHERE hash = ?').get(chunkHash);
+        sendJson(res, 201, buildArchiveObjectFromRow(assembledRow));
     } catch (err) {
         console.error('[chunks] Assembly error:', err.message);
         sendJson(res, 500, { error: err.message });
