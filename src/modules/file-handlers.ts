@@ -479,8 +479,6 @@ export function loadOBJ(objFile: File, mtlFile: File | null, textureFiles?: File
         for (const file of textureFiles) mapFile(file);
     }
 
-    const hasTextures = textureFiles && textureFiles.length > 0;
-
     // LoadingManager URL modifier maps filenames to blob URLs
     const manager = new THREE.LoadingManager();
     manager.setURLModifier((url: string) => {
@@ -518,9 +516,9 @@ export function loadOBJ(objFile: File, mtlFile: File | null, textureFiles?: File
                     objLoader.load(
                         objFile.name,
                         (object) => {
-                            // Preserve textures when MTL loaded them; only force default if no textures
+                            // MTL loaded successfully — preserve its materials (colors, textures, etc.)
                             processMeshMaterials(object, {
-                                forceDefaultMaterial: !hasTextures,
+                                forceDefaultMaterial: false,
                                 preserveTextures: true
                             });
                             // Delay blob cleanup to ensure GPU texture upload completes
