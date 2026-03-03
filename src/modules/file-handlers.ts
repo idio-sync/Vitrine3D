@@ -46,8 +46,7 @@ if (_dracoOfflineSrc) {
  */
 const SPLAT_FILE_TYPE_MAP: Record<string, string> = {
     ply: 'ply', spz: 'spz', splat: 'splat', ksplat: 'ksplat', rad: 'rad',
-    // Note: .sog (SOGS) format is not supported in Spark 2.0 preview.
-    // Convert .sog files to .spz using splat-transform or SuperSplat.
+    sog: 'pcsogszip',
 };
 
 function getSplatFileType(fileNameOrUrl: string): string | undefined {
