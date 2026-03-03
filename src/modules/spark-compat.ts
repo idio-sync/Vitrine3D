@@ -2,11 +2,12 @@
  * Spark.js Version Compatibility Adapter
  *
  * Toggles between SparkRenderer (2.0, with LOD) and OldSparkRenderer (0.1 compat)
- * based on the VITE_SPARK_VERSION env var. Both classes ship in the same 2.0 bundle.
+ * based on APP_CONFIG.sparkVersion (runtime, set via Docker env var SPARK_VERSION).
+ * Both classes ship in the same 2.0 bundle.
  *
  * Usage:
- *   VITE_SPARK_VERSION=0.1 npm run dev   # use legacy renderer
- *   npm run dev                           # default: 2.0
+ *   Docker: SPARK_VERSION=0.1 (in docker-compose or docker run -e)
+ *   Local:  Edit sparkVersion in src/config.js
  */
 
 import { SparkRenderer, OldSparkRenderer } from '@sparkjsdev/spark';
@@ -14,8 +15,8 @@ import { Logger } from './utilities.js';
 
 const log = Logger.getLogger('spark-compat');
 
-/** Build-time toggle: '2.0' (default) or '0.1' */
-const SPARK_VERSION = import.meta.env.VITE_SPARK_VERSION || '2.0';
+/** Runtime toggle from APP_CONFIG: '2.0' (default) or '0.1' */
+const SPARK_VERSION = (window as any).APP_CONFIG?.sparkVersion || '2.0';
 
 /** True when using SparkRenderer 2.0 (LOD, foveation supported). */
 export const isSparkV2 = SPARK_VERSION === '2.0';
@@ -33,7 +34,7 @@ interface SparkRendererOptions {
 }
 
 /**
- * Create the appropriate SparkRenderer based on VITE_SPARK_VERSION.
+ * Create the appropriate SparkRenderer based on APP_CONFIG.sparkVersion.
  * v2.0: SparkRenderer with full LOD/foveation options.
  * v0.1: OldSparkRenderer (LOD options silently stripped).
  */

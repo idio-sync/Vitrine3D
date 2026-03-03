@@ -215,6 +215,9 @@
         lodBudgetHd: 0,
 
         // Library (archive management) — disabled in local dev, enabled via ADMIN_ENABLED in Docker
-        libraryEnabled: false
+        libraryEnabled: false,
+
+        // Spark.js renderer version: '2.0' (default, with LOD) or '0.1' (legacy OldSparkRenderer)
+        sparkVersion: '2.0'
     };
 })();

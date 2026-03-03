@@ -15,6 +15,7 @@
 //   APP_TITLE              - Browser tab title (default: "Vitrine3D")
 //   LOD_BUDGET_SD          - Splat LOD budget for SD quality tier (default: 500000)
 //   LOD_BUDGET_HD          - Splat LOD budget for HD quality tier (default: 3000000)
+//   SPARK_VERSION          - Spark.js renderer: "2.0" (default, with LOD) or "0.1" (legacy)
 //   EMBED_REFERERS         - Space-separated list of allowed referer domains for nginx
 //                            (e.g., "client-site.com *.client-site.com")
 //
@@ -289,6 +290,9 @@
         // Chunked upload — splits large files into 50 MB chunks to work around
         // Cloudflare Tunnel's 100 MB per-request body limit (CHUNKED_UPLOAD=true)
         chunkedUpload: "${CHUNKED_UPLOAD}" === "true",
+
+        // Spark.js renderer version: '2.0' (default, with LOD) or '0.1' (legacy OldSparkRenderer)
+        sparkVersion: "${SPARK_VERSION}" || '2.0',
 
         // Browser tab title (set by APP_TITLE env var)
         appTitle: envAppTitle || 'Vitrine3D'

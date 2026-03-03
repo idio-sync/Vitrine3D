@@ -55,6 +55,7 @@ docker compose up -d
 | `DEFAULT_POINTCLOUD_URL` | _(empty)_ | Point cloud URL to auto-load |
 | `LOD_BUDGET_SD` | `1000000` | Splat LOD budget (max splats per frame) for SD quality tier |
 | `LOD_BUDGET_HD` | `5000000` | Splat LOD budget (max splats per frame) for HD quality tier |
+| `SPARK_VERSION` | `2.0` | Spark.js renderer version: `2.0` (default, with LOD/foveation) or `0.1` (legacy `OldSparkRenderer`). Both renderers ship in the same bundle. |
 | `ADMIN_ENABLED` | `false` | Enable admin panel and library. See [Admin Panel](#admin-panel) and [Library Panel](#library-panel) |
 | `MAX_UPLOAD_SIZE` | `1024` | Maximum upload size in MB |
 | `CHUNKED_UPLOAD` | `false` | Enable chunked upload mode for large archives (splits into 50 MB chunks) |
