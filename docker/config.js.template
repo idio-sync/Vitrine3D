@@ -12,6 +12,7 @@
 //                            URL params (?controls, ?sidebar, ?toolbar, ?kiosk, ?splat, etc.)
 //   ARCHIVE_PATH_PREFIX    - When set with KIOSK_LOCK, only archives under this path are allowed
 //                            (e.g., "/archives/"). Prevents path traversal to other server files.
+//   APP_TITLE              - Browser tab title (default: "Vitrine3D")
 //   LOD_BUDGET_SD          - Splat LOD budget for SD quality tier (default: 500000)
 //   LOD_BUDGET_HD          - Splat LOD budget for HD quality tier (default: 3000000)
 //   EMBED_REFERERS         - Space-separated list of allowed referer domains for nginx
@@ -175,6 +176,7 @@
     const _inj = window.__VITRINE_CLEAN_URL || {};
 
     // Server-Side Defaults (Injected by Docker)
+    const envAppTitle = "${APP_TITLE}";
     const envArchive = "${DEFAULT_ARCHIVE_URL}";
     const envSplat = "${DEFAULT_SPLAT_URL}";
     const envModel = "${DEFAULT_MODEL_URL}";
@@ -286,7 +288,10 @@
 
         // Chunked upload — splits large files into 50 MB chunks to work around
         // Cloudflare Tunnel's 100 MB per-request body limit (CHUNKED_UPLOAD=true)
-        chunkedUpload: "${CHUNKED_UPLOAD}" === "true"
+        chunkedUpload: "${CHUNKED_UPLOAD}" === "true",
+
+        // Browser tab title (set by APP_TITLE env var)
+        appTitle: envAppTitle || 'Vitrine3D'
     };
 
     console.log('[config.js] Generated Config:', window.APP_CONFIG);

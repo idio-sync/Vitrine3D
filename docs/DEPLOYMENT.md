@@ -58,6 +58,7 @@ docker compose up -d
 | `ADMIN_ENABLED` | `false` | Enable admin panel and library. See [Admin Panel](#admin-panel) and [Library Panel](#library-panel) |
 | `MAX_UPLOAD_SIZE` | `1024` | Maximum upload size in MB |
 | `CHUNKED_UPLOAD` | `false` | Enable chunked upload mode for large archives (splits into 50 MB chunks) |
+| `APP_TITLE` | `Vitrine3D` | Browser tab title shown in the page `<title>` tag |
 | `DEFAULT_KIOSK_THEME` | `editorial` | Default theme for clean URL kiosk views. See [Clean Archive URLs](#clean-archive-urls) |
 | `DEV_AUTH_USER` | _(empty)_ | **Local dev only.** Email injected as the Cloudflare Access header so the admin API authenticates without a real Cloudflare tunnel. Remove before production. |
 
