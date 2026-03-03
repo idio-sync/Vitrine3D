@@ -176,18 +176,23 @@ function initDb() {
  * Convert a SQLite row from the archives table into the API response object.
  */
 function buildArchiveObjectFromRow(row) {
+    const archivePath = '/archives/' + row.filename;
+    const parsedMeta = row.metadata_raw ? (() => { try { return JSON.parse(row.metadata_raw); } catch (_) { return {}; } })() : {};
+    // SQLite datetime('now') returns 'YYYY-MM-DD HH:MM:SS'; normalise to ISO 8601
+    const modified = row.created_at ? row.created_at.replace(' ', 'T') + 'Z' : row.created_at;
     return {
         uuid: row.uuid,
         hash: row.hash,
         filename: row.filename,
+        path: archivePath,
+        viewerUrl: '/?archive=' + encodeURIComponent(archivePath),
         title: row.title || '',
         description: row.description || '',
         thumbnail: row.thumbnail || null,
-        asset_types: row.asset_types ? (() => { try { return JSON.parse(row.asset_types); } catch (_) { return []; } })() : [],
-        metadata: row.metadata_raw ? (() => { try { return JSON.parse(row.metadata_raw); } catch (_) { return {}; } })() : {},
+        assets: row.asset_types ? (() => { try { return JSON.parse(row.asset_types); } catch (_) { return []; } })() : [],
+        metadataFields: parsedMeta.metadata_fields || null,
         size: row.size || 0,
-        // SQLite datetime('now') returns 'YYYY-MM-DD HH:MM:SS'; normalise to ISO 8601
-        created_at: row.created_at ? row.created_at.replace(' ', 'T') + 'Z' : row.created_at,
+        modified,
     };
 }
 
