@@ -20,6 +20,7 @@ const Database = require('/opt/node_modules/better-sqlite3');
 
 const META_DIR = process.env.META_DIR || '/usr/share/nginx/html/meta';
 const THUMBS_ROOT = process.env.THUMBS_ROOT || '/usr/share/nginx/html/thumbs';
+const ARCHIVES_ROOT = process.env.ARCHIVES_ROOT || '/usr/share/nginx/html/archives';
 const DB_PATH = process.env.DB_PATH || '/data/vitrine.db';
 
 const db = new Database(DB_PATH);
@@ -42,7 +43,7 @@ db.exec(`
 `);
 
 const insertStmt = db.prepare(`
-    INSERT OR IGNORE INTO archives
+    INSERT OR REPLACE INTO archives
         (uuid, hash, filename, title, description, thumbnail, asset_types, metadata_raw, size)
     VALUES
         (@uuid, @hash, @filename, @title, @description, @thumbnail, @asset_types, @metadata_raw, @size)
@@ -81,11 +82,21 @@ for (const file of metaFiles) {
         continue;
     }
 
-    const filename = meta.filename || hash;
+    // archive_url is the canonical field written by extract-meta.sh (/archives/name.a3d)
+    // filename field doesn't exist in sidecars — derive from archive_url
+    const filename = meta.filename || (meta.archive_url ? path.basename(meta.archive_url) : hash);
     const archiveUrl = '/archives/' + filename;
     const uuid = urlToUuid[archiveUrl] || crypto.randomUUID();
     const thumbFile = path.join(THUMBS_ROOT, hash + '.jpg');
     const thumbnail = fs.existsSync(thumbFile) ? '/thumbs/' + hash + '.jpg' : null;
+
+    // extract-meta.sh writes "assets" array; meta-server DB column is "asset_types"
+    const assetTypes = meta.asset_types || meta.assets || null;
+    // size is not in the sidecar — stat the actual archive file
+    let fileSize = meta.size || null;
+    if (!fileSize) {
+        try { fileSize = fs.statSync(path.join(ARCHIVES_ROOT, filename)).size; } catch (_) {}
+    }
 
     try {
         insertStmt.run({
@@ -95,9 +106,9 @@ for (const file of metaFiles) {
             title: meta.title || null,
             description: meta.description || null,
             thumbnail,
-            asset_types: meta.asset_types ? JSON.stringify(meta.asset_types) : null,
+            asset_types: assetTypes ? JSON.stringify(assetTypes) : null,
             metadata_raw: JSON.stringify(meta),
-            size: meta.size || null,
+            size: fileSize,
         });
         migrated++;
     } catch (e) {

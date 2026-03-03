@@ -186,7 +186,8 @@ function buildArchiveObjectFromRow(row) {
         asset_types: row.asset_types ? (() => { try { return JSON.parse(row.asset_types); } catch (_) { return []; } })() : [],
         metadata: row.metadata_raw ? (() => { try { return JSON.parse(row.metadata_raw); } catch (_) { return {}; } })() : {},
         size: row.size || 0,
-        created_at: row.created_at,
+        // SQLite datetime('now') returns 'YYYY-MM-DD HH:MM:SS'; normalise to ISO 8601
+        created_at: row.created_at ? row.created_at.replace(' ', 'T') + 'Z' : row.created_at,
     };
 }
 
