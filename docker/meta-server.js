@@ -182,8 +182,8 @@ function buildArchiveObjectFromRow(row) {
         title: row.title || '',
         description: row.description || '',
         thumbnail: row.thumbnail || null,
-        asset_types: row.asset_types ? JSON.parse(row.asset_types) : [],
-        metadata: row.metadata_raw ? JSON.parse(row.metadata_raw) : {},
+        asset_types: row.asset_types ? (() => { try { return JSON.parse(row.asset_types); } catch (_) { return []; } })() : [],
+        metadata: row.metadata_raw ? (() => { try { return JSON.parse(row.metadata_raw); } catch (_) { return {}; } })() : {},
         size: row.size || 0,
         created_at: row.created_at,
     };
@@ -749,10 +749,19 @@ async function handleUploadArchive(req, res) {
         const thumbExists = fs.existsSync(path.join(HTML_ROOT, 'thumbs', hash + '.jpg'));
 
         db.prepare(`
-            INSERT OR REPLACE INTO archives
+            INSERT INTO archives
                 (uuid, hash, filename, title, description, thumbnail, asset_types, metadata_raw, size, updated_at)
             VALUES
                 (@uuid, @hash, @filename, @title, @description, @thumbnail, @asset_types, @metadata_raw, @size, datetime('now'))
+            ON CONFLICT(hash) DO UPDATE SET
+                filename    = excluded.filename,
+                title       = excluded.title,
+                description = excluded.description,
+                thumbnail   = excluded.thumbnail,
+                asset_types = excluded.asset_types,
+                metadata_raw= excluded.metadata_raw,
+                size        = excluded.size,
+                updated_at  = excluded.updated_at
         `).run({
             uuid: crypto.randomUUID(),
             hash,
@@ -810,13 +819,13 @@ function handleDeleteArchive(req, res, hash) {
     try { fs.unlinkSync(path.join(META_DIR, hash + '.json')); } catch {}
     try { fs.unlinkSync(path.join(THUMBS_DIR, hash + '.jpg')); } catch {}
 
-    // Delete from DB
-    db.prepare('DELETE FROM archives WHERE hash = ?').run(hash);
-
-    // Audit log
+    // Delete from DB + audit log atomically
     const deleteActor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
-    db.prepare(`INSERT INTO audit_log (actor, action, target, ip) VALUES (?, ?, ?, ?)`)
-      .run(deleteActor, 'delete', hash, req.headers['x-real-ip'] || null);
+    db.transaction(() => {
+        db.prepare('DELETE FROM archives WHERE hash = ?').run(hash);
+        db.prepare(`INSERT INTO audit_log (actor, action, target, ip) VALUES (?, ?, ?, ?)`)
+          .run(deleteActor, 'delete', hash, req.headers['x-real-ip'] || null);
+    })();
 
     sendJson(res, 200, { deleted: true, path: '/archives/' + row.filename });
 }
@@ -826,6 +835,7 @@ function handleDeleteArchive(req, res, hash) {
  */
 function handleRegenerateArchive(req, res, hash) {
     if (!requireAuth(req, res)) return;
+    if (!checkCsrf(req, res)) return;
     const row = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
     if (!row) return sendJson(res, 404, { error: 'Archive not found' });
 
@@ -932,33 +942,33 @@ function handleRenameArchive(req, res, hash) {
             const thumbPath = '/thumbs/' + newHash + '.jpg';
             const thumbExists = fs.existsSync(path.join(HTML_ROOT, 'thumbs', newHash + '.jpg'));
 
-            // Update DB — preserve uuid, update hash, filename, and metadata
-            db.prepare(`
-                UPDATE archives SET
-                    hash = @newHash,
-                    filename = @filename,
-                    title = @title,
-                    description = @description,
-                    thumbnail = @thumbnail,
-                    asset_types = @asset_types,
-                    metadata_raw = @metadata_raw,
-                    updated_at = datetime('now')
-                WHERE hash = @oldHash
-            `).run({
-                newHash,
-                filename: sanitized,
-                title: metaRaw.title || null,
-                description: metaRaw.description || null,
-                thumbnail: thumbExists ? thumbPath : null,
-                asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
-                metadata_raw: JSON.stringify(metaRaw),
-                oldHash: hash,
-            });
-
-            // Audit log
+            // Update DB + audit log atomically — preserve uuid, update hash, filename, and metadata
             const renameActor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
-            db.prepare(`INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)`)
-              .run(renameActor, 'rename', hash, JSON.stringify({ old: oldRow.filename, new: sanitized }), req.headers['x-real-ip'] || null);
+            db.transaction(() => {
+                db.prepare(`
+                    UPDATE archives SET
+                        hash = @newHash,
+                        filename = @filename,
+                        title = @title,
+                        description = @description,
+                        thumbnail = @thumbnail,
+                        asset_types = @asset_types,
+                        metadata_raw = @metadata_raw,
+                        updated_at = datetime('now')
+                    WHERE hash = @oldHash
+                `).run({
+                    newHash,
+                    filename: sanitized,
+                    title: metaRaw.title || null,
+                    description: metaRaw.description || null,
+                    thumbnail: thumbExists ? thumbPath : null,
+                    asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+                    metadata_raw: JSON.stringify(metaRaw),
+                    oldHash: hash,
+                });
+                db.prepare(`INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)`)
+                  .run(renameActor, 'rename', hash, JSON.stringify({ old: oldRow.filename, new: sanitized }), req.headers['x-real-ip'] || null);
+            })();
 
             const renamedRow = db.prepare('SELECT * FROM archives WHERE hash = ?').get(newHash);
             sendJson(res, 200, buildArchiveObjectFromRow(renamedRow));
@@ -1227,10 +1237,19 @@ async function handleCompleteChunk(req, res, uploadId) {
         const thumbExists = fs.existsSync(path.join(HTML_ROOT, 'thumbs', chunkHash + '.jpg'));
 
         db.prepare(`
-            INSERT OR REPLACE INTO archives
+            INSERT INTO archives
                 (uuid, hash, filename, title, description, thumbnail, asset_types, metadata_raw, size, updated_at)
             VALUES
                 (@uuid, @hash, @filename, @title, @description, @thumbnail, @asset_types, @metadata_raw, @size, datetime('now'))
+            ON CONFLICT(hash) DO UPDATE SET
+                filename    = excluded.filename,
+                title       = excluded.title,
+                description = excluded.description,
+                thumbnail   = excluded.thumbnail,
+                asset_types = excluded.asset_types,
+                metadata_raw= excluded.metadata_raw,
+                size        = excluded.size,
+                updated_at  = excluded.updated_at
         `).run({
             uuid: crypto.randomUUID(),
             hash: chunkHash,
