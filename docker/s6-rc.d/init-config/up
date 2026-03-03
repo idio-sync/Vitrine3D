@@ -1,2 +1,2 @@
 #!/bin/sh
-exec /usr/bin/with-contenv /opt/generate-nginx-conf.sh
+exec /command/with-contenv /opt/generate-nginx-conf.sh

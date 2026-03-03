@@ -1,2 +1,2 @@
 #!/bin/sh
-exec /usr/bin/with-contenv /opt/extract-meta.sh /usr/share/nginx/html /usr/share/nginx/html
+exec /command/with-contenv /opt/extract-meta.sh /usr/share/nginx/html /usr/share/nginx/html
