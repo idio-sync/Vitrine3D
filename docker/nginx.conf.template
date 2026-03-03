@@ -92,6 +92,14 @@ server {
     gzip on;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
 
+    # config.js is dynamically generated from env vars at container start — never cache it.
+    # Must appear before the *.js catch-all below; exact match takes priority over regex.
+    location = /config.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header Pragma "no-cache" always;
+        expires 0;
+    }
+
     # Cache static assets
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
         expires 1d;

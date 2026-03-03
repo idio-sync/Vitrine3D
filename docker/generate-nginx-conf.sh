@@ -1,11 +1,14 @@
 #!/bin/sh
 set -e
 
-# Defaults
-ADMIN_ENABLED="${ADMIN_ENABLED:-true}"
+# Defaults — export so envsubst (a subprocess) can see values set here.
+# Same fix applied to SERVER_NAMES in cf70a99.
+export ADMIN_ENABLED="${ADMIN_ENABLED:-false}"
+export CHUNKED_UPLOAD="${CHUNKED_UPLOAD:-false}"
+export DEFAULT_KIOSK_THEME="${DEFAULT_KIOSK_THEME:-editorial}"
 
 # Substitute environment variables in the config template
-envsubst '${DEFAULT_ARCHIVE_URL} ${DEFAULT_SPLAT_URL} ${DEFAULT_MODEL_URL} ${DEFAULT_POINTCLOUD_URL} ${ALLOWED_DOMAINS} ${KIOSK_LOCK} ${ARCHIVE_PATH_PREFIX} ${LOD_BUDGET_SD} ${LOD_BUDGET_HD} ${ADMIN_ENABLED} ${CHUNKED_UPLOAD}' \
+envsubst '${DEFAULT_ARCHIVE_URL} ${DEFAULT_SPLAT_URL} ${DEFAULT_MODEL_URL} ${DEFAULT_POINTCLOUD_URL} ${ALLOWED_DOMAINS} ${KIOSK_LOCK} ${ARCHIVE_PATH_PREFIX} ${LOD_BUDGET_SD} ${LOD_BUDGET_HD} ${ADMIN_ENABLED} ${CHUNKED_UPLOAD} ${DEFAULT_KIOSK_THEME}' \
     < /usr/share/nginx/html/config.js.template \
     > /usr/share/nginx/html/config.js
 
