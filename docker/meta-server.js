@@ -579,7 +579,9 @@ function handleListArchives(req, res) {
     if (!requireAuth(req, res)) return;
     try {
         const rows = db.prepare('SELECT * FROM archives ORDER BY created_at DESC').all();
-        sendJson(res, 200, rows.map(buildArchiveObjectFromRow));
+        const archives = rows.map(buildArchiveObjectFromRow);
+        const storageUsed = rows.reduce((sum, r) => sum + (r.size || 0), 0);
+        sendJson(res, 200, { archives, storageUsed });
     } catch (err) {
         sendJson(res, 500, { error: err.message });
     }
