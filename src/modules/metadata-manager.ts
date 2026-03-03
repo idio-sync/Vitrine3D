@@ -1237,19 +1237,27 @@ export function applyCameraConstraints(
     // Keep camera above ground
     controls.maxPolarAngle = settings.lockAboveGround ? Math.PI / 2 : Math.PI;
 
-    // Max camera height — return cleanup function
+    // Max camera height — dynamically constrain minPolarAngle so the camera
+    // smoothly stops at the ceiling while still orbiting freely horizontally.
     if (settings.maxCameraHeight !== null) {
         const maxY = settings.maxCameraHeight;
-        const clampHeight = () => {
-            if (camera.position.y > maxY) {
-                camera.position.y = maxY;
-                controls.update();
+        const updateHeightConstraint = () => {
+            const distance = camera.position.distanceTo(controls.target);
+            const targetY = controls.target.y;
+            if (distance === 0 || maxY >= targetY + distance) {
+                // Camera can never reach maxY at this distance — no constraint needed
+                controls.minPolarAngle = 0;
+            } else {
+                const ratio = Math.min(1, Math.max(-1, (maxY - targetY) / distance));
+                controls.minPolarAngle = Math.acos(ratio);
             }
         };
-        controls.addEventListener('change', clampHeight);
-        // Apply immediately in case camera is already above limit
-        clampHeight();
-        return clampHeight;
+        controls.addEventListener('change', updateHeightConstraint);
+        // Apply immediately
+        updateHeightConstraint();
+        return updateHeightConstraint;
+    } else {
+        controls.minPolarAngle = 0;
     }
 
     return null;

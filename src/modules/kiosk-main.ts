@@ -1532,15 +1532,23 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                     controls.maxPolarAngle = Math.PI / 2;
                 }
 
-                // Max camera height
+                // Max camera height — dynamically constrain minPolarAngle so the
+                // camera smoothly stops at the ceiling while still orbiting freely.
                 if (manifest.viewer_settings.max_camera_height != null) {
                     const maxY = manifest.viewer_settings.max_camera_height;
-                    controls.addEventListener('change', () => {
-                        if (camera && camera.position.y > maxY) {
-                            camera.position.y = maxY;
-                            controls.update();
+                    const updateHeightConstraint = () => {
+                        if (!camera || !controls) return;
+                        const distance = camera.position.distanceTo(controls.target);
+                        const targetY = controls.target.y;
+                        if (distance === 0 || maxY >= targetY + distance) {
+                            controls.minPolarAngle = 0;
+                        } else {
+                            const ratio = Math.min(1, Math.max(-1, (maxY - targetY) / distance));
+                            controls.minPolarAngle = Math.acos(ratio);
                         }
-                    });
+                    };
+                    controls.addEventListener('change', updateHeightConstraint);
+                    updateHeightConstraint();
                 }
             }
             // Apply default matcap
