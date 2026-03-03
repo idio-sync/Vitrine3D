@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import type { Annotation, DisplayMode } from '@/types.js';
 import { normalizeScale } from '@/types.js';
 import { SceneManager } from './scene-manager.js';
-import { SparkRenderer } from '@sparkjsdev/spark';
+import { createSparkRenderer, isSparkV2 } from './spark-compat.js';
 
 // Local AssetType (not exported from types.ts)
 type AssetType = 'splat' | 'mesh' | 'pointcloud';
@@ -279,7 +279,7 @@ export async function init(): Promise<void> {
     // will be created in onRendererChanged when switching to WebGL for splat loading.
     if (sceneManager.rendererType === 'webgl') {
         const lodBudget = getLodBudget(state.qualityResolved || QUALITY_TIER.HD);
-        sparkRenderer = new SparkRenderer({
+        sparkRenderer = createSparkRenderer({
             renderer: renderer,
             clipXY: 2.0,           // Prevent edge popping without excessive overdraw (default: 1.4)
             autoUpdate: true,
@@ -319,7 +319,7 @@ export async function init(): Promise<void> {
             if (sparkRenderer.dispose) sparkRenderer.dispose();
         }
         const lodBudget = getLodBudget(state.qualityResolved || QUALITY_TIER.HD);
-        sparkRenderer = new SparkRenderer({
+        sparkRenderer = createSparkRenderer({
             renderer: newRenderer,
             clipXY: 2.0,
             autoUpdate: true,
@@ -950,7 +950,7 @@ function onDirectFileLoaded(fileName: string | null): void {
     // Resolve quality tier for direct file loads (archive flow resolves earlier)
     const glCtx = renderer ? renderer.getContext() : null;
     state.qualityResolved = resolveQualityTier(state.qualityTier, glCtx);
-    if (sparkRenderer) sparkRenderer.lodSplatCount = getLodBudget(state.qualityResolved);
+    if (sparkRenderer && isSparkV2) sparkRenderer.lodSplatCount = getLodBudget(state.qualityResolved);
 
     // Fit camera to loaded content
     fitCameraToScene();
@@ -1723,8 +1723,8 @@ async function switchQualityTier(newTier: string): Promise<void> {
         btn.classList.add('loading');
     });
 
-    // Update SparkRenderer LOD budget (works even without proxy assets)
-    if (sparkRenderer) {
+    // Update SparkRenderer LOD budget (works even without proxy assets; v2.0 only)
+    if (sparkRenderer && isSparkV2) {
         sparkRenderer.lodSplatCount = getLodBudget(newTier);
         log.info(`SparkRenderer lodSplatCount updated to ${getLodBudget(newTier)}`);
     }

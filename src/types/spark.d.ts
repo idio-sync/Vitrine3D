@@ -87,4 +87,21 @@ declare module '@sparkjsdev/spark' {
 
         dispose(): void;
     }
+
+    /**
+     * Legacy 0.1 renderer, renamed in 2.0. No LOD support.
+     * Use via spark-compat.ts adapter with VITE_SPARK_VERSION=0.1.
+     */
+    export class OldSparkRenderer extends Object3D {
+        constructor(config: {
+            renderer: WebGLRenderer;
+            autoUpdate?: boolean;
+            maxStdDev?: number;
+            minAlpha?: number;
+            premultipliedAlpha?: boolean;
+            [key: string]: any;
+        });
+        newViewpoint(options?: any): any;
+        dispose(): void;
+    }
 }

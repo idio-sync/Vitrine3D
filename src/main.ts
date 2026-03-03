@@ -1,6 +1,6 @@
 // ES Module imports (these are hoisted - execute first before any other code)
 import * as THREE from 'three';
-import { SplatMesh, SparkRenderer } from '@sparkjsdev/spark';
+import { SplatMesh, createSparkRenderer, isSparkV2 } from './modules/spark-compat.js';
 import { ArchiveLoader } from './modules/archive-loader.js';
 // hasAnyProxy moved to archive-pipeline.ts (Phase 2.2)
 import { AnnotationSystem } from './modules/annotation-system.js';
@@ -726,7 +726,7 @@ async function init() {
     // WebGL context (uses .flush()). If starting with WebGPU, SparkRenderer
     // will be created in onRendererChanged when switching to WebGL for splat loading.
     if (sceneManager.rendererType === 'webgl') {
-        sparkRenderer = new SparkRenderer({
+        sparkRenderer = createSparkRenderer({
             renderer: renderer,
             clipXY: 2.0,           // Prevent edge popping without excessive overdraw (default: 1.4)
             autoUpdate: true,
@@ -763,7 +763,7 @@ async function init() {
             sparkRenderer = null;
         }
         if (sceneManager.rendererType === 'webgl') {
-            sparkRenderer = new SparkRenderer({
+            sparkRenderer = createSparkRenderer({
                 renderer: newRenderer,
                 clipXY: 2.0,
                 autoUpdate: true,
