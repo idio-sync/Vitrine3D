@@ -539,7 +539,12 @@ function parseMultipartUpload(req) {
         bb.on('close', () => {
             if (!filename) return finish(new Error('No file field in upload'));
             if (!writeStream) return finish(new Error('No file data received'));
-            writeStream.end(() => finish(null, { tmpPath, filename }));
+            // file.pipe(writeStream) already ends the stream; guard against double-end
+            if (writeStream.writableFinished) {
+                finish(null, { tmpPath, filename });
+            } else {
+                writeStream.end(() => finish(null, { tmpPath, filename }));
+            }
         });
 
         bb.on('error', finish);
