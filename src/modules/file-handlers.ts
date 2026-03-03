@@ -38,6 +38,11 @@ if (_dracoOfflineSrc) {
     (dracoLoader as any)._loadLibrary = () => Promise.resolve(_dracoOfflineSrc);
 } else {
     dracoLoader.setDecoderPath('/draco/');
+    // Force JS decoder — Blender 5.x Draco-compressed GLBs crash the WASM decoder
+    // with Aborted(). The JS decoder (draco_decoder.js) is ~2x slower but handles
+    // all Draco-encoded files reliably. If WASM compatibility is resolved upstream,
+    // remove this line to re-enable the faster WASM path.
+    dracoLoader.setDecoderConfig({ type: 'js' });
 }
 
 /**
