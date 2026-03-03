@@ -375,6 +375,12 @@ export async function init(): Promise<void> {
 
     // Load theme and determine layout
     const config = window.APP_CONFIG || {};
+    // kiosk-main.ts is always the kiosk bundle entry — force kiosk mode and apply
+    // a default theme. config.js only sets kiosk=true / theme=editorial when the URL
+    // contains ?kiosk=true or KIOSK_LOCK is active, but the kiosk bundle is *always*
+    // kiosk mode regardless of URL params.
+    config.kiosk = true;
+    if (!config.theme) config.theme = 'editorial';
     const themeMeta = await loadTheme(config.theme, { layoutOverride: config.layout || undefined });
 
     // ?layout= overrides theme's @layout; theme overrides default 'sidebar'
