@@ -53,14 +53,13 @@ docker compose up -d
 | `DEFAULT_SPLAT_URL` | _(empty)_ | Splat file URL to auto-load |
 | `DEFAULT_MODEL_URL` | _(empty)_ | Model file URL to auto-load |
 | `DEFAULT_POINTCLOUD_URL` | _(empty)_ | Point cloud URL to auto-load |
-| `SHOW_CONTROLS` | `true` | Show/hide the controls panel |
 | `LOD_BUDGET_SD` | `1000000` | Splat LOD budget (max splats per frame) for SD quality tier |
 | `LOD_BUDGET_HD` | `5000000` | Splat LOD budget (max splats per frame) for HD quality tier |
 | `ADMIN_ENABLED` | `false` | Enable admin panel and library. See [Admin Panel](#admin-panel) and [Library Panel](#library-panel) |
-| `ADMIN_USER` | `admin` | Admin basic auth username |
-| `ADMIN_PASS` | _(empty)_ | Admin basic auth password (required when ADMIN_ENABLED=true) |
 | `MAX_UPLOAD_SIZE` | `1024` | Maximum upload size in MB |
+| `CHUNKED_UPLOAD` | `false` | Enable chunked upload mode for large archives (splits into 50 MB chunks) |
 | `DEFAULT_KIOSK_THEME` | `editorial` | Default theme for clean URL kiosk views. See [Clean Archive URLs](#clean-archive-urls) |
+| `DEV_AUTH_USER` | _(empty)_ | **Local dev only.** Email injected as the Cloudflare Access header so the admin API authenticates without a real Cloudflare tunnel. Remove before production. |
 
 ### 3. Docker Compose
 
@@ -348,11 +347,11 @@ volumes:
 
 ## Admin Panel
 
-The container includes an optional admin panel at `/admin` for browser-based archive management: upload, delete, rename, and a gallery view. Protected by HTTP basic auth. Enabling the admin panel also activates the [Library Panel](#library-panel) inside the main viewer.
+The container includes an optional admin panel at `/admin` for browser-based archive management: upload, delete, rename, and a gallery view. Protected by **Cloudflare Access** (JWT-based identity). Enabling the admin panel also activates the [Library Panel](#library-panel) inside the main viewer.
 
 ### Enabling the Admin Panel
 
-Set `ADMIN_ENABLED=true` and provide `ADMIN_PASS`:
+Set `ADMIN_ENABLED=true`. The admin routes are protected by Cloudflare Access — no username/password env vars are required:
 
 ```yaml
 services:
@@ -363,36 +362,46 @@ services:
       - "80:80"
     environment:
       - ADMIN_ENABLED=true
-      - ADMIN_USER=admin
-      - ADMIN_PASS=your-secure-password
       - MAX_UPLOAD_SIZE=1024
       # Archives must be mounted read-write for upload/delete/rename
     volumes:
       - ./archives:/usr/share/nginx/html/archives:rw
+      - vitrine_db:/data
 ```
 
-**Important:** The archives volume must be mounted with `:rw` (not `:ro`) when the admin panel is enabled.
+**Important:** The archives volume must be mounted with `:rw` (not `:ro`) when the admin panel is enabled. Mount `/data` as a named volume to persist the SQLite archive database across container restarts.
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ADMIN_ENABLED` | `false` | Master switch for admin panel |
-| `ADMIN_USER` | `admin` | Basic auth username |
-| `ADMIN_PASS` | _(required)_ | Basic auth password. Container refuses to start if not set when `ADMIN_ENABLED=true` |
 | `MAX_UPLOAD_SIZE` | `1024` | Maximum upload size in MB |
+| `CHUNKED_UPLOAD` | `false` | Enable chunked upload for large archives |
 
 ### How It Works
 
 - The admin panel is served by the same Node.js meta-server that handles OG/oEmbed
-- nginx protects `/admin` and `/api/*` routes with HTTP basic auth (htpasswd generated at container start)
+- nginx forwards `/admin` and `/api/*` routes to the meta-server, passing through the `Cf-Access-Authenticated-User-Email` header injected by Cloudflare Access
+- The meta-server validates the header on every request — unauthenticated requests receive 401
+- Archive metadata is stored in a SQLite database at `/data/vitrine.db`
 - Uploads are streamed to disk (no in-memory buffering) — supports files up to `MAX_UPLOAD_SIZE`
 - After upload, `extract-meta.sh` runs automatically to generate metadata sidecars and thumbnails
 - The admin panel works independently of OG/oEmbed (`ADMIN_ENABLED=true` alone starts the meta-server)
 
+### Local Development
+
+Without a Cloudflare tunnel, set `DEV_AUTH_USER` to an email address. nginx will inject it as the auth header so the API authenticates without real Cloudflare:
+
+```yaml
+environment:
+  - ADMIN_ENABLED=true
+  - DEV_AUTH_USER=dev@example.com   # REMOVE BEFORE PRODUCTION
+```
+
 ### API Endpoints
 
-All API routes require basic auth and are proxied through nginx:
+All API routes require a valid `Cf-Access-Authenticated-User-Email` header and are proxied through nginx:
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -404,28 +413,29 @@ All API routes require basic auth and are proxied through nginx:
 
 ### Security Notes
 
-- **HTTPS required in production.** Basic auth sends credentials as base64 — always deploy behind TLS (Cloudflare, Caddy, or similar)
+- Authentication is enforced by Cloudflare Access at the edge — only Cloudflare can set the auth header inside the tunnel
 - Path traversal protection on all operations (uploads sanitized, deletes/renames resolved via hash lookup)
 - Uploads validated: file extension check, size limit enforced by both nginx and Node.js
 - The admin panel does not affect existing deployments — all features are opt-in via `ADMIN_ENABLED`
 
+### Migrating Existing Archives to SQLite
+
+If you have archives that were extracted before the SQLite migration (i.e., `/meta/*.json` sidecar files exist but the database is empty), run the migration script once inside the container:
+
+```bash
+docker exec <container-name> node /opt/migrate-to-sqlite.js
+```
+
+This reads all existing `meta/{hash}.json` sidecars and imports them into `/data/vitrine.db`. Safe to re-run — uses `INSERT OR REPLACE` so it corrects any previously bad records.
+
 ### Verifying It Works
 
 ```bash
-# Test API (with basic auth)
-curl -u admin:your-secure-password https://viewer.yourcompany.com/api/archives
+# Health check (no auth required)
+curl https://viewer.yourcompany.com/health
 
-# Upload an archive
-curl -u admin:your-secure-password -F file=@scan.a3d https://viewer.yourcompany.com/api/archives
-
-# Delete by hash (hash from the list response)
-curl -u admin:your-secure-password -X DELETE https://viewer.yourcompany.com/api/archives/a1b2c3d4e5f6g7h8
-
-# Rename
-curl -u admin:your-secure-password -X PATCH \
-  -H "Content-Type: application/json" \
-  -d '{"filename":"new-name.a3d"}' \
-  https://viewer.yourcompany.com/api/archives/a1b2c3d4e5f6g7h8
+# Test API via Cloudflare Access (token from CF dashboard)
+curl -H "Cf-Access-Jwt-Assertion: <token>" https://viewer.yourcompany.com/api/archives
 ```
 
 ## Library Panel
@@ -459,7 +469,7 @@ The Library panel includes a drag-and-drop upload zone at the bottom. Drop `.a3d
 
 ### Authentication
 
-The Library panel uses the same HTTP Basic Auth credentials as the admin panel (`ADMIN_USER`/`ADMIN_PASS`). On first access, if the API returns 401, a login form is displayed. Credentials are stored in memory for the session (not persisted).
+The Library panel uses Cloudflare Access — the same identity that protects `/admin`. The `Cf-Access-Authenticated-User-Email` header is passed automatically by the Cloudflare tunnel on every request. No in-app login form is shown in production.
 
 ### Save to Library
 
@@ -524,8 +534,6 @@ services:
       - "80:80"
     environment:
       - ADMIN_ENABLED=true
-      - ADMIN_USER=admin
-      - ADMIN_PASS=${ADMIN_PASS}
       - MAX_UPLOAD_SIZE=1024
       - OG_ENABLED=true
       - SITE_URL=https://viewer.yourcompany.com
@@ -535,6 +543,10 @@ services:
     volumes:
       - ./archives:/usr/share/nginx/html/archives:rw
       - ./thumbs/default.jpg:/usr/share/nginx/html/thumbs/default.jpg:ro
+      - vitrine_db:/data
+
+volumes:
+  vitrine_db:
 ```
 
 ## Nginx Configuration
