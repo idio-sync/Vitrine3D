@@ -49,7 +49,7 @@ const SPLAT_FILE_TYPE_MAP: Record<string, string> = {
     sog: 'pcsogszip',
 };
 
-function getSplatFileType(fileNameOrUrl: string): string | undefined {
+export function getSplatFileType(fileNameOrUrl: string): string | undefined {
     const ext = fileNameOrUrl.split(/[?#]/)[0].split('.').pop()?.toLowerCase();
     return ext ? SPLAT_FILE_TYPE_MAP[ext] : undefined;
 }

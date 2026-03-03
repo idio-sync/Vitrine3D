@@ -21,7 +21,8 @@ import {
     loadDrawingFromBlobUrl as loadDrawingFromBlobUrlHandler,
     loadArchiveFullResMesh, loadArchiveFullResSplat,
     loadArchiveProxyMesh, loadArchiveProxySplat,
-    getPrimaryAssetType
+    getPrimaryAssetType,
+    getSplatFileType
 } from './file-handlers.js';
 import { loadCADFromBlobUrl } from './cad-loader.js';
 import { centerModelOnGrid } from './alignment.js';
@@ -55,8 +56,9 @@ async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
     // Ensure WASM is ready (required for compressed formats like .sog, .spz)
     await SplatMesh.staticInitialized;
 
-    // Create SplatMesh using Spark
-    const newSplatMesh = new SplatMesh({ url: blobUrl });
+    // Pass fileType for blob URLs where Spark can't detect format from path
+    const fileType = getSplatFileType(fileName);
+    const newSplatMesh = new SplatMesh({ url: blobUrl, ...(fileType && { fileType }) });
     setSplatMesh(newSplatMesh);
 
     // Apply default rotation to correct upside-down orientation
