@@ -471,7 +471,7 @@ interface PresetConfig {
 const PRESETS: Record<string, PresetConfig> = {
     kiosk: { theme: 'editorial', kiosk: true },
     minimal: { theme: 'editorial', kiosk: true },
-    editor: { theme: 'default', kiosk: false },
+    editor: { theme: '', kiosk: false },
 };
 
 // =============================================================================
@@ -528,9 +528,7 @@ export function showShareDialog(state: ShareState | AppState): void {
                         '<div class="share-field"><label>Theme</label>' +
                             '<select class="share-select" data-opt="theme">' +
                                 '<option value="editorial">Editorial</option>' +
-                                '<option value="museum">Museum</option>' +
-                                '<option value="technical">Technical</option>' +
-                                '<option value="default">Default</option>' +
+                                '<option value="minimal">Minimal</option>' +
                             '</select></div>' +
                         '<div class="share-field"><label>Display Mode</label>' +
                             '<select class="share-select" data-opt="displayMode">' +

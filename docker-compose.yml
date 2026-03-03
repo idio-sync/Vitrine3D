@@ -44,7 +44,7 @@ services:
       # - OEMBED_HEIGHT=540
 
       # Clean URL defaults (optional — see docs/DEPLOYMENT.md#clean-archive-urls)
-      # - DEFAULT_KIOSK_THEME=editorial
+      - DEFAULT_KIOSK_THEME=${DEFAULT_KIOSK_THEME:-editorial}
     volumes:
       # rw required for admin upload/delete/rename. Change to :ro if ADMIN_ENABLED=false.
       - ./archives:/usr/share/nginx/html/archives:rw

@@ -324,7 +324,7 @@ export class CrossSectionTool {
             mesh.updateWorldMatrix(true, false);
 
             const capMat = new THREE.MeshBasicMaterial({
-                color: 0xc9a87c,
+                color: 0xFEC03A,
                 side: THREE.BackSide,
                 clippingPlanes: [this._plane],
             });

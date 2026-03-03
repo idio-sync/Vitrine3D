@@ -60,7 +60,7 @@ docker compose up -d
 | `ADMIN_USER` | `admin` | Admin basic auth username |
 | `ADMIN_PASS` | _(empty)_ | Admin basic auth password (required when ADMIN_ENABLED=true) |
 | `MAX_UPLOAD_SIZE` | `1024` | Maximum upload size in MB |
-| `DEFAULT_KIOSK_THEME` | _(empty)_ | Default theme for clean URL kiosk views (e.g., `editorial`). See [Clean Archive URLs](#clean-archive-urls) |
+| `DEFAULT_KIOSK_THEME` | `editorial` | Default theme for clean URL kiosk views. See [Clean Archive URLs](#clean-archive-urls) |
 
 ### 3. Docker Compose
 
@@ -507,7 +507,7 @@ The 16-character hex hash is a truncated SHA-256 of the archive's URL path (e.g.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DEFAULT_KIOSK_THEME` | _(empty)_ | Theme applied to all clean URL views (e.g., `editorial`, `museum`, `technical`) |
+| `DEFAULT_KIOSK_THEME` | `editorial` | Theme applied to all clean URL views (e.g., `editorial`, `minimal`) |
 
 ### Share Dialog Integration
 
