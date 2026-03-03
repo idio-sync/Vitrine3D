@@ -481,6 +481,9 @@ export function loadOBJ(objFile: File, mtlFile: File | null, textureFiles?: File
 
     // LoadingManager URL modifier maps filenames to blob URLs
     const manager = new THREE.LoadingManager();
+    manager.onError = (url: string) => {
+        log.warn('Failed to load OBJ resource:', url);
+    };
     manager.setURLModifier((url: string) => {
         // Try exact match
         if (blobMap.has(url)) return blobMap.get(url)!;
@@ -491,6 +494,7 @@ export function loadOBJ(objFile: File, mtlFile: File | null, textureFiles?: File
         const filename = url.split(/[/\\]/).pop() || '';
         if (blobMap.has(filename)) return blobMap.get(filename)!;
         if (blobMap.has(filename.toLowerCase())) return blobMap.get(filename.toLowerCase())!;
+        log.warn('URL modifier: no blob match for', url, '— available:', [...blobMap.keys()]);
         return url;
     });
 

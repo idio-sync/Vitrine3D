@@ -74,7 +74,7 @@ export function isTauri(): boolean {
 
 const FILE_FILTERS: Record<string, TauriDialogFilter> = {
     splat:      { name: 'Gaussian Splats', extensions: ['ply', 'splat', 'ksplat', 'spz', 'sog'] },
-    model:      { name: '3D Models', extensions: ['glb', 'gltf', 'obj'] },
+    model:      { name: '3D Models', extensions: ['glb', 'gltf', 'obj', 'mtl', 'png', 'jpg', 'jpeg', 'tga', 'bmp', 'webp'] },
     stl:        { name: 'STL Models', extensions: ['stl'] },
     pointcloud: { name: 'Point Clouds', extensions: ['e57'] },
     archive:    { name: '3D Archives', extensions: ['a3d', 'a3z'] },
