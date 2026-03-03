@@ -663,6 +663,88 @@ export function setupMetadataSidebar(deps: MetadataDeps = {}): void {
         });
     }
 
+    // Camera constraint checkboxes — live preview
+    let heightClampListener: (() => void) | null = null;
+
+    function applyLiveConstraints() {
+        if (!deps.getControls) return;
+        const { controls: ctrl, camera: cam } = deps.getControls();
+        if (!ctrl || !cam) return;
+
+        // Remove old height clamp listener before re-applying
+        if (heightClampListener) {
+            ctrl.removeEventListener('change', heightClampListener);
+            heightClampListener = null;
+        }
+
+        const lockOrbit = (document.getElementById('meta-viewer-lock-orbit') as HTMLInputElement)?.checked ?? false;
+        const lockDistanceChecked = (document.getElementById('meta-viewer-lock-orbit-distance') as HTMLInputElement)?.checked ?? false;
+        const lockAboveGround = (document.getElementById('meta-viewer-lock-above-ground') as HTMLInputElement)?.checked ?? false;
+        const lockMaxHeightChecked = (document.getElementById('meta-viewer-lock-max-height') as HTMLInputElement)?.checked ?? false;
+
+        // Capture current distance when lock distance is toggled on
+        let lockDistanceValue: number | null = null;
+        if (lockDistanceChecked) {
+            const storedVal = (document.getElementById('meta-viewer-lock-distance-value') as HTMLInputElement)?.value;
+            if (storedVal) {
+                lockDistanceValue = parseFloat(storedVal);
+            } else {
+                // Capture current distance
+                const dist = cam.position.distanceTo(ctrl.target);
+                lockDistanceValue = parseFloat(dist.toFixed(4));
+                const hiddenEl = document.getElementById('meta-viewer-lock-distance-value') as HTMLInputElement;
+                if (hiddenEl) hiddenEl.value = String(lockDistanceValue);
+            }
+        } else {
+            // Clear stored distance when unchecked
+            const hiddenEl = document.getElementById('meta-viewer-lock-distance-value') as HTMLInputElement;
+            if (hiddenEl) hiddenEl.value = '';
+        }
+
+        // Max height value
+        let maxHeightValue: number | null = null;
+        if (lockMaxHeightChecked) {
+            const input = document.getElementById('meta-viewer-max-height-value') as HTMLInputElement;
+            maxHeightValue = input?.value ? parseFloat(input.value) : null;
+        }
+
+        // Show/hide max height controls
+        const maxHeightRow = document.getElementById('max-height-controls');
+        if (maxHeightRow) maxHeightRow.style.display = lockMaxHeightChecked ? '' : 'none';
+
+        heightClampListener = applyCameraConstraints(ctrl, cam, {
+            lockOrbit,
+            lockDistance: lockDistanceValue,
+            lockAboveGround,
+            maxCameraHeight: maxHeightValue,
+        });
+    }
+
+    // Wire checkbox change events
+    ['meta-viewer-lock-orbit', 'meta-viewer-lock-orbit-distance', 'meta-viewer-lock-above-ground', 'meta-viewer-lock-max-height'].forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        if (el) el.addEventListener('change', applyLiveConstraints);
+    });
+
+    // Wire max height value input — re-apply on change
+    const maxHeightInput = document.getElementById('meta-viewer-max-height-value') as HTMLInputElement | null;
+    if (maxHeightInput) maxHeightInput.addEventListener('input', applyLiveConstraints);
+
+    // "Set to current" button for max height
+    const setMaxHeightBtn = document.getElementById('btn-set-max-height-current');
+    if (setMaxHeightBtn) {
+        setMaxHeightBtn.addEventListener('click', () => {
+            if (!deps.getControls) return;
+            const { camera: cam } = deps.getControls();
+            if (!cam) return;
+            const input = document.getElementById('meta-viewer-max-height-value') as HTMLInputElement;
+            if (input) {
+                input.value = cam.position.y.toFixed(2);
+                applyLiveConstraints();
+            }
+        });
+    }
+
     // Map picker for GPS coordinates
     setupMapPicker();
 }
@@ -1123,6 +1205,54 @@ function updateCameraSaveDisplay(): void {
         if (hint) hint.style.display = '';
         if (clearBtn) clearBtn.style.display = 'none';
     }
+}
+
+/**
+ * Apply camera constraints to OrbitControls based on settings.
+ * Called on checkbox toggle (live preview) and on archive load.
+ * Returns a cleanup function for the height clamp listener, or null.
+ */
+export function applyCameraConstraints(
+    controls: any,
+    camera: any,
+    settings: {
+        lockOrbit: boolean;
+        lockDistance: number | null;
+        lockAboveGround: boolean;
+        maxCameraHeight: number | null;
+    }
+): (() => void) | null {
+    // Lock orbit point (disable panning)
+    controls.enablePan = !settings.lockOrbit;
+
+    // Lock camera distance
+    if (settings.lockDistance !== null) {
+        controls.minDistance = settings.lockDistance;
+        controls.maxDistance = settings.lockDistance;
+    } else {
+        controls.minDistance = 0.1;  // ORBIT_CONTROLS.MIN_DISTANCE
+        controls.maxDistance = 100;  // ORBIT_CONTROLS.MAX_DISTANCE
+    }
+
+    // Keep camera above ground
+    controls.maxPolarAngle = settings.lockAboveGround ? Math.PI / 2 : Math.PI;
+
+    // Max camera height — return cleanup function
+    if (settings.maxCameraHeight !== null) {
+        const maxY = settings.maxCameraHeight;
+        const clampHeight = () => {
+            if (camera.position.y > maxY) {
+                camera.position.y = maxY;
+                controls.update();
+            }
+        };
+        controls.addEventListener('change', clampHeight);
+        // Apply immediately in case camera is already above limit
+        clampHeight();
+        return clampHeight;
+    }
+
+    return null;
 }
 
 /**
