@@ -1,2 +1,2 @@
 #!/bin/sh
-exec node /opt/meta-server.js
+exec /command/with-contenv node /opt/meta-server.js
