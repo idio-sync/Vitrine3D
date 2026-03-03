@@ -1,6 +1,7 @@
 # Stage 1: Build API npm dependencies
-# better-sqlite3 is a native C++ addon — requires build tools unavailable in nginx:alpine
-FROM node:alpine AS api-deps
+# Pinned to Node 20 LTS: better-sqlite3 prebuilt binaries are published for LTS releases only.
+# The same Node binary is copied to the final stage to guarantee ABI compatibility.
+FROM node:20-alpine AS api-deps
 WORKDIR /build
 COPY docker/package.json docker/package-lock.json ./
 RUN apk add --no-cache python3 make g++ && npm ci --omit=dev
@@ -12,10 +13,15 @@ FROM nginx:alpine
 ARG S6_VERSION=3.2.0.0
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-noarch.tar.xz /tmp/
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-x86_64.tar.xz /tmp/
-RUN apk add --no-cache xz gettext nodejs python3 unzip && \
+# libstdc++ is required by the Node binary and better-sqlite3 native addon.
+# nodejs is NOT installed via apk — the build-stage binary is copied below for ABI compatibility.
+RUN apk add --no-cache xz gettext python3 unzip libstdc++ && \
     tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && \
     tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz && \
     rm /tmp/s6-overlay-*.tar.xz
+
+# Copy Node 20 binary from build stage (must match the ABI better-sqlite3 was compiled against)
+COPY --from=api-deps /usr/local/bin/node /usr/local/bin/node
 
 # Copy compiled API dependencies from build stage
 COPY --from=api-deps /build/node_modules /opt/node_modules
