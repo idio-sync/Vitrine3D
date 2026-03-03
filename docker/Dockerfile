@@ -76,7 +76,9 @@ COPY docker/generate-nginx-conf.sh /opt/generate-nginx-conf.sh
 COPY docker/s6-rc.d/ /etc/s6-overlay/s6-rc.d/
 RUN chmod +x /opt/generate-nginx-conf.sh \
               /etc/s6-overlay/s6-rc.d/nginx/run \
-              /etc/s6-overlay/s6-rc.d/api/run
+              /etc/s6-overlay/s6-rc.d/api/run \
+              /etc/s6-overlay/s6-rc.d/init-config/up \
+              /etc/s6-overlay/s6-rc.d/init-scan/up
 
 ENTRYPOINT ["/init"]
 CMD []
