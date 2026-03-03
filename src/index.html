@@ -1815,6 +1815,39 @@
                                 <input type="hidden" id="meta-viewer-camera-target-z">
                             </div>
 
+                            <div class="subsection-header" style="margin-top: 20px;">Camera Constraints</div>
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="meta-viewer-lock-orbit">
+                                <label for="meta-viewer-lock-orbit">Lock Orbit Point</label>
+                            </div>
+                            <span class="field-hint">Prevent panning — the orbit center stays fixed.</span>
+
+                            <div class="checkbox-group" style="margin-top: 8px;">
+                                <input type="checkbox" id="meta-viewer-lock-orbit-distance">
+                                <label for="meta-viewer-lock-orbit-distance">Lock Camera Distance</label>
+                            </div>
+                            <span class="field-hint">Freeze zoom at the current distance from the orbit point.</span>
+                            <input type="hidden" id="meta-viewer-lock-distance-value">
+
+                            <div class="checkbox-group" style="margin-top: 8px;">
+                                <input type="checkbox" id="meta-viewer-lock-above-ground">
+                                <label for="meta-viewer-lock-above-ground">Keep Camera Above Ground</label>
+                            </div>
+                            <span class="field-hint">Prevent the camera from orbiting below the ground plane.</span>
+
+                            <div class="checkbox-group" style="margin-top: 8px;">
+                                <input type="checkbox" id="meta-viewer-lock-max-height">
+                                <label for="meta-viewer-lock-max-height">Limit Camera Height</label>
+                            </div>
+                            <span class="field-hint">Cap the camera's vertical position at a maximum height.</span>
+                            <div id="max-height-controls" class="metadata-field" style="display: none; margin-top: 4px; padding-left: 24px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <label for="meta-viewer-max-height-value" style="white-space: nowrap; font-size: 12px;">Max Y:</label>
+                                    <input type="number" id="meta-viewer-max-height-value" step="0.1" style="width: 80px; font-size: 12px;" placeholder="0.0">
+                                    <button id="btn-set-max-height-current" class="action-btn secondary" style="font-size: 11px; padding: 2px 8px; white-space: nowrap;">Set to current</button>
+                                </div>
+                            </div>
+
                             <div class="subsection-header" style="margin-top: 20px;">Viewer Behavior</div>
                             <div class="checkbox-group">
                                 <input type="checkbox" id="meta-viewer-auto-rotate">

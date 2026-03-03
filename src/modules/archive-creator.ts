@@ -273,6 +273,10 @@ export interface Manifest {
         camera_target: { x: number; y: number; z: number } | null;
         auto_rotate: boolean;
         annotations_visible: boolean;
+        lock_orbit: boolean;
+        lock_distance: number | null;
+        lock_above_ground: boolean;
+        max_camera_height: number | null;
     };
     alignment?: {
         splat?: { position: number[]; rotation: number[]; scale: number | [number, number, number] } | null;
@@ -630,6 +634,10 @@ export class ArchiveCreator {
                 camera_target: null,
                 auto_rotate: false,
                 annotations_visible: true,
+                lock_orbit: false,
+                lock_distance: null,
+                lock_above_ground: false,
+                max_camera_height: null,
             },
             alignment: null,
             preservation: {
@@ -1097,6 +1105,10 @@ export class ArchiveCreator {
         if (settings.cameraTarget !== undefined) this.manifest.viewer_settings.camera_target = settings.cameraTarget;
         if (settings.autoRotate !== undefined) this.manifest.viewer_settings.auto_rotate = settings.autoRotate;
         if (settings.annotationsVisible !== undefined) this.manifest.viewer_settings.annotations_visible = settings.annotationsVisible;
+        if (settings.lockOrbit !== undefined) this.manifest.viewer_settings.lock_orbit = settings.lockOrbit;
+        if (settings.lockDistance !== undefined) this.manifest.viewer_settings.lock_distance = settings.lockDistance;
+        if (settings.lockAboveGround !== undefined) this.manifest.viewer_settings.lock_above_ground = settings.lockAboveGround;
+        if (settings.maxCameraHeight !== undefined) this.manifest.viewer_settings.max_camera_height = settings.maxCameraHeight;
     }
 
     setAlignment(data: {

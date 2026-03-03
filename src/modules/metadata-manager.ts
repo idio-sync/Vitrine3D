@@ -54,6 +54,7 @@ export interface MetadataDeps {
     onExportMetadata?: () => void;
     onImportMetadata?: () => void;
     getCameraState?: () => { position: { x: number; y: number; z: number }; target: { x: number; y: number; z: number } };
+    getControls?: () => { controls: any; camera: any };
     imageAssets?: Map<string, { blob: Blob; url: string; name: string }>;
     currentSplatBlob?: Blob | null;
     currentMeshBlob?: Blob | null;
@@ -198,6 +199,10 @@ export interface ViewerSettings {
     cameraTarget: { x: number; y: number; z: number } | null;
     autoRotate: boolean;
     annotationsVisible: boolean;
+    lockOrbit: boolean;
+    lockDistance: number | null;
+    lockAboveGround: boolean;
+    maxCameraHeight: number | null;
 }
 
 export interface VersionHistoryEntry {
@@ -1277,6 +1282,14 @@ export function collectMetadata(): CollectedMetadata {
             cameraTarget: getCameraFromHiddenFields('target'),
             autoRotate: (document.getElementById('meta-viewer-auto-rotate') as HTMLInputElement)?.checked ?? false,
             annotationsVisible: (document.getElementById('meta-viewer-annotations-visible') as HTMLInputElement)?.checked ?? true,
+            lockOrbit: (document.getElementById('meta-viewer-lock-orbit') as HTMLInputElement)?.checked ?? false,
+            lockDistance: (document.getElementById('meta-viewer-lock-orbit-distance') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-lock-distance-value') as HTMLInputElement)?.value) || null
+                : null,
+            lockAboveGround: (document.getElementById('meta-viewer-lock-above-ground') as HTMLInputElement)?.checked ?? false,
+            maxCameraHeight: (document.getElementById('meta-viewer-lock-max-height') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-max-height-value') as HTMLInputElement)?.value) || null
+                : null,
         }
     };
 

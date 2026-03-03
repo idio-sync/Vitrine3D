@@ -535,6 +535,7 @@ function createMetadataDeps(): any {
                 z: parseFloat(controls.target.z.toFixed(4))
             }
         }),
+        getControls: () => ({ controls, camera }),
     };
 }
 
@@ -1821,6 +1822,10 @@ function animate() {
 log.info(' Setting up initialization, readyState:', document.readyState);
 
 async function startApp() {
+    // Apply browser tab title from env var (APP_TITLE, set in config.js.template)
+    const appTitle = window.APP_CONFIG?.appTitle;
+    if (appTitle) document.title = appTitle;
+
     // Belt-and-suspenders: if kioskLock is active server-side but kiosk flag
     // was somehow cleared (e.g., config tampering), force kiosk mode anyway
     if (window.APP_CONFIG?.kioskLock && !window.APP_CONFIG?.kiosk) {
