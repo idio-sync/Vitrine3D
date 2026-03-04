@@ -48,6 +48,7 @@ let selectedHash: string | null = null;
 let initialized = false;
 let authCredentials: string | null = null;
 let hasFetched = false;
+let searchQuery = '';
 let uploadQueue: File[] = [];
 let uploading = false;
 
@@ -312,10 +313,27 @@ function render(): void {
         return;
     }
 
-    if (emptyState) emptyState.style.display = 'none';
-    if (countEl) countEl.textContent = archives.length + ' archive' + (archives.length !== 1 ? 's' : '');
+    // Filter by search query (title + tags)
+    const filtered = searchQuery
+        ? archives.filter(a => {
+            if (a.title.toLowerCase().includes(searchQuery)) return true;
+            const tags = a.metadataFields?.['project.tags'];
+            if (typeof tags === 'string' && tags.toLowerCase().includes(searchQuery)) return true;
+            return false;
+        })
+        : archives;
 
-    const sorted = [...archives].sort((a, b) => {
+    if (filtered.length === 0) {
+        if (emptyState) emptyState.style.display = '';
+        if (countEl) countEl.textContent = 'No matches';
+        return;
+    }
+
+    if (emptyState) emptyState.style.display = 'none';
+    if (countEl) countEl.textContent = filtered.length + ' archive' + (filtered.length !== 1 ? 's' : '')
+        + (searchQuery ? ' (filtered)' : '');
+
+    const sorted = [...filtered].sort((a, b) => {
         let cmp = 0;
         if (currentSort === 'name') cmp = a.title.localeCompare(b.title);
         else if (currentSort === 'date') cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime();
@@ -842,6 +860,15 @@ export function initLibraryPanel(): void {
     setupSort();
     setupUpload();
     setupDetailActions();
+
+    // Search filter
+    const searchInput = document.getElementById('library-search') as HTMLInputElement | null;
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            searchQuery = searchInput.value.trim().toLowerCase();
+            render();
+        });
+    }
 
     // Auth form
     document.getElementById('library-auth-submit')?.addEventListener('click', handleAuth);

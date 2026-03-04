@@ -4999,6 +4999,21 @@ input[type="range"]::-webkit-slider-thumb:hover {
     color: var(--text-muted);
 }
 
+.library-search {
+    flex: 1;
+    min-width: 120px;
+    max-width: 280px;
+    font-size: 11px;
+    padding: 5px 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    outline: none;
+}
+.library-search:focus { border-color: var(--accent); }
+.library-search::placeholder { color: var(--text-muted); }
+
 .library-header-right {
     display: flex;
     align-items: center;
