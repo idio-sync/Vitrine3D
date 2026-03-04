@@ -511,14 +511,21 @@ function parseMultipartUpload(req) {
         let writeStream = null;
         let settled = false;
 
+        console.log('[upload-debug] parseMultipartUpload called');
+        console.log('[upload-debug] content-type:', req.headers['content-type']);
+        console.log('[upload-debug] content-length:', req.headers['content-length']);
+        console.log('[upload-debug] transfer-encoding:', req.headers['transfer-encoding']);
+
         function finish(err, result) {
             if (settled) return;
             settled = true;
             if (err) {
+                console.log('[upload-debug] finish with error:', err.message);
                 if (writeStream) { try { writeStream.destroy(); } catch {} }
                 try { fs.unlinkSync(tmpPath); } catch {}
                 reject(err);
             } else {
+                console.log('[upload-debug] finish success, file:', result.filename);
                 resolve(result);
             }
         }
@@ -526,15 +533,19 @@ function parseMultipartUpload(req) {
         let bb;
         try {
             bb = busboy({ headers: req.headers, limits: { fileSize: MAX_UPLOAD_SIZE } });
+            console.log('[upload-debug] busboy created OK');
         } catch (err) {
+            console.log('[upload-debug] busboy creation error:', err.message);
             return reject(err);
         }
 
         bb.on('file', (_fieldname, file, info) => {
+            console.log('[upload-debug] busboy file event:', info.filename, 'field:', _fieldname);
             filename = sanitizeFilename(info.filename || '');
             writeStream = fs.createWriteStream(tmpPath);
             writeStream.on('error', finish);
             file.on('limit', () => {
+                console.log('[upload-debug] file size limit hit');
                 req.unpipe(bb);
                 bb.destroy();
                 finish(new Error('LIMIT'));
@@ -542,7 +553,12 @@ function parseMultipartUpload(req) {
             file.pipe(writeStream);
         });
 
+        bb.on('field', (name, val) => {
+            console.log('[upload-debug] busboy field event:', name, '=', val);
+        });
+
         bb.on('close', () => {
+            console.log('[upload-debug] busboy close event, filename:', filename, 'writeStream:', !!writeStream);
             if (!filename) return finish(new Error('No file field in upload'));
             if (!writeStream) return finish(new Error('No file data received'));
             // file.pipe(writeStream) already ends the stream; guard against double-end
@@ -553,8 +569,16 @@ function parseMultipartUpload(req) {
             }
         });
 
-        bb.on('error', finish);
-        req.on('error', finish);
+        bb.on('error', (err) => {
+            console.log('[upload-debug] busboy error event:', err.message);
+            finish(err);
+        });
+        req.on('error', (err) => {
+            console.log('[upload-debug] req error event:', err.message);
+            finish(err);
+        });
+
+        console.log('[upload-debug] piping req to busboy, readable:', req.readable, 'readableFlowing:', req.readableFlowing);
         req.pipe(bb);
     });
 }
@@ -597,8 +621,10 @@ function handleListArchives(req, res) {
  * POST /api/archives — upload a new archive
  */
 async function handleUploadArchive(req, res) {
-    if (!requireAuth(req, res)) return;
-    if (!checkCsrf(req, res)) return;
+    console.log('[upload-debug] handleUploadArchive called, method:', req.method);
+    if (!requireAuth(req, res)) { console.log('[upload-debug] auth failed'); return; }
+    if (!checkCsrf(req, res)) { console.log('[upload-debug] csrf failed'); return; }
+    console.log('[upload-debug] auth+csrf passed, calling parseMultipartUpload');
     try {
         const { tmpPath, filename } = await parseMultipartUpload(req);
         const finalPath = path.join(ARCHIVES_DIR, filename);
