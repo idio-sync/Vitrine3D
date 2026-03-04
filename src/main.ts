@@ -1361,12 +1361,12 @@ function wireNativeFileDialogs() {
             try {
                 await sceneManager.loadBackgroundImageFromFile(files[0]);
                 const filenameEl = document.getElementById('bg-image-filename');
-                if (filenameEl) { filenameEl.textContent = files[0].name; filenameEl.style.display = ''; }
+                if (filenameEl) filenameEl.textContent = files[0].name;
+                const statusRow = document.getElementById('bg-image-status');
+                if (statusRow) statusRow.style.display = '';
                 const envBgToggle = document.getElementById('toggle-env-background') as HTMLInputElement | null;
                 if (envBgToggle) envBgToggle.checked = false;
                 document.querySelectorAll('.color-preset').forEach(b => b.classList.remove('active'));
-                const clearBtn = document.getElementById('btn-clear-bg-image');
-                if (clearBtn) clearBtn.style.display = '';
             } catch (err) { notify.error('Failed to load background image: ' + err.message); }
         },
         onHdrFiles: async (files: any[]) => {

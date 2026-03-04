@@ -484,7 +484,7 @@ const TEXTURE_EXTS = new Set(['png', 'jpg', 'jpeg', 'tga', 'bmp', 'webp']);
  * to blob URLs via a LoadingManager URL modifier, then loaded by name.
  * This ensures MTLLoader resolves texture references correctly.
  */
-export function loadOBJ(objFile: File, mtlFile: File | null, textureFiles?: File[]): Promise<THREE.Group> {
+function loadOBJ(objFile: File, mtlFile: File | null, textureFiles?: File[]): Promise<THREE.Group> {
     // Map all files by their original filename → blob URL (Three.js docs pattern)
     const blobMap = new Map<string, string>();
     const allBlobUrls: string[] = [];
@@ -609,7 +609,7 @@ export interface OBJGroup {
  * Parse a FileList into OBJ groups — each OBJ matched with its MTL by base name.
  * All texture images are shared across groups (MTLLoader requests only what it needs).
  */
-export function parseMultiPartOBJ(files: File[]): OBJGroup[] {
+function parseMultiPartOBJ(files: File[]): OBJGroup[] {
     const objFiles: File[] = [];
     const mtlFiles: File[] = [];
     const textureFiles: File[] = [];
@@ -649,7 +649,7 @@ export function parseMultiPartOBJ(files: File[]): OBJGroup[] {
 /**
  * Load multiple OBJ parts into a single combined THREE.Group.
  */
-export async function loadMultiPartOBJ(groups: OBJGroup[]): Promise<THREE.Group> {
+async function loadMultiPartOBJ(groups: OBJGroup[]): Promise<THREE.Group> {
     const combinedGroup = new THREE.Group();
     combinedGroup.name = 'multi_obj_combined';
 
@@ -667,7 +667,7 @@ export async function loadMultiPartOBJ(groups: OBJGroup[]): Promise<THREE.Group>
  * Export a THREE.Object3D to a self-contained GLB Blob.
  * Used to convert multi-part OBJ scenes into a single archivable binary.
  */
-export async function exportToGLB(object: THREE.Object3D): Promise<Blob> {
+async function exportToGLB(object: THREE.Object3D): Promise<Blob> {
     const exporter = new GLTFExporter();
     const glbBuffer = await exporter.parseAsync(object, { binary: true });
     return new Blob([glbBuffer as ArrayBuffer], { type: 'model/gltf-binary' });
@@ -695,7 +695,7 @@ export function loadOBJFromUrl(url: string, onProgress?: (loaded: number, total:
  * Load STL from a File object
  * STLLoader returns a BufferGeometry, so we wrap it in a Mesh.
  */
-export function loadSTL(fileOrUrl: File | string): Promise<THREE.Mesh> {
+function loadSTL(fileOrUrl: File | string): Promise<THREE.Mesh> {
     return new Promise((resolve, reject) => {
         const loader = new STLLoader();
         const url = typeof fileOrUrl === 'string' ? fileOrUrl : URL.createObjectURL(fileOrUrl);
@@ -754,7 +754,7 @@ export function loadSTLFromUrl(url: string, onProgress?: (loaded: number, total:
 /**
  * Load a standalone Draco-compressed geometry file (.drc)
  */
-export function loadDRC(source: File | string, onProgress?: (loaded: number, total: number) => void): Promise<THREE.Group> {
+function loadDRC(source: File | string, onProgress?: (loaded: number, total: number) => void): Promise<THREE.Group> {
     return new Promise((resolve, reject) => {
         const url = source instanceof File ? URL.createObjectURL(source) : source;
         const isFile = source instanceof File;
@@ -1974,13 +1974,6 @@ function generateMatcapTexture(style: string): THREE.CanvasTexture {
 }
 
 /**
- * Return the list of available matcap preset names.
- */
-export function getMatcapPresets(): string[] {
-    return ['clay', 'chrome', 'pearl', 'jade', 'copper', 'bronze', 'dark-bronze'];
-}
-
-/**
  * Toggle matcap rendering mode on all meshes in a model group.
  * When enabled, replaces materials with MeshMatcapMaterial.
  * When disabled, restores original materials.
@@ -2206,7 +2199,7 @@ export function updateModelSpecularF0(modelGroup: THREE.Group, enabled: boolean)
  * E57 files from surveying/scanning use Z-up convention, so we rotate
  * the geometry to Three.js Y-up coordinate system.
  */
-export async function loadE57(url: string, onProgress?: (loaded: number, total: number) => void): Promise<THREE.Group> {
+async function loadE57(url: string, onProgress?: (loaded: number, total: number) => void): Promise<THREE.Group> {
     const E57Loader = await getE57Loader();
     if (!E57Loader) {
         throw new Error('E57 point cloud loading is not available. The three-e57-loader module could not be loaded (requires network access).');

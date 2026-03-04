@@ -100,7 +100,7 @@ function clearCADGroup(group: THREE.Group): void {
 
 // ===== Public API =====
 
-export async function loadCADFromBuffer(
+async function loadCADFromBuffer(
     buffer: ArrayBuffer,
     fileName: string,
     deps: LoadCADDeps,

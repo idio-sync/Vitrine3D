@@ -418,7 +418,7 @@ export function updateSidebarAnnotationsList(deps: AnnotationControllerDeps): vo
 /**
  * Show sidebar annotation editor with annotation data.
  */
-export function showSidebarAnnotationEditor(annotation: Annotation): void {
+function showSidebarAnnotationEditor(annotation: Annotation): void {
     const editor = document.getElementById('sidebar-annotation-editor');
     const titleInput = document.getElementById('sidebar-edit-anno-title') as HTMLInputElement | null;
     const bodyInput = document.getElementById('sidebar-edit-anno-body') as HTMLTextAreaElement | null;

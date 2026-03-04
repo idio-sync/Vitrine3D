@@ -1400,13 +1400,4 @@ export class SceneManager {
 // FACTORY FUNCTION
 // =============================================================================
 
-/**
- * Create and initialize a scene manager
- */
-export async function createSceneManager(canvas: HTMLCanvasElement, canvasRight: HTMLCanvasElement): Promise<SceneManager | null> {
-    const manager = new SceneManager();
-    const success = await manager.init(canvas, canvasRight);
-    return success ? manager : null;
-}
-
 export default SceneManager;

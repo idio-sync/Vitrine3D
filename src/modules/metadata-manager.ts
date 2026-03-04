@@ -309,7 +309,7 @@ export function switchSidebarMode(mode: string, deps: MetadataDeps = {}): void {
 /**
  * Switch edit sub-tab
  */
-export function switchEditTab(tabName: string): void {
+function switchEditTab(tabName: string): void {
     // Update tab buttons
     const tabs = document.querySelectorAll('.edit-tab');
     tabs.forEach(tab => {
@@ -384,7 +384,7 @@ export function getActiveProfile(): MetadataProfile {
 /**
  * Set the active metadata profile. Updates UI visibility and completeness indicator.
  */
-export function setActiveProfile(profile: MetadataProfile): void {
+function setActiveProfile(profile: MetadataProfile): void {
     activeProfile = profile;
 
     // Update button active states
@@ -425,7 +425,7 @@ export function setActiveProfile(profile: MetadataProfile): void {
 /**
  * Update the completeness indicator based on the active profile.
  */
-export function updateCompleteness(): void {
+function updateCompleteness(): void {
     const { filled, total } = computeCompleteness(activeProfile);
     const percent = total > 0 ? Math.round((filled / total) * 100) : 0;
 
@@ -753,7 +753,7 @@ export function setupMetadataSidebar(deps: MetadataDeps = {}): void {
 /**
  * Wire up the map picker button for GPS coordinate selection.
  */
-export function setupMapPicker(): void {
+function setupMapPicker(): void {
     const btn = document.getElementById('btn-pick-map');
     if (!btn) return;
 
@@ -818,7 +818,7 @@ export function formatFileSize(bytes: number): string {
 /**
  * Update quality stats display in metadata panel
  */
-export function updateMetadataStats(deps: MetadataDeps = {}): void {
+function updateMetadataStats(deps: MetadataDeps = {}): void {
     const { state = {} as AppState, annotationSystem, currentSplatBlob, currentMeshBlob, currentPointcloudBlob } = deps;
 
     // Splat count
@@ -878,7 +878,7 @@ export function updateMetadataStats(deps: MetadataDeps = {}): void {
 /**
  * Update asset status in metadata panel
  */
-export function updateAssetStatus(deps: MetadataDeps = {}): void {
+function updateAssetStatus(deps: MetadataDeps = {}): void {
     const { state = {} as AppState } = deps;
 
     // Splat asset
@@ -970,7 +970,7 @@ export function addCustomField(): void {
 /**
  * Add a processing software row with name, version, and URL fields
  */
-export function addProcessingSoftware(): void {
+function addProcessingSoftware(): void {
     const container = document.getElementById('processing-software-list');
     if (!container) return;
 
@@ -1008,7 +1008,7 @@ export function addProcessingSoftware(): void {
 /**
  * Add a related object row with title, description, and URL fields
  */
-export function addRelatedObject(): void {
+function addRelatedObject(): void {
     const container = document.getElementById('related-objects-list');
     if (!container) return;
 
@@ -1046,7 +1046,7 @@ export function addRelatedObject(): void {
 /**
  * Add a version history row with version and description fields
  */
-export function addVersionEntry(): void {
+function addVersionEntry(): void {
     const container = document.getElementById('version-history-list');
     if (!container) {
         log.warn('Version history container not found');
@@ -1155,7 +1155,7 @@ function validateField(fieldId: string): boolean {
  * Attach blur-event validation listeners to all validated fields.
  * Called once from setupMetadataSidebar().
  */
-export function setupFieldValidation(): void {
+function setupFieldValidation(): void {
     for (const fieldId in VALIDATION_RULES) {
         const field = document.getElementById(fieldId);
         if (field) {
@@ -2718,7 +2718,7 @@ export function openImageLightbox(src: string, alt: string): void {
 /**
  * Close the fullscreen image lightbox overlay.
  */
-export function closeImageLightbox(): void {
+function closeImageLightbox(): void {
     const lightbox = document.getElementById('image-lightbox');
     if (!lightbox) return;
 

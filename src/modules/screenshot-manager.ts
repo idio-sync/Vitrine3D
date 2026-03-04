@@ -119,7 +119,7 @@ export async function captureManualPreview(deps: ScreenshotDeps): Promise<void> 
 /**
  * Render the screenshots list in the DOM.
  */
-export function renderScreenshotsList(state: AppState): void {
+function renderScreenshotsList(state: AppState): void {
     const list = document.getElementById('screenshots-list');
     if (!list) return;
     list.innerHTML = '';
@@ -152,7 +152,7 @@ export function renderScreenshotsList(state: AppState): void {
 /**
  * Remove a screenshot by ID from state and re-render the list.
  */
-export function removeScreenshot(id: string, state: AppState): void {
+function removeScreenshot(id: string, state: AppState): void {
     state.screenshots = state.screenshots.filter(s => s.id !== id);
     renderScreenshotsList(state);
 }

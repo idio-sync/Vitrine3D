@@ -267,31 +267,10 @@ export function activateTool(toolName: string): void {
     log.debug(`Tool activated: ${toolName}`);
 }
 
-/** Get the currently active tool name */
-export function getActiveTool(): string | null {
-    return _activeTool;
-}
-
-/**
- * Toggle properties panel visibility
- */
-export function togglePropsPanel(): void {
-    const panel = document.getElementById('props-panel');
-    if (!panel) return;
-    panel.classList.toggle('hidden');
-}
-
-// --- Legacy compatibility wrappers (controls-panel no longer exists) ---
-
 interface ControlsPanelDeps {
     state: AppState;
     config?: { controlsMode?: string; showControls?: boolean };
     onWindowResize?: () => void;
-}
-
-/** @deprecated Controls panel replaced by tool rail + props panel */
-export function toggleControlsPanel(_deps: ControlsPanelDeps): void {
-    togglePropsPanel();
 }
 
 /** @deprecated Controls panel replaced by tool rail + props panel */
@@ -495,22 +474,6 @@ export function updateTransformPaneSelection(
             setVal('transform-rot-z', THREE.MathUtils.radToDeg(src.rotation.z).toFixed(1));
         }
     }
-}
-
-/**
- * Update filename display
- */
-export function updateFilename(elementId: string, filename: string): void {
-    const el = document.getElementById(elementId);
-    if (el) el.textContent = filename;
-}
-
-/**
- * Update status text
- */
-export function updateStatusText(elementId: string, text: string): void {
-    const el = document.getElementById(elementId);
-    if (el) el.textContent = text;
 }
 
 // =============================================================================

@@ -205,7 +205,7 @@ async function verifySri(content: string, expectedHash: string, specifier: strin
  * Run this in the browser console to generate integrity hashes for CDN_DEPS.
  * Copy the output into the CDN_DEPS object's integrity fields.
  */
-export async function generateCdnHashes(): Promise<Record<string, string>> {
+async function generateCdnHashes(): Promise<Record<string, string>> {
     const hashes: Record<string, string> = {};
     for (const [specifier, dep] of Object.entries(CDN_DEPS)) {
         const src = await fetchResolved(dep.url);

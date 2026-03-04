@@ -579,12 +579,12 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         try {
             await sceneManager.loadBackgroundImageFromFile(file);
             const filenameEl = document.getElementById('bg-image-filename');
-            if (filenameEl) { filenameEl.textContent = file.name; filenameEl.style.display = ''; }
+            if (filenameEl) filenameEl.textContent = file.name;
+            const statusRow = document.getElementById('bg-image-status');
+            if (statusRow) statusRow.style.display = '';
             const envBgToggle = document.getElementById('toggle-env-background') as HTMLInputElement | null;
             if (envBgToggle) envBgToggle.checked = false;
             document.querySelectorAll('.color-preset').forEach(b => b.classList.remove('active'));
-            const clearBtn = document.getElementById('btn-clear-bg-image');
-            if (clearBtn) clearBtn.style.display = '';
         } catch (err: any) {
             notify.error('Failed to load background image: ' + err.message);
         }
@@ -595,11 +595,11 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (!url || !sceneManager) return;
         try {
             await sceneManager.loadBackgroundImage(url);
+            const statusRow = document.getElementById('bg-image-status');
+            if (statusRow) statusRow.style.display = '';
             const envBgToggle = document.getElementById('toggle-env-background') as HTMLInputElement | null;
             if (envBgToggle) envBgToggle.checked = false;
             document.querySelectorAll('.color-preset').forEach(b => b.classList.remove('active'));
-            const clearBtn = document.getElementById('btn-clear-bg-image');
-            if (clearBtn) clearBtn.style.display = '';
         } catch (err: any) {
             notify.error('Failed to load background image: ' + err.message);
         }
@@ -611,10 +611,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         sceneManager.setBackgroundColor(
             '#' + (sceneManager.savedBackgroundColor || new THREE.Color(0x1a1a2e)).getHexString()
         );
-        const filenameEl = document.getElementById('bg-image-filename');
-        if (filenameEl) filenameEl.style.display = 'none';
-        const clearBtn = document.getElementById('btn-clear-bg-image');
-        if (clearBtn) clearBtn.style.display = 'none';
+        const statusRow = document.getElementById('bg-image-status');
+        if (statusRow) statusRow.style.display = 'none';
     });
 
     // ─── Scene settings — Tone mapping ───────────────────────

@@ -31,7 +31,7 @@ export function showExportPanel(deps: ExportDeps): void {
 /**
  * Update archive asset checkboxes based on loaded state.
  */
-export function updateArchiveAssetCheckboxes(deps: ExportDeps): void {
+function updateArchiveAssetCheckboxes(deps: ExportDeps): void {
     const { sceneRefs, state } = deps;
     const { annotationSystem } = sceneRefs;
 
