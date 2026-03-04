@@ -481,51 +481,69 @@
                  ======================================================== -->
             <div class="props-pane active" id="pane-assets">
 
-                <!-- Load Files -->
-                <div class="prop-section">
+                <!-- Open Archive -->
+                <div class="prop-section open">
                     <div class="prop-section-hd">
-                        <span class="prop-section-title">Load Files</span>
+                        <span class="prop-section-title">Open Archive</span>
                         <span class="prop-section-chevron">&#9654;</span>
                     </div>
                     <div class="prop-section-body">
-                        <label for="model-input" class="prop-btn" style="cursor:pointer;"><span style="color:#6a8bce;">+</span> 3D Model (.glb, .obj+mtl)</label>
+                        <label for="archive-input" class="prop-btn accent" style="cursor:pointer;">Open .a3d / .a3z</label>
+                        <input type="file" id="archive-input" accept=".a3d,.a3z" style="display:none" />
+                        <button class="prop-btn" id="btn-load-archive-url" style="font-size:10px; color:var(--text-muted);">From URL...</button>
+                        <span id="archive-filename" class="prop-hint">Loads a complete scene with all assets and metadata</span>
+                    </div>
+                </div>
+
+                <!-- Scan Data — primary asset types for 3D scanning workflows -->
+                <div class="prop-section open">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Scan Data</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <label for="splat-input" class="prop-btn" style="cursor:pointer;"><span style="color:var(--accent-text);">+</span> Gaussian Splat</label>
+                        <input type="file" id="splat-input" accept=".ply,.splat,.ksplat,.spz,.sog" style="display:none" />
+                        <button class="prop-btn" id="btn-load-splat-url" style="font-size:10px; color:var(--text-muted);">From URL...</button>
+                        <span id="splat-filename" class="prop-hint">.ply, .splat, .ksplat, .spz</span>
+                        <div class="prop-row" id="splat-vertices-row" style="display:none"><span class="prop-row-label">Status</span><span class="font-mono" id="splat-vertices" style="font-size:10px; color:var(--text-secondary);">-</span></div>
+
+                        <label for="model-input" class="prop-btn mt4" style="cursor:pointer;"><span style="color:#6a8bce;">+</span> 3D Model</label>
                         <input type="file" id="model-input" accept=".glb,.gltf,.obj,.mtl,.png,.jpg,.jpeg,.tga,.bmp,.webp" multiple style="display:none" />
-                        <button class="prop-btn" id="btn-load-model-url" style="font-size:10px; color:var(--text-muted);">Model from URL...</button>
-                        <span id="model-filename" class="prop-hint">No file loaded</span>
+                        <button class="prop-btn" id="btn-load-model-url" style="font-size:10px; color:var(--text-muted);">From URL...</button>
+                        <span id="model-filename" class="prop-hint">.glb, .obj (+.mtl)</span>
                         <div class="prop-row" id="model-faces-row" style="display:none"><span class="prop-row-label">Faces</span><span class="font-mono" id="model-faces" style="font-size:10px; color:var(--text-secondary);">-</span></div>
                         <div class="prop-row" id="model-textures-row" style="display:none"><span class="prop-row-label">Textures</span><span class="font-mono" id="model-textures" style="font-size:10px; color:var(--text-secondary);">-</span></div>
 
-                        <label for="splat-input" class="prop-btn mt4" style="cursor:pointer;"><span style="color:var(--accent-text);">+</span> Gaussian Splat (.ply, .splat, .ksplat, .spz)</label>
-                        <input type="file" id="splat-input" accept=".ply,.splat,.ksplat,.spz,.sog" style="display:none" />
-                        <button class="prop-btn" id="btn-load-splat-url" style="font-size:10px; color:var(--text-muted);">Splat from URL...</button>
-                        <span id="splat-filename" class="prop-hint">No file loaded</span>
-                        <div class="prop-row" id="splat-vertices-row" style="display:none"><span class="prop-row-label">Status</span><span class="font-mono" id="splat-vertices" style="font-size:10px; color:var(--text-secondary);">-</span></div>
-
-                        <label for="pointcloud-input" class="prop-btn mt4" style="cursor:pointer;"><span style="color:#c4863a;">+</span> Point Cloud (.e57)</label>
+                        <label for="pointcloud-input" class="prop-btn mt4" style="cursor:pointer;"><span style="color:#c4863a;">+</span> Point Cloud</label>
                         <input type="file" id="pointcloud-input" accept=".e57" style="display:none" />
-                        <button class="prop-btn" id="btn-load-pointcloud-url" style="font-size:10px; color:var(--text-muted);">Point Cloud from URL...</button>
-                        <span id="pointcloud-filename" class="prop-hint">No file loaded</span>
+                        <button class="prop-btn" id="btn-load-pointcloud-url" style="font-size:10px; color:var(--text-muted);">From URL...</button>
+                        <span id="pointcloud-filename" class="prop-hint">.e57</span>
                         <div class="prop-row" id="pointcloud-points-row" style="display:none"><span class="prop-row-label">Points</span><span class="font-mono" id="pointcloud-points" style="font-size:10px; color:var(--text-secondary);">-</span></div>
+                    </div>
+                </div>
 
-                        <label for="stl-input" class="prop-btn mt4" style="cursor:pointer;"><span style="color:#9a7bce;">+</span> STL Model (.stl)</label>
+                <!-- Additional Formats — less common, collapsed by default -->
+                <div class="prop-section">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Additional Formats</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <label for="stl-input" class="prop-btn" style="cursor:pointer;"><span style="color:#9a7bce;">+</span> STL Model</label>
                         <input type="file" id="stl-input" accept=".stl" style="display:none" />
-                        <button class="prop-btn" id="btn-load-stl-url" style="font-size:10px; color:var(--text-muted);">STL from URL...</button>
-                        <span id="stl-filename" class="prop-hint">No file loaded</span>
+                        <button class="prop-btn" id="btn-load-stl-url" style="font-size:10px; color:var(--text-muted);">From URL...</button>
+                        <span id="stl-filename" class="prop-hint">.stl</span>
 
-                        <label for="cad-input" class="prop-btn mt4" style="cursor:pointer;"><span style="color:#4a9e6b;">+</span> CAD Model (.step, .iges)</label>
+                        <label for="cad-input" class="prop-btn mt4" style="cursor:pointer;"><span style="color:#4a9e6b;">+</span> CAD Model</label>
                         <input type="file" id="cad-input" accept=".step,.stp,.iges,.igs" style="display:none" />
-                        <button class="prop-btn" id="btn-load-cad-url" style="font-size:10px; color:var(--text-muted);">CAD from URL...</button>
-                        <span id="cad-filename" class="prop-hint">No file loaded</span>
+                        <button class="prop-btn" id="btn-load-cad-url" style="font-size:10px; color:var(--text-muted);">From URL...</button>
+                        <span id="cad-filename" class="prop-hint">.step, .iges</span>
 
-                        <label for="drawing-input" class="prop-btn mt4" style="cursor:pointer;"><span style="color:#7bce9a;">+</span> CAD Drawing (.dxf)</label>
+                        <label for="drawing-input" class="prop-btn mt4" style="cursor:pointer;"><span style="color:#7bce9a;">+</span> CAD Drawing</label>
                         <input type="file" id="drawing-input" accept=".dxf" style="display:none" />
-                        <button class="prop-btn" id="btn-load-drawing-url" style="font-size:10px; color:var(--text-muted);">DXF from URL...</button>
-                        <span id="drawing-filename" class="prop-hint">No file loaded</span>
-
-                        <label for="archive-input" class="prop-btn mt4" style="cursor:pointer;">Load Archive (.a3d, .a3z)</label>
-                        <input type="file" id="archive-input" accept=".a3d,.a3z" style="display:none" />
-                        <button class="prop-btn" id="btn-load-archive-url" style="font-size:10px; color:var(--text-muted);">Archive from URL...</button>
-                        <span id="archive-filename" class="prop-hint">No archive loaded</span>
+                        <button class="prop-btn" id="btn-load-drawing-url" style="font-size:10px; color:var(--text-muted);">From URL...</button>
+                        <span id="drawing-filename" class="prop-hint">.dxf</span>
                     </div>
                 </div>
 
