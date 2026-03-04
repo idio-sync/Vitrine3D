@@ -3,8 +3,11 @@ set -e
 
 # Defaults — export so envsubst (a subprocess) can see values set here.
 # Same fix applied to SERVER_NAMES in cf70a99.
-export ADMIN_ENABLED="${ADMIN_ENABLED:-false}"
-export CHUNKED_UPLOAD="${CHUNKED_UPLOAD:-false}"
+# Normalize boolean env vars to lowercase (Docker/Unraid may pass TRUE/FALSE)
+export ADMIN_ENABLED="$(echo "${ADMIN_ENABLED:-false}" | tr '[:upper:]' '[:lower:]')"
+export CHUNKED_UPLOAD="$(echo "${CHUNKED_UPLOAD:-false}" | tr '[:upper:]' '[:lower:]')"
+export OG_ENABLED="$(echo "${OG_ENABLED:-false}" | tr '[:upper:]' '[:lower:]')"
+export KIOSK_LOCK="$(echo "${KIOSK_LOCK:-}" | tr '[:upper:]' '[:lower:]')"
 export DEFAULT_KIOSK_THEME="${DEFAULT_KIOSK_THEME:-editorial}"
 export APP_TITLE="${APP_TITLE:-Vitrine3D}"
 

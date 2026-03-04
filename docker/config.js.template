@@ -64,7 +64,7 @@
     // =========================================================================
     // When KIOSK_LOCK is true: forces kiosk mode, ignores privilege-escalating URL params
     // When ARCHIVE_PATH_PREFIX is set: only archives under that path prefix are allowed
-    const KIOSK_LOCK = "${KIOSK_LOCK}" === "true";
+    const KIOSK_LOCK = "${KIOSK_LOCK}".toLowerCase() === "true";
     const ARCHIVE_PATH_PREFIX = "${ARCHIVE_PATH_PREFIX}";
 
     if (KIOSK_LOCK) {
@@ -285,11 +285,11 @@
         lodBudgetHd: envLodBudgetHd ? parseInt(envLodBudgetHd, 10) || 0 : 0,
 
         // Library (archive management) — enabled when ADMIN_ENABLED=true
-        libraryEnabled: "${ADMIN_ENABLED}" === "true",
+        libraryEnabled: "${ADMIN_ENABLED}".toLowerCase() === "true",
 
         // Chunked upload — splits large files into 50 MB chunks to work around
         // Cloudflare Tunnel's 100 MB per-request body limit (CHUNKED_UPLOAD=true)
-        chunkedUpload: "${CHUNKED_UPLOAD}" === "true",
+        chunkedUpload: "${CHUNKED_UPLOAD}".toLowerCase() === "true",
 
         // Spark.js renderer version: '2.0' (default, with LOD) or '0.1' (legacy OldSparkRenderer)
         sparkVersion: "${SPARK_VERSION}" || '2.0',
