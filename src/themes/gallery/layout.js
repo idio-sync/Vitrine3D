@@ -804,17 +804,19 @@ function initLoadingScreen(container) {
 
 function initClickGate(container) {
     container.innerHTML =
-        '<div class="editorial-gate-backdrop">' +
+        '<div class="gallery-gate-backdrop">' +
         '    <img id="kiosk-gate-poster" alt="" />' +
-        '    <div class="editorial-gate-overlay"></div>' +
+        '    <div class="gallery-gate-overlay"></div>' +
         '</div>' +
-        '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;">' +
+        '<div class="gallery-gate-content">' +
         '    <button id="kiosk-gate-play" type="button" class="gallery-gate-play" aria-label="Load 3D viewer">' +
         '        <svg viewBox="0 0 24 24" width="32" height="32"><polygon points="6,3 20,12 6,21" /></svg>' +
         '    </button>' +
-        '    <h2 id="kiosk-gate-title" style="font-family:var(--kiosk-font-display);font-size:1.4rem;font-weight:400;color:rgba(var(--kiosk-text-heading-rgb),0.95);margin:20px 0 8px;text-align:center;"></h2>' +
-        '    <div style="width:48px;height:2px;background:var(--kiosk-accent);margin:0 auto 8px;"></div>' +
-        '    <p id="kiosk-gate-types" style="font-size:0.72rem;color:rgba(var(--kiosk-text-dim-rgb),0.7);text-align:center;"></p>' +
+        '</div>' +
+        '<div class="gallery-gate-info">' +
+        '    <h2 id="kiosk-gate-title"></h2>' +
+        '    <div class="gallery-gate-rule"></div>' +
+        '    <p id="kiosk-gate-types"></p>' +
         '</div>';
 }
 

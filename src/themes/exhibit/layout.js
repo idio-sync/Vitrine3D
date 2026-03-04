@@ -940,14 +940,14 @@ function initLoadingScreen(container) {
 
 function initClickGate(container) {
     container.innerHTML =
-        '<div class="editorial-gate-backdrop">' +
+        '<div class="exhibit-gate-backdrop">' +
         '    <img id="kiosk-gate-poster" alt="" />' +
-        '    <div class="editorial-gate-overlay"></div>' +
+        '    <div class="exhibit-gate-overlay"></div>' +
         '</div>' +
-        '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;">' +
-        '    <h2 id="kiosk-gate-title" style="font-family:var(--kiosk-font-display);font-size:1.6rem;font-weight:400;color:rgba(var(--kiosk-text-heading-rgb),0.95);margin:0 0 12px;text-align:center;"></h2>' +
-        '    <div style="width:48px;height:2px;background:var(--kiosk-accent);margin:0 auto 16px;"></div>' +
-        '    <p id="kiosk-gate-types" style="font-size:0.72rem;color:rgba(var(--kiosk-text-dim-rgb),0.7);text-align:center;margin:0 0 24px;"></p>' +
+        '<div class="exhibit-gate-content">' +
+        '    <h2 id="kiosk-gate-title"></h2>' +
+        '    <div class="exhibit-gate-rule"></div>' +
+        '    <p id="kiosk-gate-types"></p>' +
         '    <button id="kiosk-gate-play" type="button" class="exhibit-gate-play" aria-label="Load 3D viewer">' +
         '        <span>Explore</span>' +
         '        <svg viewBox="0 0 24 24" width="16" height="16" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>' +
