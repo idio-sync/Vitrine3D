@@ -486,6 +486,38 @@ input, select, textarea {
     cursor: pointer;
 }
 
+/* Debug channel disclosure */
+.debug-channels {
+    margin-top: 6px;
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 6px;
+}
+
+.debug-channels summary {
+    font-size: 10px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.debug-channels summary::before {
+    content: '\25B8';
+    font-size: 8px;
+    transition: transform 0.15s;
+}
+
+.debug-channels[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.debug-channels-body {
+    padding-top: 4px;
+}
+
 /* Color swatches */
 .swatch-row {
     display: flex;

@@ -607,18 +607,23 @@
                                 <option value="dark-bronze">Dark Bronze</option>
                             </select>
                         </div>
-                        <div class="cb-row">
-                            <input type="checkbox" id="model-normals"><label for="model-normals">Show Normals</label>
-                        </div>
-                        <div class="cb-row">
-                            <input type="checkbox" id="model-roughness"><label for="model-roughness">Roughness</label>
-                        </div>
-                        <div class="cb-row">
-                            <input type="checkbox" id="model-metalness"><label for="model-metalness">Metalness</label>
-                        </div>
-                        <div class="cb-row">
-                            <input type="checkbox" id="model-specular-f0"><label for="model-specular-f0">Specular F0</label>
-                        </div>
+                        <details class="debug-channels">
+                            <summary>Debug Channels</summary>
+                            <div class="debug-channels-body">
+                                <div class="cb-row">
+                                    <input type="checkbox" id="model-normals"><label for="model-normals">Show Normals</label>
+                                </div>
+                                <div class="cb-row">
+                                    <input type="checkbox" id="model-roughness"><label for="model-roughness">Roughness</label>
+                                </div>
+                                <div class="cb-row">
+                                    <input type="checkbox" id="model-metalness"><label for="model-metalness">Metalness</label>
+                                </div>
+                                <div class="cb-row">
+                                    <input type="checkbox" id="model-specular-f0"><label for="model-specular-f0">Specular F0</label>
+                                </div>
+                            </div>
+                        </details>
                     </div>
                 </div>
 
@@ -773,18 +778,8 @@
                                 </div>
                             </div>
                             <span id="transform-both-hint" class="prop-hint mt4" style="display:none; font-style:italic;">(showing primary object)</span>
+                            <button class="prop-btn danger mt4" id="btn-reset-transform">Reset Transform</button>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Actions (NEW) -->
-                <div class="prop-section open">
-                    <div class="prop-section-hd">
-                        <span class="prop-section-title">Actions</span>
-                        <span class="prop-section-chevron">&#9654;</span>
-                    </div>
-                    <div class="prop-section-body">
-                        <button class="prop-btn danger" id="btn-reset-transform">Reset Transform</button>
                     </div>
                 </div>
 
@@ -861,7 +856,7 @@
 
                 <div class="prop-section open">
                     <div class="prop-section-hd">
-                        <span class="prop-section-title">Settings</span>
+                        <span class="prop-section-title">Walkthrough</span>
                         <span class="prop-section-chevron">&#9654;</span>
                     </div>
                     <div class="prop-section-body">
