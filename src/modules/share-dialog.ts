@@ -528,7 +528,7 @@ export function showShareDialog(state: ShareState | AppState): void {
                         '<div class="share-field"><label>Theme</label>' +
                             '<select class="share-select" data-opt="theme">' +
                                 '<option value="editorial">Editorial</option>' +
-                                '<option value="minimal">Minimal</option>' +
+                                '<option value="gallery">Gallery</option>' +
                             '</select></div>' +
                         '<div class="share-field"><label>Display Mode</label>' +
                             '<select class="share-select" data-opt="displayMode">' +
