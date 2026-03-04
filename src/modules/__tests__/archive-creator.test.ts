@@ -105,13 +105,15 @@ describe('ArchiveCreator', () => {
             expect(creator.manifest.archival_record.ids.uri).toBe('https://example.com/object/123');
         });
 
-        it('setViewerSettings applies singleSided and backgroundColor', () => {
+        it('setViewerSettings applies singleSided and per-mode background colors', () => {
             creator.setViewerSettings({
                 singleSided: false,
-                backgroundColor: '#ff0000'
+                meshBackgroundColor: '#ff0000',
+                splatBackgroundColor: '#0000ff'
             });
             expect(creator.manifest.viewer_settings.single_sided).toBe(false);
-            expect(creator.manifest.viewer_settings.background_color).toBe('#ff0000');
+            expect(creator.manifest.viewer_settings.mesh_background_color).toBe('#ff0000');
+            expect(creator.manifest.viewer_settings.splat_background_color).toBe('#0000ff');
         });
 
         it('setCustomFields replaces entire custom_fields', () => {

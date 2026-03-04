@@ -814,17 +814,48 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         }
     });
 
-    addListener('meta-viewer-bg-override', 'change', (e: Event) => {
+    // Mesh background override
+    addListener('meta-viewer-mesh-bg-override', 'change', (e: Event) => {
         const checked = (e.target as HTMLInputElement).checked;
-        const colorRow = document.getElementById('meta-viewer-bg-color-row');
+        const colorRow = document.getElementById('meta-viewer-mesh-bg-color-row');
         if (colorRow) colorRow.style.display = checked ? '' : 'none';
+        if (checked) {
+            const color = (document.getElementById('meta-viewer-mesh-bg-color') as HTMLInputElement)?.value || '#1a1a2e';
+            deps.state.meshBackgroundColor = color;
+        } else {
+            deps.state.meshBackgroundColor = null;
+        }
+        deps.display.setDisplayMode(deps.state.displayMode);
     });
 
-    addListener('meta-viewer-bg-color', 'input', (e: Event) => {
+    addListener('meta-viewer-mesh-bg-color', 'input', (e: Event) => {
         const hex = (e.target as HTMLInputElement).value;
-        if (sceneRefs.scene) sceneRefs.scene.background = new THREE.Color(hex);
-        const hexLabel = document.getElementById('meta-viewer-bg-color-hex');
+        const hexLabel = document.getElementById('meta-viewer-mesh-bg-color-hex');
         if (hexLabel) hexLabel.textContent = hex;
+        deps.state.meshBackgroundColor = hex;
+        deps.display.setDisplayMode(deps.state.displayMode);
+    });
+
+    // Splat background override
+    addListener('meta-viewer-splat-bg-override', 'change', (e: Event) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const colorRow = document.getElementById('meta-viewer-splat-bg-color-row');
+        if (colorRow) colorRow.style.display = checked ? '' : 'none';
+        if (checked) {
+            const color = (document.getElementById('meta-viewer-splat-bg-color') as HTMLInputElement)?.value || '#1a1a2e';
+            deps.state.splatBackgroundColor = color;
+        } else {
+            deps.state.splatBackgroundColor = null;
+        }
+        deps.display.setDisplayMode(deps.state.displayMode);
+    });
+
+    addListener('meta-viewer-splat-bg-color', 'input', (e: Event) => {
+        const hex = (e.target as HTMLInputElement).value;
+        const hexLabel = document.getElementById('meta-viewer-splat-bg-color-hex');
+        if (hexLabel) hexLabel.textContent = hex;
+        deps.state.splatBackgroundColor = hex;
+        deps.display.setDisplayMode(deps.state.displayMode);
     });
 
     // ─── Setup collapsible sections ──────────────────────────

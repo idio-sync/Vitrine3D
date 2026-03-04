@@ -729,14 +729,34 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
         if (el) el.checked = settings.single_sided;
     }
 
-    // Background color
-    if (settings.background_color) {
-        if (sceneRefs.scene) sceneRefs.scene.background = new THREE.Color(settings.background_color);
-        // Sync sidebar color input
-        const colorEl = document.getElementById('meta-viewer-bg-color') as HTMLInputElement | null;
-        if (colorEl) colorEl.value = settings.background_color;
-        const hexLabel = document.getElementById('meta-viewer-bg-color-hex');
-        if (hexLabel) hexLabel.textContent = settings.background_color;
+    // Background color — per-mode overrides (with backward compat for old single background_color)
+    const legacyBg = settings.background_color || null;
+    const meshBg = settings.mesh_background_color || legacyBg;
+    const splatBg = settings.splat_background_color || legacyBg;
+    deps.state.meshBackgroundColor = meshBg;
+    deps.state.splatBackgroundColor = splatBg;
+
+    // Apply correct background for current display mode
+    let activeBg: string | null = null;
+    if (deps.state.displayMode === 'model') activeBg = meshBg;
+    else if (deps.state.displayMode === 'splat' || deps.state.displayMode === 'both') activeBg = splatBg;
+    if (activeBg && sceneRefs.scene) {
+        sceneRefs.scene.background = new THREE.Color(activeBg);
+    }
+
+    // Sync sidebar mesh background UI
+    if (meshBg) {
+        const meshColorEl = document.getElementById('meta-viewer-mesh-bg-color') as HTMLInputElement | null;
+        if (meshColorEl) meshColorEl.value = meshBg;
+        const meshHexLabel = document.getElementById('meta-viewer-mesh-bg-color-hex');
+        if (meshHexLabel) meshHexLabel.textContent = meshBg;
+    }
+    // Sync sidebar splat background UI
+    if (splatBg) {
+        const splatColorEl = document.getElementById('meta-viewer-splat-bg-color') as HTMLInputElement | null;
+        if (splatColorEl) splatColorEl.value = splatBg;
+        const splatHexLabel = document.getElementById('meta-viewer-splat-bg-color-hex');
+        if (splatHexLabel) splatHexLabel.textContent = splatBg;
     }
 
     // Apply saved camera position and target

@@ -46,6 +46,8 @@ export interface AppState {
     assetStates: Record<string, string>;  // Values are ASSET_STATE constants (untyped JS)
     viewingProxy: boolean;
     qualityTier: string;                   // 'sd' | 'hd' — widened because constants.js is untyped
+    meshBackgroundColor: string | null;
+    splatBackgroundColor: string | null;
     qualityResolved: string;               // 'sd' | 'hd' — widened because constants.js is untyped
     imageAssets: Map<string, any>;         // Map of asset key → blob URL or metadata
     screenshots: Array<{ id: string; blob: Blob; dataUrl: string; timestamp: number }>;

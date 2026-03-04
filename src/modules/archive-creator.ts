@@ -111,7 +111,8 @@ export interface ArchivalRecord {
 
 export interface ViewerSettings {
     singleSided?: boolean;
-    backgroundColor?: string | null;
+    meshBackgroundColor?: string | null;
+    splatBackgroundColor?: string | null;
     displayMode?: string;
     cameraPosition?: { x: number; y: number; z: number } | null;
     cameraTarget?: { x: number; y: number; z: number } | null;
@@ -267,7 +268,8 @@ export interface Manifest {
     };
     viewer_settings: {
         single_sided: boolean;
-        background_color: string | null;
+        mesh_background_color: string | null;
+        splat_background_color: string | null;
         display_mode: string;
         camera_position: { x: number; y: number; z: number } | null;
         camera_target: { x: number; y: number; z: number } | null;
@@ -628,7 +630,8 @@ export class ArchiveCreator {
             },
             viewer_settings: {
                 single_sided: true,
-                background_color: null,
+                mesh_background_color: null,
+                splat_background_color: null,
                 display_mode: '',
                 camera_position: null,
                 camera_target: null,
@@ -1098,7 +1101,8 @@ export class ArchiveCreator {
         if (!settings) return;
 
         if (settings.singleSided !== undefined) this.manifest.viewer_settings.single_sided = settings.singleSided;
-        if (settings.backgroundColor !== undefined) this.manifest.viewer_settings.background_color = settings.backgroundColor;
+        if (settings.meshBackgroundColor !== undefined) this.manifest.viewer_settings.mesh_background_color = settings.meshBackgroundColor;
+        if (settings.splatBackgroundColor !== undefined) this.manifest.viewer_settings.splat_background_color = settings.splatBackgroundColor;
         if (settings.displayMode !== undefined) this.manifest.viewer_settings.display_mode = settings.displayMode;
         if (settings.defaultMatcap !== undefined) this.manifest.viewer_settings.default_matcap = settings.defaultMatcap;
         if (settings.cameraPosition !== undefined) this.manifest.viewer_settings.camera_position = settings.cameraPosition;

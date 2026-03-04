@@ -7,7 +7,7 @@ import { AnnotationSystem } from './modules/annotation-system.js';
 import { CrossSectionTool } from './modules/cross-section.js';
 import { MeasurementSystem } from './modules/measurement-system.js';
 import { ArchiveCreator, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
-import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER } from './modules/constants.js';
+import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS } from './modules/constants.js';
 import { getLodBudget } from './modules/quality-tier.js';
 import { Logger, notify } from './modules/utilities.js';
 import { FlyControls } from './modules/fly-controls.js';
@@ -268,6 +268,9 @@ const state: AppState = {
     currentSplatUrl: config.defaultSplatUrl || null,
     currentModelUrl: config.defaultModelUrl || null,
     currentPointcloudUrl: config.defaultPointcloudUrl || null,
+    // Per-mode background color overrides
+    meshBackgroundColor: null,
+    splatBackgroundColor: null,
     // Archive state
     archiveLoaded: false,
     archiveManifest: null,
@@ -970,6 +973,18 @@ function toggleFlyMode() {
 
 // setupUIEvents extracted to event-wiring.ts (Phase 2, Step 2.5)
 
+function applyBackgroundForMode(mode: string) {
+    if (!scene) return;
+    let color: string | null = null;
+    if (mode === 'model') color = state.meshBackgroundColor;
+    else if (mode === 'splat' || mode === 'both') color = state.splatBackgroundColor;
+    if (color) {
+        scene.background = new THREE.Color(color);
+    } else {
+        scene.background = new THREE.Color(COLORS.SCENE_BACKGROUND);
+    }
+}
+
 function setDisplayMode(mode: DisplayMode) {
     setDisplayModeHandler(mode, {
         state,
@@ -977,6 +992,7 @@ function setDisplayMode(mode: DisplayMode) {
         onResize: onWindowResize,
         updateVisibility
     });
+    applyBackgroundForMode(mode);
 
     // Lazy-load any archive assets needed for this mode that aren't loaded yet
     if (state.archiveLoaded && state.archiveLoader) {

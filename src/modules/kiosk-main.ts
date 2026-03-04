@@ -20,7 +20,7 @@ import { FlyControls } from './fly-controls.js';
 import { AnnotationSystem } from './annotation-system.js';
 import { MeasurementSystem } from './measurement-system.js';
 import { CrossSectionTool } from './cross-section.js';
-import { CAMERA, ASSET_STATE, QUALITY_TIER, WALKTHROUGH } from './constants.js';
+import { CAMERA, ASSET_STATE, QUALITY_TIER, WALKTHROUGH, COLORS } from './constants.js';
 import { WalkthroughEngine } from './walkthrough-engine.js';
 import type { WalkthroughPlaybackState } from './walkthrough-engine.js';
 import type { Walkthrough, WalkthroughStop } from '../types.js';
@@ -87,6 +87,8 @@ interface KioskState {
     imageAssets: Map<string, any>;
     qualityTier: string;
     qualityResolved: string;
+    meshBackgroundColor: string | null;
+    splatBackgroundColor: string | null;
     archiveSourceUrl?: string | null;
 }
 
@@ -221,7 +223,9 @@ const state: KioskState = {
     assetStates: { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED },
     imageAssets: new Map(),
     qualityTier: QUALITY_TIER.AUTO,
-    qualityResolved: QUALITY_TIER.HD
+    qualityResolved: QUALITY_TIER.HD,
+    meshBackgroundColor: null,
+    splatBackgroundColor: null
 };
 
 // =============================================================================
@@ -1503,9 +1507,11 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                     });
                 }
             }
-            if (manifest.viewer_settings.background_color && scene) {
-                scene.background = new THREE.Color(manifest.viewer_settings.background_color);
-            }
+            // Per-mode background overrides (with backward compat for legacy background_color)
+            const legacyBg = manifest.viewer_settings.background_color || null;
+            state.meshBackgroundColor = manifest.viewer_settings.mesh_background_color || legacyBg;
+            state.splatBackgroundColor = manifest.viewer_settings.splat_background_color || legacyBg;
+            applyBackgroundForMode(state.displayMode);
             // Apply saved camera position and target (overrides fitCameraToScene result)
             const savedCamPos = manifest.viewer_settings.camera_position;
             const savedCamTarget = manifest.viewer_settings.camera_target;
@@ -2499,10 +2505,23 @@ function setupViewerKeyboardShortcuts(): void {
 // VIEW SWITCHER
 // =============================================================================
 
+function applyBackgroundForMode(mode: string): void {
+    if (!scene) return;
+    let color: string | null = null;
+    if (mode === 'model') color = state.meshBackgroundColor;
+    else if (mode === 'splat' || mode === 'both') color = state.splatBackgroundColor;
+    if (color) {
+        scene.background = new THREE.Color(color);
+    } else {
+        scene.background = new THREE.Color(COLORS.SCENE_BACKGROUND);
+    }
+}
+
 function switchViewMode(mode: string): void {
     state.displayMode = mode;
     setDisplayMode(mode as DisplayMode, createDisplayModeDeps());
     triggerLazyLoad(mode);
+    applyBackgroundForMode(mode);
 
     // Update active button state (sidebar layout)
     document.querySelectorAll('.kiosk-view-btn').forEach(btn => {

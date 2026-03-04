@@ -192,7 +192,8 @@ export interface AssetMetadata {
 
 export interface ViewerSettings {
     singleSided: boolean;
-    backgroundColor: string | null;
+    meshBackgroundColor: string | null;
+    splatBackgroundColor: string | null;
     displayMode: string;
     defaultMatcap: string;
     cameraPosition: { x: number; y: number; z: number } | null;
@@ -1411,8 +1412,11 @@ export function collectMetadata(): CollectedMetadata {
         includeIntegrity: (document.getElementById('meta-include-integrity') as HTMLInputElement)?.checked ?? true,
         viewerSettings: {
             singleSided: (document.getElementById('meta-viewer-single-sided') as HTMLInputElement)?.checked ?? true,
-            backgroundColor: (document.getElementById('meta-viewer-bg-override') as HTMLInputElement)?.checked
-                ? ((document.getElementById('meta-viewer-bg-color') as HTMLInputElement)?.value || '#1a1a2e')
+            meshBackgroundColor: (document.getElementById('meta-viewer-mesh-bg-override') as HTMLInputElement)?.checked
+                ? ((document.getElementById('meta-viewer-mesh-bg-color') as HTMLInputElement)?.value || '#1a1a2e')
+                : null,
+            splatBackgroundColor: (document.getElementById('meta-viewer-splat-bg-override') as HTMLInputElement)?.checked
+                ? ((document.getElementById('meta-viewer-splat-bg-color') as HTMLInputElement)?.value || '#1a1a2e')
                 : null,
             displayMode: (document.getElementById('meta-viewer-display-mode') as HTMLSelectElement)?.value || '',
             defaultMatcap: (document.getElementById('meta-viewer-default-matcap') as HTMLSelectElement)?.value || '',
@@ -1894,20 +1898,33 @@ export function prefillMetadataFromArchive(manifest: any): void {
         const singleSidedEl = document.getElementById('meta-viewer-single-sided') as HTMLInputElement | null;
         if (singleSidedEl) singleSidedEl.checked = manifest.viewer_settings.single_sided ?? true;
 
-        const bgOverrideEl = document.getElementById('meta-viewer-bg-override') as HTMLInputElement | null;
-        const bgColorEl = document.getElementById('meta-viewer-bg-color') as HTMLInputElement | null;
-        const bgColorRow = document.getElementById('meta-viewer-bg-color-row');
-        const hasBgColor = !!manifest.viewer_settings.background_color;
-        if (bgOverrideEl) {
-            bgOverrideEl.checked = hasBgColor;
+        // Backward compat: old archives have background_color, new ones have mesh/splat variants
+        const legacyBg = manifest.viewer_settings.background_color || null;
+        const meshBg = manifest.viewer_settings.mesh_background_color || legacyBg;
+        const splatBg = manifest.viewer_settings.splat_background_color || legacyBg;
+
+        // Mesh background
+        const meshBgOverrideEl = document.getElementById('meta-viewer-mesh-bg-override') as HTMLInputElement | null;
+        const meshBgColorEl = document.getElementById('meta-viewer-mesh-bg-color') as HTMLInputElement | null;
+        const meshBgColorRow = document.getElementById('meta-viewer-mesh-bg-color-row');
+        if (meshBgOverrideEl) meshBgOverrideEl.checked = !!meshBg;
+        if (meshBgColorRow) meshBgColorRow.style.display = meshBg ? '' : 'none';
+        if (meshBgColorEl && meshBg) {
+            meshBgColorEl.value = meshBg;
+            const hexLabel = document.getElementById('meta-viewer-mesh-bg-color-hex');
+            if (hexLabel) hexLabel.textContent = meshBg;
         }
-        if (bgColorRow) {
-            bgColorRow.style.display = hasBgColor ? '' : 'none';
-        }
-        if (bgColorEl && hasBgColor) {
-            bgColorEl.value = manifest.viewer_settings.background_color;
-            const hexLabel = document.getElementById('meta-viewer-bg-color-hex');
-            if (hexLabel) hexLabel.textContent = manifest.viewer_settings.background_color;
+
+        // Splat background
+        const splatBgOverrideEl = document.getElementById('meta-viewer-splat-bg-override') as HTMLInputElement | null;
+        const splatBgColorEl = document.getElementById('meta-viewer-splat-bg-color') as HTMLInputElement | null;
+        const splatBgColorRow = document.getElementById('meta-viewer-splat-bg-color-row');
+        if (splatBgOverrideEl) splatBgOverrideEl.checked = !!splatBg;
+        if (splatBgColorRow) splatBgColorRow.style.display = splatBg ? '' : 'none';
+        if (splatBgColorEl && splatBg) {
+            splatBgColorEl.value = splatBg;
+            const hexLabel = document.getElementById('meta-viewer-splat-bg-color-hex');
+            if (hexLabel) hexLabel.textContent = splatBg;
         }
 
         // Display mode
