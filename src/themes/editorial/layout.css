@@ -2055,6 +2055,10 @@ body.kiosk-mode.kiosk-editorial #kiosk-file-picker .kiosk-picker-box.drag-over {
     background: rgba(var(--kiosk-accent-rgb), 0.03);
 }
 
+body.kiosk-mode.kiosk-editorial #kiosk-file-picker .editorial-loading-title-bar {
+    align-self: center;
+}
+
 /* Title — matches #loading-title exactly */
 
 body.kiosk-mode.kiosk-editorial .editorial-picker-title {
