@@ -37,6 +37,10 @@ interface ShareState {
     splatTransform?: Transform | null;
     modelTransform?: Transform | null;
     pointcloudTransform?: Transform | null;
+    // Asset loaded flags (from AppState)
+    splatLoaded?: boolean;
+    modelLoaded?: boolean;
+    pointcloudLoaded?: boolean;
 }
 
 // =============================================================================
@@ -381,11 +385,24 @@ function getActivePreset(dialog: Element): string | null {
 function buildShareUrl(state: ShareState, dialog: Element): string {
     const preset = getActivePreset(dialog);
     const theme = (dialog.querySelector('[data-opt="theme"]') as HTMLSelectElement | null)?.value || 'editorial';
-    const isKiosk = preset === 'kiosk' || preset === 'minimal';
+    const isKiosk = preset === 'kiosk';
 
     // Kiosk mode with UUID or hash → clean URL /view/{uuid|hash}
     const viewId = state.archiveUuid || state.archiveHash;
     if (isKiosk && viewId) {
+        const base = window.location.origin + '/view/' + viewId;
+        const params: string[] = [];
+        if (theme && theme !== 'default' && theme !== 'editorial') params.push('theme=' + theme);
+        return base + (params.length ? '?' + params.join('&') : '');
+    }
+
+    // Determine if kiosk mode should be applied even without an active preset
+    // (e.g., when user changed theme which clears the preset selection)
+    const themeGrid = dialog.querySelector('[data-ref="theme-grid"]') as HTMLElement | null;
+    const isKioskMode = isKiosk || (themeGrid?.style.display !== 'none');
+
+    // Kiosk with viewId but custom theme (no active preset) → still use /view/ path
+    if (isKioskMode && viewId) {
         const base = window.location.origin + '/view/' + viewId;
         const params: string[] = [];
         if (theme && theme !== 'default' && theme !== 'editorial') params.push('theme=' + theme);
@@ -403,6 +420,9 @@ function buildShareUrl(state: ShareState, dialog: Element): string {
         if (state.modelUrl) params.set('model', state.modelUrl);
         if (state.pointcloudUrl) params.set('pointcloud', state.pointcloudUrl);
     }
+
+    if (isKioskMode) params.set('kiosk', 'true');
+    if (isKioskMode && theme && theme !== 'default' && theme !== 'editorial') params.set('theme', theme);
 
     const mode = (dialog.querySelector('[data-opt="displayMode"]') as HTMLSelectElement | null)?.value;
     if (mode && mode !== 'both') params.set('mode', mode);
@@ -470,7 +490,6 @@ interface PresetConfig {
 
 const PRESETS: Record<string, PresetConfig> = {
     kiosk: { theme: 'editorial', kiosk: true },
-    minimal: { theme: 'editorial', kiosk: true },
     editor: { theme: '', kiosk: false },
 };
 
@@ -521,7 +540,6 @@ export function showShareDialog(state: ShareState | AppState): void {
                 '<div class="share-panel active" data-panel="link">' +
                     '<div class="share-presets">' +
                         '<button class="share-preset active" data-preset="kiosk">Kiosk</button>' +
-                        '<button class="share-preset" data-preset="minimal">Minimal</button>' +
                         '<button class="share-preset" data-preset="editor">Editor</button>' +
                     '</div>' +
                     '<div class="share-grid" data-ref="theme-grid">' +
@@ -611,9 +629,28 @@ export function showShareDialog(state: ShareState | AppState): void {
         updateOutputs();
     }
 
+    // Filter display mode options based on loaded assets
+    const displaySelect = dialog.querySelector('[data-opt="displayMode"]') as HTMLSelectElement;
+    const hasSplat = !!(currentState?.splatLoaded || currentState?.splatUrl);
+    const hasModel = !!(currentState?.modelLoaded || currentState?.modelUrl);
+    const hasPointcloud = !!(currentState?.pointcloudLoaded || currentState?.pointcloudUrl);
+    const isArchive = !!currentState?.archiveUrl; // archives may contain any asset type
+
+    if (!isArchive) {
+        // Hide options for asset types not present
+        for (const opt of Array.from(displaySelect.options)) {
+            const v = opt.value;
+            if (v === 'splat' && !hasSplat) opt.style.display = 'none';
+            if (v === 'model' && !hasModel) opt.style.display = 'none';
+            if (v === 'pointcloud' && !hasPointcloud) opt.style.display = 'none';
+            if (v === 'both' && (!hasSplat || !hasModel)) opt.style.display = 'none';
+            if (v === 'split' && (!hasSplat || !hasModel)) opt.style.display = 'none';
+        }
+    }
+
     // Set initial display mode from state
     if (state.displayMode) {
-        (dialog.querySelector('[data-opt="displayMode"]') as HTMLSelectElement).value = state.displayMode;
+        displaySelect.value = state.displayMode;
     }
 
     // Tab switching
