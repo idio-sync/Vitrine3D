@@ -1,7 +1,7 @@
 # Sketchfab Feature Parity Analysis
 
-**Date:** 2026-02-11 (last updated 2026-02-24)
-**Purpose:** Ranked feature gap analysis between this viewer and Sketchfab, evaluated for Three.js 0.170.0 feasibility.
+**Date:** 2026-02-11 (last updated 2026-03-04)
+**Purpose:** Ranked feature gap analysis between this viewer and Sketchfab, evaluated for Three.js 0.182.0 feasibility.
 
 ---
 
@@ -25,6 +25,10 @@
 | 2026-02-24 | Annotation enhancements. Smooth camera animation when navigating to annotations, hero image zone with lightbox in popups, YouTube embed support in annotation descriptions, weighted connecting lines from markers to popups. | `annotation-system.ts`, `annotation-controller.ts`, `index.html`, `styles.css` |
 | 2026-02-24 | DXF drawing files as independent asset type (bonus). Loaded via `three-dxf-loader`, displayed in a dedicated drawing layer, round-trips through archive. | `file-handlers.ts`, `index.html`, `main.ts`, `kiosk-main.ts` |
 | 2026-02-24 | Draco mesh compression (bonus). DRACOLoader with WASM decoder served from `public/draco/`. Draco-compressed GLB files load transparently alongside uncompressed models. | `file-handlers.ts`, `scene-manager.ts` |
+| 2026-03-04 | STEP/IGES CAD file loading. Dedicated CAD layer via `occt-import-js` OpenCASCADE WASM. Stored as `cad_` entries in archives. | `cad-loader.ts`, `main.ts`, `scene-manager.ts`, `index.html` |
+| 2026-03-04 | Camera constraints (full). Lock orbit/pan/zoom toggles and max elevation angle. Saved in archive manifest, auto-applied in kiosk mode. | `main.ts`, `editor/index.html`, `kiosk-main.ts` |
+| 2026-03-04 | Gallery and Exhibit kiosk themes. Gallery: cinematic full-bleed with click gate. Exhibit: institutional with attract mode and click gate. | `src/themes/gallery/`, `src/themes/exhibit/` |
+| 2026-03-04 | Kiosk/editor bundle split. Two separate Vite entry points: kiosk at `/` and editor at `/editor/`. Kiosk bundle contains no editor code. | `src/index.html`, `src/editor/index.html`, `vite.config.ts` |
 
 ---
 
@@ -49,15 +53,17 @@ These features exist in our viewer but **not in Sketchfab**:
 | E57 point cloud native loading (WASM) | Sketchfab only supports PLY point clouds |
 | DXF drawing files as independent asset type | Floor plans / technical drawings alongside 3D data |
 | Custom archive format (.a3d/.a3z) with manifest | Bundled deliverables with metadata |
-| Fully offline kiosk HTML (~1MB self-contained) | No network dependency at all |
+| Kiosk/editor bundle split | Kiosk at `/` has no editor code; editor at `/editor/` |
 | N-point landmark alignment (Kabsch algorithm) with live preview & RMSE | Spatial registration of multi-asset scenes |
 | ICP auto-alignment | Iterative closest point alignment |
 | Dublin Core metadata system (50+ fields, 8 tabs) | Archival-grade metadata |
 | SIP compliance validation at export time | Required-field checking, compliance scoring, manifest audit trail |
 | Split-view dual-canvas rendering | Side-by-side comparison |
-| Kiosk theming system | Pluggable themes (editorial, minimal, template) with custom layouts |
+| Kiosk theming system | Pluggable themes (editorial, gallery, exhibit, minimal) with custom layouts |
 | SD/HD quality tier with proxy assets | Device-aware auto-detection, one-click switching |
 | Draco mesh compression support | Transparent loading of Draco-compressed GLBs |
+| STEP/IGES CAD file loading (occt-import-js WASM) | Parametric CAD in a dedicated layer |
+| Camera constraints (lock orbit/pan/zoom, max height) | Saved in archive, auto-applied in kiosk |
 | Tauri native desktop application | Offline desktop app with OS file dialogs and filesystem access |
 
 ---
@@ -77,12 +83,12 @@ These features deliver the most visual/functional parity per hour of work.
 | 5 | **Shadow catcher ground plane** | Invisible plane receiving shadows | **DONE** | LOW | High | ShadowMaterial with adjustable opacity (0.05–1.0). Excluded from raycasting. Auto-created with shadows. |
 | 6 | **Screenshot capture** | 1x/2x/4x resolution export | **DONE** | LOW | Medium-High | Capture button + viewfinder preview override + thumbnail grid. Screenshots exported to `/screenshots/` in archive. 1024x1024 JPEG. |
 | 7 | **Auto-rotate** | Turntable with speed/direction control | **DONE** | TRIVIAL | Medium | Toolbar toggle button. Default on in kiosk (auto-disables on interaction), off in main app. Speed: 2.0 (~30s/rev). |
-| 8 | **Camera constraints** | Orbit angle limits, zoom min/max, pan bounds | Partial | LOW | Medium | Zoom limits (`minDistance`/`maxDistance`) set via `ORBIT_CONTROLS` constants in scene-manager.js. Still missing: polar angle limits to prevent going underground, UI controls for runtime adjustment. |
+| 8 | **Camera constraints** | Orbit angle limits, zoom min/max, pan bounds | **DONE** | LOW | Medium | Lock orbit/pan/zoom toggles and max elevation angle. Saved in archive manifest, auto-applied in kiosk mode. |
 | 9 | **FOV control** | Adjustable field of view slider | **DONE** | TRIVIAL | Medium | Slider (10°–120°) in Scene Settings, kiosk, and editorial ribbon. |
 | 10 | **Orthographic view toggle** | Parallel projection mode | No | LOW | Medium | Swap between `PerspectiveCamera` and `OrthographicCamera`. Useful for architectural viewing. |
 
 **Estimated total effort for Tier 1: ~15-25 hours**
-**Progress: 8 of 10 features implemented (ranks 1–7, 9). Rank 8 partial (zoom limits only).**
+**Progress: 9 of 10 features implemented (ranks 1–9). Only orthographic view remaining.**
 **Expected result: ~60% visual parity with Sketchfab**
 
 ---
@@ -216,6 +222,7 @@ Features Sketchfab has that are less relevant for 3D scan deliverables.
 | Clipping/section planes | Arbitrary-orientation clipping plane, draggable 3D handle, main app and kiosk | Full |
 | Distance measurement | Two-click flow, 3D line overlay, configurable units (m/cm/mm/in/ft) | Full |
 | Guided annotation tours | Walkthrough engine with fly/fade/cut transitions, dwell times, auto-play and loop | Full |
+| Camera constraints | Lock orbit/pan/zoom, max elevation angle, saved in archive manifest | Full |
 
 ---
 
@@ -228,7 +235,7 @@ Phase 1 (Tier 1):  ~15-25 hrs  →  60% visual parity  [IN PROGRESS — 8/10 don
   ✅ Auto-rotate (toolbar toggle, kiosk default-on)
   ✅ Screenshot capture (viewfinder preview, thumbnail grid, archive export)
   ✅ FOV control slider (10°–120°)
-  🟡 Camera constraints (zoom limits only — needs angle limits + UI)
+  ✅ Camera constraints (lock orbit/pan/zoom, max elevation angle, saved in archive)
   ⬜ Orthographic view
 
 Phase 2 (Tier 2):  ~40-60 hrs  →  85% functional parity  [IN PROGRESS — 4/10 done]
@@ -253,11 +260,13 @@ Phase 5 (Tier 5):  ~60-100 hrs →  ~98% parity (diminishing returns)
 
 Bonus (not in Sketchfab):
   ✅ STL file loading
-  ✅ Kiosk theming system (editorial/minimal/template themes)
+  ✅ Kiosk theming system (editorial/gallery/exhibit/minimal themes)
   ✅ SD/HD quality tier toggle with device-aware auto-detection
   ✅ Tauri native desktop application
   ✅ DXF drawing files as independent asset type (three-dxf-loader)
   ✅ Draco mesh compression (DRACOLoader, transparent loading of compressed GLBs)
+  ✅ STEP/IGES CAD file loading (occt-import-js OpenCASCADE WASM)
+  ✅ Kiosk/editor bundle split (kiosk at /, editor at /editor/)
 ```
 
 **Total estimated effort to full parity: ~220-340 hours**
@@ -277,28 +286,9 @@ npm install some-package
 import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
 ```
 
-**Kiosk mode requires a separate step.** The kiosk generator fetches dependencies from CDN at generation time. Any package used in kiosk mode must also have a CDN URL added to the `CDN_DEPS` object in `kiosk-viewer.ts`:
+**Kiosk mode** now uses the same Vite build pipeline as the editor (separate entry points). New dependencies imported via npm are automatically bundled into both the kiosk and editor builds — no separate CDN step required.
 
-```typescript
-// Example: adding a new Three.js post-processing pass for kiosk use
-"three/addons/postprocessing/SSAOPass.js":
-  "https://esm.sh/three@0.170.0/examples/jsm/postprocessing/SSAOPass.js",
-```
-
-Remaining Phase 2 post-processing deps (not yet added):
-
-```typescript
-// Post-processing
-"three/addons/postprocessing/EffectComposer.js": "https://esm.sh/three@0.170.0/examples/jsm/postprocessing/EffectComposer.js",
-"three/addons/postprocessing/RenderPass.js":     "https://esm.sh/three@0.170.0/examples/jsm/postprocessing/RenderPass.js",
-"three/addons/postprocessing/UnrealBloomPass.js": "https://esm.sh/three@0.170.0/examples/jsm/postprocessing/UnrealBloomPass.js",
-"three/addons/postprocessing/SSAOPass.js":        "https://esm.sh/three@0.170.0/examples/jsm/postprocessing/SSAOPass.js",
-"three/addons/postprocessing/OutputPass.js":      "https://esm.sh/three@0.170.0/examples/jsm/postprocessing/OutputPass.js",
-"three/addons/postprocessing/OutlinePass.js":     "https://esm.sh/three@0.170.0/examples/jsm/postprocessing/OutlinePass.js",
-"three/addons/postprocessing/BokehPass.js":       "https://esm.sh/three@0.170.0/examples/jsm/postprocessing/BokehPass.js",
-// Camera animation (if not using built-in Three.js AnimationMixer)
-"@tweenjs/tween.js": "https://esm.sh/@tweenjs/tween.js@25.0.0"
-```
+> **Note:** The downloadable offline kiosk HTML generator (`kiosk-viewer.ts`) is deprecated. Its `CDN_DEPS` object is no longer the mechanism for adding kiosk dependencies.
 
 ---
 
@@ -306,10 +296,10 @@ Remaining Phase 2 post-processing deps (not yet added):
 
 1. **Post-processing pipeline**: Introducing `EffectComposer` changes the render loop from `renderer.render(scene, camera)` to `composer.render()`. This affects the dual-canvas split view and kiosk mode. Plan this carefully.
 
-2. **Kiosk mode**: Every new CDN dependency increases the kiosk HTML file size. HDR environment textures could add significant bulk — consider low-res HDR (512x256) for kiosk or making environments optional.
+2. **Kiosk mode**: The kiosk is now a separate Vite bundle served at `/`. New dependencies are bundled automatically. HDR environment textures could add significant bulk — consider low-res HDR (512x256) for kiosk or making environments optional.
 
 3. **Gaussian splat compatibility**: Spark.js renders splats in its own pass. Post-processing effects (SSAO, bloom) may not apply to splats correctly. Test early.
 
 4. **Performance budget**: SSAO + bloom together cost ~30% FPS. Add quality presets (Low/Medium/High) that toggle expensive effects.
 
-5. **Build pipeline via Vite**: Three.js addons can be imported directly from npm (`three/addons/...`) — no CDN needed for the main app. The kiosk generator separately fetches dependencies from CDN at generation time; any new dependency used in kiosk mode must also be added to `kiosk-viewer.ts` `CDN_DEPS`.
+5. **Build pipeline via Vite**: Three.js addons can be imported directly from npm (`three/addons/...`). Both the kiosk and editor bundles are built by Vite — no separate CDN fetching step. The downloadable kiosk HTML generator is deprecated.

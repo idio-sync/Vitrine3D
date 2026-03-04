@@ -2,7 +2,11 @@
 
 ## What This Project Is
 
-Vitrine3D is a browser-based tool for viewing and comparing three kinds of 3D data side-by-side: Gaussian splats (a photogrammetry format), traditional 3D meshes (GLB/OBJ), and E57 point clouds. It targets cultural-heritage, surveying, and digital-preservation workflows. The app also defines a custom ZIP-based archive format (.a3d/.a3z) for bundling assets with metadata, and can generate a fully offline self-contained HTML viewer.
+Vitrine3D is a browser-based tool for viewing and comparing three kinds of 3D data side-by-side: Gaussian splats (a photogrammetry format), traditional 3D meshes (GLB/OBJ/STL), and E57 point clouds. It targets cultural-heritage, surveying, and digital-preservation workflows. The app also defines a custom ZIP-based archive format (.a3d/.a3z) for bundling assets with metadata.
+
+**Two entry points** built as separate Vite bundles:
+- **Kiosk viewer** (`/`) — public-facing read-only viewer with pluggable themes (editorial, gallery, exhibit, minimal). Entry: `src/index.html` → `src/kiosk-web.ts` → `kiosk-main.ts`.
+- **Editor** (`/editor/`) — internal tool for composing scenes, aligning assets, annotating, editing metadata, and exporting archives. Entry: `src/editor/index.html` → `src/main.ts`.
 
 The project uses **Vite + TypeScript** with `allowJs: true` for hybrid .js/.ts support. All modules are now TypeScript (`.ts`). Run `npm run dev` for development (Vite dev server on port 8080), `npm run build` for production build to `dist/`. Dependencies installed via npm, resolved by Vite from `node_modules/`.
 
@@ -12,28 +16,33 @@ The project uses **Vite + TypeScript** with `allowJs: true` for hybrid .js/.ts s
 
 ```
 src/
-  index.html              - Single-page app shell (~1,100 lines)
+  index.html              - Kiosk viewer HTML (~570 lines)
+  kiosk-web.ts            - Kiosk Vite entry point (imports kiosk-main.ts)
   config.js               - URL-parameter parsing, security validation (IIFE, non-module)
   pre-module.js           - Non-module error catcher loaded before ES modules
-  main.ts                 - Application glue layer (~1,445 lines)
   types.ts                - Shared TypeScript interfaces (AppState, SceneRefs, deps interfaces)
-  styles.css              - All styling (~4,390 lines)
+  styles.css              - All styling (~5,060 lines)
+  editor/
+    index.html            - Editor HTML (~2,260 lines)
+  main.ts                 - Editor glue layer (~1,900 lines)
   modules/
     alignment.ts          - KD-tree, ICP algorithm, auto-align, fit-to-view, LandmarkAlignment
+    annotation-controller.ts - Annotation lifecycle orchestration (placement, selection, navigation)
     annotation-system.ts  - 3D annotation markers and raycasting
     archive-creator.ts    - Archive creation with SHA-256 hashing
     archive-loader.ts     - ZIP extraction and manifest parsing
     archive-pipeline.ts   - Archive loading/processing pipeline (extracted from main.ts)
     asset-store.ts        - ES module singleton for blob references
+    cad-loader.ts         - STEP/IGES CAD loading via occt-import-js WASM
     constants.ts          - Shared numeric/string constants
     cross-section.ts      - Movable/rotatable clipping plane tool using material-level clipping
     event-wiring.ts       - Central UI event binding — setupUIEvents()
-    export-controller.ts  - Archive export, kiosk viewer download, metadata manifests
-    file-handlers.ts      - Asset loading (splat, mesh, point cloud, archive)
+    export-controller.ts  - Archive export, metadata manifests
+    file-handlers.ts      - Asset loading (splat, mesh, point cloud, STL, archive)
     file-input-handlers.ts- File input events, URL prompts, URL loaders, Tauri dialogs
     fly-controls.ts       - WASD + mouse-look first-person camera
-    kiosk-main.ts         - Kiosk viewer entry point (viewer-only mode)
-    kiosk-viewer.ts       - Offline viewer generator (fetches CDN deps)
+    kiosk-main.ts         - Shared kiosk viewer layer (used by both kiosk-web.ts and editor kiosk mode)
+    kiosk-viewer.ts       - DEPRECATED: offline viewer generator (fetches CDN deps)
     logger.ts             - Standalone Logger class (extracted from utilities)
     map-picker.ts         - Leaflet + OSM interactive map modal for GPS coordinate selection
     measurement-system.ts - Point-to-point distance measurement using raycasting (session-only)
@@ -45,6 +54,7 @@ src/
     share-dialog.ts       - Share-link builder with URL parameters
     sip-validator.ts      - SIP compliance validation at export time with scoring and audit trail
     source-files-manager.ts- Source file list UI management for archive exports
+    spark-compat.ts       - Spark.js version abstraction (SPARK_VERSION env var)
     tauri-bridge.ts       - Tauri v2 native OS integration with browser fallback
     theme-loader.ts       - Kiosk theme CSS/layout loading and metadata parsing
     transform-controller.ts- Transform gizmo orchestration, object sync, delta tracking
@@ -57,11 +67,13 @@ src/
     __tests__/            - Vitest test suites (10 suites; alignment.test.ts added)
   themes/
     _template/            - Copy to create a new theme
-    editorial/            - Gold/navy editorial layout theme
+    editorial/            - Gold/navy editorial layout theme (default)
+    gallery/              - Cinematic full-bleed theme with click gate
+    exhibit/              - Institutional theme with attract mode and click gate
     minimal/              - Neutral white sidebar theme
-    lincoln-memorial/     - Lincoln Memorial showcase theme
 
-docker/                   - Dockerfile (nginx:alpine), nginx.conf, entrypoint
+docker/                   - Dockerfile (multi-stage: Node 20 + nginx:alpine), s6-overlay,
+                            SQLite metadata API, nginx.conf, entrypoint
 docs/
   archive/                - Archive format spec, guide, and metadata editor docs
   reference/              - Architecture, code review, shortcomings, feasibility analyses
@@ -73,7 +85,9 @@ docs/
 
 ### Boot sequence
 
-1. **`index.html`** loads three scripts in order:
+#### Editor (`/editor/`)
+
+1. **`editor/index.html`** loads three scripts in order:
    - `pre-module.js` (regular script) — installs global `error` and `unhandledrejection` handlers and starts a 5-second watchdog timer (`window.moduleLoaded`).
    - `config.js` (regular script, IIFE) — reads every `?param=` from the URL, validates URLs against an allowlist, and writes a `window.APP_CONFIG` object.
    - `main.ts` (ES module via `<script type="module">`) — the real application entry point.
@@ -81,6 +95,12 @@ docs/
 2. **`main.ts`** imports every module, reads `window.APP_CONFIG`, builds a global `state` object, calls `init()`, and enters the `animate()` render loop.
 
 3. **`init()`** creates a `SceneManager`, extracts its Three.js objects into module-scope variables (scene, camera, renderer, controls, etc.), wires up all DOM event listeners via `setupUIEvents()`, and calls `loadDefaultFiles()` if any URLs were provided via config.
+
+#### Kiosk (`/`)
+
+1. **`index.html`** loads `config.js` (IIFE) → `kiosk-web.ts` (ES module entry point).
+2. **`kiosk-web.ts`** imports `kiosk-main.ts` and calls its initialization.
+3. **`kiosk-main.ts`** creates a slim `SceneManager`, loads the archive from URL params, applies the theme, and starts the render loop. No editor code is included in this bundle.
 
 ### Module dependency graph
 
@@ -120,16 +140,16 @@ utilities.ts  (imports constants, logger, THREE)
      +---> walkthrough-editor.ts   (constants, logger, types)
      +---> walkthrough-controller.ts (walkthrough-engine, walkthrough-editor, logger, constants)
 
-main.ts  (imports everything above and orchestrates it all)
+main.ts  (imports everything above and orchestrates it all — editor only)
 
-kiosk-main.ts  (slim viewer entry point — imports scene-manager, file-handlers,
-                annotation-system, metadata-manager, fly-controls, quality-tier,
-                theme-loader, ui-controller, utilities)
+kiosk-web.ts → kiosk-main.ts  (slim viewer entry point — imports scene-manager,
+                file-handlers, annotation-system, metadata-manager, fly-controls,
+                quality-tier, theme-loader, ui-controller, spark-compat, utilities)
 ```
 
 Dependencies installed via npm (pinned versions in `package.json`):
-- Three.js 0.170.0
-- Spark.js 0.1.10
+- Three.js 0.182.0
+- Spark.js 2.0.0-preview (vendored in `src/vendor/`)
 - fflate 0.8.2
 - three-e57-loader 1.2.0 / web-e57 1.2.0
 - occt-import-js 0.0.23 (OpenCASCADE WASM — STEP/IGES tessellation; 7.3 MB WASM served at `/occt-import-js.wasm`)
@@ -193,7 +213,7 @@ IIFE that runs before any ES module. Parses every supported URL parameter (`?arc
 Tiny non-module script. Installs global error handlers and a 5-second timeout that logs a warning if `main.ts` never sets `window.moduleLoaded = true`. Purely diagnostic.
 
 ### `src/main.ts`
-The application glue layer. At ~1,445 lines (down from ~3,900 via Phase 1-4 refactoring), this is now a typed orchestration layer. It:
+The editor glue layer. At ~1,900 lines (down from ~3,900 via Phase 1-4 refactoring), this is a typed orchestration layer. It:
 - Holds all global state in a single `state: AppState` object (display mode, loaded flags, opacity settings, etc.)
 - Creates `SceneManager`, `AnnotationSystem`, `ArchiveCreator`, `FlyControls`
 - Defines typed factory functions that build dependency objects (`createExportDeps()`, `createArchivePipelineDeps()`, etc.) for module calls — the "deps pattern" (see Fragility section below)
@@ -203,7 +223,7 @@ The application glue layer. At ~1,445 lines (down from ~3,900 via Phase 1-4 refa
 ### `src/types.ts`
 Shared TypeScript interfaces:
 - `AppState` — global mutable state shape
-- `SceneRefs` — Three.js scene/camera/renderer/controls references; includes `drawingGroup` and `landmarkAlignment`
+- `SceneRefs` — Three.js scene/camera/renderer/controls references; includes `drawingGroup`, `cadGroup`, and `landmarkAlignment`
 - `ExportDeps`, `ArchivePipelineDeps`, `EventWiringDeps`, `FileInputDeps` — deps pattern interfaces
 - `Walkthrough`, `WalkthroughStop`, `WalkthroughTransition` — guided walkthrough data shapes
 
@@ -299,12 +319,8 @@ Manages the metadata sidebar:
 ### `src/modules/share-dialog.ts`
 Builds a modal dialog where users configure share-link options (display mode, controls visibility, toolbar, sidebar state, UI presets). Generates a URL with all current transforms serialized as query parameters. Supports three presets: `full`, `viewer`, `kiosk`.
 
-### `src/modules/kiosk-viewer.ts`
-Generates a self-contained ~1 MB HTML file that can view any .a3d/.a3z archive offline:
-- `fetchDependencies()` downloads Three.js, Spark.js, fflate, and Three.js addons from CDN.
-- Base64-encodes each dependency and embeds them in an HTML template.
-- At runtime, the generated HTML decodes the base64, creates blob URLs, rewrites `from "three"` bare imports to point at the Three.js blob URL, and dynamically imports everything.
-- The kiosk module itself is loaded lazily in `main.ts` to avoid blocking startup.
+### `src/modules/kiosk-viewer.ts` (DEPRECATED)
+~~Generates a self-contained ~1 MB HTML file that can view any .a3d/.a3z archive offline.~~ The downloadable kiosk HTML generator is deprecated. The kiosk viewer is now served as a separate Vite bundle at `/`. This module is retained for backward compatibility but the download button is hidden (`display:none`).
 
 ### `src/modules/ui-controller.ts`
 Utility functions for UI state:
@@ -352,7 +368,7 @@ Pure logic module — no DOM access, fully testable. Validates collected metadat
 Transform gizmo orchestration, object sync, delta tracking extracted from main.ts.
 
 ### `src/modules/kiosk-main.ts`
-Slim viewer entry point for kiosk/offline mode. Imports from real application modules so that visual and functional changes propagate automatically. Viewer-only — no archive creation, metadata editing, or alignment tools. Handles archive loading, display mode switching, annotations, and theme application in the generated offline HTML.
+Shared kiosk viewer layer used by both `kiosk-web.ts` (the Vite kiosk bundle at `/`) and the editor's kiosk preview mode. Imports from real application modules so that visual and functional changes propagate automatically. Viewer-only — no archive creation, metadata editing, or alignment tools. Handles archive loading, display mode switching, annotations, walkthrough playback, and theme application.
 
 ### `src/modules/walkthrough-engine.ts`
 `WalkthroughEngine` class — the core playback state machine for guided walkthroughs. Pure logic with zero DOM or Three.js dependencies; all side effects (camera animation, fade transitions, annotation display, UI sync) are delegated to a `WalkthroughCallbacks` interface injected by the host (`main.ts` or `kiosk-main.ts`). Manages playback states (`idle`, `transitioning`, `dwelling`, `paused`), dwell timers, loop logic, and reduced-motion detection. Shared between editor preview and kiosk playback without duplication.
@@ -373,7 +389,7 @@ Device capability detection for SD/HD asset selection:
 Runtime theme loading for kiosk viewer:
 - Fetches `theme.css` (required), `layout.css` (optional), and `layout.js` (optional) from `themes/{name}/`.
 - `parseThemeMeta()` extracts `@theme`, `@layout`, and `@scene-bg` directives from CSS comment blocks.
-- Supports sidebar and editorial layout modes.
+- Supports sidebar, editorial, gallery, and exhibit layout modes. Gallery and exhibit themes include click gates (click-to-load interstitials).
 
 ### `src/modules/tauri-bridge.ts`
 Native OS integration when running inside Tauri v2, with browser fallback:
@@ -405,7 +421,7 @@ After `sceneManager = new SceneManager()`, `init()` immediately copies `sceneMan
 
 ### 4. `main.ts` size — improved but still largest file
 **Before**: ~3,900 lines, God Module anti-pattern.
-**After**: ~1,445 lines via Phase 1-4 refactoring. Now a typed glue layer: `init()`, state declarations, deps factories, animation loop, and thin delegation wrappers.
+**After**: ~1,900 lines via Phase 1-4 refactoring. Now a typed glue layer: `init()`, state declarations, deps factories, animation loop, and thin delegation wrappers.
 
 Still the largest single file, but manageable and focused on orchestration rather than implementation.
 
@@ -439,14 +455,8 @@ The CSP in `index.html` includes `'unsafe-eval'` because Spark.js uses WASM that
 ### 10. Point cloud memory management
 `E57Loader` uses a WASM-based parser. There are no explicit limits on point count, so loading a very large E57 file can exhaust browser memory with no graceful degradation. The `disposeObject()` utility handles cleanup, but there's a known shortcoming (documented in [SHORTCOMINGS_AND_SOLUTIONS.md](SHORTCOMINGS_AND_SOLUTIONS.md)) around memory leaks during point cloud disposal.
 
-### 11. Kiosk CDN versions must be kept in sync
-The kiosk-viewer.ts `CDN_DEPS` object fetches dependencies from CDN at kiosk generation time (not from `node_modules/`). Versions must match `package.json`:
-- Three.js 0.170.0
-- Spark.js 0.1.10
-- fflate 0.8.2
-- three-e57-loader 1.2.0
-
-If `package.json` is updated but kiosk-viewer.ts is not, the kiosk viewer will bundle different versions than the main app uses, causing subtle breakage (this has already caused bugs per the git history).
+### 11. ~~Kiosk CDN versions must be kept in sync~~ (RESOLVED)
+~~The kiosk-viewer.ts `CDN_DEPS` object fetches dependencies from CDN at kiosk generation time.~~ The downloadable kiosk HTML generator is deprecated. The kiosk viewer is now a separate Vite bundle at `/` that uses the same npm dependencies as the editor — no CDN version sync required. The `kiosk-viewer.ts` `CDN_DEPS` object is vestigial.
 
 ### 12. Annotation system doesn't import Logger
 `annotation-system.ts` imports only `THREE` and uses no logging. Every other module uses `Logger.getLogger()`. Annotation debugging currently produces no structured log output, unlike the rest of the app.

@@ -1,5 +1,7 @@
 # Usage Guide
 
+This guide covers the **editor** at `/editor/`. For the kiosk viewer at `/`, see [Kiosk Viewer](KIOSK-VIEWER.md).
+
 ## Loading Files
 
 **From the UI**: Use the Load Files panel to load assets from local files or URLs. Each asset type (Splat, Model, Point Cloud, Drawing, Archive) has "From File" and "From URL" buttons.
@@ -125,7 +127,7 @@ A walkthrough is a guided sequence of camera stops that plays back automatically
 ## Scene Settings
 
 - **Grid** — Toggle a reference grid
-- **Background color** — Choose from presets (dark blue, near black, grays, light gray) or pick a custom color
+- **Background color** — Choose from presets (dark blue, near black, grays, light gray) or pick a custom color. Per-asset-type background overrides available (splat, model, point cloud)
 - **Background image** — Load a background image from file or URL; clears when switching to environment-as-background
 - **Lighting** — Adjust ambient, hemisphere, and two directional lights (affects models and point clouds only)
 - **Tone mapping** — 6 modes: None (default), Linear, Reinhard, Cineon, ACESFilmic, AgX. Exposure slider (0.1–3.0). Default is None for neutral rendering; opt-in to cinematic looks
@@ -138,6 +140,17 @@ A walkthrough is a guided sequence of camera stops that plays back automatically
 - **Capture Screenshot** — Captures a 1024x1024 JPEG of the current viewport. Screenshots appear as thumbnails below the button with a red X to delete
 - **Set Archive Preview Image** — Opens a viewfinder overlay showing the square crop region. Capture from the viewfinder to override the automatic preview generated during archive export
 - **Archive export** — All captured screenshots are bundled into the archive's `/screenshots/` directory on export
+
+## Camera Constraints
+
+The editor includes camera constraint controls for locking orbit behavior in kiosk mode:
+
+- **Lock Orbit** — Prevent camera rotation
+- **Lock Pan** — Prevent camera panning
+- **Lock Zoom** — Prevent camera zoom
+- **Max Height** — Set a maximum camera elevation angle
+
+Constraints are saved in the archive manifest and applied automatically when the archive is loaded in kiosk mode.
 
 ## Asset-Specific Settings
 

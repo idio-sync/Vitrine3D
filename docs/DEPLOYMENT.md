@@ -76,7 +76,7 @@ services:
     environment:
       - ALLOWED_DOMAINS=assets.yourcompany.com
       - FRAME_ANCESTORS='self' https://yourcompany.com https://*.yourcompany.com
-      - SHOW_CONTROLS=true
+      - ADMIN_ENABLED=true
 ```
 
 ## Archive Storage (Cloudflare R2)
@@ -157,8 +157,8 @@ Embed the viewer on your company website using existing URL parameters:
 | `mode` | `splat`, `model`, `pointcloud`, `both`, `split` | Initial display mode |
 | `toolbar` | `show`, `hide` | Toolbar visibility |
 | `sidebar` | `closed`, `view`, `edit` | Metadata sidebar state |
-| `theme` | theme folder name | Kiosk theme (e.g., `editorial`, `minimal`) |
-| `layout` | `sidebar`, `editorial` | Layout override (overrides theme default) |
+| `theme` | theme folder name | Kiosk theme (e.g., `editorial`, `gallery`, `exhibit`, `minimal`) |
+| `layout` | `sidebar`, `editorial`, `gallery`, `exhibit` | Layout override (overrides theme default) |
 | `autoload` | `true`, `false` | Auto-load archive (default `true`; `false` shows click-to-load gate) |
 
 ### Required Configuration
@@ -482,7 +482,7 @@ When `ADMIN_ENABLED=true`, a **Save to Library** button appears in the export pa
 | Feature | Admin Page (`/admin`) | Library Panel (viewer) |
 |---------|----------------------|----------------------|
 | URL | `/admin` | Main viewer, Library tool button |
-| Authentication | nginx basic auth prompt | In-app login form |
+| Authentication | Cloudflare Access | Cloudflare Access (cookie-based) |
 | Archive gallery | Standalone HTML page | Integrated into viewport |
 | Upload | Drag-and-drop | Drag-and-drop |
 | Share dialog | Built-in | Built-in (with QR codes) |
@@ -570,7 +570,7 @@ This section consolidates all deployment-relevant security controls. For securit
 
 Two layers of CSP are applied:
 
-**1. Meta tag in `index.html` (lines 8–23)** — Controls script sources, style sources, connect targets, and other resource origins:
+**1. Meta tag in `index.html` and `editor/index.html`** — Controls script sources, style sources, connect targets, and other resource origins:
 
 ```
 default-src 'self';
@@ -632,14 +632,14 @@ const ALLOWED_EXTERNAL_DOMAINS = [
 ```
 
 **Important: URL validation is implemented in two places** with separate domain allowlists:
-- `config.js` (line 56) — validates URL parameters at boot
-- `main.js` (line 157) — validates URLs entered via prompt dialogs
+- `config.js` — validates URL parameters at boot
+- `main.ts` — validates URLs entered via prompt dialogs
 
-In Docker deployments, both share the list from `ALLOWED_DOMAINS` because `config.js.template` merges the env var into `ALLOWED_EXTERNAL_DOMAINS` and passes it to `main.js` via `window.APP_CONFIG.allowedDomains`. In local development, `main.js` reads from `APP_CONFIG` as well, but if you hardcode domains directly into `config.js`, `main.js` must also be updated.
+In Docker deployments, both share the list from `ALLOWED_DOMAINS` because `config.js.template` merges the env var into `ALLOWED_EXTERNAL_DOMAINS` and passes it to `main.ts` via `window.APP_CONFIG.allowedDomains`. In local development, `main.ts` reads from `APP_CONFIG` as well, but if you hardcode domains directly into `config.js`, `main.ts` must also be updated.
 
 ### Archive Filename Sanitization
 
-When extracting files from `.a3d`/`.a3z` archives, all filenames are sanitized by `sanitizeArchiveFilename()` in `archive-loader.js` (lines 37–99). This prevents:
+When extracting files from `.a3d`/`.a3z` archives, all filenames are sanitized by `sanitizeArchiveFilename()` in `archive-loader.ts`. This prevents:
 
 | Attack | Protection |
 |--------|-----------|
@@ -658,7 +658,7 @@ When embedding the viewer via `<iframe>` on client websites, four environment va
 
 | Variable | Example | Description |
 |----------|---------|-------------|
-| `KIOSK_LOCK` | `true` | Forces kiosk mode server-side. Ignores privilege-escalating URL params (`?kiosk`, `?controls`, `?sidebar`, `?toolbar`, `?splat`, `?model`, `?pointcloud`, `?alignment`). The `?archive=` param still works (needed for per-embed URLs). Theme/layout params are allowed (cosmetic only). |
+| `KIOSK_LOCK` | `true` | **Superseded by the kiosk/editor bundle split** — the kiosk bundle at `/` no longer includes editor code, so privilege escalation via URL params is not possible. This env var is retained for backward compatibility but is no longer necessary. |
 | `ARCHIVE_PATH_PREFIX` | `/archives/` | When set with `KIOSK_LOCK`, only allows loading archives whose path starts with this prefix. Prevents path traversal (`../`) via URL normalization using `new URL()`. New archives added to the directory work immediately with no config changes. |
 | `EMBED_REFERERS` | `client.com *.client.com` | nginx `valid_referers` check. Rejects requests from unlisted domains. Direct browser visits (no referer) are still allowed. Space-separated list; supports wildcards. |
 | `FRAME_ANCESTORS` | `https://client.com` | CSP `frame-ancestors` directive set via nginx HTTP header. Prevents the viewer from being embedded in iframes on unauthorized sites (clickjacking prevention). |
@@ -682,9 +682,9 @@ docker run -e KIOSK_LOCK=true \
 
 | Layer | What It Prevents |
 |-------|-----------------|
-| `KIOSK_LOCK` | Switching to editor mode via URL params |
+| `KIOSK_LOCK` | Switching to editor mode via URL params (superseded by bundle split — kiosk at `/` has no editor code) |
 | `ARCHIVE_PATH_PREFIX` | Loading files outside the archives directory |
-| nginx module blocking | Loading editor JS modules (`archive-creator`, `share-dialog`, `kiosk-viewer`) even via devtools |
+| Bundle split | Editor code is in a separate bundle at `/editor/` — not present in the kiosk bundle at `/` |
 | `EMBED_REFERERS` | Accessing the viewer from unlisted domains |
 | `FRAME_ANCESTORS` | Embedding the viewer iframe on unauthorized sites |
 | Non-guessable paths | Guessing other clients' archive URLs |

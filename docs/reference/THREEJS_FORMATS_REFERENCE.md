@@ -340,4 +340,4 @@ Start: What are you trying to do?
 ---
 
 *Generated February 2026 for Direct Dimensions Inc. internal reference.*
-*Covers Three.js r175+ and community packages as of early 2026.*
+*Covers Three.js r182+ and community packages as of early 2026.*

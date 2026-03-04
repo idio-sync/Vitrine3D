@@ -52,16 +52,17 @@
 
 ### 1.3 CDN Dependency at Export Time
 
-**Problem:** Kiosk export fetches dependencies from `esm.sh` at build time. If the CDN is unavailable, restructures URLs, or changes bundling behavior, export fails entirely. There is a single retry with no fallback.
+**Problem:** ~~Kiosk export fetches dependencies from `esm.sh` at build time. If the CDN is unavailable, restructures URLs, or changes bundling behavior, export fails entirely.~~ The downloadable kiosk HTML generator is deprecated. The kiosk viewer is now served as a separate Vite bundle at `/`, with all dependencies bundled at build time. CDN dependency at runtime is eliminated for the web-served kiosk.
 
 **Solutions:**
-- **Short-term:** Add a local cache of fetched dependencies using the Cache API or IndexedDB. Once fetched successfully, subsequent exports use the cached copy. Display a clear error if the CDN is unreachable and no cache exists.
-- **Medium-term:** Bundle the required dependencies (Three.js, Spark.js, fflate) as local assets within the application's deployment. Fetch from local first, fall back to CDN. This eliminates the CDN as a single point of failure.
+- ~~**Short-term:** Add a local cache of fetched dependencies using the Cache API or IndexedDB.~~
+- ~~**Medium-term:** Bundle the required dependencies as local assets within the application's deployment.~~
 - **Long-term:** Provide a CLI or build script that pre-fetches and bundles all dependencies for air-gapped or institutional deployments where external network access may be restricted.
 
-  **Status: Partially Implemented (2026-02-13)**
+  **Status: Largely Resolved (2026-03-04)**
+  - Kiosk/editor bundle split: both bundles are built by Vite with all dependencies bundled at build time — no runtime CDN fetching
   - `scripts/vendor-deps.mjs` downloads CDN dependencies to `dist/vendor/` and rewrites the import map for Tauri desktop builds
-  - Not yet available for the web app or kiosk export (CDN is still the sole source there)
+  - The deprecated downloadable kiosk HTML generator (`kiosk-viewer.ts`) still uses CDN fetching, but this code path is no longer the primary kiosk delivery mechanism
 
 ### 1.4 No Progressive or Level-of-Detail Loading
 
@@ -74,7 +75,7 @@
   **Status: Implemented (2026-02-13) — via upload, not on-load decimation**
   - Users can upload pre-simplified mesh and splat proxies alongside full-resolution assets
   - Archive manifest stores proxies as separate `data_entries` with `lod: "proxy"` and `derived_from` linking to the primary entry
-  - Kiosk viewer auto-detects device capability (`quality-tier.js`) and defaults to SD (proxy) on low-end devices
+  - Kiosk viewer auto-detects device capability (`quality-tier.ts`) and defaults to SD (proxy) on low-end devices
   - SD/HD toggle allows manual switching between proxy and full-resolution at runtime
   - On-load decimation (in-browser) remains unimplemented
 
@@ -93,7 +94,7 @@
   **Status: Partially Implemented (2026-02-08)**
   - LOD proxy system added to archives: upload a pre-simplified mesh as `mesh_0_proxy` with `lod: "proxy"` and `derived_from: "mesh_0"`
   - Kiosk viewer auto-loads proxy mesh when available (mobile/bandwidth-constrained scenarios)
-  - Quality tier detection (`quality-tier.js`) adapts asset loading to device capability
+  - Quality tier detection (`quality-tier.ts`) adapts asset loading to device capability
   - Full multi-resolution LOD chain (multiple levels) and in-browser decimation not yet implemented
 
   **Note:** The implemented approach uses separate `data_entries` (e.g. `mesh_0_proxy`) rather than an `lod_variants` array. The separate-entry pattern was chosen because it preserves per-entry metadata (transform, provenance) and integrates with the existing `role: "derived"` / `derived_from` hierarchy.
@@ -117,7 +118,7 @@
 
 ### 3.1 No Formal Specification Document
 
-**Problem:** The `.a3d` format is defined implicitly by the code in `archive-loader.js` and `archive-creator.js`. There is no standalone specification document. Anyone writing an independent reader must reverse-engineer the behavior from JavaScript source code. For a preservation format, the specification should be a document, not an implementation.
+**Problem:** The `.a3d` format is defined implicitly by the code in `archive-loader.ts` and `archive-creator.ts`. There is no standalone specification document. Anyone writing an independent reader must reverse-engineer the behavior from JavaScript source code. For a preservation format, the specification should be a document, not an implementation.
 
 **Solutions:**
 - **Short-term:** Write a standalone specification document (`SPECIFICATION.md` or a versioned PDF) that defines the archive structure, manifest schema, required and optional fields, data types, and processing rules independent of any implementation. Publish it in the `archive-3d` repository.
@@ -269,38 +270,24 @@
 
 ## 6. Preservation — Kiosk Viewer Durability
 
-### 6.1 Polyglot HTML+ZIP Format Is Fragile
+> **Note (2026-03-04):** The downloadable kiosk HTML generator is deprecated. The kiosk viewer is now served as a separate Vite bundle at `/`, eliminating the polyglot HTML+ZIP format and the frozen JS stack concerns described below. These issues remain relevant only for any previously-generated offline kiosk HTML files and for the Tauri desktop app.
 
-**Problem:** The kiosk viewer appends raw ZIP bytes after `</html>`. This polyglot format can be corrupted by: HTML sanitizers that strip content after `</html>`, email systems that transcode attachments, CMS platforms, charset-aware file transfers (FTP ASCII mode), or any tool that processes "HTML files" and doesn't expect trailing binary data.
+### 6.1 ~~Polyglot HTML+ZIP Format Is Fragile~~ (DEPRECATED)
 
-**Solutions:**
-- **Short-term:** Document the fragility clearly in the spec and in the kiosk viewer's UI. Add a warning: "This file must be transferred as binary. Do not open in text editors or send via systems that may modify HTML content."
-- **Medium-term:** Base64-encode the ZIP data and embed it within a `<script>` tag as a JavaScript string, rather than appending raw binary after `</html>`. This makes the file valid HTML throughout:
-  ```html
-  <script id="archive-data" type="application/octet-stream">
-  base64-encoded-zip-data-here
-  </script>
-  </body></html>
-  ```
-  This increases file size by ~33% but survives any HTML-aware processing. The viewer decodes the base64 at runtime.
-- **Long-term:** Consider alternative self-contained formats:
-  - A `.zip` file where `index.html` is the entry point (like EPUB). Browsers can serve this from a Service Worker.
-  - A Web Bundle (`.wbn`) — a W3C format specifically designed for self-contained web content. Browser support is emerging.
-  - An Electron/Tauri-packaged offline viewer for institutional desktops where browser compatibility is less certain.
+~~**Problem:** The kiosk viewer appends raw ZIP bytes after `</html>`. This polyglot format can be corrupted by: HTML sanitizers that strip content after `</html>`, email systems that transcode attachments, CMS platforms, charset-aware file transfers (FTP ASCII mode), or any tool that processes "HTML files" and doesn't expect trailing binary data.~~
 
-  **Status: Partially Implemented (2026-02-13)**
-  - Tauri v2 desktop app added (`src-tauri/`), defaults to kiosk mode with editorial theme
-  - GitHub Actions CI/CD builds for Windows, Linux, and macOS
-  - Base64 embedding and Web Bundle approaches remain unimplemented
+**Status: No longer applicable.** The kiosk viewer is now served via a standard Vite build at `/`. The downloadable kiosk HTML generator is deprecated. Alternative self-contained formats remain relevant for offline distribution:
+  - Tauri v2 desktop app (`src-tauri/`), defaults to kiosk mode with editorial theme — **implemented**
+  - Web Bundle (`.wbn`) — a W3C format for self-contained web content — not yet implemented
+  - Service Worker-based ZIP viewer — not yet implemented
 
-### 6.2 Embedded JavaScript Will Age
+### 6.2 ~~Embedded JavaScript Will Age~~ (DEPRECATED)
 
-**Problem:** The kiosk viewer embeds Three.js 0.170.0 and Spark.js 0.1.10 as base64 blobs. These libraries use JavaScript patterns, APIs, and WebGL calls that may break as browsers evolve. A kiosk file created today may not render correctly in a 2036 browser.
+~~**Problem:** The kiosk viewer embeds Three.js 0.170.0 and Spark.js 0.1.10 as base64 blobs. These libraries use JavaScript patterns, APIs, and WebGL calls that may break as browsers evolve.~~
 
-**Solutions:**
-- **Short-term:** Accept this limitation and document it. The kiosk viewer is a best-effort snapshot, not a permanent renderer. The archive's true preservation value is in the raw data files and metadata.
-- **Medium-term:** Include a `viewer_version` and `viewer_created_date` in the kiosk HTML metadata. Add a conspicuous "This viewer was created on [date] and may not work in future browsers. The original data files can be extracted from the archive." message in the kiosk UI.
-- **Long-term:** Investigate rendering to a static format as a preservation fallback. Generate a set of pre-rendered turntable images or a video orbit alongside the interactive viewer. If the WebGL code breaks, the pre-rendered media survives:
+**Status: No longer applicable.** The web-served kiosk uses the same Vite-bundled Three.js 0.182.0 and Spark.js 2.0.0-preview as the editor, updated with each deployment. The JS aging concern now applies only to the Tauri desktop app (which bundles a specific version).
+
+**Remaining long-term consideration:** Investigate pre-rendered turntable images/video as a preservation fallback:
   ```json
   "preservation_fallback": {
     "turntable_video": "assets/preview_orbit.mp4",
@@ -316,16 +303,18 @@
 
 ## 7. Usability — Measurement & Analysis Tools
 
-### 7.1 No Measurement Tools
+### 7.1 ~~No~~ Measurement Tools
 
-**Problem:** The quality metrics section documents sub-millimeter accuracy, but the viewer has no distance measurement, area calculation, cross-section, or volume estimation tools. Users can read that the data is precise but cannot actually measure anything.
+**Problem:** ~~The quality metrics section documents sub-millimeter accuracy, but the viewer has no distance measurement, area calculation, cross-section, or volume estimation tools. Users can read that the data is precise but cannot actually measure anything.~~
 
-**Solutions:**
-- **Short-term:** Add a point-to-point distance tool. Click two points on the 3D surface (via raycasting), display the Euclidean distance in the scene units (meters). This is the most-requested feature in any 3D heritage viewer.
+**Status: Partially Implemented (2026-02-24)**
+- **Point-to-point distance measurement** — two-click flow, 3D line overlay, DOM distance markers, configurable units (m/cm/mm/in/ft). Works in main app and kiosk viewer. (`measurement-system.ts`)
+- **Cross-section tool** — arbitrary-orientation clipping plane with draggable 3D handle, normal flip, and depth snap. Works in main app and kiosk viewer. (`cross-section.ts`)
+
+**Remaining solutions:**
 - **Medium-term:** Add:
   - **Multi-point polyline measurement** — click a series of points, display cumulative distance
   - **Surface area measurement** — select a region, compute area from the mesh triangles within it
-  - **Cross-section tool** — define a cutting plane, display the intersection profile as a 2D line drawing
   - **Coordinate readout** — hover over the surface, display XYZ coordinates in real-time
 - **Long-term:** Add:
   - **Volume estimation** from closed mesh regions
@@ -350,9 +339,16 @@
 
   Add auto-detection where possible:
   - Parse EXIF data from images to pre-fill capture date, device, GPS coordinates
-  - Detect file format and auto-populate PRONOM IDs
-  - Infer mesh statistics (face count, vertex count, bounding box dimensions) from loaded files
-- **Long-term:** Add a "metadata completeness score" that shows users how thorough their metadata is, with suggestions for what to add next. Implement ORCID lookup (autocomplete from the ORCID API) and PRONOM lookup (search the PRONOM registry). Support import of metadata from external sources (CSV, Dublin Core XML, institutional collection management systems).
+  - ~~Detect file format and auto-populate PRONOM IDs~~ **Done** — auto-detected from loaded assets
+  - ~~Infer mesh statistics (face count, vertex count, bounding box dimensions) from loaded files~~ **Done** — displayed as read-only statistics
+
+  **Status: Partially Implemented (2026-02-24)**
+  - PRONOM format IDs auto-detected from loaded assets
+  - Mesh face/vertex counts displayed as read-only statistics
+  - Metadata completeness profile selector (Basic / Standard / Archival) controls which tabs and fields are visible
+  - SIP compliance validation at export time: required/recommended field checking, format validation, compliance scoring, manifest audit trail
+
+- **Long-term:** Implement ORCID lookup (autocomplete from the ORCID API) and PRONOM lookup (search the PRONOM registry). Support import of metadata from external sources (CSV, Dublin Core XML, institutional collection management systems).
 
 ### 8.2 No Metadata Validation
 
@@ -491,12 +487,12 @@
 
 ### 11.2 Tension Between Self-Contained and Open
 
-**Problem:** The `.a3d` archive requires this viewer to display. The kiosk export is self-contained but depends on a frozen JavaScript stack. Neither is truly self-contained in the archival sense — one needs software, the other needs a compatible browser.
+**Problem:** The `.a3d` archive requires this viewer to display. ~~The kiosk export is self-contained but depends on a frozen JavaScript stack.~~ The kiosk is now served as a standard Vite bundle at `/`, updated with each deployment. The Tauri desktop app bundles a specific version for offline use. Neither is truly self-contained in the archival sense — one needs software, the other needs a compatible browser or the desktop app.
 
 **Solutions:**
 - **Short-term:** Accept and document the two-tier model explicitly:
   - **Tier 1 (Archive, .a3d):** Long-term preservation. Standard ZIP + JSON + standard file formats. Any ZIP library + JSON parser can extract and read the contents. The data survives without any specific viewer.
-  - **Tier 2 (Kiosk, .html):** Convenient access. Works in contemporary browsers. May stop working as browsers evolve. The viewer is a convenience, not a preservation guarantee.
+  - **Tier 2 (Kiosk, web-served or Tauri desktop):** Convenient access. The web-served kiosk at `/` stays current with each deployment. The Tauri desktop app bundles a specific version for offline use. The viewer is a convenience, not a preservation guarantee.
 - **Medium-term:** Ensure the archive's data files are fully self-describing without the viewer. Include a `README.txt` in every archive explaining the structure in plain text:
   ```
   This is an archive-3d container (version 1.0).
@@ -570,23 +566,23 @@
 | 12.1 | No data hierarchy | High | Low | **Critical** | **Done** |
 | 4.2 | PRONOM IDs misleading | Medium | Low | **High** | |
 | 5.2 | SHA-256 fails on HTTP | Medium | Low | **High** | **Done** |
-| 7.1 | No measurement tools | High | Medium | **High** | |
-| 8.1 | Metadata UI overwhelming | Medium | Medium | **High** | |
+| 7.1 | No measurement tools | High | Medium | **High** | Partial |
+| 8.1 | Metadata UI overwhelming | Medium | Medium | **High** | Partial |
 | 3.2 | No compatibility strategy | Medium | Low | **High** | **Done** |
 | 10.1 | Annotations text-only | Medium | Medium | **High** | Partial |
 | 9.2 | No collaboration model | Medium | Medium | **Medium** | |
 | 5.1 | No digital signatures | Medium | High | **Medium** | |
 | 1.1 | Splat format instability | High | Low (document) | **Medium** | |
 | 1.2 | WebGL 2.0 lifespan | Medium | High | **Medium** | |
-| 6.1 | Polyglot format fragile | Medium | Medium | **Medium** | |
+| 6.1 | Polyglot format fragile | Medium | Medium | **Medium** | Deprecated |
 | 4.1 | Dublin Core informal | Medium | Medium | **Medium** | **Done** |
 | 4.3 | No OAIS mapping | Low | Medium | **Medium** | |
 | 1.4 | No LOD loading | Medium | High | **Medium** | Partial |
 | 8.2 | No metadata validation | Medium | Medium | **Medium** | **Done** |
 | 9.1 | No versioning | Medium | Medium | **Medium** | **Done** |
-| 1.3 | CDN dependency | Low | Low | **Low** | |
+| 1.3 | CDN dependency | Low | Low | **Low** | Resolved |
 | 2.1 | ICP alignment naive | Low | High | **Low** | |
-| 6.2 | Embedded JS will age | Low | High | **Low** | |
+| 6.2 | Embedded JS will age | Low | High | **Low** | Deprecated |
 
 ---
 
@@ -598,6 +594,6 @@ The three most impactful areas of work were:
 
 2. **~~Add data hierarchy and role classification~~ (12.1, 4.2, 1.1) — Partially done.** Data entries now support `role` (primary/derived) classification. PRONOM variant annotations (4.2) and splat format stability documentation (1.1) remain open.
 
-3. **Add measurement and structured annotation tools** (7.1, 10.1) — image attachments in annotations are implemented via the `asset:` protocol; measurement tools, annotation types, and polyline/area annotations remain the largest open feature gap.
+3. **~~Add measurement and structured annotation tools~~ (7.1, 10.1) — Partially done.** Point-to-point distance measurement and cross-section clipping plane are implemented. Image attachments in annotations are implemented via the `asset:` protocol. Remaining: polyline/area measurement, annotation types, and W3C Web Annotation export.
 
-Of the 22 items tracked, 7 are fully implemented and 2 are partially implemented. The highest-impact remaining work is measurement tools (7.1), format independence from the viewer (11.1), and structured annotation types (10.1).
+Of the 22 items tracked, 7 are fully implemented, 2 are deprecated (kiosk viewer durability 6.1/6.2), 1 is largely resolved (CDN dependency 1.3), and 4 are partially implemented. The highest-impact remaining work is format independence from the viewer (11.1), structured annotation types (10.1), and advanced measurement tools (area, polyline).

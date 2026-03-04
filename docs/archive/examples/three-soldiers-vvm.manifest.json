@@ -1,0 +1,238 @@
+{
+    "container_version": "1.0",
+    "packer": "vitrine3d",
+    "packer_version": "1.0.0",
+    "_creation_date": "2026-03-01T14:30:00.000Z",
+
+    "project": {
+        "title": "The Three Soldiers — Vietnam Veterans Memorial",
+        "id": "three-soldiers-vvm-2026",
+        "description": "High-resolution 3D capture of *The Three Soldiers* (also known as *The Three Servicemen*), a bronze sculpture by Frederick Hart located on the National Mall in Washington, D.C. The statue depicts three young American servicemen — one White, one African American, and one Hispanic — and was unveiled on Veterans Day 1984 as a figurative complement to Maya Lin's abstract memorial wall.",
+        "tags": ["photogrammetry", "heritage", "sculpture", "bronze", "memorial", "national-mall"],
+        "license": "CC-BY-NC-4.0"
+    },
+
+    "relationships": {
+        "part_of": "Vietnam Veterans Memorial Documentation Project 2026",
+        "derived_from": "raw-scan-003",
+        "replaces": "",
+        "related_objects": [
+            "vietnam-veterans-memorial-wall",
+            {
+                "title": "Vietnam Women's Memorial",
+                "description": "Bronze sculpture by Glenna Goodacre, dedicated 1993, located 300 ft south of The Wall.",
+                "url": ""
+            }
+        ]
+    },
+
+    "provenance": {
+        "capture_date": "2026-02-18",
+        "capture_device": "Leica RTC360",
+        "device_serial": "SN-55892",
+        "operator": "Michael Torres, National Mall Survey Team",
+        "operator_orcid": "0000-0003-4567-8901",
+        "location": "Washington, D.C., USA",
+        "convention_hints": ["Y-up", "meters", "right-handed"],
+        "processing_software": [
+            { "name": "Reality Capture", "version": "1.5", "url": "https://www.capturingreality.com/" },
+            { "name": "Blender", "version": "5.0" }
+        ],
+        "processing_notes": "Captured across two sessions (morning and afternoon) for optimal lighting. 1,240 images aligned, dense cloud cleaned of tourist occlusion, mesh decimated for web delivery."
+    },
+
+    "quality_metrics": {
+        "tier": "reference",
+        "accuracy_grade": "A",
+        "capture_resolution": { "value": 1.5, "unit": "mm", "type": "GSD" },
+        "alignment_error": { "value": 0.4, "unit": "mm", "method": "RMSE" },
+        "scale_verification": "Verified against known plinth dimensions (base width 2.44 m).",
+        "data_quality": {
+            "coverage_gaps": "Minor occlusion under rifle sling and between figures at rear contact points.",
+            "reconstruction_areas": "Small infill on underside of helmet brims.",
+            "color_calibration": "X-Rite ColorChecker used, white balance corrected per session.",
+            "measurement_uncertainty": "0.4mm"
+        }
+    },
+
+    "archival_record": {
+        "standard": "Dublin Core",
+        "title": "The Three Soldiers (The Three Servicemen)",
+        "alternate_titles": ["The Three Servicemen Statue", "Three Soldiers Statue"],
+        "ids": {
+            "accession_number": "VVMF-1984-002",
+            "siris_id": "",
+            "uri": "https://www.nps.gov/vive/learn/the-three-soldiers.htm"
+        },
+        "creation": {
+            "creator": "Frederick Hart",
+            "date_created": "1984",
+            "period": "Late 20th Century",
+            "culture": "American"
+        },
+        "physical_description": {
+            "medium": "Cast bronze on granite base",
+            "dimensions": { "height": "2.13m", "width": "3.05m", "depth": "2.44m" },
+            "condition": "Good — characteristic green-brown patina with high-touch polish on hands and faces from visitor contact."
+        },
+        "provenance": "Commissioned by the Vietnam Veterans Memorial Fund. Unveiled November 9, 1984. Administered by the National Park Service.",
+        "rights": {
+            "copyright_status": "CC-BY-NC-4.0",
+            "credit_line": "National Mall Survey Team, 2026. Sculpture by Frederick Hart, 1984."
+        },
+        "context": {
+            "description": "The sculpture stands in a small grove of trees approximately 120 ft from the west end of The Wall (Vietnam Veterans Memorial). The three figures face The Wall, creating a symbolic connection between the figurative soldiers and the 58,318 names inscribed on the black granite panels. Hart's sculpture was added as a compromise after controversy over Maya Lin's abstract design.",
+            "location_history": "Installed at the current site on the National Mall, November 9, 1984. Has not been relocated."
+        },
+        "coverage": {
+            "spatial": {
+                "location_name": "National Mall, Washington, D.C., USA",
+                "coordinates": { "latitude": "38.8911", "longitude": "-77.0478" }
+            },
+            "temporal": {
+                "subject_period": "1984",
+                "subject_date_circa": false
+            }
+        }
+    },
+
+    "material_standard": {
+        "workflow": "metalness-roughness",
+        "occlusion_packed": false,
+        "color_space": "sRGB",
+        "normal_space": "OpenGL (+Y up)"
+    },
+
+    "preservation": {
+        "format_registry": {
+            "glb": "fmt/861",
+            "ply": "fmt/831",
+            "e57": "fmt/643"
+        },
+        "significant_properties": [
+            "Geometric accuracy (point positions)",
+            "Color fidelity (patina surface variation)",
+            "Real-world scale"
+        ],
+        "rendering_requirements": "WebGL 2.0 with EXT_color_buffer_float for Gaussian splat rendering.",
+        "rendering_notes": "Splat default orientation is rotated 180 degrees on X-axis (Z-up to Y-up conversion)."
+    },
+
+    "data_entries": {
+        "scene_0": {
+            "file_name": "assets/scene_0.ply",
+            "created_by": "nerfstudio",
+            "_created_by_version": "1.1.4",
+            "_source_notes": "Trained for 50k iterations from 1,240 images. Two lighting conditions blended.",
+            "role": "derived",
+            "_parameters": {
+                "position": [0, 0, 0],
+                "rotation": [3.14159, 0, 0],
+                "scale": 1
+            }
+        },
+        "mesh_0": {
+            "file_name": "assets/mesh_0.glb",
+            "created_by": "Reality Capture",
+            "_created_by_version": "1.5",
+            "_source_notes": "Decimated from 180M to 8M faces. PBR textures baked at 8K.",
+            "role": "derived",
+            "_parameters": {
+                "position": [0, 0, 0],
+                "rotation": [0, 0, 0],
+                "scale": 1
+            }
+        },
+        "mesh_0_proxy": {
+            "file_name": "assets/mesh_0_proxy.glb",
+            "created_by": "vitrine3d",
+            "role": "derived",
+            "lod": "proxy",
+            "derived_from": "mesh_0",
+            "face_count": 50000
+        },
+        "pointcloud_0": {
+            "file_name": "assets/pointcloud_0.e57",
+            "created_by": "Leica Cyclone",
+            "_created_by_version": "2025.2.0",
+            "_source_notes": "Registered from 8 scan positions around the sculpture group.",
+            "role": "primary",
+            "_parameters": {
+                "position": [0, 0, 0],
+                "rotation": [0, 0, 0],
+                "scale": 1
+            }
+        },
+        "thumbnail_0": {
+            "file_name": "preview.jpg",
+            "created_by": "vitrine3d"
+        }
+    },
+
+    "annotations": [
+        {
+            "id": "anno_1",
+            "title": "Polished contact area — lead figure's right hand",
+            "body": "Surface patina worn to bright bronze from decades of visitor contact. Demonstrates public interaction with the memorial.",
+            "position": { "x": 0.15, "y": 1.35, "z": 0.42 },
+            "camera_position": { "x": 1.0, "y": 1.5, "z": 1.8 },
+            "camera_target": { "x": 0.15, "y": 1.35, "z": 0.42 }
+        },
+        {
+            "id": "anno_2",
+            "title": "Orientation toward The Wall",
+            "body": "All three figures face east-southeast toward the Vietnam Veterans Memorial Wall. This sightline is a deliberate design element by Frederick Hart.",
+            "position": { "x": -0.3, "y": 1.6, "z": -0.1 },
+            "camera_position": { "x": -2.5, "y": 2.0, "z": 2.0 },
+            "camera_target": { "x": -0.3, "y": 1.6, "z": -0.1 }
+        }
+    ],
+
+    "version_history": [
+        {
+            "version": "1.0",
+            "date": "2026-02-18T16:00:00Z",
+            "description": "Initial capture and processing."
+        },
+        {
+            "version": "1.1",
+            "date": "2026-03-01T14:30:00Z",
+            "description": "Added afternoon session data for improved coverage of rear contact points."
+        }
+    ],
+
+    "integrity": {
+        "algorithm": "SHA-256",
+        "manifest_hash": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+        "assets": {
+            "assets/scene_0.ply": "3f8a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1",
+            "assets/mesh_0.glb": "7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6",
+            "assets/pointcloud_0.e57": "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3",
+            "preview.jpg": "e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5"
+        }
+    },
+
+    "compliance": {
+        "profile": "archival",
+        "status": "pass",
+        "score": 100,
+        "checked_at": "2026-03-01T14:30:00.000Z",
+        "errors": [],
+        "warnings": [],
+        "overridden": false
+    },
+
+    "_meta": {
+        "quality": {
+            "splat_count": 3500000,
+            "mesh_polygons": 8000000,
+            "mesh_vertices": 4000000,
+            "pointcloud_points": 42000000
+        },
+        "custom_fields": {
+            "nps_unit_code": "VIVE",
+            "nps_alpha_code": "Vietnam Veterans Memorial",
+            "sculptor": "Frederick Hart"
+        }
+    }
+}

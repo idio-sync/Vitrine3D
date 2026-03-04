@@ -82,7 +82,9 @@ The kiosk viewer supports themes — self-contained packages that control colors
 | Theme | Layout | Description |
 |-------|--------|-------------|
 | *(default)* | Sidebar | Cyan/purple palette with metadata sidebar |
-| `editorial` | Editorial | Gold and navy palette with full-bleed scene, edge-anchored title block, bottom ribbon, and magazine-spread details overlay |
+| `editorial` | Editorial | Gold and navy palette with full-bleed scene, edge-anchored title block, bottom ribbon, and magazine-spread details overlay. Default theme for kiosk mode. |
+| `gallery` | Gallery | Cinematic full-bleed layout with centered bottom title bar, slide-up details panel, and click gate |
+| `exhibit` | Exhibit | Institutional kiosk layout with attract mode idle screen, side panel, and click gate |
 | `minimal` | Sidebar | Neutral white accent with standard sidebar layout |
 
 ### Creating a custom theme
@@ -91,7 +93,7 @@ The kiosk viewer supports themes — self-contained packages that control colors
 2. Edit `theme.css` — uncomment and change the CSS variables you want to override
 3. Set the metadata in the comment block at the top:
    - `@theme` — Display name (e.g., `@theme My Custom Theme`)
-   - `@layout sidebar` or `@layout editorial` — which layout to use
+   - `@layout sidebar`, `@layout editorial`, `@layout gallery`, or `@layout exhibit` — which layout to use
    - `@scene-bg #hex` — Three.js scene background color
 4. Use with `?theme=your-theme-name`
 
@@ -137,12 +139,14 @@ Themes can include their own layout (DOM structure and positioning) beyond the d
   - Export a `setup(manifest, deps)` function that receives all dependencies via the `deps` object (no ES imports — this avoids path resolution issues between online and offline modes)
   - Self-register on `window.__KIOSK_LAYOUTS__['{layout-name}']` at module load time
 
-See `src/themes/editorial/` for a complete example with all three files.
+See `src/themes/editorial/`, `src/themes/gallery/`, or `src/themes/exhibit/` for complete examples with all three files.
 
 ### Theme URL parameters
 
 ```
-?theme=editorial          Full editorial experience (layout + colors)
+?theme=editorial          Full editorial experience (layout + colors) — default for kiosk mode
+?theme=gallery            Cinematic full-bleed with click gate
+?theme=exhibit            Institutional kiosk with attract mode and click gate
 ?theme=minimal            Sidebar layout with neutral colors
 ?theme=my-custom-theme    Any user-created theme folder
 ?layout=editorial         Override layout regardless of theme
@@ -157,11 +161,8 @@ See `src/themes/editorial/` for a complete example with all three files.
 3. For non-sidebar layouts, also fetches `layout.css` and dynamically imports `layout.js`
 4. CSS variable overrides cascade over the defaults in `styles.css`
 
-**Offline (generated kiosk HTML):**
-1. `kiosk-viewer.js` fetches theme CSS, layout CSS, and layout JS at generation time
-2. Theme and layout CSS are inlined as `<style>` blocks in the HTML
-3. Layout JS is base64-encoded in the deps bundle and loaded by the bootstrap before `init()`
-4. The layout module self-registers on `window.__KIOSK_LAYOUTS__` so `theme-loader.js` finds it without network access
+**Offline (generated kiosk HTML) — DEPRECATED:**
+The downloadable offline kiosk viewer (`kiosk-viewer.ts`) is deprecated. The kiosk/editor bundle split now serves the kiosk viewer directly at `/` via the Vite build. Theme loading always uses the online path above.
 
 ### Graceful fallback
 
@@ -182,6 +183,5 @@ Use `autoload=false` when embedding multiple viewers on one page to defer downlo
 
 ## Limitations
 
-- The kiosk viewer is read-only — no archive creation, metadata editing, or alignment tools
-- The embedded JavaScript stack (Three.js, Spark.js) in the executable and bundled HTML file is frozen at export time and may eventually become incompatible with future browsers
+- The kiosk viewer is read-only — no archive creation, metadata editing, or alignment tools. The editor is served separately at `/editor/`.
 - The archive's raw data files (GLB, PLY, E57) remain the authoritative preservation copies; the kiosk viewer is a convenience access layer
