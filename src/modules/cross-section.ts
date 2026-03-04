@@ -48,6 +48,11 @@ export class CrossSectionTool {
     /** Group that holds cap meshes in the scene. */
     private _capGroup: THREE.Group;
 
+    /** Reusable temporaries for updatePlane() — avoids per-frame allocations. */
+    private readonly _tmpPos = new THREE.Vector3();
+    private readonly _tmpQuat = new THREE.Quaternion();
+    private readonly _tmpNormal = new THREE.Vector3();
+
     constructor(
         private readonly _scene: THREE.Scene,
         private readonly _camera: any,
@@ -145,18 +150,16 @@ export class CrossSectionTool {
     updatePlane(): void {
         if (!this._active) return;
 
-        const pos = new THREE.Vector3();
-        const quat = new THREE.Quaternion();
-        this._planeAnchor.getWorldPosition(pos);
-        this._planeAnchor.getWorldQuaternion(quat);
+        this._planeAnchor.getWorldPosition(this._tmpPos);
+        this._planeAnchor.getWorldQuaternion(this._tmpQuat);
 
         // Anchor's local +Y is the plane normal
-        const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(quat);
-        this._plane.setFromNormalAndCoplanarPoint(normal, pos);
+        this._tmpNormal.set(0, 1, 0).applyQuaternion(this._tmpQuat);
+        this._plane.setFromNormalAndCoplanarPoint(this._tmpNormal, this._tmpPos);
 
         // Keep visual mesh aligned with anchor
-        this._planeMesh.position.copy(pos);
-        this._planeMesh.quaternion.copy(quat);
+        this._planeMesh.position.copy(this._tmpPos);
+        this._planeMesh.quaternion.copy(this._tmpQuat);
     }
 
     // ─── Controls ─────────────────────────────────────────────
