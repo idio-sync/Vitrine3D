@@ -51,6 +51,7 @@ let hasFetched = false;
 let searchQuery = '';
 let uploadQueue: File[] = [];
 let uploading = false;
+let csrfToken: string | null = null;
 
 const CHUNK_SIZE = 50 * 1024 * 1024; // 50 MB — safely under Cloudflare's 100 MB request limit
 const CHUNK_CONCURRENCY = 3;          // parallel in-flight chunk uploads
@@ -110,11 +111,23 @@ function escapeHtml(s: string): string {
 
 // ── API ──
 
-function authHeaders(): HeadersInit {
-    if (authCredentials) {
-        return { 'Authorization': 'Basic ' + authCredentials };
+function authHeaders(): Record<string, string> {
+    const h: Record<string, string> = {};
+    if (authCredentials) h['Authorization'] = 'Basic ' + authCredentials;
+    if (csrfToken) h['X-CSRF-Token'] = csrfToken;
+    return h;
+}
+
+async function fetchCsrfToken(): Promise<void> {
+    try {
+        const res = await apiFetch('/api/csrf-token');
+        if (res.ok) {
+            const data = await res.json() as { token?: string };
+            csrfToken = data.token || null;
+        }
+    } catch {
+        log.warn('Failed to fetch CSRF token');
     }
-    return {};
 }
 
 async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> {
@@ -172,6 +185,7 @@ function uploadFileChunked(file: File): Promise<Archive> {
             xhr.open('POST', '/api/archives/chunks?' + params.toString());
             xhr.withCredentials = true;
             if (authCredentials) xhr.setRequestHeader('Authorization', 'Basic ' + authCredentials);
+            if (csrfToken) xhr.setRequestHeader('X-CSRF-Token', csrfToken);
             xhr.setRequestHeader('Content-Type', 'application/octet-stream');
             xhr.send(chunk);
         });
@@ -180,7 +194,7 @@ function uploadFileChunked(file: File): Promise<Archive> {
         fetch('/api/archives/chunks/' + uploadId + '/complete', {
             method: 'POST',
             credentials: 'include',
-            headers: authCredentials ? { 'Authorization': 'Basic ' + authCredentials } : {}
+            headers: authHeaders()
         }).then(async (res) => {
             if (res.status === 401) throw new AuthError();
             if (!res.ok) {
@@ -234,9 +248,8 @@ function uploadFile(file: File): Promise<Archive> {
 
         xhr.open('POST', '/api/archives');
         xhr.withCredentials = true;
-        if (authCredentials) {
-            xhr.setRequestHeader('Authorization', 'Basic ' + authCredentials);
-        }
+        if (authCredentials) xhr.setRequestHeader('Authorization', 'Basic ' + authCredentials);
+        if (csrfToken) xhr.setRequestHeader('X-CSRF-Token', csrfToken);
         xhr.send(form);
     });
 }
@@ -583,7 +596,18 @@ async function processUploadQueue(): Promise<void> {
         if (uploadZone) uploadZone.classList.add('uploading');
 
         try {
-            const archive = await uploadFile(file);
+            let archive: Archive;
+            try {
+                archive = await uploadFile(file);
+            } catch (err) {
+                // On CSRF failure, re-fetch token and retry once
+                if ((err as Error).message?.includes('CSRF')) {
+                    await fetchCsrfToken();
+                    archive = await uploadFile(file);
+                } else {
+                    throw err;
+                }
+            }
             archives.push(archive);
             render();
             notify.success('Uploaded ' + archive.filename);
@@ -887,6 +911,8 @@ export function initLibraryPanel(): void {
  */
 export async function onLibraryActivated(): Promise<void> {
     if (!initialized) return;
+    // Fetch CSRF token if we don't have one yet
+    if (!csrfToken) await fetchCsrfToken();
     // Only fetch if we haven't fetched yet and auth form isn't showing
     const authVisible = authPanel && authPanel.style.display !== 'none';
     if (!hasFetched && !authVisible) {
@@ -916,6 +942,10 @@ export async function onLibraryActivated(): Promise<void> {
  */
 export function getAuthCredentials(): string | null {
     return authCredentials;
+}
+
+export function getCsrfToken(): string | null {
+    return csrfToken;
 }
 
 export async function refreshLibrary(): Promise<void> {
