@@ -2685,7 +2685,7 @@ function createWallLabel(): void {
     const detailsBtn = label.querySelector('.wall-label-details-btn');
     if (detailsBtn) {
         detailsBtn.addEventListener('click', () => {
-            if (window.innerWidth > 768) {
+            if (window.innerWidth > 699) {
                 toggleInfoOverlay(true);
             } else {
                 showMetadataSidebar('view', { state: state as any, annotationSystem, imageAssets: state.imageAssets });

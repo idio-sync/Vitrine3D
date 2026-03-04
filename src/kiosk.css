@@ -513,14 +513,14 @@ body.kiosk-mode .kiosk-tool-btn:focus-visible {
 .kiosk-info-col-right::-webkit-scrollbar-thumb { background: rgba(var(--kiosk-accent-rgb), 0.2); border-radius: 2px; }
 
 /* Mobile: overlay hidden, sidebar bottom sheet is the fallback */
-@media (max-width: 768px) {
+@media (max-width: 699px) {
     #kiosk-info-overlay {
         display: none !important;
     }
 }
 
 /* Desktop: sidebar hidden, overlay used instead */
-@media (min-width: 769px) {
+@media (min-width: 700px) {
     body.kiosk-mode:not(.kiosk-editorial) #metadata-sidebar {
         display: none !important;
     }
@@ -1217,7 +1217,7 @@ body.kiosk-mode #metadata-sidebar ::-webkit-scrollbar-thumb:hover {
     display: none;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 699px) {
 
     /* --- Drag Handle: Visible on Mobile Kiosk --- */
 
@@ -1634,7 +1634,7 @@ body.kiosk-mode #metadata-sidebar ::-webkit-scrollbar-thumb:hover {
 
 /* --- Landscape: Shorter Sheet --- */
 
-@media (max-width: 768px) and (orientation: landscape) {
+@media (max-width: 699px) and (orientation: landscape) {
 
     body.kiosk-mode #metadata-sidebar {
         height: 70dvh;
@@ -1967,7 +1967,7 @@ body.kiosk-mode .kiosk-wt-player {
 }
 
 /* Mobile responsive */
-@media (max-width: 768px) {
+@media (max-width: 699px) {
     .kiosk-wt-player {
         bottom: 12px;
         left: 8px;

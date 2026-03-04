@@ -126,6 +126,16 @@ function setupAutoFade(titleBlock, cornerElement) {
     };
 
     document.addEventListener('mousemove', fadeIn);
+
+    // Touch: tap on viewer canvas reveals title for 3s (mousemove doesn't fire on touch)
+    const canvas = document.getElementById('viewer-canvas');
+    if (canvas) {
+        canvas.addEventListener('touchstart', (e) => {
+            // Only single-tap on blank canvas (not pinch/multi-touch)
+            if (e.touches.length === 1) fadeIn();
+        }, { passive: true });
+    }
+
     fadeTimer = setTimeout(() => {
         elements.forEach(el => { el.style.opacity = '0.15'; });
     }, 4000);
@@ -1393,6 +1403,97 @@ export function setup(manifest, deps) {
     }
     viewerContainer.appendChild(ribbon);
 
+    // --- 4b. Mobile Bottom Nav (replaces ribbon at <700px) ---
+    const mobileNav = document.createElement('div');
+    mobileNav.className = 'editorial-mobile-nav';
+
+    // View mode cycle button
+    const navViewBtn = document.createElement('button');
+    navViewBtn.className = 'editorial-mobile-nav-btn';
+    navViewBtn.title = 'View mode';
+    navViewBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span class="editorial-mobile-nav-label">View</span>';
+    const navViewModes = types.length > 0 ? types.map(t => t.mode) : ['both'];
+    let navViewIndex = Math.max(0, navViewModes.indexOf(state.displayMode));
+    navViewBtn.addEventListener('click', () => {
+        navViewIndex = (navViewIndex + 1) % navViewModes.length;
+        const mode = navViewModes[navViewIndex];
+        state.displayMode = mode;
+        setDisplayMode(mode, createDisplayModeDeps());
+        triggerLazyLoad(mode);
+        // Sync ribbon view mode links if they exist
+        viewModes.querySelectorAll('.editorial-view-mode-link:not(.quality-toggle-btn)').forEach(l => {
+            l.classList.toggle('active', l.dataset.mode === mode);
+        });
+    });
+    mobileNav.appendChild(navViewBtn);
+
+    // Quality toggle button (SD/HD)
+    if (deps.hasAnyProxy || deps.hasSplat) {
+        const navQualityBtn = document.createElement('button');
+        navQualityBtn.className = 'editorial-mobile-nav-btn';
+        navQualityBtn.title = 'Quality';
+        let navQuality = deps.qualityResolved || 'sd';
+        const updateQualityIcon = () => {
+            navQualityBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span class="editorial-mobile-nav-label">${navQuality.toUpperCase()}</span>`;
+            navQualityBtn.classList.toggle('active', navQuality === 'hd');
+        };
+        updateQualityIcon();
+        navQualityBtn.addEventListener('click', () => {
+            navQuality = navQuality === 'sd' ? 'hd' : 'sd';
+            if (deps.switchQualityTier) deps.switchQualityTier(navQuality);
+            updateQualityIcon();
+            // Sync ribbon quality buttons
+            ribbon.querySelectorAll('.quality-toggle-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.tier === navQuality);
+            });
+        });
+        mobileNav.appendChild(navQualityBtn);
+    }
+
+    // Annotation toggle button
+    const navAnnoBtn = document.createElement('button');
+    navAnnoBtn.className = 'editorial-mobile-nav-btn';
+    navAnnoBtn.title = 'Annotations';
+    navAnnoBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="editorial-mobile-nav-label">Notes</span>';
+    if (annotations.length === 0) navAnnoBtn.style.display = 'none';
+    navAnnoBtn.addEventListener('click', () => {
+        setMarkersVisible(!markersVisible);
+        navAnnoBtn.classList.toggle('active', markersVisible);
+        if (!markersVisible && getCurrentPopupId()) {
+            hideAnnotationPopup();
+            hideAnnotationLine();
+            setCurrentPopupId(null);
+            annotationSystem.selectedAnnotation = null;
+            document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
+        }
+    });
+    navAnnoBtn.classList.toggle('active', markersVisible && annotations.length > 0);
+    mobileNav.appendChild(navAnnoBtn);
+
+    // Details button — opens sidebar bottom sheet on mobile
+    const navDetailsBtn = document.createElement('button');
+    navDetailsBtn.className = 'editorial-mobile-nav-btn';
+    navDetailsBtn.title = 'Details';
+    navDetailsBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="editorial-mobile-nav-label">Info</span>';
+    navDetailsBtn.addEventListener('click', () => {
+        const sidebar = document.getElementById('metadata-sidebar');
+        if (!sidebar) return;
+        if (sidebar.classList.contains('sheet-half') || sidebar.classList.contains('sheet-full')) {
+            // Collapse to peek
+            sidebar.classList.remove('sheet-half', 'sheet-full');
+            sidebar.classList.add('sheet-peek');
+            navDetailsBtn.classList.remove('active');
+        } else {
+            // Open to half
+            sidebar.classList.remove('sheet-peek');
+            sidebar.classList.add('sheet-half');
+            navDetailsBtn.classList.add('active');
+        }
+    });
+    mobileNav.appendChild(navDetailsBtn);
+
+    viewerContainer.appendChild(mobileNav);
+
     // --- 5. Info Panel (side panel) ---
     const overlay = createInfoOverlay(manifest, deps);
     viewerContainer.appendChild(overlay);
@@ -1599,40 +1700,44 @@ function onKeyboardShortcut(key) {
 
 let wtStopDots = null;
 let wtTitleEl = null;
+let wtMobileControls = null;
+let wtTotalStops = 0;
 
 function onWalkthroughStart(walkthrough) {
+    wtTotalStops = walkthrough.stops.length;
+
     // Create walkthrough progress dots in the ribbon
     const ribbon = document.querySelector('.editorial-bottom-ribbon');
-    if (!ribbon) return;
+    if (ribbon) {
+        // Hide annotation sequence during walkthrough
+        const annoSeq = ribbon.querySelector('.editorial-anno-sequence');
+        if (annoSeq) annoSeq.style.display = 'none';
 
-    // Hide annotation sequence during walkthrough
-    const annoSeq = ribbon.querySelector('.editorial-anno-sequence');
-    if (annoSeq) annoSeq.style.display = 'none';
+        // Create walkthrough stop dots
+        wtStopDots = document.createElement('div');
+        wtStopDots.className = 'editorial-wt-sequence';
 
-    // Create walkthrough stop dots
-    wtStopDots = document.createElement('div');
-    wtStopDots.className = 'editorial-wt-sequence';
+        walkthrough.stops.forEach((stop, i) => {
+            if (i > 0) {
+                const dash = document.createElement('span');
+                dash.className = 'editorial-anno-seq-dash';
+                wtStopDots.appendChild(dash);
+            }
+            const dot = document.createElement('span');
+            dot.className = 'editorial-wt-seq-dot';
+            dot.dataset.stopIndex = String(i);
+            dot.textContent = String(i + 1).padStart(2, '0');
+            wtStopDots.appendChild(dot);
+        });
 
-    walkthrough.stops.forEach((stop, i) => {
-        if (i > 0) {
-            const dash = document.createElement('span');
-            dash.className = 'editorial-anno-seq-dash';
-            wtStopDots.appendChild(dash);
-        }
-        const dot = document.createElement('span');
-        dot.className = 'editorial-wt-seq-dot';
-        dot.dataset.stopIndex = String(i);
-        dot.textContent = String(i + 1).padStart(2, '0');
-        wtStopDots.appendChild(dot);
-    });
-
-    // Insert before the first ribbon-rule after tools group, or append to tools group
-    const toolsGroup = ribbon.querySelector('.editorial-ribbon-tools');
-    if (toolsGroup) {
-        if (annoSeq) {
-            toolsGroup.insertBefore(wtStopDots, annoSeq);
-        } else {
-            toolsGroup.prepend(wtStopDots);
+        // Insert before the first ribbon-rule after tools group, or append to tools group
+        const toolsGroup = ribbon.querySelector('.editorial-ribbon-tools');
+        if (toolsGroup) {
+            if (annoSeq) {
+                toolsGroup.insertBefore(wtStopDots, annoSeq);
+            } else {
+                toolsGroup.prepend(wtStopDots);
+            }
         }
     }
 
@@ -1645,10 +1750,54 @@ function onWalkthroughStart(walkthrough) {
         titleBlock.style.opacity = '1';
         titleBlock.style.pointerEvents = 'auto';
     }
+
+    // --- Mobile nav: swap buttons with walkthrough controls ---
+    const mobileNav = document.querySelector('.editorial-mobile-nav');
+    if (mobileNav) {
+        // Hide normal buttons
+        mobileNav.querySelectorAll('.editorial-mobile-nav-btn').forEach(btn => {
+            btn.style.display = 'none';
+        });
+
+        // Create walkthrough controls container
+        wtMobileControls = document.createElement('div');
+        wtMobileControls.className = 'editorial-mobile-wt-controls';
+
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'editorial-mobile-wt-btn';
+        prevBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
+        prevBtn.addEventListener('click', () => {
+            document.querySelector('.wt-prev-btn')?.dispatchEvent(new MouseEvent('click'));
+        });
+
+        const counter = document.createElement('span');
+        counter.className = 'editorial-mobile-wt-counter';
+        counter.textContent = `1 / ${wtTotalStops}`;
+
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'editorial-mobile-wt-btn';
+        nextBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+        nextBtn.addEventListener('click', () => {
+            document.querySelector('.wt-next-btn')?.dispatchEvent(new MouseEvent('click'));
+        });
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'editorial-mobile-wt-btn editorial-mobile-wt-close';
+        closeBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        closeBtn.addEventListener('click', () => {
+            document.querySelector('.wt-close-btn')?.dispatchEvent(new MouseEvent('click'));
+        });
+
+        wtMobileControls.appendChild(prevBtn);
+        wtMobileControls.appendChild(counter);
+        wtMobileControls.appendChild(nextBtn);
+        wtMobileControls.appendChild(closeBtn);
+        mobileNav.appendChild(wtMobileControls);
+    }
 }
 
 function onWalkthroughStopChange(stopIndex, stop) {
-    // Update progress dots
+    // Update progress dots (ribbon)
     if (wtStopDots) {
         wtStopDots.querySelectorAll('.editorial-wt-seq-dot').forEach(d => d.classList.remove('active'));
         // Mark current and all previous as visited
@@ -1663,10 +1812,16 @@ function onWalkthroughStopChange(stopIndex, stop) {
     if (wtTitleEl) {
         wtTitleEl.textContent = stop.title || '';
     }
+
+    // Update mobile counter
+    if (wtMobileControls) {
+        const counter = wtMobileControls.querySelector('.editorial-mobile-wt-counter');
+        if (counter) counter.textContent = `${stopIndex + 1} / ${wtTotalStops}`;
+    }
 }
 
 function onWalkthroughEnd() {
-    // Remove walkthrough UI
+    // Remove walkthrough UI (ribbon)
     if (wtStopDots) {
         wtStopDots.remove();
         wtStopDots = null;
@@ -1687,6 +1842,20 @@ function onWalkthroughEnd() {
         titleBlock.style.opacity = '';
         titleBlock.style.pointerEvents = '';
     }
+
+    // Restore mobile nav buttons
+    if (wtMobileControls) {
+        wtMobileControls.remove();
+        wtMobileControls = null;
+    }
+    const mobileNav = document.querySelector('.editorial-mobile-nav');
+    if (mobileNav) {
+        mobileNav.querySelectorAll('.editorial-mobile-nav-btn').forEach(btn => {
+            btn.style.display = '';
+        });
+    }
+
+    wtTotalStops = 0;
 }
 
 // ---- Self-register for offline kiosk discovery ----

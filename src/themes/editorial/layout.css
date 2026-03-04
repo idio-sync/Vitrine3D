@@ -2429,11 +2429,154 @@ body.kiosk-mode.kiosk-editorial .editorial-slice-btn.active {
 }
 
 /* =================================================================
+   Mobile Bottom Nav — hidden by default, shown at Tier 3 (<700px)
+   ================================================================= */
+
+body.kiosk-mode.kiosk-editorial .editorial-mobile-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    background: rgba(var(--kiosk-surface-rgb), 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1.5px solid var(--kiosk-accent);
+    z-index: 100;
+    justify-content: space-evenly;
+    align-items: center;
+    padding: 0 8px;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-mobile-nav-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: none;
+    border: none;
+    color: var(--kiosk-text-secondary);
+    cursor: pointer;
+    padding: 4px 12px;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 6px;
+    transition: color 0.15s ease, background 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-mobile-nav-btn:active {
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-mobile-nav-btn.active {
+    color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-mobile-nav-label {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.55rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1;
+}
+
+/* Mobile walkthrough controls (inside mobile nav) */
+body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    width: 100%;
+    height: 100%;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--kiosk-text-secondary);
+    cursor: pointer;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 50%;
+    transition: color 0.15s ease, background 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-btn:active {
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+    color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-counter {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.8rem;
+    color: var(--kiosk-accent);
+    letter-spacing: 0.06em;
+    min-width: 48px;
+    text-align: center;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
+    position: absolute;
+    right: 8px;
+    color: var(--kiosk-text-muted);
+}
+
+/* =================================================================
+   Touch Targets — enlarge interactive elements on coarse-pointer devices
+   ================================================================= */
+
+@media (pointer: coarse) {
+    /* Ribbon — taller for touch */
+    body.kiosk-mode.kiosk-editorial .editorial-bottom-ribbon {
+        height: 40px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-view-mode-link,
+    body.kiosk-mode.kiosk-editorial .quality-toggle-btn {
+        padding: 10px 8px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-marker-toggle {
+        width: 36px;
+        height: 36px;
+    }
+
+    /* Dropdown items — taller for touch */
+    body.kiosk-mode.kiosk-editorial .editorial-matcap-item {
+        padding: 8px 14px;
+        font-size: 0.7rem;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-measure-scale-row,
+    body.kiosk-mode.kiosk-editorial .editorial-slice-axis-row {
+        padding: 6px 10px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-slice-seg-btn {
+        min-width: 36px;
+        min-height: 36px;
+    }
+
+    /* Overflow panel items */
+    body.kiosk-mode.kiosk-editorial .editorial-ribbon-overflow .editorial-marker-toggle {
+        width: 40px;
+        height: 40px;
+    }
+}
+
+/* =================================================================
    Responsive Tiers — graduated degradation for embedded iframes.
    Tier 1 (≥1024px): full editorial (no overrides needed).
    Tier 2 (700–1023px): compact editorial — tighter spacing/fonts.
-   Tier 3 (480–699px): minimal editorial — spine + compact title only.
-   Tier 4 (<480px): micro embed — spine only, maximum viewport.
+   Tier 3 (480–699px): minimal editorial — mobile nav + compact title.
+   Tier 4 (<480px): micro embed — mobile nav + spine only.
    ================================================================= */
 
 /* --- Tier 2: Compact Editorial (700–1023px) --- */
@@ -2659,10 +2802,15 @@ body.kiosk-mode.kiosk-editorial .editorial-slice-btn.active {
         display: none;
     }
 
-    /* Hide ribbon and info panel */
+    /* Hide ribbon and info panel — mobile nav replaces ribbon */
     body.kiosk-mode.kiosk-editorial .editorial-bottom-ribbon,
     body.kiosk-mode.kiosk-editorial .editorial-info-overlay {
         display: none !important;
+    }
+
+    /* Show mobile nav */
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-nav {
+        display: flex !important;
     }
 
     /* Revert viewer to block layout for sidebar fallback */
@@ -2675,10 +2823,121 @@ body.kiosk-mode.kiosk-editorial .editorial-slice-btn.active {
         flex: none;
     }
 
-    /* Show sidebar + view switcher for metadata access */
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar,
-    body.kiosk-mode.kiosk-editorial .kiosk-view-switcher {
+    /* Show sidebar for metadata access; hide generic view switcher (mobile nav has view cycling) */
+    body.kiosk-mode.kiosk-editorial #metadata-sidebar {
         display: block !important;
+    }
+
+    body.kiosk-mode.kiosk-editorial .kiosk-view-switcher {
+        display: none !important;
+    }
+
+    /* --- Editorial-styled bottom sheet --- */
+
+    /* Offset sheet above mobile nav (48px) */
+    body.kiosk-mode.kiosk-editorial #metadata-sidebar {
+        bottom: 48px;
+        border-top-color: rgba(var(--kiosk-accent-rgb), 0.3);
+        background: rgba(var(--kiosk-surface-rgb), 0.96);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+    }
+
+    /* Gold drag handle */
+    body.kiosk-mode.kiosk-editorial .drag-handle-bar {
+        background: rgba(var(--kiosk-accent-rgb), 0.4);
+    }
+
+    body.kiosk-mode.kiosk-editorial #sidebar-drag-handle:hover .drag-handle-bar,
+    body.kiosk-mode.kiosk-editorial #sidebar-drag-handle:active .drag-handle-bar {
+        background: rgba(var(--kiosk-accent-rgb), 0.7);
+    }
+
+    /* Editorial typography in sidebar */
+    body.kiosk-mode.kiosk-editorial #sidebar-view .display-title {
+        font-family: var(--kiosk-font-display);
+        font-size: 1.3rem;
+        letter-spacing: 0.01em;
+    }
+
+    body.kiosk-mode.kiosk-editorial #sidebar-view .display-description {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.88rem;
+        line-height: 1.65;
+    }
+
+    /* Gold tab accents */
+    body.kiosk-mode.kiosk-editorial .sidebar-mode-tab.active {
+        color: var(--kiosk-accent);
+        border-bottom-color: var(--kiosk-accent);
+    }
+
+    /* Gold dividers in sidebar content */
+    body.kiosk-mode.kiosk-editorial #sidebar-view .display-divider {
+        background: rgba(var(--kiosk-accent-rgb), 0.2);
+    }
+
+    /* Gold scrollbar for sidebar */
+    body.kiosk-mode.kiosk-editorial #sidebar-view::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    body.kiosk-mode.kiosk-editorial #sidebar-view::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    body.kiosk-mode.kiosk-editorial #sidebar-view::-webkit-scrollbar-thumb {
+        background: rgba(var(--kiosk-accent-rgb), 0.3);
+        border-radius: 2px;
+    }
+
+    body.kiosk-mode.kiosk-editorial #sidebar-view::-webkit-scrollbar-thumb:hover {
+        background: rgba(var(--kiosk-accent-rgb), 0.5);
+    }
+
+    /* Metadata field labels — editorial style */
+    body.kiosk-mode.kiosk-editorial .display-field-label {
+        font-family: var(--kiosk-font-body);
+        text-transform: uppercase;
+        font-size: 0.65rem;
+        letter-spacing: 0.06em;
+        color: var(--kiosk-text-muted);
+    }
+
+    body.kiosk-mode.kiosk-editorial .display-field-value {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.85rem;
+        color: var(--kiosk-text-primary);
+    }
+
+    /* --- Editorial mobile annotation detail --- */
+
+    /* Gold underline under title (matches desktop popup) */
+    body.kiosk-mode.kiosk-editorial .mobile-anno-header {
+        padding-bottom: 14px;
+        border-bottom: 2px solid rgba(var(--kiosk-accent-rgb), 0.4);
+        margin-bottom: 16px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .mobile-anno-title {
+        text-transform: uppercase;
+        font-size: 1.1rem;
+        letter-spacing: 0.03em;
+    }
+
+    /* Nav buttons — editorial style */
+    body.kiosk-mode.kiosk-editorial .mobile-anno-nav-btn {
+        border-color: rgba(var(--kiosk-accent-rgb), 0.3);
+        color: var(--kiosk-text-secondary);
+    }
+
+    body.kiosk-mode.kiosk-editorial .mobile-anno-nav-btn:active {
+        background: rgba(var(--kiosk-accent-rgb), 0.12);
+    }
+
+    body.kiosk-mode.kiosk-editorial .mobile-anno-return {
+        border-color: rgba(var(--kiosk-accent-rgb), 0.4);
+        color: var(--kiosk-accent);
     }
 
     body.kiosk-mode.kiosk-editorial #annotation-info-popup {
@@ -2893,6 +3152,47 @@ body.kiosk-mode.kiosk-editorial .editorial-slice-btn.active {
 
     body.kiosk-mode.kiosk-editorial #kiosk-gate-types {
         display: none;
+    }
+}
+
+/* --- Short viewport: hide info panel in squat iframes --- */
+
+@media (max-height: 400px) {
+    body.kiosk-mode.kiosk-editorial .editorial-info-overlay {
+        display: none !important;
+    }
+}
+
+/* --- Phone landscape: tighter chrome, hide title --- */
+
+@media (max-width: 699px) and (orientation: landscape) {
+    /* Shrink mobile nav for limited vertical space */
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-nav {
+        height: 40px;
+    }
+
+    /* Hide title block — too little vertical room */
+    body.kiosk-mode.kiosk-editorial .editorial-title-block {
+        display: none !important;
+    }
+
+    /* Shorter bottom sheet */
+    body.kiosk-mode.kiosk-editorial #metadata-sidebar {
+        height: 60dvh;
+        max-height: 60dvh;
+        bottom: 40px;
+    }
+
+    body.kiosk-mode.kiosk-editorial #metadata-sidebar.sheet-peek {
+        transform: translateY(calc(60dvh - 60px));
+    }
+
+    body.kiosk-mode.kiosk-editorial #metadata-sidebar.sheet-half {
+        transform: translateY(calc(60dvh * 0.5));
+    }
+
+    body.kiosk-mode.kiosk-editorial #metadata-sidebar.sheet-full {
+        transform: translateY(0);
     }
 }
 

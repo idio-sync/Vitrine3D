@@ -2589,7 +2589,7 @@ export function updateAnnotationPopupPosition(currentPopupAnnotationId: string |
     if (!currentPopupAnnotationId) return;
 
     // On mobile kiosk, popup is hidden — annotation content shown in bottom sheet
-    if (window.innerWidth <= 768 && document.body.classList.contains('kiosk-mode')) return;
+    if (window.innerWidth <= 699 && document.body.classList.contains('kiosk-mode')) return;
 
     const popup = document.getElementById('annotation-info-popup');
     if (!popup || popup.classList.contains('hidden')) return;
