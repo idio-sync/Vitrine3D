@@ -735,7 +735,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         // Tool rail pane shortcuts (match data-tooltip in HTML)
         let activatedTool: string | null = null;
         switch (key) {
-            case 's': activateTool('scene'); activatedTool = 'scene'; break;
+            case 'v': activateTool('viewsettings'); activatedTool = 'viewsettings'; break;
             case 'a': activateTool('assets'); activatedTool = 'assets'; break;
             case 't':
                 activateTool('transform'); activatedTool = 'transform';

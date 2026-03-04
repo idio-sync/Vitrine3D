@@ -92,15 +92,6 @@
                 </svg>
             </button>
 
-            <!-- Scene — Background, lighting, environment -->
-            <button class="tool-btn" data-tool="scene" data-tooltip="Scene  S" title="Background, lighting, and environment">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                    <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-                    <polyline points="2 17 12 22 22 17"/>
-                    <polyline points="2 12 12 17 22 12"/>
-                </svg>
-            </button>
-
             <div class="rail-sep"></div>
 
             <!-- ── Authoring: Narrate ──────────────────────── -->
@@ -129,6 +120,17 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
                     <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                     <circle cx="12" cy="13" r="4"/>
+                </svg>
+            </button>
+
+            <!-- View Settings — Background, display defaults, camera, lighting -->
+            <button class="tool-btn" data-tool="viewsettings" data-tooltip="View Settings  V" title="Scene appearance, display defaults, and preview settings">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="4"/>
+                    <line x1="21.17" y1="8" x2="12" y2="8"/>
+                    <line x1="3.95" y1="6.06" x2="8.54" y2="14"/>
+                    <line x1="10.88" y1="21.94" x2="15.46" y2="14"/>
                 </svg>
             </button>
 
@@ -321,9 +323,11 @@
             </div>
 
             <!-- ========================================================
-                 SCENE PANE
+                 VIEW SETTINGS PANE
                  ======================================================== -->
-            <div class="props-pane" id="pane-scene">
+            <div class="props-pane" id="pane-view-settings">
+
+                <!-- ── Archive Defaults (saved to .a3d/.a3z) ────── -->
 
                 <!-- Background -->
                 <div class="prop-section open archived">
@@ -356,6 +360,176 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Background Overrides -->
+                <div class="prop-section archived">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Background Overrides</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="cb-row">
+                            <input type="checkbox" id="meta-viewer-mesh-bg-override">
+                            <label for="meta-viewer-mesh-bg-override">Mesh Background</label>
+                        </div>
+                        <span class="prop-hint">Background color used when viewing the mesh asset.</span>
+                        <div class="color-input-row" id="meta-viewer-mesh-bg-color-row" style="margin-top: 6px; display: none;">
+                            <input type="color" id="meta-viewer-mesh-bg-color" value="#1a1a2e">
+                            <span class="color-hex-label" id="meta-viewer-mesh-bg-color-hex">#1a1a2e</span>
+                        </div>
+
+                        <div class="cb-row mt6">
+                            <input type="checkbox" id="meta-viewer-splat-bg-override">
+                            <label for="meta-viewer-splat-bg-override">Splat Background</label>
+                        </div>
+                        <span class="prop-hint">Background color used when viewing the splat or combined view.</span>
+                        <div class="color-input-row" id="meta-viewer-splat-bg-color-row" style="margin-top: 6px; display: none;">
+                            <input type="color" id="meta-viewer-splat-bg-color" value="#1a1a2e">
+                            <span class="color-hex-label" id="meta-viewer-splat-bg-color-hex">#1a1a2e</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Display Mode -->
+                <div class="prop-section archived">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Display Mode</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <label for="meta-viewer-display-mode" class="prop-label">Default Asset View</label>
+                        <select class="prop-select mb4" id="meta-viewer-display-mode">
+                            <option value="">Auto (show primary asset)</option>
+                            <option value="splat">Splat</option>
+                            <option value="model">Model</option>
+                            <option value="pointcloud">Point Cloud</option>
+                            <option value="both">All Assets</option>
+                        </select>
+                        <span class="prop-hint">Which asset(s) to display when the viewer opens.</span>
+
+                        <label for="meta-viewer-default-matcap" class="prop-label mt6">Default Matcap</label>
+                        <select class="prop-select mb4" id="meta-viewer-default-matcap">
+                            <option value="">None</option>
+                            <option value="clay">Clay</option>
+                            <option value="chrome">Chrome</option>
+                            <option value="pearl">Pearl</option>
+                            <option value="jade">Jade</option>
+                            <option value="copper">Copper</option>
+                            <option value="bronze">Bronze</option>
+                            <option value="dark-bronze">Dark Bronze</option>
+                        </select>
+                        <span class="prop-hint">Apply a matcap material to meshes when the viewer opens.</span>
+                    </div>
+                </div>
+
+                <!-- Mesh Rendering -->
+                <div class="prop-section archived">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Mesh Rendering</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="cb-row">
+                            <input type="checkbox" id="meta-viewer-single-sided" checked>
+                            <label for="meta-viewer-single-sided">Single Sided</label>
+                        </div>
+                        <span class="prop-hint">When enabled, back faces are culled. Disable for thin geometry like leaves, fabric, or paper.</span>
+                    </div>
+                </div>
+
+                <!-- Opening Camera -->
+                <div class="prop-section archived">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Opening Camera</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="prop-btn-row">
+                            <button id="btn-save-camera" class="prop-btn" style="flex: 1;">Save Current View</button>
+                            <button id="btn-clear-camera" class="prop-btn" style="flex: 0 0 auto; display: none;">Clear</button>
+                        </div>
+                        <span class="prop-hint" id="camera-save-hint">Saves the current camera position as the default opening view.</span>
+                        <div id="camera-saved-info" style="display: none;">
+                            <span class="prop-hint">Position: <span id="camera-pos-display"></span></span>
+                            <span class="prop-hint">Target: <span id="camera-target-display"></span></span>
+                        </div>
+                        <input type="hidden" id="meta-viewer-camera-pos-x">
+                        <input type="hidden" id="meta-viewer-camera-pos-y">
+                        <input type="hidden" id="meta-viewer-camera-pos-z">
+                        <input type="hidden" id="meta-viewer-camera-target-x">
+                        <input type="hidden" id="meta-viewer-camera-target-y">
+                        <input type="hidden" id="meta-viewer-camera-target-z">
+                    </div>
+                </div>
+
+                <!-- Camera Constraints -->
+                <div class="prop-section archived">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Camera Constraints</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="cb-row">
+                            <input type="checkbox" id="meta-viewer-lock-orbit">
+                            <label for="meta-viewer-lock-orbit">Lock Orbit Point</label>
+                        </div>
+                        <span class="prop-hint">Prevent panning — the orbit center stays fixed.</span>
+
+                        <div class="cb-row mt6">
+                            <input type="checkbox" id="meta-viewer-lock-orbit-distance">
+                            <label for="meta-viewer-lock-orbit-distance">Lock Camera Distance</label>
+                        </div>
+                        <span class="prop-hint">Freeze zoom at the current distance from the orbit point.</span>
+                        <input type="hidden" id="meta-viewer-lock-distance-value">
+
+                        <div class="cb-row mt6">
+                            <input type="checkbox" id="meta-viewer-lock-above-ground">
+                            <label for="meta-viewer-lock-above-ground">Keep Camera Above Ground</label>
+                        </div>
+                        <span class="prop-hint">Prevent the camera from orbiting below the ground plane.</span>
+
+                        <div class="cb-row mt6">
+                            <input type="checkbox" id="meta-viewer-lock-max-height">
+                            <label for="meta-viewer-lock-max-height">Limit Camera Height</label>
+                        </div>
+                        <span class="prop-hint">Cap the camera's vertical position at a maximum height.</span>
+                        <div id="max-height-controls" style="display: none; margin-top: 4px; padding-left: 24px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label for="meta-viewer-max-height-value" style="white-space: nowrap; font-size: 12px;">Max Y:</label>
+                                <input type="number" id="meta-viewer-max-height-value" step="0.1" style="width: 80px; font-size: 12px;" placeholder="0.0">
+                                <button id="btn-set-max-height-current" class="prop-btn" style="font-size: 10px; padding: 2px 8px; white-space: nowrap;">Set to current</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Viewer Behavior -->
+                <div class="prop-section archived">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Viewer Behavior</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="cb-row">
+                            <input type="checkbox" id="meta-viewer-auto-rotate">
+                            <label for="meta-viewer-auto-rotate">Auto-Rotate</label>
+                        </div>
+                        <span class="prop-hint">Slowly rotate the scene when the viewer first opens.</span>
+                        <div class="cb-row mt6">
+                            <input type="checkbox" id="meta-viewer-annotations-visible" checked>
+                            <label for="meta-viewer-annotations-visible">Show Annotations</label>
+                        </div>
+                        <span class="prop-hint">Display annotation markers when the viewer opens.</span>
+                    </div>
+                </div>
+
+                <!-- ── Editor Preview (session-only) ────────────── -->
 
                 <!-- Camera -->
                 <div class="prop-section open">
@@ -447,7 +621,7 @@
                     </div>
                 </div>
 
-                <!-- Environment -->
+                <!-- Environment (IBL) -->
                 <div class="prop-section">
                     <div class="prop-section-hd">
                         <span class="prop-section-title">Environment (IBL)</span>
@@ -1199,7 +1373,6 @@
                                 <option value="preservation" data-tier="archival">Preservation</option>
                                 <option value="assets" data-tier="standard">Assets</option>
                                 <option value="integrity" data-tier="archival">Integrity</option>
-                                <option value="viewer">Default View</option>
                             </select>
                         </div>
                         <div class="metadata-actions">
@@ -1787,133 +1960,6 @@
                             </div>
                         </div>
 
-                        <!-- Default View Tab -->
-                        <div class="edit-tab-content" id="edit-tab-viewer">
-                            <div class="subsection-header">Mesh Rendering</div>
-                            <div class="checkbox-group">
-                                <input type="checkbox" id="meta-viewer-single-sided" checked>
-                                <label for="meta-viewer-single-sided">Single Sided</label>
-                            </div>
-                            <span class="field-hint">When enabled, back faces are culled (like Sketchfab default). Disable for thin geometry like leaves, fabric, or paper.</span>
-
-                            <div class="metadata-field" style="margin-top: 12px;">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="meta-viewer-mesh-bg-override">
-                                    <label for="meta-viewer-mesh-bg-override">Override Mesh Background Color</label>
-                                </div>
-                                <span class="field-hint">Background color used when viewing the mesh asset.</span>
-                                <div class="color-input-row" id="meta-viewer-mesh-bg-color-row" style="margin-top: 6px; display: none;">
-                                    <input type="color" id="meta-viewer-mesh-bg-color" value="#1a1a2e">
-                                    <span class="color-hex-label" id="meta-viewer-mesh-bg-color-hex">#1a1a2e</span>
-                                </div>
-                            </div>
-
-                            <div class="subsection-header" style="margin-top: 20px;">Scene</div>
-                            <div class="metadata-field">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="meta-viewer-splat-bg-override">
-                                    <label for="meta-viewer-splat-bg-override">Override Splat Background Color</label>
-                                </div>
-                                <span class="field-hint">Background color used when viewing the splat or combined (mesh + splat) view.</span>
-                                <div class="color-input-row" id="meta-viewer-splat-bg-color-row" style="margin-top: 6px; display: none;">
-                                    <input type="color" id="meta-viewer-splat-bg-color" value="#1a1a2e">
-                                    <span class="color-hex-label" id="meta-viewer-splat-bg-color-hex">#1a1a2e</span>
-                                </div>
-                            </div>
-
-                            <div class="subsection-header" style="margin-top: 20px;">Display Mode</div>
-                            <div class="metadata-field">
-                                <label for="meta-viewer-display-mode">Default Asset View</label>
-                                <select id="meta-viewer-display-mode">
-                                    <option value="">Auto (show primary asset)</option>
-                                    <option value="splat">Splat</option>
-                                    <option value="model">Model</option>
-                                    <option value="pointcloud">Point Cloud</option>
-                                    <option value="both">All Assets</option>
-                                </select>
-                                <span class="field-hint">Which asset(s) to display when the viewer opens. Auto selects the first loaded asset.</span>
-                            </div>
-                            <div class="metadata-field" style="margin-top: 12px;">
-                                <label for="meta-viewer-default-matcap">Default Matcap</label>
-                                <select id="meta-viewer-default-matcap">
-                                    <option value="">None</option>
-                                    <option value="clay">Clay</option>
-                                    <option value="chrome">Chrome</option>
-                                    <option value="pearl">Pearl</option>
-                                    <option value="jade">Jade</option>
-                                    <option value="copper">Copper</option>
-                                    <option value="bronze">Bronze</option>
-                                    <option value="dark-bronze">Dark Bronze</option>
-                                </select>
-                                <span class="field-hint">Apply a matcap material to meshes when the viewer opens. None uses the original materials.</span>
-                            </div>
-
-                            <div class="subsection-header" style="margin-top: 20px;">Opening Camera</div>
-                            <div class="metadata-field">
-                                <div class="camera-save-controls">
-                                    <button id="btn-save-camera" class="action-btn secondary" style="flex: 1;">Save Current View</button>
-                                    <button id="btn-clear-camera" class="action-btn secondary" style="flex: 0 0 auto; display: none;">Clear</button>
-                                </div>
-                                <span class="field-hint" id="camera-save-hint">Saves the current camera position as the default opening view.</span>
-                                <div id="camera-saved-info" style="display: none;">
-                                    <div class="saved-camera-display">
-                                        <span class="field-hint">Position: <span id="camera-pos-display"></span></span>
-                                        <span class="field-hint">Target: <span id="camera-target-display"></span></span>
-                                    </div>
-                                </div>
-                                <input type="hidden" id="meta-viewer-camera-pos-x">
-                                <input type="hidden" id="meta-viewer-camera-pos-y">
-                                <input type="hidden" id="meta-viewer-camera-pos-z">
-                                <input type="hidden" id="meta-viewer-camera-target-x">
-                                <input type="hidden" id="meta-viewer-camera-target-y">
-                                <input type="hidden" id="meta-viewer-camera-target-z">
-                            </div>
-
-                            <div class="subsection-header" style="margin-top: 20px;">Camera Constraints</div>
-                            <div class="checkbox-group">
-                                <input type="checkbox" id="meta-viewer-lock-orbit">
-                                <label for="meta-viewer-lock-orbit">Lock Orbit Point</label>
-                            </div>
-                            <span class="field-hint">Prevent panning — the orbit center stays fixed.</span>
-
-                            <div class="checkbox-group" style="margin-top: 8px;">
-                                <input type="checkbox" id="meta-viewer-lock-orbit-distance">
-                                <label for="meta-viewer-lock-orbit-distance">Lock Camera Distance</label>
-                            </div>
-                            <span class="field-hint">Freeze zoom at the current distance from the orbit point.</span>
-                            <input type="hidden" id="meta-viewer-lock-distance-value">
-
-                            <div class="checkbox-group" style="margin-top: 8px;">
-                                <input type="checkbox" id="meta-viewer-lock-above-ground">
-                                <label for="meta-viewer-lock-above-ground">Keep Camera Above Ground</label>
-                            </div>
-                            <span class="field-hint">Prevent the camera from orbiting below the ground plane.</span>
-
-                            <div class="checkbox-group" style="margin-top: 8px;">
-                                <input type="checkbox" id="meta-viewer-lock-max-height">
-                                <label for="meta-viewer-lock-max-height">Limit Camera Height</label>
-                            </div>
-                            <span class="field-hint">Cap the camera's vertical position at a maximum height.</span>
-                            <div id="max-height-controls" class="metadata-field" style="display: none; margin-top: 4px; padding-left: 24px;">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <label for="meta-viewer-max-height-value" style="white-space: nowrap; font-size: 12px;">Max Y:</label>
-                                    <input type="number" id="meta-viewer-max-height-value" step="0.1" style="width: 80px; font-size: 12px;" placeholder="0.0">
-                                    <button id="btn-set-max-height-current" class="action-btn secondary" style="font-size: 11px; padding: 2px 8px; white-space: nowrap;">Set to current</button>
-                                </div>
-                            </div>
-
-                            <div class="subsection-header" style="margin-top: 20px;">Viewer Behavior</div>
-                            <div class="checkbox-group">
-                                <input type="checkbox" id="meta-viewer-auto-rotate">
-                                <label for="meta-viewer-auto-rotate">Auto-Rotate</label>
-                            </div>
-                            <span class="field-hint">Slowly rotate the scene when the viewer first opens.</span>
-                            <div class="checkbox-group" style="margin-top: 8px;">
-                                <input type="checkbox" id="meta-viewer-annotations-visible" checked>
-                                <label for="meta-viewer-annotations-visible">Show Annotations</label>
-                            </div>
-                            <span class="field-hint">Display annotation markers when the viewer opens.</span>
-                        </div>
                     </div>
 
                     <!-- KIOSK-STRIP-END: metadata edit tab -->

@@ -199,7 +199,7 @@ export function hideLoading(): void {
 
 /** Map of tool names to their pane IDs and display titles */
 const TOOL_PANE_MAP: Record<string, { pane: string; title: string }> = {
-    scene:        { pane: 'pane-scene',        title: 'Scene' },
+    viewsettings: { pane: 'pane-view-settings', title: 'View Settings' },
     assets:       { pane: 'pane-assets',       title: 'Assets' },
     transform:    { pane: 'pane-transform',    title: 'Transform' },
     annotate:     { pane: 'pane-annotate',     title: 'Annotations' },

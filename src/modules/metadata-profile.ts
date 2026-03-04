@@ -27,7 +27,6 @@ export const TAB_TIERS: Record<string, MetadataProfile> = {
     material:     'archival',
     preservation: 'archival',
     integrity:    'archival',
-    viewer:       'basic',
 };
 
 /** Maps kiosk detail section titles (from createDetailSection() in kiosk-main.ts) to tiers */
