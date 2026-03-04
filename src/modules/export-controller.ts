@@ -556,10 +556,6 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
     if (!archiveCreator) return;
 
     const creds = getAuthCredentials();
-    if (!creds) {
-        notify.warning('Please authenticate in the Library panel first.');
-        return;
-    }
 
     log.info(' Starting save to library');
     deps.ui.showLoading('Creating archive...', true);
@@ -612,7 +608,7 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
                 xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
                 xhr.open('POST', '/api/archives/chunks?' + params.toString());
                 xhr.withCredentials = true;
-                xhr.setRequestHeader('Authorization', 'Basic ' + creds);
+                if (creds) xhr.setRequestHeader('Authorization', 'Basic ' + creds);
                 xhr.setRequestHeader('Content-Type', 'application/octet-stream');
                 xhr.send(chunk);
             });
@@ -623,13 +619,13 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
             // Trigger assembly; on 409 (file exists) delete and retry
             const doComplete = () => fetch('/api/archives/chunks/' + uploadId + '/complete', {
                 method: 'POST', credentials: 'include',
-                headers: { 'Authorization': 'Basic ' + creds }
+                headers: creds ? { 'Authorization': 'Basic ' + creds } : {}
             });
             let completeRes = await doComplete();
             if (completeRes.status === 409) {
                 const delRes = await fetch('/api/archives/' + encodeURIComponent(filename), {
                     method: 'DELETE', credentials: 'include',
-                    headers: { 'Authorization': 'Basic ' + creds }
+                    headers: creds ? { 'Authorization': 'Basic ' + creds } : {}
                 });
                 if (!delRes.ok) throw new Error('Archive already exists and could not be overwritten');
                 completeRes = await doComplete();
@@ -662,7 +658,7 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
                         fetch('/api/archives/' + encodeURIComponent(filename), {
                             method: 'DELETE',
                             credentials: 'include',
-                            headers: { 'Authorization': 'Basic ' + creds }
+                            headers: creds ? { 'Authorization': 'Basic ' + creds } : {}
                         }).then(delRes => {
                             if (!delRes.ok) {
                                 reject(new Error('Archive already exists and could not be overwritten'));
@@ -678,7 +674,7 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
                             retryXhr.addEventListener('error', () => reject(new Error('Re-upload network error')));
                             retryXhr.open('POST', '/api/archives');
                             retryXhr.withCredentials = true;
-                            retryXhr.setRequestHeader('Authorization', 'Basic ' + creds);
+                            if (creds) retryXhr.setRequestHeader('Authorization', 'Basic ' + creds);
                             retryXhr.send(retryForm);
                         }).catch(reject);
                     } else {
@@ -692,7 +688,7 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
 
                 xhr.open('POST', '/api/archives');
                 xhr.withCredentials = true;
-                xhr.setRequestHeader('Authorization', 'Basic ' + creds);
+                if (creds) xhr.setRequestHeader('Authorization', 'Basic ' + creds);
                 xhr.send(form);
             });
         }
