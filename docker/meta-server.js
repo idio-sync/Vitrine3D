@@ -39,9 +39,9 @@ const SITE_URL = process.env.SITE_URL || '';
 const SITE_DESCRIPTION = process.env.SITE_DESCRIPTION || 'Interactive 3D viewer';
 const OEMBED_WIDTH = parseInt(process.env.OEMBED_WIDTH || '960', 10);
 const OEMBED_HEIGHT = parseInt(process.env.OEMBED_HEIGHT || '540', 10);
-const ADMIN_ENABLED = process.env.ADMIN_ENABLED === 'true';
+const ADMIN_ENABLED = (process.env.ADMIN_ENABLED || '').toLowerCase() === 'true';
 const MAX_UPLOAD_SIZE = parseInt(process.env.MAX_UPLOAD_SIZE || '1024', 10) * 1024 * 1024;
-const CHUNKED_UPLOAD = process.env.CHUNKED_UPLOAD === 'true';
+const CHUNKED_UPLOAD = (process.env.CHUNKED_UPLOAD || '').toLowerCase() === 'true';
 const MAX_CHUNK_SIZE = 100 * 1024 * 1024; // 100 MB per-chunk hard cap
 const CHUNKS_DIR = '/tmp/v3d_chunks';
 const DEFAULT_KIOSK_THEME = process.env.DEFAULT_KIOSK_THEME || '';
