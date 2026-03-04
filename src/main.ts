@@ -398,7 +398,12 @@ function createFileHandlerDeps(): any {
                 storeLastPositions();
                 updateObjectSelectButtons();
                 assets.splatBlob = file;
-                document.getElementById('splat-vertices').textContent = 'Loaded';
+                const splatVertEl = document.getElementById('splat-vertices');
+                if (splatVertEl) {
+                    splatVertEl.textContent = 'Loaded';
+                    const splatRow = document.getElementById('splat-vertices-row');
+                    if (splatRow) splatRow.style.display = '';
+                }
                 // Auto center-align if model is already loaded
                 if (state.modelLoaded && !state.archiveLoaded) {
                     setTimeout(() => autoCenterAlign(), TIMING.AUTO_ALIGN_DELAY);
@@ -426,7 +431,12 @@ function createFileHandlerDeps(): any {
                 storeLastPositions();
                 updateObjectSelectButtons();
                 assets.meshBlob = file;
-                document.getElementById('model-faces').textContent = (faceCount || 0).toLocaleString();
+                const facesEl = document.getElementById('model-faces');
+                if (facesEl) {
+                    facesEl.textContent = (faceCount || 0).toLocaleString();
+                    const facesRow = document.getElementById('model-faces-row');
+                    if (facesRow) facesRow.style.display = '';
+                }
                 // Update texture info display
                 if (state.meshTextureInfo) {
                     const texEl = document.getElementById('model-textures');
@@ -1695,7 +1705,12 @@ function createPointcloudDeps(): any {
                 // Update UI
                 const fileName = file.name || file;
                 document.getElementById('pointcloud-filename').textContent = fileName;
-                document.getElementById('pointcloud-points').textContent = pointCount.toLocaleString();
+                const pcPointsEl = document.getElementById('pointcloud-points');
+                if (pcPointsEl) {
+                    pcPointsEl.textContent = pointCount.toLocaleString();
+                    const pcRow = document.getElementById('pointcloud-points-row');
+                    if (pcRow) pcRow.style.display = '';
+                }
                 updatePronomRegistry(state);
             }
         }

@@ -482,16 +482,20 @@
                         <input type="file" id="model-input" accept=".glb,.gltf,.obj,.mtl,.png,.jpg,.jpeg,.tga,.bmp,.webp" multiple style="display:none" />
                         <button class="prop-btn" id="btn-load-model-url" style="font-size:10px; color:var(--text-muted);">Model from URL...</button>
                         <span id="model-filename" class="prop-hint">No file loaded</span>
+                        <div class="prop-row" id="model-faces-row" style="display:none"><span class="prop-row-label">Faces</span><span class="font-mono" id="model-faces" style="font-size:10px; color:var(--text-secondary);">-</span></div>
+                        <div class="prop-row" id="model-textures-row" style="display:none"><span class="prop-row-label">Textures</span><span class="font-mono" id="model-textures" style="font-size:10px; color:var(--text-secondary);">-</span></div>
 
                         <label for="splat-input" class="prop-btn mt4" style="cursor:pointer;"><span style="color:var(--accent-text);">+</span> Gaussian Splat (.ply, .splat, .ksplat, .spz)</label>
                         <input type="file" id="splat-input" accept=".ply,.splat,.ksplat,.spz,.sog" style="display:none" />
                         <button class="prop-btn" id="btn-load-splat-url" style="font-size:10px; color:var(--text-muted);">Splat from URL...</button>
                         <span id="splat-filename" class="prop-hint">No file loaded</span>
+                        <div class="prop-row" id="splat-vertices-row" style="display:none"><span class="prop-row-label">Status</span><span class="font-mono" id="splat-vertices" style="font-size:10px; color:var(--text-secondary);">-</span></div>
 
                         <label for="pointcloud-input" class="prop-btn mt4" style="cursor:pointer;"><span style="color:#c4863a;">+</span> Point Cloud (.e57)</label>
                         <input type="file" id="pointcloud-input" accept=".e57" style="display:none" />
                         <button class="prop-btn" id="btn-load-pointcloud-url" style="font-size:10px; color:var(--text-muted);">Point Cloud from URL...</button>
                         <span id="pointcloud-filename" class="prop-hint">No file loaded</span>
+                        <div class="prop-row" id="pointcloud-points-row" style="display:none"><span class="prop-row-label">Points</span><span class="font-mono" id="pointcloud-points" style="font-size:10px; color:var(--text-secondary);">-</span></div>
 
                         <label for="stl-input" class="prop-btn mt4" style="cursor:pointer;"><span style="color:#9a7bce;">+</span> STL Model (.stl)</label>
                         <input type="file" id="stl-input" accept=".stl" style="display:none" />
