@@ -68,6 +68,8 @@
 
             <div class="rail-sep rail-library-sep" style="display:none"></div>
 
+            <!-- ── Authoring: Compose ─────────────────────── -->
+
             <!-- Assets — Load splats, meshes, point clouds -->
             <button class="tool-btn active" data-tool="assets" data-tooltip="Assets  A" title="Load and configure 3D assets">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -75,15 +77,6 @@
                     <rect x="14" y="3" width="7" height="7"/>
                     <rect x="14" y="14" width="7" height="7"/>
                     <rect x="3" y="14" width="7" height="7"/>
-                </svg>
-            </button>
-
-            <!-- Scene — Background, lighting, environment -->
-            <button class="tool-btn" data-tool="scene" data-tooltip="Scene  S" title="Background, lighting, and environment">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                    <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-                    <polyline points="2 17 12 22 22 17"/>
-                    <polyline points="2 12 12 17 22 12"/>
                 </svg>
             </button>
 
@@ -99,41 +92,24 @@
                 </svg>
             </button>
 
+            <!-- Scene — Background, lighting, environment -->
+            <button class="tool-btn" data-tool="scene" data-tooltip="Scene  S" title="Background, lighting, and environment">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                    <polyline points="2 17 12 22 22 17"/>
+                    <polyline points="2 12 12 17 22 12"/>
+                </svg>
+            </button>
+
             <div class="rail-sep"></div>
 
-            <!-- Measure — Measure distances on model -->
-            <button class="tool-btn" data-tool="measure" data-tooltip="Measure  M" title="Measure distances between points">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                    <path d="M2 12h20"/>
-                    <path d="M7 8v8"/>
-                    <path d="M12 6v4"/>
-                    <path d="M17 8v8"/>
-                </svg>
-            </button>
-
-            <!-- Capture — Take screenshots -->
-            <button class="tool-btn" data-tool="capture" data-tooltip="Capture  C" title="Capture screenshots of the viewport">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                    <circle cx="12" cy="13" r="4"/>
-                </svg>
-            </button>
+            <!-- ── Authoring: Narrate ──────────────────────── -->
 
             <!-- Annotate — Place annotation markers -->
             <button class="tool-btn" data-tool="annotate" data-tooltip="Annotate  N" title="Place and edit annotation markers">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
                     <circle cx="12" cy="10" r="3"/>
-                </svg>
-            </button>
-
-            <!-- Metadata — Project info, Dublin Core -->
-            <button class="tool-btn" data-tool="metadata" data-tooltip="Metadata  D" id="btn-metadata" title="Edit project metadata and Dublin Core fields">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                    <line x1="16" y1="13" x2="8" y2="13"/>
-                    <line x1="16" y1="17" x2="8" y2="17"/>
                 </svg>
             </button>
 
@@ -148,6 +124,39 @@
                 </svg>
             </button>
 
+            <!-- Capture — Take screenshots -->
+            <button class="tool-btn" data-tool="capture" data-tooltip="Capture  C" title="Capture screenshots of the viewport">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                </svg>
+            </button>
+
+            <!-- Metadata — Project info, Dublin Core -->
+            <button class="tool-btn" data-tool="metadata" data-tooltip="Metadata  D" id="btn-metadata" title="Edit project metadata and Dublin Core fields">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+            </button>
+
+            <div class="rail-spacer"></div>
+            <div class="rail-sep"></div>
+
+            <!-- ── Viewing Tools ───────────────────────────── -->
+
+            <!-- Measure — Measure distances on model -->
+            <button class="tool-btn" data-tool="measure" data-tooltip="Measure  M" title="Measure distances between points">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                    <path d="M2 12h20"/>
+                    <path d="M7 8v8"/>
+                    <path d="M12 6v4"/>
+                    <path d="M17 8v8"/>
+                </svg>
+            </button>
+
             <!-- Cross-Section — Clip with a movable plane -->
             <button class="tool-btn" data-tool="crosssection" data-tooltip="Cross-Section  X" title="Clip the scene with a movable plane">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -158,8 +167,9 @@
                 </svg>
             </button>
 
-            <div class="rail-spacer"></div>
             <div class="rail-sep"></div>
+
+            <!-- ── Utility ─────────────────────────────────── -->
 
             <!-- Export — Package as archive -->
             <button class="tool-btn" data-tool="export" data-tooltip="Export  E" id="btn-export-archive" title="Export scene as .a3d/.a3z archive">
