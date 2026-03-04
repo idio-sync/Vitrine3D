@@ -185,13 +185,6 @@
                 </svg>
             </button>
 
-            <!-- Settings — Stats and preferences -->
-            <button class="tool-btn" data-tool="settings" data-tooltip="Settings  ," title="Application settings and stats">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                </svg>
-            </button>
         </aside>
 
 
@@ -477,7 +470,7 @@
             <div class="props-pane active" id="pane-assets">
 
                 <!-- Load Files -->
-                <div class="prop-section open">
+                <div class="prop-section">
                     <div class="prop-section-hd">
                         <span class="prop-section-title">Load Files</span>
                         <span class="prop-section-chevron">&#9654;</span>
@@ -550,14 +543,7 @@
                         <span class="prop-section-chevron">&#9654;</span>
                     </div>
                     <div class="prop-section-body">
-                        <label for="source-files-input" class="prop-btn" style="font-size:10px; cursor:pointer;">+ Add Source Files</label>
-                        <input type="file" id="source-files-input" multiple style="display:none" />
-                        <div id="source-files-list" class="source-files-list"></div>
-                        <div id="source-files-summary" class="source-files-summary" style="display:none">
-                            <span id="source-files-count">0</span> files
-                            (<span id="source-files-size">0 MB</span>)
-                        </div>
-                        <select class="prop-select mt4" id="source-files-category" style="font-size:10px;">
+                        <select class="prop-select" id="source-files-category" style="font-size:10px;">
                             <option value="">Category (optional)</option>
                             <option value="raw_photography">Raw Photography</option>
                             <option value="processing_report">Processing Report</option>
@@ -567,6 +553,13 @@
                             <option value="reference">Reference Material</option>
                             <option value="other">Other</option>
                         </select>
+                        <label for="source-files-input" class="prop-btn mt4" style="font-size:10px; cursor:pointer;">+ Add Source Files</label>
+                        <input type="file" id="source-files-input" multiple style="display:none" />
+                        <div id="source-files-list" class="source-files-list"></div>
+                        <div id="source-files-summary" class="source-files-summary" style="display:none">
+                            <span id="source-files-count">0</span> files
+                            (<span id="source-files-size">0 MB</span>)
+                        </div>
                         <p class="prop-hint mt4">Archived alongside 3D data. Not loaded into viewer.</p>
                     </div>
                 </div>
@@ -1988,24 +1981,6 @@
             <!-- KIOSK-STRIP-END: export panel -->
 
 
-            <!-- ========================================================
-                 SETTINGS PANE
-                 ======================================================== -->
-            <div class="props-pane" id="pane-settings">
-                <div class="prop-section open">
-                    <div class="prop-section-hd">
-                        <span class="prop-section-title">Info</span>
-                        <span class="prop-section-chevron">&#9654;</span>
-                    </div>
-                    <div class="prop-section-body">
-                        <div class="prop-row"><span class="prop-row-label">Splat count</span><span class="font-mono" id="splat-vertices" style="font-size:10px; color:var(--text-secondary);">-</span></div>
-                        <div class="prop-row"><span class="prop-row-label">Model faces</span><span class="font-mono" id="model-faces" style="font-size:10px; color:var(--text-secondary);">-</span></div>
-                        <div class="prop-row" style="display:none"><span class="prop-row-label">Textures</span><span class="font-mono" id="model-textures" style="font-size:10px; color:var(--text-secondary);">-</span></div>
-                        <div class="prop-row"><span class="prop-row-label">Point cloud</span><span class="font-mono" id="pointcloud-points" style="font-size:10px; color:var(--text-secondary);">-</span></div>
-                        <div class="prop-row"><span class="prop-row-label">FPS</span><span class="font-mono" id="fps-counter" style="font-size:10px; color:var(--accent-text);">-</span></div>
-                    </div>
-                </div>
-            </div>
 
             <!-- ========================================================
                  LIBRARY PANE — selected archive details

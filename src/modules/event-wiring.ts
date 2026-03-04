@@ -766,7 +766,6 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             case 'm': activateTool('measure'); activatedTool = 'measure'; break;
             case 'c': activateTool('capture'); activatedTool = 'capture'; break;
             case 'd': activateTool('metadata'); activatedTool = 'metadata'; break;
-            case ',': activateTool('settings'); activatedTool = 'settings'; break;
             case 'l': activateTool('library'); activatedTool = 'library'; onLibraryActivated(); break;
             case 'f': deps.camera.toggleFlyMode(); break;
             default: break;
