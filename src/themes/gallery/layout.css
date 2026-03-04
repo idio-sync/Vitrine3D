@@ -4,27 +4,7 @@
    Part of the 'gallery' theme package.
    ============================================================================= */
 
-/* --- Base Typography --- */
-
-html:has(body.kiosk-mode.kiosk-gallery) {
-    font-size: 112.5%;
-}
-
-body.kiosk-mode.kiosk-gallery {
-    font-family: var(--kiosk-font-body);
-    font-feature-settings: "liga", "kern";
-    -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
-}
-
-/* --- Hide Default Kiosk Chrome --- */
-
-body.kiosk-mode.kiosk-gallery #metadata-sidebar,
-body.kiosk-mode.kiosk-gallery .kiosk-view-switcher,
-body.kiosk-mode.kiosk-gallery #kiosk-toolbar,
-body.kiosk-mode.kiosk-gallery #kiosk-wall-label {
-    display: none !important;
-}
+/* Base typography and chrome-hiding inherited from kiosk.css shared rules. */
 
 /* =============================================================================
    TITLE CARD — top-left anchor, auto-fades

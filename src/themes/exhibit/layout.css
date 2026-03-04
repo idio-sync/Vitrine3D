@@ -4,27 +4,7 @@
    Part of the 'exhibit' theme package.
    ============================================================================= */
 
-/* --- Base Typography --- */
-
-html:has(body.kiosk-mode.kiosk-exhibit) {
-    font-size: 112.5%;
-}
-
-body.kiosk-mode.kiosk-exhibit {
-    font-family: var(--kiosk-font-body);
-    font-feature-settings: "liga", "kern";
-    -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
-}
-
-/* --- Hide Default Kiosk Chrome --- */
-
-body.kiosk-mode.kiosk-exhibit #metadata-sidebar,
-body.kiosk-mode.kiosk-exhibit .kiosk-view-switcher,
-body.kiosk-mode.kiosk-exhibit #kiosk-toolbar,
-body.kiosk-mode.kiosk-exhibit #kiosk-wall-label {
-    display: none !important;
-}
+/* Base typography and chrome-hiding inherited from kiosk.css shared rules. */
 
 /* =============================================================================
    TITLE PLAQUE — bottom-left wall label, persistent

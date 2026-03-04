@@ -1019,51 +1019,11 @@ input, select, textarea {
 
 /* (Old #controls-panel removed — replaced by #props-panel and .prop-section) */
 
-.subsection-header {
-    font-size: 0.75rem;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-top: 15px;
-    margin-bottom: 10px;
-    padding-top: 10px;
-    border-top: 1px solid #2a2a3a;
-}
-
 /* Source file list */
 .source-files-list {
     max-height: 150px;
     overflow-y: auto;
     margin: 6px 0;
-}
-.source-file-item {
-    display: flex;
-    align-items: center;
-    padding: 3px 0;
-    font-size: 0.8em;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-.source-file-item .source-file-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.source-file-item .source-file-size {
-    opacity: 0.6;
-    margin: 0 8px;
-    flex-shrink: 0;
-    font-size: 0.9em;
-}
-.source-file-item .source-file-remove {
-    cursor: pointer;
-    opacity: 0.4;
-    flex-shrink: 0;
-    font-size: 0.9em;
-}
-.source-file-item .source-file-remove:hover {
-    opacity: 1;
-    color: #ff6b6b;
 }
 .source-files-summary {
     font-size: 0.8em;
@@ -2472,38 +2432,14 @@ input[type="range"]::-webkit-slider-thumb:hover {
     font-size: 0.85rem;
 }
 
-/* Dimension inputs (for Archival Record dimensions) */
-.dimension-inputs {
-    display: flex;
-    gap: 8px;
-}
-
-.dimension-inputs input {
-    flex: 1;
-    min-width: 0;
-    padding: 8px 10px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    color: var(--text-primary);
-    font-size: 0.85rem;
-}
-
-.dimension-inputs input:focus {
-    outline: none;
-    border-color: var(--accent);
-}
-
-.dimension-inputs input::placeholder {
-    color: var(--text-muted);
-}
-
-/* Coordinate inputs (for Geographic Coverage) */
+/* Dimension inputs (Archival Record) & Coordinate inputs (Geographic Coverage) */
+.dimension-inputs,
 .coordinate-inputs {
     display: flex;
     gap: 8px;
 }
 
+.dimension-inputs input,
 .coordinate-inputs input {
     flex: 1;
     min-width: 0;
@@ -2515,11 +2451,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
     font-size: 0.85rem;
 }
 
+.dimension-inputs input:focus,
 .coordinate-inputs input:focus {
     outline: none;
     border-color: var(--accent);
 }
 
+.dimension-inputs input::placeholder,
 .coordinate-inputs input::placeholder {
     color: var(--text-muted);
 }
@@ -4444,7 +4382,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
     background: var(--bg-tertiary, #2a2a2a);
     color: var(--text-primary, #e0e0e0);
 }
-.map-picker-btn {
+.map-picker-btn,
+.btn-pick-map {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -4457,7 +4396,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
     cursor: pointer;
     flex-shrink: 0;
 }
-.map-picker-btn:hover {
+.map-picker-btn:hover,
+.btn-pick-map:hover {
     color: var(--accent, #4fc3f7);
     border-color: var(--accent, #4fc3f7);
 }
@@ -4521,24 +4461,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
     cursor: not-allowed;
 }
 
-/* Pick on map button (inline in coordinate-inputs) */
-.btn-pick-map {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    background: var(--bg-tertiary, #2a2a2a);
-    border: 1px solid var(--border, #333);
-    border-radius: 4px;
-    color: var(--text-secondary, #aaa);
-    cursor: pointer;
-    flex-shrink: 0;
-}
-.btn-pick-map:hover {
-    color: var(--accent, #4fc3f7);
-    border-color: var(--accent, #4fc3f7);
-}
+/* Pick on map button (inline in coordinate-inputs) — shares styles with .map-picker-btn */
 
 /* ============================================================
    Walkthrough Editor

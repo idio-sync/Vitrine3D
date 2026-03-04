@@ -4,29 +4,7 @@
    Part of the 'editorial' theme package.
    ============================================================================= */
 
-/* --- Base Typography — inherited by all editorial elements --- */
-
-/* Bump root font-size so all rem values scale up for readability.
-   16px default → 18px effective base. */
-html:has(body.kiosk-mode.kiosk-editorial) {
-    font-size: 112.5%;
-}
-
-body.kiosk-mode.kiosk-editorial {
-    font-family: var(--kiosk-font-body);
-    font-feature-settings: "liga", "kern";
-    -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
-}
-
-/* --- Hide Sidebar Layout Elements --- */
-
-body.kiosk-mode.kiosk-editorial #metadata-sidebar,
-body.kiosk-mode.kiosk-editorial .kiosk-view-switcher,
-body.kiosk-mode.kiosk-editorial #kiosk-toolbar,
-body.kiosk-mode.kiosk-editorial #kiosk-wall-label {
-    display: none !important;
-}
+/* Base typography and chrome-hiding inherited from kiosk.css shared rules. */
 
 /* --- Gold Spine — left edge accent line --- */
 
