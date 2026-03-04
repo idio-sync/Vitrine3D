@@ -324,7 +324,12 @@
                  ======================================================== -->
             <div class="props-pane" id="pane-view-settings">
 
-                <!-- ── Archive Defaults (saved to .a3d/.a3z) ────── -->
+                <div class="vs-tab-bar">
+                    <button class="active" data-vs-tab="defaults">Defaults</button>
+                    <button data-vs-tab="editor">Editor</button>
+                </div>
+
+                <div class="vs-tab-content active" id="vs-tab-defaults">
 
                 <!-- Background -->
                 <div class="prop-section open archived">
@@ -406,7 +411,7 @@
                         </select>
                         <span class="prop-hint">Which asset(s) to display when the viewer opens.</span>
 
-                        <label for="meta-viewer-default-matcap" class="prop-label mt6">Default Matcap</label>
+                        <label for="meta-viewer-default-matcap" class="prop-label mt6">Matcap on Open</label>
                         <select class="prop-select mb4" id="meta-viewer-default-matcap">
                             <option value="">None</option>
                             <option value="clay">Clay</option>
@@ -515,7 +520,7 @@
                     <div class="prop-section-body">
                         <div class="cb-row">
                             <input type="checkbox" id="meta-viewer-auto-rotate">
-                            <label for="meta-viewer-auto-rotate">Auto-Rotate</label>
+                            <label for="meta-viewer-auto-rotate">Auto-Rotate on Open</label>
                         </div>
                         <span class="prop-hint">Slowly rotate the scene when the viewer first opens.</span>
                         <div class="cb-row mt6">
@@ -526,7 +531,109 @@
                     </div>
                 </div>
 
-                <!-- ── Editor Preview (session-only) ────────────── -->
+                <!-- Lighting on Open -->
+                <div class="prop-section archived">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Lighting on Open</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="cb-row">
+                            <input type="checkbox" id="meta-viewer-lighting-enabled">
+                            <label for="meta-viewer-lighting-enabled">Save lighting with archive</label>
+                        </div>
+                        <span class="prop-hint">When enabled, these lighting values override viewer defaults.</span>
+                        <div id="meta-viewer-lighting-controls" class="mt6" style="display:none;">
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Ambient</span><span class="sl-val" id="meta-viewer-ambient-intensity-value">0.8</span></div>
+                                <input type="range" id="meta-viewer-ambient-intensity" min="0" max="2" step="0.1" value="0.8">
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Hemisphere</span><span class="sl-val" id="meta-viewer-hemisphere-intensity-value">0.6</span></div>
+                                <input type="range" id="meta-viewer-hemisphere-intensity" min="0" max="2" step="0.1" value="0.6">
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Directional 1</span><span class="sl-val" id="meta-viewer-directional1-intensity-value">1.5</span></div>
+                                <input type="range" id="meta-viewer-directional1-intensity" min="0" max="3" step="0.1" value="1.5">
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Directional 2</span><span class="sl-val" id="meta-viewer-directional2-intensity-value">0.5</span></div>
+                                <input type="range" id="meta-viewer-directional2-intensity" min="0" max="3" step="0.1" value="0.5">
+                            </div>
+                            <div class="cb-row mt4">
+                                <input type="checkbox" id="meta-viewer-shadows-enabled">
+                                <label for="meta-viewer-shadows-enabled">Enable Shadows</label>
+                            </div>
+                            <div class="sl-row mt4" id="meta-viewer-shadow-opacity-group" style="display:none;">
+                                <div class="sl-hd"><span class="sl-label">Shadow Opacity</span><span class="sl-val" id="meta-viewer-shadow-opacity-value">0.3</span></div>
+                                <input type="range" id="meta-viewer-shadow-opacity" min="0.05" max="1" step="0.05" value="0.3">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tone Mapping on Open -->
+                <div class="prop-section archived">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Tone Mapping on Open</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="cb-row">
+                            <input type="checkbox" id="meta-viewer-tone-mapping-enabled">
+                            <label for="meta-viewer-tone-mapping-enabled">Save tone mapping with archive</label>
+                        </div>
+                        <span class="prop-hint">When enabled, these values override viewer defaults.</span>
+                        <div id="meta-viewer-tone-mapping-controls" class="mt6" style="display:none;">
+                            <select class="prop-select mb4" id="meta-viewer-tone-mapping-method">
+                                <option value="None" selected>None</option>
+                                <option value="Linear">Linear</option>
+                                <option value="Reinhard">Reinhard</option>
+                                <option value="Cineon">Cineon</option>
+                                <option value="ACESFilmic">ACES Filmic</option>
+                                <option value="AgX">AgX</option>
+                            </select>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Exposure</span><span class="sl-val" id="meta-viewer-tone-mapping-exposure-value">1.0</span></div>
+                                <input type="range" id="meta-viewer-tone-mapping-exposure" min="0.1" max="3" step="0.1" value="1">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Environment on Open -->
+                <div class="prop-section archived">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Environment on Open</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="cb-row">
+                            <input type="checkbox" id="meta-viewer-env-enabled">
+                            <label for="meta-viewer-env-enabled">Save environment with archive</label>
+                        </div>
+                        <span class="prop-hint">When enabled, this environment preset overrides viewer defaults.</span>
+                        <div id="meta-viewer-env-controls" class="mt6" style="display:none;">
+                            <select class="prop-select mb4" id="meta-viewer-env-preset">
+                                <option value="">None</option>
+                                <option value="preset:0">Outdoor</option>
+                                <option value="preset:1">Studio</option>
+                                <option value="preset:2">Sunset</option>
+                            </select>
+                            <div class="cb-row mt4">
+                                <input type="checkbox" id="meta-viewer-env-as-background">
+                                <label for="meta-viewer-env-as-background">Show as Background</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                </div><!-- /vs-tab-defaults -->
+
+                <div class="vs-tab-content" id="vs-tab-editor">
 
                 <!-- Camera -->
                 <div class="prop-section open">
@@ -544,7 +651,7 @@
                         </div>
                         <div class="cb-row mt4">
                             <input type="checkbox" id="btn-auto-rotate">
-                            <label for="btn-auto-rotate">Auto-rotate</label>
+                            <label for="btn-auto-rotate">Auto-Rotate (Live)</label>
                         </div>
                         <div class="cb-row">
                             <input type="checkbox" id="toggle-gridlines" checked>
@@ -565,7 +672,7 @@
                 <!-- Lighting -->
                 <div class="prop-section">
                     <div class="prop-section-hd">
-                        <span class="prop-section-title">Lighting</span>
+                        <span class="prop-section-title">Lighting (Live)</span>
                         <span class="prop-section-chevron">&#9654;</span>
                     </div>
                     <div class="prop-section-body">
@@ -599,7 +706,7 @@
                 <!-- Tone Mapping -->
                 <div class="prop-section">
                     <div class="prop-section-hd">
-                        <span class="prop-section-title">Tone Mapping</span>
+                        <span class="prop-section-title">Tone Mapping (Live)</span>
                         <span class="prop-section-chevron">&#9654;</span>
                     </div>
                     <div class="prop-section-body">
@@ -621,7 +728,7 @@
                 <!-- Environment (IBL) -->
                 <div class="prop-section">
                     <div class="prop-section-hd">
-                        <span class="prop-section-title">Environment (IBL)</span>
+                        <span class="prop-section-title">Environment (Live)</span>
                         <span class="prop-section-chevron">&#9654;</span>
                     </div>
                     <div class="prop-section-body">
@@ -643,6 +750,99 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Model Settings -->
+                <div class="prop-section">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Model</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="sl-row">
+                            <div class="sl-hd"><span class="sl-label">Scale</span><span class="sl-val" id="model-scale-value">1.0</span></div>
+                            <input type="range" id="model-scale" min="0.1" max="5" step="0.1" value="1">
+                        </div>
+                        <div class="sl-row">
+                            <div class="sl-hd"><span class="sl-label">Opacity</span><span class="sl-val" id="model-opacity-value">1.0</span></div>
+                            <input type="range" id="model-opacity" min="0" max="1" step="0.05" value="1">
+                        </div>
+                        <div class="cb-row mt4">
+                            <input type="checkbox" id="model-wireframe"><label for="model-wireframe">Wireframe</label>
+                        </div>
+                        <div class="cb-row">
+                            <input type="checkbox" id="model-no-texture"><label for="model-no-texture">Hide Textures</label>
+                        </div>
+                        <div class="cb-row">
+                            <input type="checkbox" id="model-matcap"><label for="model-matcap">Matcap (Live)</label>
+                        </div>
+                        <div id="matcap-style-group" style="display:none;" class="mt4">
+                            <select class="prop-select" id="matcap-style">
+                                <option value="clay">Clay</option>
+                                <option value="chrome">Chrome</option>
+                                <option value="pearl">Pearl</option>
+                                <option value="jade">Jade</option>
+                                <option value="copper">Copper</option>
+                                <option value="bronze">Bronze</option>
+                                <option value="dark-bronze">Dark Bronze</option>
+                            </select>
+                        </div>
+                        <details class="debug-channels">
+                            <summary>Debug Channels</summary>
+                            <div class="debug-channels-body">
+                                <div class="cb-row">
+                                    <input type="checkbox" id="model-normals"><label for="model-normals">Show Normals</label>
+                                </div>
+                                <div class="cb-row">
+                                    <input type="checkbox" id="model-roughness"><label for="model-roughness">Roughness</label>
+                                </div>
+                                <div class="cb-row">
+                                    <input type="checkbox" id="model-metalness"><label for="model-metalness">Metalness</label>
+                                </div>
+                                <div class="cb-row">
+                                    <input type="checkbox" id="model-specular-f0"><label for="model-specular-f0">Specular F0</label>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Splat Settings -->
+                <div class="prop-section">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Splat</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="sl-row">
+                            <div class="sl-hd"><span class="sl-label">Scale</span><span class="sl-val" id="splat-scale-value">1.0</span></div>
+                            <input type="range" id="splat-scale" min="0.1" max="5" step="0.1" value="1">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Point Cloud Settings -->
+                <div class="prop-section">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Point Cloud</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="sl-row">
+                            <div class="sl-hd"><span class="sl-label">Scale</span><span class="sl-val" id="pointcloud-scale-value">1.0</span></div>
+                            <input type="range" id="pointcloud-scale" min="0.1" max="5" step="0.1" value="1">
+                        </div>
+                        <div class="sl-row">
+                            <div class="sl-hd"><span class="sl-label">Point Size</span><span class="sl-val" id="pointcloud-point-size-value">0.01</span></div>
+                            <input type="range" id="pointcloud-point-size" min="0.001" max="0.1" step="0.001" value="0.01">
+                        </div>
+                        <div class="sl-row">
+                            <div class="sl-hd"><span class="sl-label">Opacity</span><span class="sl-val" id="pointcloud-opacity-value">1.0</span></div>
+                            <input type="range" id="pointcloud-opacity" min="0" max="1" step="0.05" value="1">
+                        </div>
+                    </div>
+                </div>
+
+                </div><!-- /vs-tab-editor -->
 
             </div>
 
@@ -786,100 +986,6 @@
                             (<span id="source-files-size">0 MB</span>)
                         </div>
                         <p class="prop-hint mt4">Archived alongside 3D data. Not loaded into viewer.</p>
-                    </div>
-                </div>
-
-                <!-- Model Settings -->
-                <div class="prop-section">
-                    <div class="prop-section-hd">
-                        <span class="prop-section-title">Model Settings</span>
-                        <span class="prop-section-chevron">&#9654;</span>
-                    </div>
-                    <div class="prop-section-body">
-                        <p class="prop-hint mb4" style="font-style:italic;">Visualization settings are session-only.</p>
-                        <div class="sl-row">
-                            <div class="sl-hd"><span class="sl-label">Scale</span><span class="sl-val" id="model-scale-value">1.0</span></div>
-                            <input type="range" id="model-scale" min="0.1" max="5" step="0.1" value="1">
-                        </div>
-                        <div class="sl-row">
-                            <div class="sl-hd"><span class="sl-label">Opacity</span><span class="sl-val" id="model-opacity-value">1.0</span></div>
-                            <input type="range" id="model-opacity" min="0" max="1" step="0.05" value="1">
-                        </div>
-                        <div class="cb-row mt4">
-                            <input type="checkbox" id="model-wireframe"><label for="model-wireframe">Wireframe</label>
-                        </div>
-                        <div class="cb-row">
-                            <input type="checkbox" id="model-no-texture"><label for="model-no-texture">Hide Textures</label>
-                        </div>
-                        <div class="cb-row">
-                            <input type="checkbox" id="model-matcap"><label for="model-matcap">Matcap</label>
-                        </div>
-                        <div id="matcap-style-group" style="display:none;" class="mt4">
-                            <select class="prop-select" id="matcap-style">
-                                <option value="clay">Clay</option>
-                                <option value="chrome">Chrome</option>
-                                <option value="pearl">Pearl</option>
-                                <option value="jade">Jade</option>
-                                <option value="copper">Copper</option>
-                                <option value="bronze">Bronze</option>
-                                <option value="dark-bronze">Dark Bronze</option>
-                            </select>
-                        </div>
-                        <details class="debug-channels">
-                            <summary>Debug Channels</summary>
-                            <div class="debug-channels-body">
-                                <div class="cb-row">
-                                    <input type="checkbox" id="model-normals"><label for="model-normals">Show Normals</label>
-                                </div>
-                                <div class="cb-row">
-                                    <input type="checkbox" id="model-roughness"><label for="model-roughness">Roughness</label>
-                                </div>
-                                <div class="cb-row">
-                                    <input type="checkbox" id="model-metalness"><label for="model-metalness">Metalness</label>
-                                </div>
-                                <div class="cb-row">
-                                    <input type="checkbox" id="model-specular-f0"><label for="model-specular-f0">Specular F0</label>
-                                </div>
-                            </div>
-                        </details>
-                    </div>
-                </div>
-
-                <!-- Splat Settings -->
-                <div class="prop-section">
-                    <div class="prop-section-hd">
-                        <span class="prop-section-title">Splat Settings</span>
-                        <span class="prop-section-chevron">&#9654;</span>
-                    </div>
-                    <div class="prop-section-body">
-                        <p class="prop-hint mb4" style="font-style:italic;">Scale is session-only.</p>
-                        <div class="sl-row">
-                            <div class="sl-hd"><span class="sl-label">Scale</span><span class="sl-val" id="splat-scale-value">1.0</span></div>
-                            <input type="range" id="splat-scale" min="0.1" max="5" step="0.1" value="1">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Point Cloud Settings -->
-                <div class="prop-section">
-                    <div class="prop-section-hd">
-                        <span class="prop-section-title">Point Cloud Settings</span>
-                        <span class="prop-section-chevron">&#9654;</span>
-                    </div>
-                    <div class="prop-section-body">
-                        <p class="prop-hint mb4" style="font-style:italic;">Scale, size, and opacity are session-only.</p>
-                        <div class="sl-row">
-                            <div class="sl-hd"><span class="sl-label">Scale</span><span class="sl-val" id="pointcloud-scale-value">1.0</span></div>
-                            <input type="range" id="pointcloud-scale" min="0.1" max="5" step="0.1" value="1">
-                        </div>
-                        <div class="sl-row">
-                            <div class="sl-hd"><span class="sl-label">Point Size</span><span class="sl-val" id="pointcloud-point-size-value">0.01</span></div>
-                            <input type="range" id="pointcloud-point-size" min="0.001" max="0.1" step="0.001" value="0.01">
-                        </div>
-                        <div class="sl-row">
-                            <div class="sl-hd"><span class="sl-label">Opacity</span><span class="sl-val" id="pointcloud-opacity-value">1.0</span></div>
-                            <input type="range" id="pointcloud-opacity" min="0" max="1" step="0.05" value="1">
-                        </div>
                     </div>
                 </div>
 

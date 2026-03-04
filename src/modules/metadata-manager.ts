@@ -204,6 +204,16 @@ export interface ViewerSettings {
     lockDistance: number | null;
     lockAboveGround: boolean;
     maxCameraHeight: number | null;
+    ambientIntensity: number | null;
+    hemisphereIntensity: number | null;
+    directional1Intensity: number | null;
+    directional2Intensity: number | null;
+    shadowsEnabled: boolean | null;
+    shadowOpacity: number | null;
+    toneMappingMethod: string | null;
+    toneMappingExposure: number | null;
+    environmentPreset: string | null;
+    environmentAsBackground: boolean | null;
 }
 
 export interface VersionHistoryEntry {
@@ -1432,6 +1442,39 @@ export function collectMetadata(): CollectedMetadata {
             maxCameraHeight: (document.getElementById('meta-viewer-lock-max-height') as HTMLInputElement)?.checked
                 ? parseFloat((document.getElementById('meta-viewer-max-height-value') as HTMLInputElement)?.value) || null
                 : null,
+            // Lighting (only when enabled)
+            ambientIntensity: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-ambient-intensity') as HTMLInputElement)?.value) ?? null
+                : null,
+            hemisphereIntensity: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-hemisphere-intensity') as HTMLInputElement)?.value) ?? null
+                : null,
+            directional1Intensity: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-directional1-intensity') as HTMLInputElement)?.value) ?? null
+                : null,
+            directional2Intensity: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-directional2-intensity') as HTMLInputElement)?.value) ?? null
+                : null,
+            shadowsEnabled: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
+                ? (document.getElementById('meta-viewer-shadows-enabled') as HTMLInputElement)?.checked ?? null
+                : null,
+            shadowOpacity: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-shadow-opacity') as HTMLInputElement)?.value) ?? null
+                : null,
+            // Tone Mapping (only when enabled)
+            toneMappingMethod: (document.getElementById('meta-viewer-tone-mapping-enabled') as HTMLInputElement)?.checked
+                ? (document.getElementById('meta-viewer-tone-mapping-method') as HTMLSelectElement)?.value || null
+                : null,
+            toneMappingExposure: (document.getElementById('meta-viewer-tone-mapping-enabled') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-tone-mapping-exposure') as HTMLInputElement)?.value) ?? null
+                : null,
+            // Environment IBL (only when enabled)
+            environmentPreset: (document.getElementById('meta-viewer-env-enabled') as HTMLInputElement)?.checked
+                ? (document.getElementById('meta-viewer-env-preset') as HTMLSelectElement)?.value || null
+                : null,
+            environmentAsBackground: (document.getElementById('meta-viewer-env-enabled') as HTMLInputElement)?.checked
+                ? (document.getElementById('meta-viewer-env-as-background') as HTMLInputElement)?.checked ?? null
+                : null,
         }
     };
 
@@ -1979,6 +2022,59 @@ export function prefillMetadataFromArchive(manifest: any): void {
         if (maxHeightControls) maxHeightControls.style.display = manifest.viewer_settings.max_camera_height != null ? '' : 'none';
         if (maxHeightValEl && manifest.viewer_settings.max_camera_height != null) {
             maxHeightValEl.value = String(manifest.viewer_settings.max_camera_height);
+        }
+
+        // Lighting defaults
+        const hasLighting = manifest.viewer_settings.ambient_intensity != null;
+        const lightingEnabledEl = document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement | null;
+        const lightingControlsEl = document.getElementById('meta-viewer-lighting-controls');
+        if (lightingEnabledEl) lightingEnabledEl.checked = hasLighting;
+        if (lightingControlsEl) lightingControlsEl.style.display = hasLighting ? '' : 'none';
+        if (hasLighting) {
+            const setSlider = (id: string, val: number | null | undefined) => {
+                const el = document.getElementById(id) as HTMLInputElement | null;
+                const valEl = document.getElementById(id + '-value');
+                if (el && val != null) { el.value = String(val); if (valEl) valEl.textContent = String(val); }
+            };
+            setSlider('meta-viewer-ambient-intensity', manifest.viewer_settings.ambient_intensity);
+            setSlider('meta-viewer-hemisphere-intensity', manifest.viewer_settings.hemisphere_intensity);
+            setSlider('meta-viewer-directional1-intensity', manifest.viewer_settings.directional1_intensity);
+            setSlider('meta-viewer-directional2-intensity', manifest.viewer_settings.directional2_intensity);
+            const shadowsEl = document.getElementById('meta-viewer-shadows-enabled') as HTMLInputElement | null;
+            if (shadowsEl && manifest.viewer_settings.shadows_enabled != null) shadowsEl.checked = manifest.viewer_settings.shadows_enabled;
+            const shadowOpacityGroup = document.getElementById('meta-viewer-shadow-opacity-group');
+            if (shadowOpacityGroup) shadowOpacityGroup.style.display = manifest.viewer_settings.shadows_enabled ? '' : 'none';
+            setSlider('meta-viewer-shadow-opacity', manifest.viewer_settings.shadow_opacity);
+        }
+
+        // Tone Mapping defaults
+        const hasToneMapping = manifest.viewer_settings.tone_mapping_method != null;
+        const tmEnabledEl = document.getElementById('meta-viewer-tone-mapping-enabled') as HTMLInputElement | null;
+        const tmControlsEl = document.getElementById('meta-viewer-tone-mapping-controls');
+        if (tmEnabledEl) tmEnabledEl.checked = hasToneMapping;
+        if (tmControlsEl) tmControlsEl.style.display = hasToneMapping ? '' : 'none';
+        if (hasToneMapping) {
+            const tmMethodEl = document.getElementById('meta-viewer-tone-mapping-method') as HTMLSelectElement | null;
+            if (tmMethodEl) tmMethodEl.value = manifest.viewer_settings.tone_mapping_method || 'None';
+            const tmExpEl = document.getElementById('meta-viewer-tone-mapping-exposure') as HTMLInputElement | null;
+            const tmExpValEl = document.getElementById('meta-viewer-tone-mapping-exposure-value');
+            if (tmExpEl && manifest.viewer_settings.tone_mapping_exposure != null) {
+                tmExpEl.value = String(manifest.viewer_settings.tone_mapping_exposure);
+                if (tmExpValEl) tmExpValEl.textContent = String(manifest.viewer_settings.tone_mapping_exposure);
+            }
+        }
+
+        // Environment defaults
+        const hasEnv = manifest.viewer_settings.environment_preset != null;
+        const envEnabledEl = document.getElementById('meta-viewer-env-enabled') as HTMLInputElement | null;
+        const envControlsEl = document.getElementById('meta-viewer-env-controls');
+        if (envEnabledEl) envEnabledEl.checked = hasEnv;
+        if (envControlsEl) envControlsEl.style.display = hasEnv ? '' : 'none';
+        if (hasEnv) {
+            const envPresetEl = document.getElementById('meta-viewer-env-preset') as HTMLSelectElement | null;
+            if (envPresetEl) envPresetEl.value = manifest.viewer_settings.environment_preset || '';
+            const envBgEl = document.getElementById('meta-viewer-env-as-background') as HTMLInputElement | null;
+            if (envBgEl && manifest.viewer_settings.environment_as_background != null) envBgEl.checked = manifest.viewer_settings.environment_as_background;
         }
     }
 

@@ -855,6 +855,62 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         deps.display.setDisplayMode(deps.state.displayMode);
     });
 
+    // ─── View Settings tab switching ─────────────────────────
+    document.querySelectorAll('.vs-tab-bar button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = (btn as HTMLElement).dataset.vsTab;
+            if (!tab) return;
+            document.querySelectorAll('.vs-tab-bar button').forEach(b => b.classList.toggle('active', b === btn));
+            document.querySelectorAll('.vs-tab-content').forEach(c => c.classList.toggle('active', c.id === `vs-tab-${tab}`));
+        });
+    });
+
+    // ─── View Settings: master enable checkboxes ──────────────
+    // Lighting on Open — toggle controls visibility
+    addListener('meta-viewer-lighting-enabled', 'change', (e: Event) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const controls = document.getElementById('meta-viewer-lighting-controls');
+        if (controls) controls.style.display = checked ? '' : 'none';
+    });
+
+    // Shadows checkbox — toggle shadow opacity slider visibility
+    addListener('meta-viewer-shadows-enabled', 'change', (e: Event) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const group = document.getElementById('meta-viewer-shadow-opacity-group');
+        if (group) group.style.display = checked ? '' : 'none';
+    });
+
+    // Tone Mapping on Open — toggle controls visibility
+    addListener('meta-viewer-tone-mapping-enabled', 'change', (e: Event) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const controls = document.getElementById('meta-viewer-tone-mapping-controls');
+        if (controls) controls.style.display = checked ? '' : 'none';
+    });
+
+    // Environment on Open — toggle controls visibility
+    addListener('meta-viewer-env-enabled', 'change', (e: Event) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const controls = document.getElementById('meta-viewer-env-controls');
+        if (controls) controls.style.display = checked ? '' : 'none';
+    });
+
+    // ─── View Settings: Defaults tab slider value displays ───
+    const defaultSliders = [
+        'meta-viewer-ambient-intensity',
+        'meta-viewer-hemisphere-intensity',
+        'meta-viewer-directional1-intensity',
+        'meta-viewer-directional2-intensity',
+        'meta-viewer-shadow-opacity',
+        'meta-viewer-tone-mapping-exposure',
+    ];
+    for (const id of defaultSliders) {
+        addListener(id, 'input', (e: Event) => {
+            const val = parseFloat((e.target as HTMLInputElement).value);
+            const valueEl = document.getElementById(`${id}-value`);
+            if (valueEl) valueEl.textContent = val.toFixed(1);
+        });
+    }
+
     // ─── Setup collapsible sections ──────────────────────────
     setupCollapsibles();
 

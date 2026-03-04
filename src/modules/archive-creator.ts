@@ -114,10 +114,25 @@ export interface ViewerSettings {
     meshBackgroundColor?: string | null;
     splatBackgroundColor?: string | null;
     displayMode?: string;
+    defaultMatcap?: string;
     cameraPosition?: { x: number; y: number; z: number } | null;
     cameraTarget?: { x: number; y: number; z: number } | null;
     autoRotate?: boolean;
     annotationsVisible?: boolean;
+    lockOrbit?: boolean;
+    lockDistance?: number | null;
+    lockAboveGround?: boolean;
+    maxCameraHeight?: number | null;
+    ambientIntensity?: number | null;
+    hemisphereIntensity?: number | null;
+    directional1Intensity?: number | null;
+    directional2Intensity?: number | null;
+    shadowsEnabled?: boolean | null;
+    shadowOpacity?: number | null;
+    toneMappingMethod?: string | null;
+    toneMappingExposure?: number | null;
+    environmentPreset?: string | null;
+    environmentAsBackground?: boolean | null;
 }
 
 export interface MaterialStandard {
@@ -279,6 +294,17 @@ export interface Manifest {
         lock_distance: number | null;
         lock_above_ground: boolean;
         max_camera_height: number | null;
+        ambient_intensity: number | null;
+        hemisphere_intensity: number | null;
+        directional1_intensity: number | null;
+        directional2_intensity: number | null;
+        shadows_enabled: boolean | null;
+        shadow_opacity: number | null;
+        tone_mapping_method: string | null;
+        tone_mapping_exposure: number | null;
+        environment_preset: string | null;
+        environment_as_background: boolean | null;
+        [key: string]: any;
     };
     alignment?: {
         splat?: { position: number[]; rotation: number[]; scale: number | [number, number, number] } | null;
@@ -641,6 +667,16 @@ export class ArchiveCreator {
                 lock_distance: null,
                 lock_above_ground: false,
                 max_camera_height: null,
+                ambient_intensity: null,
+                hemisphere_intensity: null,
+                directional1_intensity: null,
+                directional2_intensity: null,
+                shadows_enabled: null,
+                shadow_opacity: null,
+                tone_mapping_method: null,
+                tone_mapping_exposure: null,
+                environment_preset: null,
+                environment_as_background: null,
             },
             alignment: null,
             preservation: {
@@ -1113,6 +1149,16 @@ export class ArchiveCreator {
         if (settings.lockDistance !== undefined) this.manifest.viewer_settings.lock_distance = settings.lockDistance;
         if (settings.lockAboveGround !== undefined) this.manifest.viewer_settings.lock_above_ground = settings.lockAboveGround;
         if (settings.maxCameraHeight !== undefined) this.manifest.viewer_settings.max_camera_height = settings.maxCameraHeight;
+        if (settings.ambientIntensity !== undefined) this.manifest.viewer_settings.ambient_intensity = settings.ambientIntensity;
+        if (settings.hemisphereIntensity !== undefined) this.manifest.viewer_settings.hemisphere_intensity = settings.hemisphereIntensity;
+        if (settings.directional1Intensity !== undefined) this.manifest.viewer_settings.directional1_intensity = settings.directional1Intensity;
+        if (settings.directional2Intensity !== undefined) this.manifest.viewer_settings.directional2_intensity = settings.directional2Intensity;
+        if (settings.shadowsEnabled !== undefined) this.manifest.viewer_settings.shadows_enabled = settings.shadowsEnabled;
+        if (settings.shadowOpacity !== undefined) this.manifest.viewer_settings.shadow_opacity = settings.shadowOpacity;
+        if (settings.toneMappingMethod !== undefined) this.manifest.viewer_settings.tone_mapping_method = settings.toneMappingMethod;
+        if (settings.toneMappingExposure !== undefined) this.manifest.viewer_settings.tone_mapping_exposure = settings.toneMappingExposure;
+        if (settings.environmentPreset !== undefined) this.manifest.viewer_settings.environment_preset = settings.environmentPreset;
+        if (settings.environmentAsBackground !== undefined) this.manifest.viewer_settings.environment_as_background = settings.environmentAsBackground;
     }
 
     setAlignment(data: {

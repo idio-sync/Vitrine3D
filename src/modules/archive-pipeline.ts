@@ -784,6 +784,39 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
         });
     }
 
+    // Apply saved lighting intensities
+    if (settings.ambient_intensity != null) {
+        const ambientLight = sceneRefs.scene?.children.find((c: any) => c.isAmbientLight);
+        if (ambientLight) (ambientLight as any).intensity = settings.ambient_intensity;
+    }
+    if (settings.hemisphere_intensity != null) {
+        const hemiLight = sceneRefs.scene?.children.find((c: any) => c.isHemisphereLight);
+        if (hemiLight) (hemiLight as any).intensity = settings.hemisphere_intensity;
+    }
+    if (settings.directional1_intensity != null || settings.directional2_intensity != null) {
+        const dirLights = sceneRefs.scene?.children.filter((c: any) => c.isDirectionalLight) || [];
+        if (dirLights[0] && settings.directional1_intensity != null) (dirLights[0] as any).intensity = settings.directional1_intensity;
+        if (dirLights[1] && settings.directional2_intensity != null) (dirLights[1] as any).intensity = settings.directional2_intensity;
+    }
+
+    // Apply saved tone mapping
+    if (settings.tone_mapping_method != null && sceneRefs.renderer) {
+        const toneMapTypes: Record<string, number> = {
+            'None': THREE.NoToneMapping,
+            'Linear': THREE.LinearToneMapping,
+            'Reinhard': THREE.ReinhardToneMapping,
+            'Cineon': THREE.CineonToneMapping,
+            'ACESFilmic': THREE.ACESFilmicToneMapping,
+            'AgX': THREE.AgXToneMapping,
+        };
+        sceneRefs.renderer.toneMapping = toneMapTypes[settings.tone_mapping_method] ?? THREE.NoToneMapping;
+    }
+    if (settings.tone_mapping_exposure != null && sceneRefs.renderer) {
+        sceneRefs.renderer.toneMappingExposure = settings.tone_mapping_exposure;
+    }
+
+    // NOTE: environment_preset IBL would require async HDR loading; skipped here.
+
     log.info('Applied viewer settings:', settings);
 }
 

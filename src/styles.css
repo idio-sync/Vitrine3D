@@ -3530,6 +3530,44 @@ input[type="range"]::-webkit-slider-thumb:hover {
     color: var(--text-primary);
 }
 
+/* View Settings tab bar */
+.vs-tab-bar {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    margin: 0 -10px;
+    padding: 0 10px;
+}
+
+.vs-tab-bar button {
+    flex: 1;
+    padding: 7px 0;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.vs-tab-bar button:hover {
+    color: var(--text-primary);
+}
+
+.vs-tab-bar button.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.vs-tab-content {
+    display: none;
+}
+
+.vs-tab-content.active {
+    display: block;
+}
+
 /* Edit tab content */
 .edit-tab-content {
     display: none;

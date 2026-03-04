@@ -1573,6 +1573,40 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 const markersContainer = document.getElementById('annotation-markers');
                 if (markersContainer) markersContainer.style.display = 'none';
             }
+
+            // Apply saved lighting intensities
+            if (manifest.viewer_settings.ambient_intensity != null) {
+                const ambientLight = scene?.children.find((c: any) => c.isAmbientLight);
+                if (ambientLight) (ambientLight as any).intensity = manifest.viewer_settings.ambient_intensity;
+            }
+            if (manifest.viewer_settings.hemisphere_intensity != null) {
+                const hemiLight = scene?.children.find((c: any) => c.isHemisphereLight);
+                if (hemiLight) (hemiLight as any).intensity = manifest.viewer_settings.hemisphere_intensity;
+            }
+            if (manifest.viewer_settings.directional1_intensity != null || manifest.viewer_settings.directional2_intensity != null) {
+                const dirLights = scene?.children.filter((c: any) => c.isDirectionalLight) || [];
+                if (dirLights[0] && manifest.viewer_settings.directional1_intensity != null) (dirLights[0] as any).intensity = manifest.viewer_settings.directional1_intensity;
+                if (dirLights[1] && manifest.viewer_settings.directional2_intensity != null) (dirLights[1] as any).intensity = manifest.viewer_settings.directional2_intensity;
+            }
+
+            // Apply saved tone mapping
+            if (manifest.viewer_settings.tone_mapping_method != null && renderer) {
+                const toneMapTypes: Record<string, number> = {
+                    'None': THREE.NoToneMapping,
+                    'Linear': THREE.LinearToneMapping,
+                    'Reinhard': THREE.ReinhardToneMapping,
+                    'Cineon': THREE.CineonToneMapping,
+                    'ACESFilmic': THREE.ACESFilmicToneMapping,
+                    'AgX': THREE.AgXToneMapping,
+                };
+                renderer.toneMapping = toneMapTypes[manifest.viewer_settings.tone_mapping_method] ?? THREE.NoToneMapping;
+            }
+            if (manifest.viewer_settings.tone_mapping_exposure != null && renderer) {
+                renderer.toneMappingExposure = manifest.viewer_settings.tone_mapping_exposure;
+            }
+
+            // NOTE: environment_preset IBL would require async HDR loading; skipped here.
+
             log.info('Applied viewer settings:', manifest.viewer_settings);
         }
 
