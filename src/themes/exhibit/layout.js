@@ -925,14 +925,15 @@ function initLoadingScreen(container) {
     container.innerHTML =
         '<div class="exhibit-loading-center">' +
         '    <div class="exhibit-loading-eyebrow">Loading</div>' +
-        '    <div class="loading-spinner"></div>' +
+        '    <div class="exhibit-loading-spinner"></div>' +
+        '    <div class="exhibit-loading-rule"></div>' +
         '    <p id="loading-text">Preparing exhibit\u2026</p>' +
         '</div>' +
-        '<div style="position:absolute;bottom:24px;left:0;right:0;text-align:center;">' +
+        '<div class="exhibit-loading-bottom">' +
         '    <div id="loading-progress-container" class="hidden">' +
         '        <div id="loading-progress-bar"></div>' +
         '    </div>' +
-        '    <p id="loading-progress-text" class="hidden" style="font-size:0.72rem;color:rgba(190,200,215,0.7);">0%</p>' +
+        '    <p id="loading-progress-text" class="hidden">0%</p>' +
         '</div>';
 }
 
