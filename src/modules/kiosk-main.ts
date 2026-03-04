@@ -2507,13 +2507,19 @@ function setupViewerKeyboardShortcuts(): void {
 
 function applyBackgroundForMode(mode: string): void {
     if (!scene) return;
+    // If no overrides configured at all, don't touch the background
+    if (!state.meshBackgroundColor && !state.splatBackgroundColor) return;
+
     let color: string | null = null;
     if (mode === 'model') color = state.meshBackgroundColor;
     else if (mode === 'splat' || mode === 'both') color = state.splatBackgroundColor;
+
     if (color) {
         scene.background = new THREE.Color(color);
     } else {
-        scene.background = new THREE.Color(COLORS.SCENE_BACKGROUND);
+        // Restore theme/default background
+        scene.background = sceneManager?.savedBackgroundColor?.clone()
+            || new THREE.Color(COLORS.SCENE_BACKGROUND);
     }
 }
 

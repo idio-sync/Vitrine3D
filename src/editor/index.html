@@ -1755,16 +1755,28 @@
                             </div>
                             <span class="field-hint">When enabled, back faces are culled (like Sketchfab default). Disable for thin geometry like leaves, fabric, or paper.</span>
 
+                            <div class="metadata-field" style="margin-top: 12px;">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="meta-viewer-mesh-bg-override">
+                                    <label for="meta-viewer-mesh-bg-override">Override Mesh Background Color</label>
+                                </div>
+                                <span class="field-hint">Background color used when viewing the mesh asset.</span>
+                                <div class="color-input-row" id="meta-viewer-mesh-bg-color-row" style="margin-top: 6px; display: none;">
+                                    <input type="color" id="meta-viewer-mesh-bg-color" value="#1a1a2e">
+                                    <span class="color-hex-label" id="meta-viewer-mesh-bg-color-hex">#1a1a2e</span>
+                                </div>
+                            </div>
+
                             <div class="subsection-header" style="margin-top: 20px;">Scene</div>
                             <div class="metadata-field">
                                 <div class="checkbox-group">
-                                    <input type="checkbox" id="meta-viewer-bg-override">
-                                    <label for="meta-viewer-bg-override">Override Background Color</label>
+                                    <input type="checkbox" id="meta-viewer-splat-bg-override">
+                                    <label for="meta-viewer-splat-bg-override">Override Splat Background Color</label>
                                 </div>
-                                <span class="field-hint">When unchecked, the viewer theme controls the background color.</span>
-                                <div class="color-input-row" id="meta-viewer-bg-color-row" style="margin-top: 6px; display: none;">
-                                    <input type="color" id="meta-viewer-bg-color" value="#1a1a2e">
-                                    <span class="color-hex-label" id="meta-viewer-bg-color-hex">#1a1a2e</span>
+                                <span class="field-hint">Background color used when viewing the splat or combined (mesh + splat) view.</span>
+                                <div class="color-input-row" id="meta-viewer-splat-bg-color-row" style="margin-top: 6px; display: none;">
+                                    <input type="color" id="meta-viewer-splat-bg-color" value="#1a1a2e">
+                                    <span class="color-hex-label" id="meta-viewer-splat-bg-color-hex">#1a1a2e</span>
                                 </div>
                             </div>
 
