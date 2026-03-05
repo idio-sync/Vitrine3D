@@ -171,6 +171,13 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     const metadata = metadataFns.collectMetadata();
     log.info(' Metadata collected:', metadata);
 
+    // Inject current measurement calibration into viewer settings
+    const ms = (deps as any).measurementSystem || deps.sceneRefs?.measurementSystem;
+    if (ms && ms.isCalibrated && ms.isCalibrated()) {
+        metadata.viewerSettings.measurementScale = ms.getScale();
+        metadata.viewerSettings.measurementUnit = ms.getUnit();
+    }
+
     // Get export options
     const formatRadio = document.querySelector('input[name="export-format"]:checked') as HTMLInputElement | null;
     const format = formatRadio?.value || 'a3d';
@@ -781,6 +788,14 @@ export async function exportMetadataManifest(deps: ExportDeps): Promise<void> {
     }
 
     const metadata = metadataFns.collectMetadata();
+
+    // Inject current measurement calibration into viewer settings
+    const ms = (deps as any).measurementSystem || deps.sceneRefs?.measurementSystem;
+    if (ms && ms.isCalibrated && ms.isCalibrated()) {
+        metadata.viewerSettings.measurementScale = ms.getScale();
+        metadata.viewerSettings.measurementUnit = ms.getUnit();
+    }
+
     tempCreator.applyMetadata(metadata);
     tempCreator.setMetadataProfile(getActiveProfile());
 

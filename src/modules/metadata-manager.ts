@@ -214,6 +214,8 @@ export interface ViewerSettings {
     toneMappingExposure: number | null;
     environmentPreset: string | null;
     environmentAsBackground: boolean | null;
+    measurementScale: number | null;
+    measurementUnit: string | null;
 }
 
 export interface VersionHistoryEntry {
@@ -1475,6 +1477,8 @@ export function collectMetadata(): CollectedMetadata {
             environmentAsBackground: (document.getElementById('meta-viewer-env-enabled') as HTMLInputElement)?.checked
                 ? (document.getElementById('meta-viewer-env-as-background') as HTMLInputElement)?.checked ?? null
                 : null,
+            measurementScale: null,  // Populated by export-controller from measurementSystem
+            measurementUnit: null,
         }
     };
 

@@ -1314,9 +1314,38 @@
                  ======================================================== -->
             <div class="props-pane" id="pane-measure">
 
-                <div class="prop-section open" id="measure-scale-panel">
+                <div class="prop-section open" id="measure-calibrate-section">
                     <div class="prop-section-hd">
-                        <span class="prop-section-title">Scale</span>
+                        <span class="prop-section-title">Calibrate</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <p style="font-size:11px; color:var(--text-muted); margin-bottom:8px; line-height:1.5;">
+                            Click two points on a known dimension to set the real-world scale.
+                        </p>
+                        <button class="prop-btn" id="btn-calibrate-scale">Calibrate Scale</button>
+                        <div id="calibrate-inline-form" style="display:none;" class="measure-calibrate-inline">
+                            <label>Raw scene distance: <strong id="calibrate-raw-distance">&mdash;</strong></label>
+                            <div class="calibrate-row">
+                                <label>Real distance:</label>
+                                <input class="prop-input" type="number" id="calibrate-real-distance" min="0.0001" step="any" style="width:70px; text-align:center;">
+                                <select class="prop-select" id="calibrate-unit" style="width:60px;">
+                                    <option value="ft">ft</option>
+                                    <option value="in">in</option>
+                                    <option value="m">m</option>
+                                    <option value="cm">cm</option>
+                                    <option value="mm">mm</option>
+                                </select>
+                                <button class="prop-btn" id="btn-calibrate-apply">Apply</button>
+                            </div>
+                        </div>
+                        <div id="measure-calibrate-status" class="measure-calibrate-status">Not calibrated</div>
+                    </div>
+                </div>
+
+                <div class="prop-section" id="measure-scale-panel">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Advanced: Manual Scale</span>
                         <span class="prop-section-chevron">&#9654;</span>
                     </div>
                     <div class="prop-section-body">
@@ -1324,11 +1353,11 @@
                             <span style="font-size:11px; color:var(--text-secondary); white-space:nowrap;">1 unit =</span>
                             <input class="prop-input" type="number" id="measure-scale-value" value="1" min="0.0001" step="any" style="width:60px; text-align:center;">
                             <select class="prop-select" id="measure-scale-unit" style="width:60px;">
+                                <option value="ft">ft</option>
+                                <option value="in">in</option>
                                 <option value="m">m</option>
                                 <option value="cm">cm</option>
                                 <option value="mm">mm</option>
-                                <option value="in">in</option>
-                                <option value="ft">ft</option>
                             </select>
                         </div>
                     </div>

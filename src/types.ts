@@ -220,6 +220,7 @@ export interface ArchivePipelineDeps {
     sourceFiles: {
         updateSourceFilesUI: () => void;
     };
+    measurementSystem?: any;
 }
 
 export interface EventWiringDeps {

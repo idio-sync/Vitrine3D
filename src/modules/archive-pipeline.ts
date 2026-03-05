@@ -534,6 +534,27 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
         // Prefill metadata panel from loaded archive
         deps.metadata.prefillMetadataFromArchive(manifest);
 
+        // Apply saved measurement calibration from archive
+        if (deps.measurementSystem &&
+            manifest?.viewer_settings?.measurement_scale != null &&
+            manifest?.viewer_settings?.measurement_unit) {
+            deps.measurementSystem.setBaseScale(
+                manifest.viewer_settings.measurement_scale,
+                manifest.viewer_settings.measurement_unit
+            );
+            // Update the manual scale inputs to reflect saved values
+            const scaleInput = document.getElementById('measure-scale-value') as HTMLInputElement | null;
+            const unitSelect = document.getElementById('measure-scale-unit') as HTMLSelectElement | null;
+            if (scaleInput) scaleInput.value = String(manifest.viewer_settings.measurement_scale);
+            if (unitSelect) unitSelect.value = manifest.viewer_settings.measurement_unit;
+            // Update calibration status display
+            const statusEl = document.getElementById('measure-calibrate-status');
+            if (statusEl) {
+                statusEl.textContent = `Calibrated: 1 unit = ${parseFloat(manifest.viewer_settings.measurement_scale.toFixed(4))} ${manifest.viewer_settings.measurement_unit}`;
+                statusEl.classList.add('calibrated');
+            }
+        }
+
         const contentInfo = archiveLoader.getContentInfo();
 
         // Populate proxy filenames in the file menu (even when loading at HD quality)

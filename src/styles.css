@@ -1635,6 +1635,86 @@ input[type="range"]::-webkit-slider-thumb:hover {
     white-space: nowrap;
 }
 
+/* Unit toggle button on measurement labels */
+.measure-unit-btn {
+    background: none;
+    border: 1px solid rgba(255, 107, 53, 0.4);
+    border-radius: 3px;
+    color: #FF6B35;
+    font-family: monospace;
+    font-size: 11px;
+    padding: 0 4px;
+    cursor: pointer;
+    margin-left: 2px;
+    line-height: 1.4;
+    transition: background 0.15s;
+}
+.measure-unit-btn:hover {
+    background: rgba(255, 107, 53, 0.15);
+}
+
+/* Unit dropdown popup */
+.measure-unit-dropdown {
+    position: fixed;
+    z-index: 10001;
+    background: var(--panel-bg, #1e1e2e);
+    border: 1px solid var(--border-color, #333);
+    border-radius: 6px;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.measure-unit-option {
+    background: none;
+    border: none;
+    color: var(--text-primary, #e0e0e0);
+    font-family: monospace;
+    font-size: 12px;
+    padding: 4px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    text-align: left;
+}
+.measure-unit-option:hover {
+    background: rgba(255, 107, 53, 0.15);
+}
+.measure-unit-option.active {
+    color: #FF6B35;
+    font-weight: bold;
+}
+
+/* Calibration inline UI in editor measure pane */
+.measure-calibrate-status {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    line-height: 1.5;
+}
+.measure-calibrate-status.calibrated {
+    color: #4CAF50;
+}
+.measure-calibrate-inline {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(255, 107, 53, 0.05);
+    border: 1px solid rgba(255, 107, 53, 0.2);
+    border-radius: 6px;
+}
+.measure-calibrate-inline label {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.measure-calibrate-inline .calibrate-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 #measure-scale-value {
     width: 60px;
     background: var(--bg-elevated);

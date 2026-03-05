@@ -133,6 +133,8 @@ export interface ViewerSettings {
     toneMappingExposure?: number | null;
     environmentPreset?: string | null;
     environmentAsBackground?: boolean | null;
+    measurementScale?: number | null;
+    measurementUnit?: string | null;
 }
 
 export interface MaterialStandard {
@@ -304,6 +306,8 @@ export interface Manifest {
         tone_mapping_exposure: number | null;
         environment_preset: string | null;
         environment_as_background: boolean | null;
+        measurement_scale: number | null;
+        measurement_unit: string | null;
         [key: string]: any;
     };
     alignment?: {
@@ -677,6 +681,8 @@ export class ArchiveCreator {
                 tone_mapping_exposure: null,
                 environment_preset: null,
                 environment_as_background: null,
+                measurement_scale: null,
+                measurement_unit: null,
             },
             alignment: null,
             preservation: {
@@ -1159,6 +1165,8 @@ export class ArchiveCreator {
         if (settings.toneMappingExposure !== undefined) this.manifest.viewer_settings.tone_mapping_exposure = settings.toneMappingExposure;
         if (settings.environmentPreset !== undefined) this.manifest.viewer_settings.environment_preset = settings.environmentPreset;
         if (settings.environmentAsBackground !== undefined) this.manifest.viewer_settings.environment_as_background = settings.environmentAsBackground;
+        if (settings.measurementScale !== undefined) this.manifest.viewer_settings.measurement_scale = settings.measurementScale;
+        if (settings.measurementUnit !== undefined) this.manifest.viewer_settings.measurement_unit = settings.measurementUnit;
     }
 
     setAlignment(data: {

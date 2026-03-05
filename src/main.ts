@@ -607,7 +607,8 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
         },
         sourceFiles: {
             updateSourceFilesUI
-        }
+        },
+        measurementSystem
     };
 }
 
@@ -1620,6 +1621,72 @@ function _wireMeasurementControls() {
     // Clear all measurements
     addListener('measure-clear-all', 'click', () => {
         if (measurementSystem) measurementSystem.clearAll();
+    });
+
+    // --- Calibration flow ---
+    let _calibrateRawDistance = 0;
+    let _calibrateCheckInterval: ReturnType<typeof setInterval> | null = null;
+    const _calibrateBtn = document.getElementById('btn-calibrate-scale');
+
+    addListener('btn-calibrate-scale', 'click', () => {
+        if (!measurementSystem) return;
+        // Enter measure mode to capture a reference measurement
+        measurementSystem.setMeasureMode(true);
+        if (_calibrateBtn) _calibrateBtn.textContent = 'Click two points...';
+        const measureBtn = document.getElementById('btn-measure');
+        if (measureBtn) measureBtn.classList.add('active');
+
+        // Watch for a new measurement to appear
+        const startCount = measurementSystem.getMeasurements().length;
+        _calibrateCheckInterval = setInterval(() => {
+            if (!measurementSystem) return;
+            const measurements = measurementSystem.getMeasurements();
+            if (measurements.length > startCount) {
+                const last = measurements[measurements.length - 1];
+                _calibrateRawDistance = last.rawDistance;
+                if (_calibrateCheckInterval) clearInterval(_calibrateCheckInterval);
+                _calibrateCheckInterval = null;
+
+                // Show inline form with raw distance
+                const rawEl = document.getElementById('calibrate-raw-distance');
+                if (rawEl) rawEl.textContent = parseFloat(_calibrateRawDistance.toFixed(4)) + ' units';
+                const form = document.getElementById('calibrate-inline-form');
+                if (form) form.style.display = '';
+                if (_calibrateBtn) _calibrateBtn.textContent = 'Calibrate Scale';
+
+                measurementSystem.setMeasureMode(false);
+                if (measureBtn) measureBtn.classList.remove('active');
+
+                // Remove the reference measurement — it was just for calibration
+                measurementSystem.removeMeasurement(last.id);
+            }
+        }, 100);
+    });
+
+    addListener('btn-calibrate-apply', 'click', () => {
+        if (!measurementSystem || _calibrateRawDistance <= 0) return;
+        const realDist = parseFloat((document.getElementById('calibrate-real-distance') as HTMLInputElement)?.value);
+        const unit = (document.getElementById('calibrate-unit') as HTMLSelectElement)?.value || 'm';
+        if (isNaN(realDist) || realDist <= 0) return;
+
+        measurementSystem.calibrate(_calibrateRawDistance, realDist, unit);
+
+        // Update calibration status
+        const status = document.getElementById('measure-calibrate-status');
+        if (status) {
+            status.textContent = `Calibrated: 1 unit = ${parseFloat(measurementSystem.getScale().toFixed(4))} ${measurementSystem.getUnit()}`;
+            status.classList.add('calibrated');
+        }
+
+        // Sync manual scale inputs
+        const scaleInput = document.getElementById('measure-scale-value') as HTMLInputElement | null;
+        const unitSelect = document.getElementById('measure-scale-unit') as HTMLSelectElement | null;
+        if (scaleInput) scaleInput.value = String(parseFloat(measurementSystem.getScale().toFixed(4)));
+        if (unitSelect) unitSelect.value = measurementSystem.getUnit();
+
+        // Hide inline form
+        const form = document.getElementById('calibrate-inline-form');
+        if (form) form.style.display = 'none';
     });
 }
 

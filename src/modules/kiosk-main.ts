@@ -1607,6 +1607,22 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
 
             // NOTE: environment_preset IBL would require async HDR loading; skipped here.
 
+            // Apply saved measurement calibration
+            if (manifest.viewer_settings.measurement_scale != null &&
+                manifest.viewer_settings.measurement_unit &&
+                measurementSystem) {
+                measurementSystem.setBaseScale(
+                    manifest.viewer_settings.measurement_scale,
+                    manifest.viewer_settings.measurement_unit
+                );
+                // Hide the manual scale panel — calibration is embedded in the archive
+                const scalePanel = document.getElementById('measure-scale-panel');
+                if (scalePanel) scalePanel.style.display = 'none';
+                log.info('Applied measurement calibration:',
+                    manifest.viewer_settings.measurement_scale,
+                    manifest.viewer_settings.measurement_unit);
+            }
+
             log.info('Applied viewer settings:', manifest.viewer_settings);
         }
 
