@@ -113,39 +113,64 @@ export async function decimateGeometry(
     const flags: string[] = [];
     if (options.lockBorder) flags.push('LockBorder');
 
-    // Use position-only simplification for SD proxies. Attribute-aware
-    // simplification (simplifyWithAttributes) is too constrained for dense
-    // scan meshes — per-vertex normals and UV seams prevent meaningful
-    // edge collapses, resulting in near-zero reduction. Plain simplify
-    // produces much better results; normals are recomputed after export.
+    // Scan/photogrammetry GLBs typically have split vertices — adjacent
+    // triangles don't share vertex indices because normals and UVs differ
+    // per face. meshoptimizer can't find shared edges without position
+    // deduplication. Use generatePositionRemap to build a topology where
+    // coincident positions share an index, run simplify on that, then map
+    // the result back to original vertex indices.
+    const posRemap = MeshoptSimplifier.generatePositionRemap(positions, stride);
+    const maxRemapIdx = posRemap.reduce((a: number, b: number) => Math.max(a, b), 0);
+    const dedupPositions = new Float32Array((maxRemapIdx + 1) * stride);
+    for (let i = 0; i < posRemap.length; i++) {
+        const ri = posRemap[i];
+        for (let c = 0; c < stride; c++) {
+            dedupPositions[ri * stride + c] = positions[i * stride + c];
+        }
+    }
+    const dedupIndices = new Uint32Array(indices.length);
+    for (let i = 0; i < indices.length; i++) dedupIndices[i] = posRemap[indices[i]];
+
+    log.info(`Position dedup: ${vertexCount} → ${maxRemapIdx + 1} unique positions`);
+
     const result = MeshoptSimplifier.simplify(
-        indices, positions, stride,
+        dedupIndices, dedupPositions, stride,
         targetIndexCount,
         options.errorThreshold,
         flags,
     );
 
-    const [newIndices, error] = result;
-    const newFaceCount = newIndices.length / 3;
+    const [simplifiedDedupIndices, error] = result;
+    const newFaceCount = simplifiedDedupIndices.length / 3;
     log.info(`Decimation: ${originalFaceCount} → ${newFaceCount} faces (error: ${error.toFixed(6)})`);
 
     onProgress?.('Rebuilding geometry', 80);
 
+    // Map simplified dedup indices back to original vertex indices.
+    // For each dedup index, find an original vertex that maps to it.
+    // This preserves the original vertex attributes (normals, UVs, etc.).
+    const dedupToOriginal = new Uint32Array(maxRemapIdx + 1);
+    for (let i = 0; i < posRemap.length; i++) {
+        dedupToOriginal[posRemap[i]] = i;
+    }
+    const newIndices = new Uint32Array(simplifiedDedupIndices.length);
+    for (let i = 0; i < simplifiedDedupIndices.length; i++) {
+        newIndices[i] = dedupToOriginal[simplifiedDedupIndices[i]];
+    }
+
     // Compact: build a new geometry with only the referenced vertices.
-    // Without this, the cloned geometry retains all original vertices,
-    // making the exported GLB larger than the original.
     const usedSet = new Set<number>();
     for (let i = 0; i < newIndices.length; i++) usedSet.add(newIndices[i]);
     const usedVerts = Array.from(usedSet).sort((a, b) => a - b);
-    const remap = new Map<number, number>();
-    for (let i = 0; i < usedVerts.length; i++) remap.set(usedVerts[i], i);
+    const compactRemap = new Map<number, number>();
+    for (let i = 0; i < usedVerts.length; i++) compactRemap.set(usedVerts[i], i);
 
     const newGeo = new THREE.BufferGeometry();
 
-    // Remap indices
-    const remappedIndices = new Uint32Array(newIndices.length);
-    for (let i = 0; i < newIndices.length; i++) remappedIndices[i] = remap.get(newIndices[i])!;
-    newGeo.setIndex(new THREE.BufferAttribute(remappedIndices, 1));
+    // Remap indices to compacted vertex space
+    const compactIndices = new Uint32Array(newIndices.length);
+    for (let i = 0; i < newIndices.length; i++) compactIndices[i] = compactRemap.get(newIndices[i])!;
+    newGeo.setIndex(new THREE.BufferAttribute(compactIndices, 1));
 
     // Copy and compact each attribute
     for (const name of Object.keys(geo.attributes)) {
@@ -178,11 +203,6 @@ export async function decimateGeometry(
                 return new THREE.BufferAttribute(dst, itemSize, srcAttr.normalized);
             });
         }
-    }
-
-    // Copy groups
-    if (geo.groups.length > 0) {
-        for (const group of geo.groups) newGeo.addGroup(group.start, group.count, group.materialIndex);
     }
 
     log.info(`Compacted: ${vertexCount} → ${usedVerts.length} vertices`);
