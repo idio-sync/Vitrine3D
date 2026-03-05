@@ -123,7 +123,9 @@ function renderError(container: HTMLElement, message: string): void {
  */
 export async function initCollectionPage(): Promise<boolean> {
     const config = (window as unknown as { APP_CONFIG?: { collectionSlug?: string } }).APP_CONFIG;
-    const slug = config?.collectionSlug;
+    // Check APP_CONFIG (server injection) first, then fall back to URL path detection
+    const pathMatch = window.location.pathname.match(/^\/collection\/([a-z0-9][a-z0-9-]{0,79})$/);
+    const slug = config?.collectionSlug || (pathMatch ? pathMatch[1] : null);
     if (!slug) return false;
 
     log.info('Loading collection:', slug);
