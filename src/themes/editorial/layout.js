@@ -721,12 +721,21 @@ export function setup(manifest, deps) {
 
     const viewerContainer = document.getElementById('viewer-container') || document.body;
 
-    // Set scene background from theme metadata, or fall back to CSS variable
-    const themeMeta = (window.APP_CONFIG || {})._themeMeta;
-    const sceneBg = (themeMeta && themeMeta.sceneBg) ||
-        getComputedStyle(document.body).getPropertyValue('--kiosk-scene-bg').trim() ||
-        '#1a1a2e';
-    sceneManager.setBackgroundColor(sceneBg);
+    // Set scene background from theme metadata, or fall back to CSS variable.
+    // Skip if the archive manifest declares its own background override — the
+    // kiosk loader applies that override after setup() returns, and we must not
+    // clobber savedBackgroundColor with the theme default.
+    const hasArchiveBgOverride = manifest && manifest.viewer_settings &&
+        (manifest.viewer_settings.splat_background_color ||
+         manifest.viewer_settings.mesh_background_color ||
+         manifest.viewer_settings.background_color);
+    if (!hasArchiveBgOverride) {
+        const themeMeta = (window.APP_CONFIG || {})._themeMeta;
+        const sceneBg = (themeMeta && themeMeta.sceneBg) ||
+            getComputedStyle(document.body).getPropertyValue('--kiosk-scene-bg').trim() ||
+            '#1a1a2e';
+        sceneManager.setBackgroundColor(sceneBg);
+    }
 
     // --- 1. Gold Spine ---
     const spine = document.createElement('div');

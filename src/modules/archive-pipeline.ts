@@ -797,8 +797,11 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
     let activeBg: string | null = null;
     if (deps.state.displayMode === 'model') activeBg = meshBg;
     else if (deps.state.displayMode === 'splat' || deps.state.displayMode === 'both') activeBg = splatBg;
-    if (activeBg && sceneRefs.scene) {
-        sceneRefs.scene.background = new THREE.Color(activeBg);
+    if (activeBg) {
+        // Use setBackgroundColor to also update savedBackgroundColor — prevents
+        // theme/default color from being restored by clearEnvironment or
+        // setEnvironmentAsBackground toggle.
+        deps.sceneManager?.setBackgroundColor(activeBg);
     }
 
     // Sync sidebar mesh background UI

@@ -591,12 +591,20 @@ function setup(manifest, deps) {
 
     var viewerContainer = document.getElementById('viewer-container') || document.body;
 
-    // Set scene background from theme metadata
-    var themeMeta = (window.APP_CONFIG || {})._themeMeta;
-    var sceneBg = (themeMeta && themeMeta.sceneBg) ||
-        getComputedStyle(document.body).getPropertyValue('--kiosk-scene-bg').trim() ||
-        '#1a1a2e';
-    sceneManager.setBackgroundColor(sceneBg);
+    // Set scene background from theme metadata.
+    // Skip if the archive manifest declares its own background override — the
+    // kiosk loader applies that override after setup() returns.
+    var hasArchiveBgOverride = manifest && manifest.viewer_settings &&
+        (manifest.viewer_settings.splat_background_color ||
+         manifest.viewer_settings.mesh_background_color ||
+         manifest.viewer_settings.background_color);
+    if (!hasArchiveBgOverride) {
+        var themeMeta = (window.APP_CONFIG || {})._themeMeta;
+        var sceneBg = (themeMeta && themeMeta.sceneBg) ||
+            getComputedStyle(document.body).getPropertyValue('--kiosk-scene-bg').trim() ||
+            '#1a1a2e';
+        sceneManager.setBackgroundColor(sceneBg);
+    }
 
     // --- 1. Title Card ---
     var titleCard = document.createElement('div');
