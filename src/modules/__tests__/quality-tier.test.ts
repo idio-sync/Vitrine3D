@@ -306,8 +306,8 @@ describe('detectDeviceTier', () => {
             get: () => 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)'
         });
 
-        // Should lose mobile point (score 4/5 without GL, still HD)
-        expect(detectDeviceTier()).toBe('hd');
+        // iOS/iPadOS forced to SD to prevent Safari tab crashes from GPU memory exhaustion
+        expect(detectDeviceTier()).toBe('sd');
     });
 
     it('detects Android as mobile device', () => {

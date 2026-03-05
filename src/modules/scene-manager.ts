@@ -243,7 +243,13 @@ export class SceneManager {
         } else {
             newRenderer = new WebGLRenderer({ canvas, antialias: this._antialias });
         }
-        newRenderer.setPixelRatio(Math.min(window.devicePixelRatio, RENDERER.MAX_PIXEL_RATIO));
+        // iOS/iPadOS: cap pixel ratio lower to reduce GPU memory pressure.
+        // Safari kills tabs that exceed ~1.5 GB; 2x-3x Retina framebuffers
+        // combined with splat rendering and post-processing easily exceed that.
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const maxRatio = isIOS ? Math.min(RENDERER.MAX_PIXEL_RATIO, 1.5) : RENDERER.MAX_PIXEL_RATIO;
+        newRenderer.setPixelRatio(Math.min(window.devicePixelRatio, maxRatio));
         newRenderer.outputColorSpace = THREE.SRGBColorSpace;
         newRenderer.toneMapping = THREE.NoToneMapping;
         newRenderer.toneMappingExposure = 1.0;

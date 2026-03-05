@@ -18,15 +18,35 @@ declare global {
 }
 
 /**
+ * Detect if the device is running iOS or iPadOS.
+ * Modern iPads send a desktop Safari UA, so we also check for touch + standalone support.
+ */
+function isIOSDevice(): boolean {
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) return true;
+    // iPadOS 13+ sends desktop UA — detect via platform + touch support
+    return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+}
+
+/**
  * Detect device capability tier based on hardware signals.
  * Returns QUALITY_TIER.SD for low-end devices, QUALITY_TIER.HD for capable ones.
  *
  * Scoring: 5 heuristics, each worth 1 point. Score >= 3 = HD.
+ * iOS/iPadOS devices are forced to SD — Safari has strict process memory limits
+ * (~1.5 GB) and will kill the tab when GPU memory is exhausted.
  *
  * @param gl - GL context for GPU queries
  * @returns QUALITY_TIER.SD or QUALITY_TIER.HD
  */
 export function detectDeviceTier(gl?: WebGLRenderingContext | WebGL2RenderingContext): string {
+    // iOS/iPadOS: force SD regardless of hardware capability.
+    // Even M-series iPads hit Safari's process memory ceiling with HD splat budgets
+    // and full-res render targets at 2x-3x pixel ratio.
+    if (isIOSDevice()) {
+        log.info(`Device tier detected: ${QUALITY_TIER.SD} (iOS/iPadOS — forced SD)`);
+        return QUALITY_TIER.SD;
+    }
+
     let score = 0;
 
     // 1. Device memory (Chrome/Edge only; absent = assume capable)
