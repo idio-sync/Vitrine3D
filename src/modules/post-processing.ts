@@ -9,6 +9,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Logger } from './logger.js';
 import { POST_PROCESSING } from './constants.js';
 import type { PostProcessingEffectConfig } from '../types.js';
@@ -250,6 +251,10 @@ export function enable(
     uberPass.uniforms['uResolution'].value             = new Vector2(w, h);
     applyUberUniforms();
     composer.addPass(uberPass);
+
+    // OutputPass applies tone mapping + linear→sRGB conversion as the final step.
+    // Without this, linear values render directly to screen and appear much darker.
+    composer.addPass(new OutputPass());
 
     log.info(`Post-processing enabled (${w}×${h})`);
 }
