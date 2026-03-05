@@ -755,8 +755,11 @@ function setupFilePicker(): void {
     const dropZone = document.getElementById('kiosk-drop-zone');
 
     if (btn && input) {
-        // In Tauri, use native OS file dialog instead of browser file input
-        if (window.__TAURI__) {
+        // In Tauri desktop, use native OS file dialog instead of browser file input.
+        // On Android, the Tauri dialog plugin can't complete file selection, so
+        // fall through to the browser <input type="file"> which works in WebViews.
+        const isAndroid = /android/i.test(navigator.userAgent);
+        if (window.__TAURI__ && !isAndroid) {
             btn.addEventListener('click', async () => {
                 try {
                     const { openFileDialogPathOnly } = await import('./tauri-bridge.js');
