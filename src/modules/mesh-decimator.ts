@@ -207,6 +207,11 @@ export async function decimateGeometry(
 
     log.info(`Compacted: ${vertexCount} → ${usedVerts.length} vertices`);
 
+    // Recompute normals from the simplified topology. The original per-vertex
+    // normals come from different faces and are inconsistent after decimation,
+    // causing visible cracks/seams in the lighting.
+    newGeo.computeVertexNormals();
+
     onProgress?.('Complete', 100);
     return newGeo;
 }
