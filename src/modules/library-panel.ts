@@ -8,6 +8,7 @@
 
 import { Logger, notify } from './utilities.js';
 import { activateTool } from './ui-controller.js';
+import { initCollectionManager, getActiveCollectionArchives, updateChipsForArchive, refreshCollections as refreshCollectionList } from './collection-manager.js';
 
 const log = Logger.getLogger('library-panel');
 
@@ -49,6 +50,7 @@ let initialized = false;
 let authCredentials: string | null = null;
 let hasFetched = false;
 let searchQuery = '';
+let activeCollectionHashes: string[] | null = null;
 let uploadQueue: File[] = [];
 let uploading = false;
 let csrfToken: string | null = null;
@@ -342,11 +344,24 @@ function render(): void {
         return;
     }
 
+    // Apply collection filter if active
+    let collectionFiltered = filtered;
+    if (activeCollectionHashes !== null) {
+        const hashSet = new Set(activeCollectionHashes);
+        collectionFiltered = filtered.filter(a => hashSet.has(a.hash));
+    }
+
+    if (collectionFiltered.length === 0) {
+        if (emptyState) emptyState.style.display = '';
+        if (countEl) countEl.textContent = 'No matches';
+        return;
+    }
+
     if (emptyState) emptyState.style.display = 'none';
-    if (countEl) countEl.textContent = filtered.length + ' archive' + (filtered.length !== 1 ? 's' : '')
+    if (countEl) countEl.textContent = collectionFiltered.length + ' archive' + (collectionFiltered.length !== 1 ? 's' : '')
         + (searchQuery ? ' (filtered)' : '');
 
-    const sorted = [...filtered].sort((a, b) => {
+    const sorted = [...collectionFiltered].sort((a, b) => {
         let cmp = 0;
         if (currentSort === 'name') cmp = a.title.localeCompare(b.title);
         else if (currentSort === 'date') cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime();
@@ -400,6 +415,9 @@ function selectArchive(hash: string): void {
 
     renderAssets(archive);
     renderMetadata(archive);
+
+    // Update collection chips in detail pane
+    updateChipsForArchive(hash);
 }
 
 function showDetailEmpty(): void {
@@ -884,6 +902,20 @@ export function initLibraryPanel(): void {
     setupSort();
     setupUpload();
     setupDetailActions();
+
+    // Initialize collection manager
+    initCollectionManager({
+        getAuthHeaders: authHeaders,
+        getCsrfToken: () => csrfToken,
+        onFilterChange: async (slug) => {
+            if (slug) {
+                activeCollectionHashes = await getActiveCollectionArchives() || [];
+            } else {
+                activeCollectionHashes = null;
+            }
+            render();
+        },
+    });
 
     // Search filter
     const searchInput = document.getElementById('library-search') as HTMLInputElement | null;
