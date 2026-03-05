@@ -214,6 +214,8 @@
         lodBudgetSd: 0,
         lodBudgetHd: 0,
 
+        collectionSlug: _inj.collection || null,
+
         // Library (archive management) — disabled in local dev, enabled via ADMIN_ENABLED in Docker
         libraryEnabled: false,
 
