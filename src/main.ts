@@ -684,7 +684,7 @@ function createEventWiringDeps(): EventWiringDeps {
         },
         export: { showExportPanel, downloadArchive, downloadGenericViewer, saveToLibrary },
         screenshots: { captureScreenshotToList, showViewfinder, captureManualPreview, hideViewfinder },
-        metadata: { hideMetadataPanel, toggleMetadataDisplay, setupMetadataSidebar },
+        metadata: { hideMetadataPanel, toggleMetadataDisplay, setupMetadataSidebar, populateMetadataDisplay },
         share: { copyShareLink },
         transform: { setSelectedObject, setTransformMode, resetTransform },
         crossSection: crossSection!,

@@ -342,6 +342,7 @@ export interface EventWiringDeps {
         hideMetadataPanel: () => void;
         toggleMetadataDisplay: () => void;
         setupMetadataSidebar: () => void;
+        populateMetadataDisplay: () => void;
     };
     share: {
         copyShareLink: () => void;

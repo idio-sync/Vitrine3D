@@ -53,6 +53,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             activateTool(tool);
             // Trigger library data fetch on first activation
             if (tool === 'library') onLibraryActivated();
+            // Populate metadata display when opening the metadata pane
+            if (tool === 'metadata') deps.metadata.populateMetadataDisplay();
             // Show/hide transform gizmo and orbit center line based on active tool
             if (sceneRefs.transformControls) {
                 try {
