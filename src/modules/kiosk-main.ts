@@ -94,6 +94,7 @@ interface KioskState {
 }
 
 interface AppConfig {
+    home?: boolean;
     theme?: string;
     layout?: string;
     defaultArchiveUrl?: string;
@@ -604,10 +605,20 @@ function createFilePicker(): HTMLElement {
     const picker = document.createElement('div');
     picker.id = 'kiosk-file-picker';
     picker.className = 'hidden';
+
+    // "Browse Library" button — shown only on Tauri home screen when server URL is configured
+    const config = window.APP_CONFIG || {};
+    const libraryUrl = (import.meta.env.VITE_APP_LIBRARY_URL as string | undefined) || '';
+    const showLibrary = config.home && libraryUrl;
+    const libraryHtml = showLibrary
+        ? `<button id="kiosk-library-btn" class="kiosk-library-btn" type="button">Browse Library</button>`
+        : '';
+
     picker.innerHTML = `
         <div class="kiosk-picker-content">
             <h1>Vitrine3D</h1>
             <p>Open a 3D file or archive to view its content.</p>
+            ${libraryHtml}
             <div class="kiosk-picker-box" id="kiosk-drop-zone">
                 <div class="kiosk-picker-icon">&#128194;</div>
                 <p>Select a <strong>3D file</strong> or <strong>archive</strong></p>
@@ -623,6 +634,18 @@ function createFilePicker(): HTMLElement {
             <input type="file" id="kiosk-picker-input" accept=".a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">
         </div>
     `;
+
+    // Wire up library button
+    if (showLibrary) {
+        const libraryBtn = picker.querySelector('#kiosk-library-btn');
+        if (libraryBtn) {
+            libraryBtn.addEventListener('click', () => {
+                log.info('Navigating to library:', libraryUrl);
+                window.location.href = libraryUrl + '/library';
+            });
+        }
+    }
+
     document.body.appendChild(picker);
     return picker;
 }

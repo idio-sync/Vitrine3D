@@ -108,6 +108,27 @@ body.kiosk-mode .tag-chip {
     background: var(--accent-hover);
 }
 
+.kiosk-library-btn {
+    display: block;
+    width: 100%;
+    margin: 0 0 20px;
+    padding: 14px 28px;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--accent-text);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    letter-spacing: 0.02em;
+}
+
+.kiosk-library-btn:hover {
+    background: var(--accent);
+    color: var(--bg-deep);
+}
+
 /* =============================================================================
    KIOSK MODE — PROFESSIONAL VIEWER LAYOUT
    All rules scoped under body.kiosk-mode — no effect on editor mode.
