@@ -1196,6 +1196,39 @@ export async function loadModelFromFile(files: FileList, deps: LoadModelDeps): P
 }
 
 /**
+ * Bundle model files into a single archive-ready blob.
+ * For OBJ with companion MTL/textures, loads and converts to a self-contained GLB.
+ * For GLB/GLTF, returns the file as-is.
+ * Used by the display proxy picker to match the main mesh file picker behavior.
+ */
+export async function bundleModelFiles(files: File[]): Promise<{ blob: Blob; fileName: string }> {
+    const mainFile = files.find(f => {
+        const ext = f.name.split('.').pop()?.toLowerCase() || '';
+        return !COMPANION_EXTS.has(ext);
+    }) || files[0];
+
+    const extension = mainFile.name.split('.').pop()?.toLowerCase();
+
+    if (extension === 'obj') {
+        const groups = parseMultiPartOBJ(files);
+        const hasCompanions = groups.some(g => g.mtlFile || g.textureFiles.length > 0);
+        if (hasCompanions || groups.length > 1) {
+            let loadedObject: THREE.Object3D;
+            if (groups.length > 1) {
+                loadedObject = await loadMultiPartOBJ(groups);
+            } else {
+                loadedObject = await loadOBJ(groups[0].objFile, groups[0].mtlFile, groups[0].textureFiles);
+            }
+            const glbBlob = await exportToGLB(loadedObject);
+            disposeObject(loadedObject);
+            return { blob: glbBlob, fileName: mainFile.name.replace(/\.obj$/i, '.glb') };
+        }
+    }
+
+    return { blob: mainFile, fileName: mainFile.name };
+}
+
+/**
  * Load model from URL
  */
 export async function loadModelFromUrl(url: string, deps: LoadModelDeps, onProgress: ProgressCallback = null): Promise<THREE.Object3D | undefined> {

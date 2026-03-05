@@ -10,7 +10,8 @@ import {
     loadPointcloudFromFile as loadPointcloudFromFileHandler,
     loadPointcloudFromUrl as loadPointcloudFromUrlHandler,
     loadDrawingFromFile as loadDrawingFromFileHandler,
-    loadDrawingFromUrl as loadDrawingFromUrlHandler
+    loadDrawingFromUrl as loadDrawingFromUrlHandler,
+    bundleModelFiles
 } from './file-handlers.js';
 import { loadCADFromFile as loadCADFromFileHandler, loadCADFromUrl as loadCADFromUrlHandler } from './cad-loader.js';
 
@@ -360,12 +361,15 @@ export async function handleCADFile(event: Event, deps: FileInputDeps) {
 }
 
 export async function handleProxyMeshFile(event: Event, deps: FileInputDeps) {
-    const file = (event.target as HTMLInputElement).files?.[0];
-    if (!file) return;
+    const files = (event.target as HTMLInputElement).files;
+    if (!files?.length) return;
 
-    deps.assets.proxyMeshBlob = file;
-    document.getElementById('proxy-mesh-filename').textContent = file.name;
-    notify.info(`Display proxy "${file.name}" ready — will be included in archive exports.`);
+    const fileArray = Array.from(files);
+    const { blob, fileName } = await bundleModelFiles(fileArray);
+
+    deps.assets.proxyMeshBlob = blob;
+    document.getElementById('proxy-mesh-filename').textContent = fileName;
+    notify.info(`Display proxy "${fileName}" ready — will be included in archive exports.`);
 }
 
 export async function handleProxySplatFile(event: Event, deps: FileInputDeps) {
@@ -468,9 +472,10 @@ export function wireNativeFileDialogs(deps: FileInputDeps) {
             }
         },
         onProxyMeshFiles: async (files: any[]) => {
-            deps.assets.proxyMeshBlob = files[0];
-            document.getElementById('proxy-mesh-filename').textContent = files[0].name;
-            notify.info(`Display proxy "${files[0].name}" ready — will be included in archive exports.`);
+            const { blob, fileName } = await bundleModelFiles(files);
+            deps.assets.proxyMeshBlob = blob;
+            document.getElementById('proxy-mesh-filename').textContent = fileName;
+            notify.info(`Display proxy "${fileName}" ready — will be included in archive exports.`);
         },
         onSourceFiles: async (files: any[]) => {
             const category = (document.getElementById('source-files-category') as HTMLInputElement)?.value || '';
