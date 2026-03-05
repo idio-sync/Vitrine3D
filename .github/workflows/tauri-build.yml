@@ -113,27 +113,45 @@ jobs:
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> $GITHUB_ENV
+          echo "SITE_URL=${{ vars.SITE_URL }}" >> $GITHUB_ENV
 
       - name: Initialize Android scaffold
         run: npx tauri android init
 
+      - name: Inspect Android scaffold
+        run: |
+          echo "=== Scaffold structure ==="
+          find src-tauri/gen/android -type f | head -60
+          echo ""
+          echo "=== AndroidManifest.xml ==="
+          find src-tauri/gen/android -name "AndroidManifest.xml" -exec cat {} \;
+          echo ""
+          echo "=== styles.xml (if any) ==="
+          find src-tauri/gen/android -name "styles.xml" -exec echo "--- {} ---" \; -exec cat {} \;
+          echo ""
+          echo "=== themes.xml (if any) ==="
+          find src-tauri/gen/android -name "themes.xml" -exec echo "--- {} ---" \; -exec cat {} \;
+
       - name: Enable display cutout support
         run: |
-          # Find the generated styles.xml (path varies by Tauri version)
-          STYLES=$(find src-tauri/gen/android -name "styles.xml" -path "*/values/*" | head -1)
-          if [ -z "$STYLES" ]; then
-            echo "::warning::styles.xml not found — skipping cutout patch"
-            exit 0
+          # Try styles.xml first, then themes.xml (Tauri version dependent)
+          THEME_FILE=$(find src-tauri/gen/android -name "styles.xml" -path "*/values/*" -o -name "themes.xml" -path "*/values/*" | head -1)
+          if [ -n "$THEME_FILE" ]; then
+            echo "Patching $THEME_FILE for cutout support"
+            sed -i 's|</style>|    <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>\n    </style>|' "$THEME_FILE"
+          else
+            # Fall back to AndroidManifest.xml activity attribute
+            MANIFEST=$(find src-tauri/gen/android -name "AndroidManifest.xml" -path "*/main/*" | head -1)
+            if [ -n "$MANIFEST" ]; then
+              echo "Patching $MANIFEST for cutout support"
+              sed -i 's|android:name=".MainActivity"|android:name=".MainActivity" android:windowLayoutInDisplayCutoutMode="shortEdges"|' "$MANIFEST"
+            else
+              echo "::warning::No theme or manifest file found — skipping cutout patch"
+            fi
           fi
-          echo "Patching $STYLES"
-          # Add windowLayoutInDisplayCutoutMode so the app renders edge-to-edge
-          # into notch/punch-hole areas. CSS env(safe-area-inset-*) handles padding.
-          sed -i 's|</style>|    <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>\n    </style>|' "$STYLES"
 
       - name: Build APK
         run: npx tauri android build --apk --target aarch64 --target armv7 --debug
-        env:
-          SITE_URL: ${{ vars.SITE_URL }}
 
       - name: Locate built APKs
         id: apks

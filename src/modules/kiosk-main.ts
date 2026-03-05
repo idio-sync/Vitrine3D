@@ -755,16 +755,17 @@ function setupFilePicker(): void {
     const dropZone = document.getElementById('kiosk-drop-zone');
 
     if (btn && input) {
-        // In Tauri desktop, use native OS file dialog instead of browser file input.
-        // On Android, the Tauri dialog plugin can't complete file selection, so
-        // fall through to the browser <input type="file"> which works in WebViews.
-        const isAndroid = /android/i.test(navigator.userAgent);
-        if (window.__TAURI__ && !isAndroid) {
+        // In Tauri, use native OS file dialog (browser <input type="file"> is not
+        // supported in Tauri's Android WebView). On Android, skip file extension
+        // filters because the dialog maps them to MIME types and custom extensions
+        // like .a3d/.a3z have no MIME mapping, making them unselectable.
+        if (window.__TAURI__) {
+            const isAndroid = /android/i.test(navigator.userAgent);
             btn.addEventListener('click', async () => {
                 try {
                     const { openFileDialogPathOnly } = await import('./tauri-bridge.js');
                     const result = await openFileDialogPathOnly({
-                        filterKey: 'all',
+                        filterKey: isAndroid ? 'none' : 'all',
                         onDialogClose: () => showLoading('Loading archive...', true),
                     });
                     if (!result) return;

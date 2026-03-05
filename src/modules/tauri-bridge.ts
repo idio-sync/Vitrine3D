@@ -169,11 +169,17 @@ export async function openFileDialogPathOnly(options: {
     if (!isTauri()) return null;
 
     const { open } = window.__TAURI__!.dialog;
-    const filter = FILE_FILTERS[filterKey] || FILE_FILTERS.all;
+    const filter = FILE_FILTERS[filterKey];
+
+    // 'none' or unknown key → no filters (needed on Android where custom
+    // extensions like .a3d have no MIME mapping and get blocked)
+    const filters = filter
+        ? [filter, { name: 'All Files', extensions: ['*'] }]
+        : [];
 
     const selected = await open({
-        title: `Open ${filter.name}`,
-        filters: [filter, { name: 'All Files', extensions: ['*'] }],
+        title: filter ? `Open ${filter.name}` : 'Open File',
+        filters,
         multiple: false,
     });
 
@@ -182,7 +188,25 @@ export async function openFileDialogPathOnly(options: {
     options.onDialogClose?.();
 
     const filePath = Array.isArray(selected) ? selected[0] : selected;
-    const name = filePath.split(/[\\/]/).pop()!;
+
+    // Android returns content:// URIs — extract display name from the URI
+    // (last path segment, URL-decoded) rather than splitting on path separators.
+    let name: string;
+    if (filePath.startsWith('content://')) {
+        const decoded = decodeURIComponent(filePath);
+        // Content URIs often end with /display_name or encode the filename
+        const lastSegment = decoded.split('/').pop() || 'file';
+        // Strip any query params
+        name = lastSegment.split('?')[0];
+        // If the segment still has no extension, try the second-to-last segment
+        if (!name.includes('.')) {
+            const segments = decoded.split('/');
+            name = segments.length > 1 ? segments[segments.length - 2] : lastSegment;
+        }
+    } else {
+        name = filePath.split(/[\\/]/).pop()!;
+    }
+
     const assetUrl = window.__TAURI__!.core.convertFileSrc(filePath);
 
     log.info(`Native dialog (path-only): ${name}`);
