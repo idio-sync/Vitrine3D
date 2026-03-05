@@ -141,6 +141,10 @@ export async function decimateGeometry(
 
     const targetIndexCount = computeTargetIndexCount(originalFaceCount, options);
 
+    log.info(`Decimation input: ${vertexCount} verts, ${originalFaceCount} faces, stride=${stride}, indexed=${!!geometry.index}`);
+    log.info(`Decimation target: ${targetIndexCount / 3} faces (ratio=${options.targetRatio}, maxFaces=${DECIMATION_PRESETS[options.preset]?.maxFaces}, errorThreshold=${options.errorThreshold})`);
+    log.info(`Attributes: hasNormals=${hasNormals}, hasUVs=${hasUVs}, attribStride=${attribStride}, weights=[${attribWeights}], lockBorder=${options.lockBorder}`);
+
     onProgress?.('Simplifying', 30);
 
     // Build flags
@@ -150,6 +154,7 @@ export async function decimateGeometry(
     // Run simplification
     let result: [Uint32Array, number];
     if (attribStride > 0) {
+        log.info('Using simplifyWithAttributes');
         result = MeshoptSimplifier.simplifyWithAttributes(
             indices, positions, stride,
             attribArray, attribStride, attribWeights,
@@ -159,6 +164,7 @@ export async function decimateGeometry(
             flags,
         );
     } else {
+        log.info('Using simplify (no attributes)');
         result = MeshoptSimplifier.simplify(
             indices, positions, stride,
             targetIndexCount,
