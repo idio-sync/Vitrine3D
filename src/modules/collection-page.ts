@@ -1,8 +1,9 @@
 /**
  * Collection Page Module
  *
- * Renders a card grid of archives belonging to a collection.
- * Used in kiosk mode when a collection slug is detected in APP_CONFIG.
+ * Renders an editorial-themed collection browser for kiosk mode.
+ * Design language matches the Editorial Gold theme: navy + gold palette,
+ * Source Sans 3 typography, gold accent rules, staggered entry animations.
  */
 
 import { Logger } from './utilities.js';
@@ -48,12 +49,19 @@ function escapeHtml(s: string): string {
     return d.innerHTML;
 }
 
-const ASSET_TYPE_ICONS: Record<string, string> = {
-    splat: '\u2B24',
-    mesh: '\u25B3',
-    pointcloud: '\u2059',
-    cad: '\u2B21',
-    drawing: '\u25A1',
+function formatDate(dateStr: string): string {
+    try {
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch { return ''; }
+}
+
+const ASSET_LABELS: Record<string, string> = {
+    splat: 'Gaussian Splat',
+    mesh: 'Mesh',
+    pointcloud: 'Point Cloud',
+    cad: 'CAD',
+    drawing: 'Drawing',
 };
 
 // ── Fetch ──
@@ -64,55 +72,365 @@ async function fetchCollection(slug: string): Promise<CollectionData> {
     return res.json();
 }
 
+// ── Inject Styles ──
+
+function injectStyles(): void {
+    if (document.getElementById('collection-page-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'collection-page-styles';
+    style.textContent = `
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
+
+@keyframes cpFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+@keyframes cpSlideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes cpRuleDraw {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+@keyframes cpSpineFade {
+    from { opacity: 0; height: 0; }
+    to { opacity: 0.6; height: 100%; }
+}
+
+.cp-page {
+    position: fixed;
+    inset: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: #08182a;
+    color: rgba(232, 236, 240, 0.95);
+    font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Gold spine — left edge accent */
+.cp-spine {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    background: #FEC03A;
+    opacity: 0.6;
+    z-index: 10;
+    animation: cpSpineFade 0.6s ease-out 0.2s both;
+}
+
+/* Header region */
+.cp-header {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 72px 48px 0 48px;
+    animation: cpFadeIn 0.5s ease-out 0.1s both;
+}
+
+.cp-logo {
+    display: block;
+    height: 18px;
+    margin-bottom: 32px;
+    opacity: 0.7;
+    filter: brightness(1.5) drop-shadow(0 1px 4px rgba(0,0,0,0.5));
+}
+
+.cp-eyebrow {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #FEC03A;
+    margin-bottom: 12px;
+}
+
+.cp-title {
+    font-size: clamp(1.5rem, 4vw, 2.5rem);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    color: rgba(245, 245, 250, 0.95);
+    margin: 0 0 16px;
+}
+
+.cp-rule {
+    width: 56px;
+    height: 3px;
+    background: #FEC03A;
+    margin-bottom: 16px;
+    transform-origin: left;
+    animation: cpRuleDraw 0.5s cubic-bezier(0.33, 1, 0.68, 1) 0.4s both;
+}
+
+.cp-description {
+    font-size: 0.88rem;
+    font-weight: 400;
+    line-height: 1.7;
+    color: rgba(190, 200, 215, 0.9);
+    max-width: 560px;
+    margin: 0 0 12px;
+}
+
+.cp-count {
+    font-size: 0.68rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(140, 160, 180, 0.7);
+}
+
+/* Grid */
+.cp-grid {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 40px 48px 80px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 24px;
+}
+
+/* Card */
+.cp-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: rgba(17, 48, 78, 0.6);
+    border: 1px solid rgba(254, 192, 58, 0.08);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    animation: cpSlideUp 0.4s ease-out both;
+}
+
+.cp-card:hover {
+    border-color: rgba(254, 192, 58, 0.25);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.cp-card:hover .cp-card-thumb img {
+    transform: scale(1.03);
+}
+
+.cp-card-thumb {
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    background: rgba(8, 24, 42, 0.8);
+    position: relative;
+}
+
+.cp-card-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+}
+
+.cp-card-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(17, 48, 78, 0.5), rgba(8, 24, 42, 0.8));
+}
+
+/* Asset type pills overlaid on thumbnail */
+.cp-card-types {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    display: flex;
+    gap: 4px;
+}
+
+.cp-type-pill {
+    font-size: 0.55rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 7px;
+    background: rgba(8, 24, 42, 0.75);
+    border: 1px solid rgba(254, 192, 58, 0.2);
+    color: rgba(190, 200, 215, 0.85);
+    backdrop-filter: blur(8px);
+}
+
+/* Card body */
+.cp-card-body {
+    padding: 14px 16px 16px;
+    border-top: 1px solid rgba(254, 192, 58, 0.1);
+}
+
+.cp-card-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 6px;
+    color: rgba(232, 236, 240, 0.95);
+}
+
+.cp-card-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 0.62rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(140, 160, 180, 0.6);
+}
+
+.cp-card-meta span {
+    white-space: nowrap;
+}
+
+/* Footer ribbon */
+.cp-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 20px 0 12px;
+    background: rgba(17, 48, 78, 0.88);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    z-index: 10;
+    animation: cpFadeIn 0.4s ease-out 0.6s both;
+}
+
+.cp-footer-logo {
+    height: 14px;
+    opacity: 0.6;
+    filter: brightness(1.5) drop-shadow(0 1px 3px rgba(0,0,0,0.4));
+}
+
+/* Error state */
+.cp-error {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 120px 48px;
+    text-align: center;
+}
+
+.cp-error p {
+    font-size: 0.88rem;
+    color: rgba(140, 160, 180, 0.7);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .cp-header { padding: 48px 24px 0; }
+    .cp-grid { padding: 32px 24px 80px; gap: 16px; }
+    .cp-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+    .cp-title { font-size: 1.4rem; }
+    .cp-logo { height: 14px; margin-bottom: 24px; }
+}
+
+@media (max-width: 480px) {
+    .cp-header { padding: 36px 16px 0; }
+    .cp-grid { padding: 24px 16px 72px; grid-template-columns: 1fr; }
+}
+`;
+    document.head.appendChild(style);
+}
+
+// ── Logo ──
+
+/** Resolve the editorial theme logo path, handling both dev and Docker contexts. */
+function getLogoSrc(): string {
+    // In production builds, themes are copied to dist/themes/
+    // In dev, Vite serves from src/ directly
+    return '/themes/editorial/logo.png';
+}
+
 // ── Rendering ──
 
-function renderCard(archive: CollectionArchive): HTMLElement {
+function renderCard(archive: CollectionArchive, index: number): HTMLElement {
     const card = document.createElement('a');
-    card.className = 'collection-card';
+    card.className = 'cp-card';
     card.href = archive.uuid ? '/view/' + archive.uuid : archive.viewerUrl;
+    // Stagger animation delay
+    card.style.animationDelay = (0.15 + index * 0.06) + 's';
 
     const thumbHtml = archive.thumbnail
         ? '<img src="' + escapeHtml(archive.thumbnail) + '" alt="" loading="lazy">'
-        : '<div class="collection-card-placeholder"><svg width="28" height="28" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1" opacity="0.25"><path d="M16 6l10 5.5v9L16 26 6 20.5v-9L16 6z"/><path d="M16 15.5V26"/><path d="M6 11.5L16 17l10-5.5"/></svg></div>';
+        : '<div class="cp-card-placeholder"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="rgba(254,192,58,0.2)" stroke-width="0.8"><path d="M16 6l10 5.5v9L16 26 6 20.5v-9L16 6z"/><path d="M16 15.5V26"/><path d="M6 11.5L16 17l10-5.5"/></svg></div>';
 
-    let badges = '';
+    // Asset type pills
+    let typePills = '';
     if (archive.assets && archive.assets.length > 0) {
         const types = [...new Set(archive.assets.map(a => a.type))];
-        badges = '<div class="collection-card-badges">' +
-            types.map(t => '<span class="collection-badge" title="' + t + '">' + (ASSET_TYPE_ICONS[t] || '\u25CF') + '</span>').join('') +
+        typePills = '<div class="cp-card-types">' +
+            types.map(t => '<span class="cp-type-pill">' + (ASSET_LABELS[t] || t) + '</span>').join('') +
             '</div>';
     }
 
+    // Metadata line: size + date
+    const datePart = archive.modified ? formatDate(archive.modified) : '';
+    const metaParts: string[] = [];
+    if (datePart) metaParts.push('<span>' + escapeHtml(datePart) + '</span>');
+    metaParts.push('<span>' + formatBytes(archive.size) + '</span>');
+
     card.innerHTML =
-        '<div class="collection-card-thumb">' + thumbHtml + badges + '</div>' +
-        '<div class="collection-card-body">' +
-            '<div class="collection-card-title">' + escapeHtml(archive.title || archive.filename) + '</div>' +
-            '<div class="collection-card-meta">' + formatBytes(archive.size) + '</div>' +
+        '<div class="cp-card-thumb">' + thumbHtml + typePills + '</div>' +
+        '<div class="cp-card-body">' +
+            '<div class="cp-card-title">' + escapeHtml(archive.title || archive.filename) + '</div>' +
+            '<div class="cp-card-meta">' + metaParts.join('') + '</div>' +
         '</div>';
 
     return card;
 }
 
 function renderPage(container: HTMLElement, data: CollectionData): void {
+    const logoSrc = getLogoSrc();
+
+    // Header
     const header = document.createElement('div');
-    header.className = 'collection-header';
+    header.className = 'cp-header';
     header.innerHTML =
-        '<h1 class="collection-title">' + escapeHtml(data.name) + '</h1>' +
-        (data.description ? '<p class="collection-description">' + escapeHtml(data.description) + '</p>' : '') +
-        '<span class="collection-count">' + data.archiveCount + ' archive' + (data.archiveCount !== 1 ? 's' : '') + '</span>';
+        '<img class="cp-logo" src="' + logoSrc + '" alt="" onerror="this.style.display=\'none\'">' +
+        '<div class="cp-eyebrow">Collection</div>' +
+        '<h1 class="cp-title">' + escapeHtml(data.name) + '</h1>' +
+        '<div class="cp-rule"></div>' +
+        (data.description ? '<p class="cp-description">' + escapeHtml(data.description) + '</p>' : '') +
+        '<span class="cp-count">' + data.archiveCount + ' Archive' + (data.archiveCount !== 1 ? 's' : '') + '</span>';
 
+    // Grid
     const grid = document.createElement('div');
-    grid.className = 'collection-grid';
-    for (const archive of data.archives) {
-        grid.appendChild(renderCard(archive));
-    }
+    grid.className = 'cp-grid';
+    data.archives.forEach((archive, i) => {
+        grid.appendChild(renderCard(archive, i));
+    });
 
+    // Footer ribbon with logo
+    const footer = document.createElement('div');
+    footer.className = 'cp-footer';
+    footer.innerHTML = '<img class="cp-footer-logo" src="' + logoSrc + '" alt="" onerror="this.style.display=\'none\'">';
+
+    // Gold spine
+    const spine = document.createElement('div');
+    spine.className = 'cp-spine';
+
+    container.appendChild(spine);
     container.appendChild(header);
     container.appendChild(grid);
+    container.appendChild(footer);
 }
 
 function renderError(container: HTMLElement, message: string): void {
-    container.innerHTML = '<div class="collection-error"><p>' + escapeHtml(message) + '</p></div>';
+    const spine = document.createElement('div');
+    spine.className = 'cp-spine';
+    container.appendChild(spine);
+    container.innerHTML += '<div class="cp-error"><p>' + escapeHtml(message) + '</p></div>';
 }
 
 // ── Public API ──
@@ -129,6 +447,7 @@ export async function initCollectionPage(): Promise<boolean> {
     if (!slug) return false;
 
     log.info('Loading collection:', slug);
+    injectStyles();
 
     // Hide the entire app shell (tool rail, viewport, status bar, props panel)
     const app = document.getElementById('app');
@@ -138,7 +457,7 @@ export async function initCollectionPage(): Promise<boolean> {
     if (!container) {
         container = document.createElement('div');
         container.id = 'collection-container';
-        container.className = 'collection-container';
+        container.className = 'cp-page';
         document.body.appendChild(container);
     }
 
