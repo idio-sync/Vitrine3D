@@ -234,7 +234,18 @@ location ~ "^/view/[a-f0-9]{16}$" {
     proxy_set_header X-Forwarded-Proto $scheme;
 }
 VIEWEOF
-    echo "  Clean URLs: /view/{uuid} and /view/{hash} enabled"
+
+    # Collection pages: /collection/{slug} — proxy to meta-server for HTML injection
+    cat >> /etc/nginx/conf.d/view-proxy.conf.inc <<'COLLEOF'
+# Collection pages: /collection/{slug}
+location ~ "^/collection/[a-z0-9][a-z0-9-]{0,79}$" {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+COLLEOF
+    echo "  Clean URLs: /view/{uuid}, /view/{hash}, and /collection/{slug} enabled"
 fi
 
 exit 0
