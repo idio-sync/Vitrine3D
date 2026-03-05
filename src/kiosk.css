@@ -4,9 +4,6 @@
    Split from styles.css for cleaner separation of concerns.
    ============================================================================= */
 
-/* Source Sans 3 — loaded from Google Fonts when online, falls back to system sans-serif offline */
-@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
-
 /* --- Tag chip override for kiosk --- */
 
 body.kiosk-mode .tag-chip {
