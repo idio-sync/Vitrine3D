@@ -96,6 +96,10 @@ export default defineConfig({
     base: './',
     publicDir: resolve(__dirname, 'public'),
 
+    define: {
+        'import.meta.env.VITE_APP_LIBRARY_URL': JSON.stringify(process.env.SITE_URL || ''),
+    },
+
     build: {
         outDir: '../dist',
         emptyOutDir: true,

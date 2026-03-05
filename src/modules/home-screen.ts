@@ -348,7 +348,7 @@ export async function initHomeScreen(): Promise<boolean> {
     }
 
     const serverUrl: string | null =
-        (import.meta.env.VITE_SERVER_URL as string | undefined) ?? null;
+        (import.meta.env.VITE_APP_LIBRARY_URL as string | undefined) ?? null;
 
     const page = buildPage(serverUrl || null);
     document.body.appendChild(page);
