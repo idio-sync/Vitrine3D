@@ -192,40 +192,35 @@ export function injectStyles(): void {
     gap: 24px;
 }
 
-/* Card */
+/* Card — click-gate-inspired poster layout */
 .cp-card {
     display: block;
     text-decoration: none;
     color: inherit;
-    background: rgba(17, 48, 78, 0.6);
-    border: 1px solid rgba(254, 192, 58, 0.08);
     overflow: hidden;
     cursor: pointer;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+    border-radius: 2px;
     animation: cpSlideUp 0.4s ease-out both;
 }
 
-.cp-card:hover {
-    border-color: rgba(254, 192, 58, 0.25);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
-}
-
-.cp-card:hover .cp-card-thumb img {
-    transform: scale(1.03);
-}
-
-.cp-card-thumb {
+/* Full-bleed poster image */
+.cp-card-poster {
     aspect-ratio: 16 / 10;
-    overflow: hidden;
-    background: rgba(8, 24, 42, 0.8);
     position: relative;
+    overflow: hidden;
+    background: rgba(8, 24, 42, 0.9);
 }
 
-.cp-card-thumb img {
+.cp-card-poster img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.4s ease;
+    transition: transform 0.5s ease, opacity 0.3s ease;
+}
+
+.cp-card:hover .cp-card-poster img {
+    transform: scale(1.05);
 }
 
 .cp-card-placeholder {
@@ -237,56 +232,124 @@ export function injectStyles(): void {
     background: linear-gradient(135deg, rgba(17, 48, 78, 0.5), rgba(8, 24, 42, 0.8));
 }
 
-/* Asset type pills overlaid on thumbnail */
-.cp-card-types {
+/* Vignette overlay — matches click gate gradient */
+.cp-card-vignette {
     position: absolute;
-    bottom: 8px;
-    left: 8px;
+    inset: 0;
+    background: linear-gradient(180deg,
+        rgba(8, 24, 42, 0.15) 0%,
+        rgba(8, 24, 42, 0.05) 40%,
+        rgba(8, 24, 42, 0.5) 70%,
+        rgba(8, 24, 42, 0.92) 100%
+    );
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.cp-card:hover .cp-card-vignette {
+    opacity: 0.8;
+}
+
+/* Play button — centered, matches editorial gate play */
+.cp-card-play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.85);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(254, 192, 58, 0.3);
+    background: rgba(8, 24, 42, 0.5);
     display: flex;
-    gap: 4px;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease, border-color 0.3s ease, background 0.3s ease;
+    z-index: 3;
+    backdrop-filter: blur(4px);
 }
 
-.cp-type-pill {
-    font-size: 0.55rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    padding: 2px 7px;
-    background: rgba(8, 24, 42, 0.75);
-    border: 1px solid rgba(254, 192, 58, 0.2);
-    color: rgba(190, 200, 215, 0.85);
-    backdrop-filter: blur(8px);
+.cp-card-play svg {
+    fill: rgba(254, 192, 58, 0.8);
+    stroke: none;
+    width: 16px;
+    height: 16px;
+    margin-left: 2px;
 }
 
-/* Card body */
-.cp-card-body {
-    padding: 14px 16px 16px;
-    border-top: 1px solid rgba(254, 192, 58, 0.1);
+.cp-card:hover .cp-card-play {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    border-color: rgba(254, 192, 58, 0.6);
+    background: rgba(254, 192, 58, 0.1);
+}
+
+.cp-card:hover .cp-card-play:hover {
+    border-color: #FEC03A;
+    background: rgba(254, 192, 58, 0.2);
+    box-shadow: 0 0 24px rgba(254, 192, 58, 0.2);
+}
+
+/* Info overlay — bottom of poster, over vignette */
+.cp-card-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 14px;
+    z-index: 2;
 }
 
 .cp-card-title {
     font-size: 0.82rem;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: 0.01em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     margin-bottom: 6px;
-    color: rgba(232, 236, 240, 0.95);
+    color: rgba(245, 245, 250, 0.95);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7), 0 0 8px rgba(0,0,0,0.4);
 }
 
 .cp-card-meta {
     display: flex;
-    gap: 12px;
-    font-size: 0.62rem;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    font-size: 0.6rem;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: rgba(140, 160, 180, 0.6);
+    color: rgba(190, 200, 215, 0.7);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
 }
 
 .cp-card-meta span {
     white-space: nowrap;
+}
+
+/* Asset type pills — inline with meta */
+.cp-type-pill {
+    font-size: 0.55rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #FEC03A;
+}
+
+/* Gold rule above info */
+.cp-card-rule {
+    width: 24px;
+    height: 2px;
+    background: rgba(254, 192, 58, 0.4);
+    margin-bottom: 8px;
+    transition: width 0.3s ease, background 0.3s ease;
+}
+
+.cp-card:hover .cp-card-rule {
+    width: 40px;
+    background: rgba(254, 192, 58, 0.7);
 }
 
 /* Error state */
@@ -342,26 +405,33 @@ export function renderCard(archive: CollectionArchive, index: number): HTMLEleme
         ? '<img src="' + escapeHtml(archive.thumbnail) + '" alt="" loading="lazy">'
         : '<div class="cp-card-placeholder"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="rgba(254,192,58,0.2)" stroke-width="0.8"><path d="M16 6l10 5.5v9L16 26 6 20.5v-9L16 6z"/><path d="M16 15.5V26"/><path d="M6 11.5L16 17l10-5.5"/></svg></div>';
 
-    // Asset type pills
-    let typePills = '';
+    // Play button SVG (matches editorial click gate)
+    const playSvg = '<svg viewBox="0 0 24 24" width="16" height="16"><polygon points="8,5 20,12 8,19"/></svg>';
+
+    // Asset type pills as inline labels
+    let typeMeta = '';
     if (archive.assets && archive.assets.length > 0) {
         const types = [...new Set(archive.assets.map(a => a.type))];
-        typePills = '<div class="cp-card-types">' +
-            types.map(t => '<span class="cp-type-pill">' + (ASSET_LABELS[t] || t) + '</span>').join('') +
-            '</div>';
+        typeMeta = types.map(t => '<span class="cp-type-pill">' + (ASSET_LABELS[t] || t) + '</span>').join('');
     }
 
-    // Metadata line: size + date
+    // Metadata parts: date, size, filename
     const datePart = archive.modified ? formatDate(archive.modified) : '';
     const metaParts: string[] = [];
+    if (typeMeta) metaParts.push(typeMeta);
     if (datePart) metaParts.push('<span>' + escapeHtml(datePart) + '</span>');
     metaParts.push('<span>' + formatBytes(archive.size) + '</span>');
 
     card.innerHTML =
-        '<div class="cp-card-thumb">' + thumbHtml + typePills + '</div>' +
-        '<div class="cp-card-body">' +
-            '<div class="cp-card-title">' + escapeHtml(archive.title || archive.filename) + '</div>' +
-            '<div class="cp-card-meta">' + metaParts.join('') + '</div>' +
+        '<div class="cp-card-poster">' +
+            thumbHtml +
+            '<div class="cp-card-vignette"></div>' +
+            '<div class="cp-card-play">' + playSvg + '</div>' +
+            '<div class="cp-card-info">' +
+                '<div class="cp-card-rule"></div>' +
+                '<div class="cp-card-title">' + escapeHtml(archive.title || archive.filename) + '</div>' +
+                '<div class="cp-card-meta">' + metaParts.join('') + '</div>' +
+            '</div>' +
         '</div>';
 
     return card;
