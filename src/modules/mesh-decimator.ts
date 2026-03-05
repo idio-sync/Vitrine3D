@@ -131,9 +131,61 @@ export async function decimateGeometry(
 
     onProgress?.('Rebuilding geometry', 80);
 
-    // Build new geometry with decimated indices, keeping all vertex attributes
-    const newGeo = geo.clone();
-    newGeo.setIndex(new THREE.BufferAttribute(newIndices, 1));
+    // Compact: build a new geometry with only the referenced vertices.
+    // Without this, the cloned geometry retains all original vertices,
+    // making the exported GLB larger than the original.
+    const usedSet = new Set<number>();
+    for (let i = 0; i < newIndices.length; i++) usedSet.add(newIndices[i]);
+    const usedVerts = Array.from(usedSet).sort((a, b) => a - b);
+    const remap = new Map<number, number>();
+    for (let i = 0; i < usedVerts.length; i++) remap.set(usedVerts[i], i);
+
+    const newGeo = new THREE.BufferGeometry();
+
+    // Remap indices
+    const remappedIndices = new Uint32Array(newIndices.length);
+    for (let i = 0; i < newIndices.length; i++) remappedIndices[i] = remap.get(newIndices[i])!;
+    newGeo.setIndex(new THREE.BufferAttribute(remappedIndices, 1));
+
+    // Copy and compact each attribute
+    for (const name of Object.keys(geo.attributes)) {
+        const srcAttr = geo.attributes[name];
+        const itemSize = srcAttr.itemSize;
+        const TypedArrayCtor = (srcAttr.array as Float32Array).constructor as new (len: number) => Float32Array;
+        const dst = new TypedArrayCtor(usedVerts.length * itemSize);
+        for (let i = 0; i < usedVerts.length; i++) {
+            const srcIdx = usedVerts[i];
+            for (let c = 0; c < itemSize; c++) {
+                dst[i * itemSize + c] = srcAttr.array[srcIdx * itemSize + c];
+            }
+        }
+        newGeo.setAttribute(name, new THREE.BufferAttribute(dst, itemSize, srcAttr.normalized));
+    }
+
+    // Copy morph attributes if present
+    if (geo.morphAttributes) {
+        for (const name of Object.keys(geo.morphAttributes)) {
+            newGeo.morphAttributes[name] = geo.morphAttributes[name].map((srcAttr: THREE.BufferAttribute) => {
+                const itemSize = srcAttr.itemSize;
+                const TypedArrayCtor = (srcAttr.array as Float32Array).constructor as new (len: number) => Float32Array;
+                const dst = new TypedArrayCtor(usedVerts.length * itemSize);
+                for (let i = 0; i < usedVerts.length; i++) {
+                    const srcIdx = usedVerts[i];
+                    for (let c = 0; c < itemSize; c++) {
+                        dst[i * itemSize + c] = srcAttr.array[srcIdx * itemSize + c];
+                    }
+                }
+                return new THREE.BufferAttribute(dst, itemSize, srcAttr.normalized);
+            });
+        }
+    }
+
+    // Copy groups
+    if (geo.groups.length > 0) {
+        for (const group of geo.groups) newGeo.addGroup(group.start, group.count, group.materialIndex);
+    }
+
+    log.info(`Compacted: ${vertexCount} → ${usedVerts.length} vertices`);
 
     onProgress?.('Complete', 100);
     return newGeo;
