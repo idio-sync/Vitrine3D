@@ -463,6 +463,7 @@ function createFileHandlerDeps(): any {
                         if (texRow) texRow.style.display = '';
                     }
                 }
+                showQualityToggleIfNeeded();
                 // Advisory face count warnings
                 if (faceCount > MESH_LOD.DESKTOP_WARNING_FACES) {
                     notify.warning(`Mesh has ${faceCount.toLocaleString()} faces. A display proxy is recommended for broad device support.`);
@@ -859,6 +860,7 @@ function setupDecimationPanel(): void {
             if (statusText) statusText.textContent = `Proxy ready (${result.faceCount.toLocaleString()} faces, ${(result.blob.size / 1024 / 1024).toFixed(1)} MB)`;
             statusDiv?.classList.remove('hidden');
             if (previewBtn) previewBtn.textContent = 'Preview SD';
+            showQualityToggleIfNeeded();
             notify.success(`SD proxy generated: ${result.faceCount.toLocaleString()} faces`);
         } catch (err: any) {
             log.error('Decimation failed:', err);
@@ -896,7 +898,10 @@ function setupDecimationPanel(): void {
         state.proxyMeshSettings = null;
         state.proxyMeshFaceCount = null;
         modelGroup.visible = true;
+        state.viewingProxy = false;
+        updateQualityButtonStates('hd');
         statusDiv?.classList.add('hidden');
+        showQualityToggleIfNeeded();
         notify.info('SD proxy removed');
     });
 }
@@ -1654,15 +1659,89 @@ function handleLoadCADFromUrlPrompt() {
 }
 
 async function handleProxyMeshFile(event: Event) {
-    return handleProxyMeshFileCtrl(event, createFileInputDeps());
+    await handleProxyMeshFileCtrl(event, createFileInputDeps());
+    showQualityToggleIfNeeded();
 }
 
 async function handleProxySplatFile(event: Event) {
     return handleProxySplatFileCtrl(event, createFileInputDeps());
 }
 
-// Switch quality tier (delegated to archive-pipeline.ts)
-async function switchQualityTier(newTier: string) { return switchQualityTierCtrl(newTier, createArchivePipelineDeps()); }
+/** Show or hide the SD/HD toggle in the status bar based on proxy availability. */
+function showQualityToggleIfNeeded() {
+    const container = document.getElementById('quality-toggle-container');
+    if (!container) return;
+    const assets = getStore();
+    const hasProxy = !!(assets.proxyMeshBlob || state.proxyMeshGroup);
+    const hasMesh = state.modelLoaded;
+    if (hasMesh && hasProxy) {
+        container.classList.remove('hidden');
+    } else {
+        container.classList.add('hidden');
+    }
+}
+
+/** Update SD/HD button active states. */
+function updateQualityButtonStates(tier: string) {
+    document.querySelectorAll('.quality-toggle-btn').forEach((btn: Element) => {
+        btn.classList.toggle('active', (btn as HTMLElement).dataset.tier === tier);
+    });
+}
+
+/**
+ * Editor quality tier switch — handles both archive-loaded and local proxies.
+ * For archive proxies, delegates to archive-pipeline switchQualityTier.
+ * For local proxies (decimator or manual upload), toggles visibility directly.
+ */
+async function switchQualityTier(newTier: string) {
+    // Archive-loaded proxy: delegate to archive-pipeline
+    if (state.archiveLoader) {
+        const contentInfo = state.archiveLoader.getContentInfo();
+        if (contentInfo.hasMeshProxy || contentInfo.hasSceneProxy) {
+            await switchQualityTierCtrl(newTier, createArchivePipelineDeps());
+            return;
+        }
+    }
+
+    // Local proxy (decimator or manual upload)
+    const assets = getStore();
+    if (newTier === 'sd') {
+        // Load proxy blob into a THREE.Group if not already loaded
+        if (!state.proxyMeshGroup && assets.proxyMeshBlob) {
+            const blobUrl = URL.createObjectURL(assets.proxyMeshBlob);
+            try {
+                const { loadGLTF } = await import('./modules/file-handlers.js');
+                const loaded = await loadGLTF(blobUrl);
+                state.proxyMeshGroup = loaded;
+                // Copy transform from full-res model
+                if (modelGroup) {
+                    loaded.position.copy(modelGroup.position);
+                    loaded.rotation.copy(modelGroup.rotation);
+                    loaded.scale.copy(modelGroup.scale);
+                }
+                loaded.visible = false;
+                scene.add(loaded);
+            } finally {
+                URL.revokeObjectURL(blobUrl);
+            }
+        }
+        if (state.proxyMeshGroup && modelGroup) {
+            state.proxyMeshGroup.visible = true;
+            modelGroup.visible = false;
+            state.viewingProxy = true;
+        }
+    } else {
+        // Switch to HD — show full-res, hide proxy
+        if (state.proxyMeshGroup) state.proxyMeshGroup.visible = false;
+        if (modelGroup) modelGroup.visible = true;
+        state.viewingProxy = false;
+    }
+
+    updateQualityButtonStates(newTier);
+    // Sync the decimation panel preview button text if present
+    const previewBtn = document.getElementById('btn-preview-proxy');
+    if (previewBtn) previewBtn.textContent = newTier === 'sd' ? 'Preview HD' : 'Preview SD';
+}
 
 // ==================== Source Files ====================
 // Extracted to source-files-manager.ts
