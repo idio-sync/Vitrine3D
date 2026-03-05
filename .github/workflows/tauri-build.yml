@@ -119,7 +119,13 @@ jobs:
 
       - name: Enable display cutout support
         run: |
-          STYLES="src-tauri/gen/android/app/src/main/res/values/styles.xml"
+          # Find the generated styles.xml (path varies by Tauri version)
+          STYLES=$(find src-tauri/gen/android -name "styles.xml" -path "*/values/*" | head -1)
+          if [ -z "$STYLES" ]; then
+            echo "::warning::styles.xml not found — skipping cutout patch"
+            exit 0
+          fi
+          echo "Patching $STYLES"
           # Add windowLayoutInDisplayCutoutMode so the app renders edge-to-edge
           # into notch/punch-hole areas. CSS env(safe-area-inset-*) handles padding.
           sed -i 's|</style>|    <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>\n    </style>|' "$STYLES"
