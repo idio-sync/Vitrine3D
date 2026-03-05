@@ -242,17 +242,21 @@
                 </div>
             </div>
 
-            <!-- Viewport overlay: Display mode pill -->
-            <div class="vp-display-pill" id="vp-display-pill">
-                <button class="vp-pill-btn" id="btn-model" data-mode="model">Model</button>
-                <button class="vp-pill-btn" id="btn-splat" data-mode="splat">Splat</button>
-                <button class="vp-pill-btn" id="btn-pointcloud" data-mode="pointcloud">Cloud</button>
-                <button class="vp-pill-btn" id="btn-stl" data-mode="stl">STL</button>
-                <button class="vp-pill-btn active" id="btn-both" data-mode="both">M/S</button>
-                <button class="vp-pill-btn" id="btn-split" data-mode="split">Split</button>
+            <!-- Viewport overlay: Display mode pill + quality toggle row -->
+            <div class="vp-display-row">
+                <div class="hidden" id="quality-toggle-container">
+                    <button id="btn-quality-sd" class="quality-toggle-btn" data-tier="sd">SD</button>
+                    <button id="btn-quality-hd" class="quality-toggle-btn active" data-tier="hd">HD</button>
+                </div>
+                <div class="vp-display-pill" id="vp-display-pill">
+                    <button class="vp-pill-btn" id="btn-model" data-mode="model">Model</button>
+                    <button class="vp-pill-btn" id="btn-splat" data-mode="splat">Splat</button>
+                    <button class="vp-pill-btn" id="btn-pointcloud" data-mode="pointcloud">Cloud</button>
+                    <button class="vp-pill-btn" id="btn-stl" data-mode="stl">STL</button>
+                    <button class="vp-pill-btn active" id="btn-both" data-mode="both">M/S</button>
+                    <button class="vp-pill-btn" id="btn-split" data-mode="split">Split</button>
+                </div>
             </div>
-
-            <!-- Quality toggle moved to status bar -->
 
             <!-- Viewport hints and indicators -->
             <div id="transform-hint" class="hidden">
@@ -2579,10 +2583,6 @@
                 </div>
             </div>
             <div class="status-right">
-                <div class="status-item hidden" id="quality-toggle-container">
-                    <button id="btn-quality-sd" class="quality-toggle-btn" data-tier="sd">SD</button>
-                    <button id="btn-quality-hd" class="quality-toggle-btn active" data-tier="hd">HD</button>
-                </div>
                 <div class="status-item" id="status-filename">
                 </div>
             </div>

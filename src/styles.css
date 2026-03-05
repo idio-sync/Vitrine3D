@@ -241,17 +241,23 @@ input, select, textarea {
    Viewport Overlays
    ============================================================ */
 
-/* Display mode pill — seg-ctrl style, positioned in viewport */
-#vp-display-pill {
+/* Display mode pill + quality toggle row — positioned in viewport top-right */
+.vp-display-row {
     position: absolute;
     top: 10px;
     right: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    z-index: 50;
+}
+
+#vp-display-pill {
     display: flex;
     background: var(--bg-deep);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-sm);
     overflow: hidden;
-    z-index: 50;
 }
 
 .vp-pill-btn {
@@ -1953,7 +1959,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
     cursor: pointer;
 }
 
-/* Quality tier toggle (SD/HD) — lives in status bar */
+/* Quality tier toggle (SD/HD) — lives in viewport display row */
 #quality-toggle-container {
     display: inline-flex;
     gap: 0;
