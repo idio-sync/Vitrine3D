@@ -74,7 +74,7 @@ export function isTauri(): boolean {
 
 const FILE_FILTERS: Record<string, TauriDialogFilter> = {
     splat:      { name: 'Gaussian Splats', extensions: ['ply', 'splat', 'ksplat', 'spz', 'sog'] },
-    model:      { name: '3D Models', extensions: ['glb', 'gltf', 'obj'] },
+    model:      { name: '3D Models', extensions: ['glb', 'gltf', 'obj', 'mtl', 'png', 'jpg', 'jpeg', 'tga', 'bmp', 'webp'] },
     stl:        { name: 'STL Models', extensions: ['stl'] },
     pointcloud: { name: 'Point Clouds', extensions: ['e57'] },
     archive:    { name: '3D Archives', extensions: ['a3d', 'a3z'] },
@@ -99,7 +99,7 @@ interface TauriFile extends File {
 /**
  * Open a native file dialog and return File object(s).
  */
-export async function openFileDialog(options: {
+async function openFileDialog(options: {
     filterKey?: string;
     multiple?: boolean;
     /** Called immediately after the OS dialog closes (file selected) but before reading file contents. Use to show a loading indicator. */
@@ -197,7 +197,7 @@ export async function openFileDialogPathOnly(options: {
  * Save a Blob/string using native save dialog.
  * Returns true if saved, false if cancelled or not in Tauri.
  */
-export async function saveFileDialog(
+async function saveFileDialog(
     blob: Blob,
     defaultFilename: string,
     filter?: TauriDialogFilter
@@ -369,18 +369,3 @@ export async function ipcCloseFile(handleId: string): Promise<void> {
 // OPEN EXTERNAL URL
 // ============================================================
 
-/**
- * Open a URL in the default external browser.
- * In Tauri, uses the shell plugin. In browser, uses window.open.
- */
-export async function openExternal(url: string): Promise<void> {
-    if (isTauri()) {
-        try {
-            await window.__TAURI__!.shell.open(url);
-            return;
-        } catch (err) {
-            log.warn('shell.open failed:', (err as Error).message);
-        }
-    }
-    window.open(url, '_blank');
-}

@@ -1,13 +1,16 @@
 #!/bin/sh
 set -e
 
+# Defaults
+ADMIN_ENABLED="${ADMIN_ENABLED:-true}"
+
 # Substitute environment variables in the config template
-envsubst '${DEFAULT_ARCHIVE_URL} ${DEFAULT_SPLAT_URL} ${DEFAULT_MODEL_URL} ${DEFAULT_POINTCLOUD_URL} ${SHOW_CONTROLS} ${ALLOWED_DOMAINS} ${KIOSK_LOCK} ${ARCHIVE_PATH_PREFIX} ${LOD_BUDGET_SD} ${LOD_BUDGET_HD} ${ADMIN_ENABLED} ${CHUNKED_UPLOAD}' \
+envsubst '${DEFAULT_ARCHIVE_URL} ${DEFAULT_SPLAT_URL} ${DEFAULT_MODEL_URL} ${DEFAULT_POINTCLOUD_URL} ${ALLOWED_DOMAINS} ${KIOSK_LOCK} ${ARCHIVE_PATH_PREFIX} ${LOD_BUDGET_SD} ${LOD_BUDGET_HD} ${ADMIN_ENABLED} ${CHUNKED_UPLOAD}' \
     < /usr/share/nginx/html/config.js.template \
     > /usr/share/nginx/html/config.js
 
 # Substitute environment variables in the nginx config template
-SERVER_NAMES="${SERVER_NAMES:-localhost}"
+export SERVER_NAMES="${SERVER_NAMES:-localhost}"
 envsubst '${FRAME_ANCESTORS} ${SERVER_NAMES} ${SITE_URL}' \
     < /etc/nginx/templates/nginx.conf.template \
     > /etc/nginx/conf.d/default.conf
@@ -38,26 +41,15 @@ echo "  DEFAULT_ARCHIVE_URL: ${DEFAULT_ARCHIVE_URL:-<not set>}"
 echo "  DEFAULT_SPLAT_URL: ${DEFAULT_SPLAT_URL:-<not set>}"
 echo "  DEFAULT_MODEL_URL: ${DEFAULT_MODEL_URL:-<not set>}"
 echo "  DEFAULT_POINTCLOUD_URL: ${DEFAULT_POINTCLOUD_URL:-<not set>}"
-echo "  SHOW_CONTROLS: ${SHOW_CONTROLS}"
 echo "  ALLOWED_DOMAINS: ${ALLOWED_DOMAINS:-<not set>}"
 echo "  FRAME_ANCESTORS: ${FRAME_ANCESTORS}"
 echo "  SERVER_NAMES: ${SERVER_NAMES:-localhost}"
 echo "  CORS_ORIGINS: ${CORS_ORIGINS:-<not set, same-origin only>}"
 echo "  ARCHIVE_PATH_PREFIX: ${ARCHIVE_PATH_PREFIX:-<not set>}"
 
-# Generate kiosk-lock nginx rules
-if [ "${KIOSK_LOCK}" = "true" ]; then
-    cat > /etc/nginx/conf.d/kiosk-lock.conf.inc <<'LOCKEOF'
-# Block editor-only modules when KIOSK_LOCK is active
-location ~ /modules/(archive-creator|share-dialog|kiosk-viewer)\.js$ {
-    return 403;
-}
-LOCKEOF
-    echo "  KIOSK_LOCK: ACTIVE (editor modules blocked)"
-else
-    : > /etc/nginx/conf.d/kiosk-lock.conf.inc
-    echo "  KIOSK_LOCK: off"
-fi
+# kiosk-lock.conf.inc must exist (included by nginx.conf.template); always empty now
+# that editor modules are in a separate bundle at /editor/
+: > /etc/nginx/conf.d/kiosk-lock.conf.inc
 
 # Generate embed referer check rules
 if [ -n "${EMBED_REFERERS}" ]; then
@@ -81,47 +73,64 @@ fi
 if [ "${ADMIN_ENABLED}" = "true" ]; then
     echo ""
     echo "Admin panel: ENABLED"
-
-    if [ -z "${ADMIN_PASS}" ]; then
-        echo "ERROR: ADMIN_PASS is required when ADMIN_ENABLED=true"
-        exit 1
-    fi
-
-    # Generate htpasswd file using openssl (available in Alpine)
-    printf "%s:%s\n" "${ADMIN_USER:-admin}" "$(openssl passwd -apr1 "${ADMIN_PASS}")" > /etc/nginx/.htpasswd
-    echo "  ADMIN_USER: ${ADMIN_USER:-admin}"
     echo "  MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-1024}MB"
     echo "  CHUNKED_UPLOAD: ${CHUNKED_UPLOAD:-false}"
 
-    # Generate admin nginx config snippet
-    cat > /etc/nginx/conf.d/admin-auth.conf.inc <<ADMINEOF
-# Admin panel — proxied to meta-server, protected by basic auth
+    # Generate admin nginx config — forwards Cloudflare Access header to api
+    # Auth is enforced at the Cloudflare edge; no basic auth needed inside the container
+    if [ -n "${DEV_AUTH_USER}" ]; then
+        # Local dev: inject a static CF header so requireAuth() passes without real Cloudflare
+        cat > /etc/nginx/conf.d/admin-auth.conf.inc <<DEVADMINEOF
 location /admin {
-    auth_basic "Vitrine3D Admin";
-    auth_basic_user_file /etc/nginx/.htpasswd;
     proxy_pass http://127.0.0.1:3001;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header Cf-Access-Authenticated-User-Email "${DEV_AUTH_USER}";
 }
 
-# API routes — proxied to meta-server, protected by basic auth
 location /api/ {
-    auth_basic "Vitrine3D Admin";
-    auth_basic_user_file /etc/nginx/.htpasswd;
     proxy_pass http://127.0.0.1:3001;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header Cf-Access-Authenticated-User-Email "${DEV_AUTH_USER}";
+    client_max_body_size ${MAX_UPLOAD_SIZE:-1024}m;
+    proxy_request_buffering off;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+}
+DEVADMINEOF
+        echo ""
+        echo "  *** WARNING: DEV_AUTH_USER is set. All /admin and /api/ requests will authenticate"
+        echo "  *** as '${DEV_AUTH_USER}' regardless of actual credentials. REMOVE BEFORE PRODUCTION."
+        echo ""
+    else
+        cat > /etc/nginx/conf.d/admin-auth.conf.inc <<ADMINEOF
+location /admin {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    # Security: \$http_cf_access_authenticated_user_email reflects the incoming header.
+    # Header spoofing is prevented by the Cloudflare Tunnel — only Cloudflare can
+    # reach this container, so this header is always set by Cloudflare Access.
+    proxy_set_header Cf-Access-Authenticated-User-Email \$http_cf_access_authenticated_user_email;
+}
 
-    # Large upload support
+location /api/ {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    # Security: \$http_cf_access_authenticated_user_email reflects the incoming header.
+    # Header spoofing is prevented by the Cloudflare Tunnel — only Cloudflare can
+    # reach this container, so this header is always set by Cloudflare Access.
+    proxy_set_header Cf-Access-Authenticated-User-Email \$http_cf_access_authenticated_user_email;
     client_max_body_size ${MAX_UPLOAD_SIZE:-1024}m;
     proxy_request_buffering off;
     proxy_read_timeout 600s;
     proxy_send_timeout 600s;
 }
 ADMINEOF
+    fi
 
-    # Check archives directory is writable
     if [ ! -w "/usr/share/nginx/html/archives/" ]; then
         echo "  WARNING: /usr/share/nginx/html/archives/ is not writable."
         echo "  Mount with :rw for upload/delete/rename to work."

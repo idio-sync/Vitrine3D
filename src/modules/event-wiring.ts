@@ -29,6 +29,7 @@ import {
     updatePointcloudOpacity,
     updateModelTextures
 } from './file-handlers.js';
+import * as postProcessing from './post-processing.js';
 import type { EventWiringDeps } from '@/types.js';
 
 const log = Logger.getLogger('event-wiring');
@@ -52,6 +53,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             activateTool(tool);
             // Trigger library data fetch on first activation
             if (tool === 'library') onLibraryActivated();
+            // Populate metadata display when opening the metadata pane
+            if (tool === 'metadata') deps.metadata.populateMetadataDisplay();
             // Show/hide transform gizmo and orbit center line based on active tool
             if (sceneRefs.transformControls) {
                 try {
@@ -579,12 +582,12 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         try {
             await sceneManager.loadBackgroundImageFromFile(file);
             const filenameEl = document.getElementById('bg-image-filename');
-            if (filenameEl) { filenameEl.textContent = file.name; filenameEl.style.display = ''; }
+            if (filenameEl) filenameEl.textContent = file.name;
+            const statusRow = document.getElementById('bg-image-status');
+            if (statusRow) statusRow.style.display = '';
             const envBgToggle = document.getElementById('toggle-env-background') as HTMLInputElement | null;
             if (envBgToggle) envBgToggle.checked = false;
             document.querySelectorAll('.color-preset').forEach(b => b.classList.remove('active'));
-            const clearBtn = document.getElementById('btn-clear-bg-image');
-            if (clearBtn) clearBtn.style.display = '';
         } catch (err: any) {
             notify.error('Failed to load background image: ' + err.message);
         }
@@ -595,11 +598,11 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (!url || !sceneManager) return;
         try {
             await sceneManager.loadBackgroundImage(url);
+            const statusRow = document.getElementById('bg-image-status');
+            if (statusRow) statusRow.style.display = '';
             const envBgToggle = document.getElementById('toggle-env-background') as HTMLInputElement | null;
             if (envBgToggle) envBgToggle.checked = false;
             document.querySelectorAll('.color-preset').forEach(b => b.classList.remove('active'));
-            const clearBtn = document.getElementById('btn-clear-bg-image');
-            if (clearBtn) clearBtn.style.display = '';
         } catch (err: any) {
             notify.error('Failed to load background image: ' + err.message);
         }
@@ -611,10 +614,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         sceneManager.setBackgroundColor(
             '#' + (sceneManager.savedBackgroundColor || new THREE.Color(0x1a1a2e)).getHexString()
         );
-        const filenameEl = document.getElementById('bg-image-filename');
-        if (filenameEl) filenameEl.style.display = 'none';
-        const clearBtn = document.getElementById('btn-clear-bg-image');
-        if (clearBtn) clearBtn.style.display = 'none';
+        const statusRow = document.getElementById('bg-image-status');
+        if (statusRow) statusRow.style.display = 'none';
     });
 
     // ─── Scene settings — Tone mapping ───────────────────────
@@ -626,6 +627,151 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         const val = parseFloat((e.target as HTMLInputElement).value);
         document.getElementById('tone-mapping-exposure-value')!.textContent = val.toFixed(1);
         if (sceneManager) sceneManager.setToneMappingExposure(val);
+    });
+
+    // ─── Scene settings — Post-Processing ────────────────────
+    addListener('pp-master-enable', 'change', async (e: Event) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const ppControls = document.getElementById('pp-controls');
+        if (ppControls) ppControls.style.display = checked ? '' : 'none';
+        if (checked && sceneManager.rendererType === 'webgpu') {
+            // Force switch to WebGL — EffectComposer is WebGL-only
+            notify('Switching to WebGL for post-processing effects');
+            await sceneManager.switchRenderer('webgl');
+            // onRendererChanged callback in main.ts re-enables post-processing
+        }
+        if (!checked) {
+            // Disable all effects but keep pipeline alive
+            postProcessing.setConfig({
+                ssao: { enabled: false, radius: 0.5, intensity: 1.0 },
+                bloom: { enabled: false, strength: 0.5, radius: 0.4, threshold: 0.85 },
+                sharpen: { enabled: false, intensity: 0.3 },
+                vignette: { enabled: false, intensity: 0.5, offset: 1.0 },
+                chromaticAberration: { enabled: false, intensity: 0.005 },
+                colorBalance: { enabled: false, shadows: [0, 0, 0], midtones: [0, 0, 0], highlights: [0, 0, 0] },
+                grain: { enabled: false, intensity: 0.05 },
+            });
+            ['pp-ssao-enable', 'pp-bloom-enable', 'pp-sharpen-enable', 'pp-vignette-enable', 'pp-ca-enable', 'pp-cb-enable', 'pp-grain-enable'].forEach(id => {
+                const el = document.getElementById(id) as HTMLInputElement;
+                if (el) el.checked = false;
+            });
+        }
+    });
+
+    // SSAO
+    addListener('pp-ssao-enable', 'change', (e: Event) => {
+        postProcessing.setSSAO({ enabled: (e.target as HTMLInputElement).checked });
+    });
+    addListener('pp-ssao-radius', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-ssao-radius-value');
+        if (el) el.textContent = val.toFixed(2);
+        postProcessing.setSSAO({ radius: val });
+    });
+    addListener('pp-ssao-intensity', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-ssao-intensity-value');
+        if (el) el.textContent = val.toFixed(1);
+        postProcessing.setSSAO({ intensity: val });
+    });
+
+    // Bloom
+    addListener('pp-bloom-enable', 'change', (e: Event) => {
+        postProcessing.setBloom({ enabled: (e.target as HTMLInputElement).checked });
+    });
+    addListener('pp-bloom-strength', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-bloom-strength-value');
+        if (el) el.textContent = val.toFixed(2);
+        postProcessing.setBloom({ strength: val });
+    });
+    addListener('pp-bloom-radius', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-bloom-radius-value');
+        if (el) el.textContent = val.toFixed(2);
+        postProcessing.setBloom({ radius: val });
+    });
+    addListener('pp-bloom-threshold', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-bloom-threshold-value');
+        if (el) el.textContent = val.toFixed(2);
+        postProcessing.setBloom({ threshold: val });
+    });
+
+    // Sharpen
+    addListener('pp-sharpen-enable', 'change', (e: Event) => {
+        postProcessing.setUberEffects({ sharpen: { enabled: (e.target as HTMLInputElement).checked, intensity: postProcessing.getConfig().sharpen.intensity } });
+    });
+    addListener('pp-sharpen-intensity', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-sharpen-intensity-value');
+        if (el) el.textContent = val.toFixed(2);
+        postProcessing.setUberEffects({ sharpen: { enabled: postProcessing.getConfig().sharpen.enabled, intensity: val } });
+    });
+
+    // Vignette
+    addListener('pp-vignette-enable', 'change', (e: Event) => {
+        const cfg = postProcessing.getConfig().vignette;
+        postProcessing.setUberEffects({ vignette: { ...cfg, enabled: (e.target as HTMLInputElement).checked } });
+    });
+    addListener('pp-vignette-intensity', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-vignette-intensity-value');
+        if (el) el.textContent = val.toFixed(2);
+        const cfg = postProcessing.getConfig().vignette;
+        postProcessing.setUberEffects({ vignette: { ...cfg, intensity: val } });
+    });
+    addListener('pp-vignette-offset', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-vignette-offset-value');
+        if (el) el.textContent = val.toFixed(2);
+        const cfg = postProcessing.getConfig().vignette;
+        postProcessing.setUberEffects({ vignette: { ...cfg, offset: val } });
+    });
+
+    // Chromatic Aberration
+    addListener('pp-ca-enable', 'change', (e: Event) => {
+        const cfg = postProcessing.getConfig().chromaticAberration;
+        postProcessing.setUberEffects({ chromaticAberration: { ...cfg, enabled: (e.target as HTMLInputElement).checked } });
+    });
+    addListener('pp-ca-intensity', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-ca-intensity-value');
+        if (el) el.textContent = val.toFixed(3);
+        const cfg = postProcessing.getConfig().chromaticAberration;
+        postProcessing.setUberEffects({ chromaticAberration: { ...cfg, intensity: val } });
+    });
+
+    // Color Balance
+    addListener('pp-cb-enable', 'change', (e: Event) => {
+        const cfg = postProcessing.getConfig().colorBalance;
+        postProcessing.setUberEffects({ colorBalance: { ...cfg, enabled: (e.target as HTMLInputElement).checked } });
+    });
+    for (const zone of ['shadows', 'midtones', 'highlights'] as const) {
+        for (const [ch, idx] of [['r', 0], ['g', 1], ['b', 2]] as [string, number][]) {
+            addListener(`pp-cb-${zone}-${ch}`, 'input', (e: Event) => {
+                const val = parseFloat((e.target as HTMLInputElement).value);
+                const el = document.getElementById(`pp-cb-${zone}-${ch}-value`);
+                if (el) el.textContent = val.toFixed(2);
+                const cfg = postProcessing.getConfig().colorBalance;
+                const arr = [...cfg[zone]] as [number, number, number];
+                arr[idx] = val;
+                postProcessing.setUberEffects({ colorBalance: { ...cfg, [zone]: arr } });
+            });
+        }
+    }
+
+    // Grain
+    addListener('pp-grain-enable', 'change', (e: Event) => {
+        const cfg = postProcessing.getConfig().grain;
+        postProcessing.setUberEffects({ grain: { ...cfg, enabled: (e.target as HTMLInputElement).checked } });
+    });
+    addListener('pp-grain-intensity', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-grain-intensity-value');
+        if (el) el.textContent = val.toFixed(2);
+        const cfg = postProcessing.getConfig().grain;
+        postProcessing.setUberEffects({ grain: { ...cfg, intensity: val } });
     });
 
     // ─── Scene settings — Environment map (IBL) ─────────────
@@ -737,7 +883,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         // Tool rail pane shortcuts (match data-tooltip in HTML)
         let activatedTool: string | null = null;
         switch (key) {
-            case 's': activateTool('scene'); activatedTool = 'scene'; break;
+            case 'v': activateTool('viewsettings'); activatedTool = 'viewsettings'; break;
             case 'a': activateTool('assets'); activatedTool = 'assets'; break;
             case 't':
                 activateTool('transform'); activatedTool = 'transform';
@@ -766,7 +912,6 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             case 'm': activateTool('measure'); activatedTool = 'measure'; break;
             case 'c': activateTool('capture'); activatedTool = 'capture'; break;
             case 'd': activateTool('metadata'); activatedTool = 'metadata'; break;
-            case ',': activateTool('settings'); activatedTool = 'settings'; break;
             case 'l': activateTool('library'); activatedTool = 'library'; onLibraryActivated(); break;
             case 'f': deps.camera.toggleFlyMode(); break;
             default: break;
@@ -814,18 +959,105 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         }
     });
 
-    addListener('meta-viewer-bg-override', 'change', (e: Event) => {
+    // Mesh background override
+    addListener('meta-viewer-mesh-bg-override', 'change', (e: Event) => {
         const checked = (e.target as HTMLInputElement).checked;
-        const colorRow = document.getElementById('meta-viewer-bg-color-row');
+        const colorRow = document.getElementById('meta-viewer-mesh-bg-color-row');
         if (colorRow) colorRow.style.display = checked ? '' : 'none';
+        if (checked) {
+            const color = (document.getElementById('meta-viewer-mesh-bg-color') as HTMLInputElement)?.value || '#1a1a2e';
+            deps.state.meshBackgroundColor = color;
+        } else {
+            deps.state.meshBackgroundColor = null;
+        }
+        deps.display.setDisplayMode(deps.state.displayMode);
     });
 
-    addListener('meta-viewer-bg-color', 'input', (e: Event) => {
+    addListener('meta-viewer-mesh-bg-color', 'input', (e: Event) => {
         const hex = (e.target as HTMLInputElement).value;
-        if (sceneRefs.scene) sceneRefs.scene.background = new THREE.Color(hex);
-        const hexLabel = document.getElementById('meta-viewer-bg-color-hex');
+        const hexLabel = document.getElementById('meta-viewer-mesh-bg-color-hex');
         if (hexLabel) hexLabel.textContent = hex;
+        deps.state.meshBackgroundColor = hex;
+        deps.display.setDisplayMode(deps.state.displayMode);
     });
+
+    // Splat background override
+    addListener('meta-viewer-splat-bg-override', 'change', (e: Event) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const colorRow = document.getElementById('meta-viewer-splat-bg-color-row');
+        if (colorRow) colorRow.style.display = checked ? '' : 'none';
+        if (checked) {
+            const color = (document.getElementById('meta-viewer-splat-bg-color') as HTMLInputElement)?.value || '#1a1a2e';
+            deps.state.splatBackgroundColor = color;
+        } else {
+            deps.state.splatBackgroundColor = null;
+        }
+        deps.display.setDisplayMode(deps.state.displayMode);
+    });
+
+    addListener('meta-viewer-splat-bg-color', 'input', (e: Event) => {
+        const hex = (e.target as HTMLInputElement).value;
+        const hexLabel = document.getElementById('meta-viewer-splat-bg-color-hex');
+        if (hexLabel) hexLabel.textContent = hex;
+        deps.state.splatBackgroundColor = hex;
+        deps.display.setDisplayMode(deps.state.displayMode);
+    });
+
+    // ─── View Settings tab switching ─────────────────────────
+    document.querySelectorAll('.vs-tab-bar button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = (btn as HTMLElement).dataset.vsTab;
+            if (!tab) return;
+            document.querySelectorAll('.vs-tab-bar button').forEach(b => b.classList.toggle('active', b === btn));
+            document.querySelectorAll('.vs-tab-content').forEach(c => c.classList.toggle('active', c.id === `vs-tab-${tab}`));
+        });
+    });
+
+    // ─── View Settings: master enable checkboxes ──────────────
+    // Lighting on Open — toggle controls visibility
+    addListener('meta-viewer-lighting-enabled', 'change', (e: Event) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const controls = document.getElementById('meta-viewer-lighting-controls');
+        if (controls) controls.style.display = checked ? '' : 'none';
+    });
+
+    // Shadows checkbox — toggle shadow opacity slider visibility
+    addListener('meta-viewer-shadows-enabled', 'change', (e: Event) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const group = document.getElementById('meta-viewer-shadow-opacity-group');
+        if (group) group.style.display = checked ? '' : 'none';
+    });
+
+    // Tone Mapping on Open — toggle controls visibility
+    addListener('meta-viewer-tone-mapping-enabled', 'change', (e: Event) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const controls = document.getElementById('meta-viewer-tone-mapping-controls');
+        if (controls) controls.style.display = checked ? '' : 'none';
+    });
+
+    // Environment on Open — toggle controls visibility
+    addListener('meta-viewer-env-enabled', 'change', (e: Event) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const controls = document.getElementById('meta-viewer-env-controls');
+        if (controls) controls.style.display = checked ? '' : 'none';
+    });
+
+    // ─── View Settings: Defaults tab slider value displays ───
+    const defaultSliders = [
+        'meta-viewer-ambient-intensity',
+        'meta-viewer-hemisphere-intensity',
+        'meta-viewer-directional1-intensity',
+        'meta-viewer-directional2-intensity',
+        'meta-viewer-shadow-opacity',
+        'meta-viewer-tone-mapping-exposure',
+    ];
+    for (const id of defaultSliders) {
+        addListener(id, 'input', (e: Event) => {
+            const val = parseFloat((e.target as HTMLInputElement).value);
+            const valueEl = document.getElementById(`${id}-value`);
+            if (valueEl) valueEl.textContent = val.toFixed(1);
+        });
+    }
 
     // ─── Setup collapsible sections ──────────────────────────
     setupCollapsibles();

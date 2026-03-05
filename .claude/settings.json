@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git check-ignore -q .worktrees)",
+      "Bash(gh api repos/blender/blender/git/trees/main --jq '.tree[] | select\\(.path | startswith\\(\"\"scripts/addons\"\"\\)\\) | .path')"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
+    ]
+  }
+}

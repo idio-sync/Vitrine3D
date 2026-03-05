@@ -7,6 +7,27 @@ export type RotationPivot = 'object' | 'origin';
 export type QualityTier = 'sd' | 'hd';
 export type AssetStateValue = 'unloaded' | 'loading' | 'loaded' | 'error';
 
+export interface DecimationOptions {
+    preset: string;
+    targetRatio: number;
+    targetFaceCount: number | null;
+    errorThreshold: number;
+    lockBorder: boolean;
+    preserveUVSeams: boolean;
+    textureMaxRes: number;
+    textureFormat: 'jpeg' | 'png' | 'keep';
+    textureQuality: number;
+}
+
+export interface DecimationResult {
+    faceCount: number;
+    vertexCount: number;
+    originalFaceCount: number;
+    blob: Blob;
+    preset: string;
+    options: DecimationOptions;
+}
+
 // ===== Main State =====
 
 export interface AppState {
@@ -46,10 +67,16 @@ export interface AppState {
     assetStates: Record<string, string>;  // Values are ASSET_STATE constants (untyped JS)
     viewingProxy: boolean;
     qualityTier: string;                   // 'sd' | 'hd' — widened because constants.js is untyped
+    meshBackgroundColor: string | null;
+    splatBackgroundColor: string | null;
     qualityResolved: string;               // 'sd' | 'hd' — widened because constants.js is untyped
     imageAssets: Map<string, any>;         // Map of asset key → blob URL or metadata
     screenshots: Array<{ id: string; blob: Blob; dataUrl: string; timestamp: number }>;
     manualPreviewBlob: Blob | null;
+    // Decimation / SD proxy state
+    proxyMeshGroup: any | null;
+    proxyMeshSettings: DecimationOptions | null;
+    proxyMeshFaceCount: number | null;
     // Detected asset format extensions (set during file load)
     meshFormat: string | null;
     pointcloudFormat: string | null;
@@ -165,6 +192,28 @@ export interface AssetStore {
     sourceFiles: Array<{ name: string; blob: Blob }>;
 }
 
+// ===== Library Collections =====
+
+/** A named collection of archives, displayed as a group in the library and kiosk. */
+export interface Collection {
+    id: number;
+    slug: string;
+    name: string;
+    description: string;
+    thumbnail: string | null;
+    theme: string | null;
+    archiveCount: number;
+    created_at: string;
+    updated_at: string;
+}
+
+/** An archive's membership in a collection, with sort order. */
+export interface CollectionArchive {
+    collection_id: number;
+    archive_id: number;
+    sort_order: number;
+}
+
 // ===== Module Dependencies =====
 
 export interface ExportDeps {
@@ -218,6 +267,7 @@ export interface ArchivePipelineDeps {
     sourceFiles: {
         updateSourceFilesUI: () => void;
     };
+    measurementSystem?: any;
 }
 
 export interface EventWiringDeps {
@@ -292,6 +342,7 @@ export interface EventWiringDeps {
         hideMetadataPanel: () => void;
         toggleMetadataDisplay: () => void;
         setupMetadataSidebar: () => void;
+        populateMetadataDisplay: () => void;
     };
     share: {
         copyShareLink: () => void;
@@ -321,4 +372,19 @@ export interface EventWiringDeps {
     tauri: {
         wireNativeDialogsIfAvailable: () => void;
     };
+}
+
+export interface PostProcessingEffectConfig {
+    ssao: { enabled: boolean; radius: number; intensity: number };
+    bloom: { enabled: boolean; strength: number; radius: number; threshold: number };
+    sharpen: { enabled: boolean; intensity: number };
+    vignette: { enabled: boolean; intensity: number; offset: number };
+    chromaticAberration: { enabled: boolean; intensity: number };
+    colorBalance: {
+        enabled: boolean;
+        shadows: [number, number, number];
+        midtones: [number, number, number];
+        highlights: [number, number, number];
+    };
+    grain: { enabled: boolean; intensity: number };
 }

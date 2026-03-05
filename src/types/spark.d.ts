@@ -87,4 +87,45 @@ declare module '@sparkjsdev/spark' {
 
         dispose(): void;
     }
+
+    /**
+     * PackedSplats — pre-decoded splat data container.
+     * Can be passed to SplatMesh constructor to skip the decode step.
+     */
+    export class PackedSplats {
+        initialized: Promise<PackedSplats>;
+        isInitialized: boolean;
+        numSplats: number;
+        packedArray: Uint32Array | null;
+        constructor(options?: { packedArray?: Uint32Array; numSplats?: number; extra?: any; splatEncoding?: any; [key: string]: any });
+    }
+
+    /**
+     * Decode splat file bytes on the legacy worker (supports all formats including pcsogszip/.sog).
+     * The new PackedSplats worker path does NOT support .sog — use this as a workaround.
+     */
+    export function unpackSplats(options: {
+        input: Uint8Array | ArrayBuffer;
+        fileType?: string;
+        pathOrUrl?: string;
+        extraFiles?: any;
+        splatEncoding?: any;
+    }): Promise<{ packedArray: Uint32Array; numSplats: number; extra?: any }>;
+
+    /**
+     * Legacy 0.1 renderer, renamed in 2.0. No LOD support.
+     * Use via spark-compat.ts adapter with VITE_SPARK_VERSION=0.1.
+     */
+    export class OldSparkRenderer extends Object3D {
+        constructor(config: {
+            renderer: WebGLRenderer;
+            autoUpdate?: boolean;
+            maxStdDev?: number;
+            minAlpha?: number;
+            premultipliedAlpha?: boolean;
+            [key: string]: any;
+        });
+        newViewpoint(options?: any): any;
+        dispose(): void;
+    }
 }

@@ -96,12 +96,17 @@ export default defineConfig({
     base: './',
     publicDir: resolve(__dirname, 'public'),
 
+    define: {
+        'import.meta.env.VITE_APP_LIBRARY_URL': JSON.stringify(process.env.SITE_URL || ''),
+    },
+
     build: {
         outDir: '../dist',
         emptyOutDir: true,
         rollupOptions: {
             input: {
-                main: resolve(__dirname, 'src/index.html'),
+                index: resolve(__dirname, 'src/index.html'),
+                editor: resolve(__dirname, 'src/editor/index.html'),
             },
         },
     },
@@ -127,7 +132,7 @@ export default defineConfig({
     optimizeDeps: {
         // Spark.js uses eval() for WASM — excluding prevents esbuild from breaking it.
         // occt-import-js uses dynamic import + locateFile for WASM — exclude to prevent esbuild inlining.
-        exclude: ['@sparkjsdev/spark', 'occt-import-js'],
+        exclude: ['@sparkjsdev/spark', 'occt-import-js', 'meshoptimizer'],
     },
 
     plugins: [

@@ -194,15 +194,6 @@ export function sanitizeArchiveFilename(filename: string): SanitizationResult {
 }
 
 /**
- * Check if a filename is an archive file
- */
-export function isArchiveFile(filename: string): boolean {
-    if (!filename) return false;
-    const ext = filename.split('.').pop()?.toLowerCase();
-    return ext ? ARCHIVE_EXTENSIONS.includes(ext) : false;
-}
-
-/**
  * Get the file extension from a filename
  */
 function getExtension(filename: string): string {

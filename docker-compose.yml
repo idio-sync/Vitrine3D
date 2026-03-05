@@ -32,8 +32,6 @@ services:
 
       # Admin panel + Library (optional — see docs/DEPLOYMENT.md#admin-panel)
       - ADMIN_ENABLED=${ADMIN_ENABLED:-false}
-      - ADMIN_USER=${ADMIN_USER:-admin}
-      - ADMIN_PASS=${ADMIN_PASS:-}
       - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-1024}
       - CHUNKED_UPLOAD=${CHUNKED_UPLOAD:-false}
 
@@ -46,14 +44,20 @@ services:
       # - OEMBED_HEIGHT=540
 
       # Clean URL defaults (optional — see docs/DEPLOYMENT.md#clean-archive-urls)
-      # - DEFAULT_KIOSK_THEME=editorial
+      - DEFAULT_KIOSK_THEME=${DEFAULT_KIOSK_THEME:-editorial}
     volumes:
-      # Mount archives directory (use :rw when ADMIN_ENABLED=true for upload/delete/rename)
-      - ./archives:/usr/share/nginx/html/archives:ro
+      # rw required for admin upload/delete/rename. Change to :ro if ADMIN_ENABLED=false.
+      - ./archives:/usr/share/nginx/html/archives:rw
+      - thumbs:/usr/share/nginx/html/thumbs
+      - app_data:/data
       # Mount a default thumbnail for link previews (optional)
       # - ./thumbs/default.jpg:/usr/share/nginx/html/thumbs/default.jpg:ro
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  thumbs:
+  app_data:

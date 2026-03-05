@@ -4,6 +4,8 @@ A web-based application for viewing multiple types of 3D data, including 3D mode
 
 Powered by [Three.js](https://github.com/mrdoob/three.js/) and [Spark](https://sparkjs.dev/).
 
+The application is built as two separate bundles: a **kiosk viewer** (`/`) for client-facing presentation, and an **editor** (`/editor/`) for composing scenes, editing metadata, and exporting archives.
+
 ## Features
 
 - **Archive container support** (.a3d, .a3z) — bundle all assets, metadata, and multi-data alignment into a single file
@@ -22,7 +24,7 @@ Powered by [Three.js](https://github.com/mrdoob/three.js/) and [Spark](https://s
 - **Metadata editor** with 8 tabs covering project info, provenance, archival records, quality metrics, preservation, and more — with inline field validation
 - **Cross-section tool** — arbitrary-orientation clipping plane with draggable 3D handle; works in main app and kiosk viewer
 - **Walkthrough engine** — author guided camera tours with fly/fade/cut transitions, dwell times, annotation links, auto-play and loop; playback in editor and kiosk viewer
-- **Kiosk themes** — customizable color palettes and layouts via self-contained theme packages
+- **Kiosk themes** — Editorial (golden ratio layout), Gallery (cinematic full-bleed), Exhibit (institutional with attract mode), and Minimal; self-contained theme packages with layout CSS/JS and click gates
 - **Lazy archive loading** — only the manifest is decompressed on open; individual assets load on demand
 - **SIP compliance validation** — required/recommended field checking, compliance scoring, and manifest audit trail at export time
 - **Library panel** — built-in archive browser in the viewer when admin is enabled: gallery view, detail pane, upload, rename, delete, and direct-to-editor loading
@@ -30,7 +32,8 @@ Powered by [Three.js](https://github.com/mrdoob/three.js/) and [Spark](https://s
 - **Share dialog** — generate customized share links, embed codes, and QR codes with preset modes (kiosk, minimal, editor) and theme selection
 - **Clean archive URLs** — shareable `/view/{hash}` URLs that load archives in kiosk mode without query parameters
 - **Social link previews** — Open Graph, Twitter Card, and oEmbed support for rich previews when sharing viewer URLs on Slack, Discord, Twitter, WordPress, etc.
-- **Docker deployment** with environment-variable configuration, kiosk mode support, and optional admin/library features
+- **Camera constraints** — lock orbit, pan, zoom, and height limits per-archive; applied automatically in kiosk mode
+- **Docker deployment** with s6-overlay process supervision (nginx + Node API), SQLite metadata storage, Cloudflare Access authentication, and environment-variable configuration
 - **Digital preservation metadata** aligned with Dublin Core, PRONOM, and Smithsonian EDAN standards
 
 ## Quick Start
@@ -40,7 +43,7 @@ Powered by [Three.js](https://github.com/mrdoob/three.js/) and [Spark](https://s
 npm install
 npm run dev
 ```
-Then open http://localhost:8080 in your browser.
+Then open http://localhost:8080 in your browser. This serves the kiosk viewer; the editor is at http://localhost:8080/editor/.
 
 ### Production Build
 ```bash
@@ -117,12 +120,15 @@ docker run -p 8080:80 \
 - [three-dxf-loader](https://www.npmjs.com/package/three-dxf-loader) — DXF drawing file loading
 - [occt-import-js](https://github.com/kovacsv/occt-import-js) — STEP/IGES parametric CAD loading (OpenCASCADE WASM)
 - [fflate](https://github.com/101arrowz/fflate) — Fast ZIP compression/decompression
+- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) — SQLite database for server-side metadata storage
+- [busboy](https://github.com/mscdex/busboy) — Streaming multipart form parser for uploads
+- [s6-overlay](https://github.com/just-containers/s6-overlay) — Process supervision in Docker (nginx + Node API)
 - [nginx](https://nginx.org/) — Web server for Docker deployment
 - [Vite](https://vitejs.dev/) — Dev server, bundler, and build toolchain
 - [Vitest](https://vitest.dev/) — Test runner
 - TypeScript with ESLint and Prettier
 
-Runtime dependencies are installed via npm and resolved by Vite from `node_modules/`. The kiosk viewer generator fetches Three.js core from jsDelivr and Three.js addons from esm.sh at generation time for reliable offline bundling.
+Runtime dependencies are installed via npm and resolved by Vite from `node_modules/`.
 
 ## Browser Compatibility
 

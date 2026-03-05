@@ -12,7 +12,8 @@
  */
 
 import { Logger, parseMarkdown, resolveAssetRefs } from './utilities.js';
-import type { AppState, Annotation } from '@/types.js';
+import type { AppState, Annotation, PostProcessingEffectConfig } from '@/types.js';
+import * as postProcessing from './post-processing.js';
 import type { MetadataProfile } from './metadata-profile.js';
 import { TAB_TIERS, isTierVisible, computeCompleteness, PROFILE_ORDER, PRONOM_REGISTRY } from './metadata-profile.js';
 
@@ -54,6 +55,7 @@ export interface MetadataDeps {
     onExportMetadata?: () => void;
     onImportMetadata?: () => void;
     getCameraState?: () => { position: { x: number; y: number; z: number }; target: { x: number; y: number; z: number } };
+    getControls?: () => { controls: any; camera: any };
     imageAssets?: Map<string, { blob: Blob; url: string; name: string }>;
     currentSplatBlob?: Blob | null;
     currentMeshBlob?: Blob | null;
@@ -191,13 +193,31 @@ export interface AssetMetadata {
 
 export interface ViewerSettings {
     singleSided: boolean;
-    backgroundColor: string | null;
+    meshBackgroundColor: string | null;
+    splatBackgroundColor: string | null;
     displayMode: string;
     defaultMatcap: string;
     cameraPosition: { x: number; y: number; z: number } | null;
     cameraTarget: { x: number; y: number; z: number } | null;
     autoRotate: boolean;
     annotationsVisible: boolean;
+    lockOrbit: boolean;
+    lockDistance: number | null;
+    lockAboveGround: boolean;
+    maxCameraHeight: number | null;
+    ambientIntensity: number | null;
+    hemisphereIntensity: number | null;
+    directional1Intensity: number | null;
+    directional2Intensity: number | null;
+    shadowsEnabled: boolean | null;
+    shadowOpacity: number | null;
+    toneMappingMethod: string | null;
+    toneMappingExposure: number | null;
+    environmentPreset: string | null;
+    environmentAsBackground: boolean | null;
+    measurementScale: number | null;
+    measurementUnit: string | null;
+    postProcessing?: PostProcessingEffectConfig | null;
 }
 
 export interface VersionHistoryEntry {
@@ -303,7 +323,7 @@ export function switchSidebarMode(mode: string, deps: MetadataDeps = {}): void {
 /**
  * Switch edit sub-tab
  */
-export function switchEditTab(tabName: string): void {
+function switchEditTab(tabName: string): void {
     // Update tab buttons
     const tabs = document.querySelectorAll('.edit-tab');
     tabs.forEach(tab => {
@@ -378,7 +398,7 @@ export function getActiveProfile(): MetadataProfile {
 /**
  * Set the active metadata profile. Updates UI visibility and completeness indicator.
  */
-export function setActiveProfile(profile: MetadataProfile): void {
+function setActiveProfile(profile: MetadataProfile): void {
     activeProfile = profile;
 
     // Update button active states
@@ -419,7 +439,7 @@ export function setActiveProfile(profile: MetadataProfile): void {
 /**
  * Update the completeness indicator based on the active profile.
  */
-export function updateCompleteness(): void {
+function updateCompleteness(): void {
     const { filled, total } = computeCompleteness(activeProfile);
     const percent = total > 0 ? Math.round((filled / total) * 100) : 0;
 
@@ -658,6 +678,88 @@ export function setupMetadataSidebar(deps: MetadataDeps = {}): void {
         });
     }
 
+    // Camera constraint checkboxes — live preview
+    let heightClampListener: (() => void) | null = null;
+
+    function applyLiveConstraints() {
+        if (!deps.getControls) return;
+        const { controls: ctrl, camera: cam } = deps.getControls();
+        if (!ctrl || !cam) return;
+
+        // Remove old height clamp listener before re-applying
+        if (heightClampListener) {
+            ctrl.removeEventListener('change', heightClampListener);
+            heightClampListener = null;
+        }
+
+        const lockOrbit = (document.getElementById('meta-viewer-lock-orbit') as HTMLInputElement)?.checked ?? false;
+        const lockDistanceChecked = (document.getElementById('meta-viewer-lock-orbit-distance') as HTMLInputElement)?.checked ?? false;
+        const lockAboveGround = (document.getElementById('meta-viewer-lock-above-ground') as HTMLInputElement)?.checked ?? false;
+        const lockMaxHeightChecked = (document.getElementById('meta-viewer-lock-max-height') as HTMLInputElement)?.checked ?? false;
+
+        // Capture current distance when lock distance is toggled on
+        let lockDistanceValue: number | null = null;
+        if (lockDistanceChecked) {
+            const storedVal = (document.getElementById('meta-viewer-lock-distance-value') as HTMLInputElement)?.value;
+            if (storedVal) {
+                lockDistanceValue = parseFloat(storedVal);
+            } else {
+                // Capture current distance
+                const dist = cam.position.distanceTo(ctrl.target);
+                lockDistanceValue = parseFloat(dist.toFixed(4));
+                const hiddenEl = document.getElementById('meta-viewer-lock-distance-value') as HTMLInputElement;
+                if (hiddenEl) hiddenEl.value = String(lockDistanceValue);
+            }
+        } else {
+            // Clear stored distance when unchecked
+            const hiddenEl = document.getElementById('meta-viewer-lock-distance-value') as HTMLInputElement;
+            if (hiddenEl) hiddenEl.value = '';
+        }
+
+        // Max height value
+        let maxHeightValue: number | null = null;
+        if (lockMaxHeightChecked) {
+            const input = document.getElementById('meta-viewer-max-height-value') as HTMLInputElement;
+            maxHeightValue = input?.value ? parseFloat(input.value) : null;
+        }
+
+        // Show/hide max height controls
+        const maxHeightRow = document.getElementById('max-height-controls');
+        if (maxHeightRow) maxHeightRow.style.display = lockMaxHeightChecked ? '' : 'none';
+
+        heightClampListener = applyCameraConstraints(ctrl, cam, {
+            lockOrbit,
+            lockDistance: lockDistanceValue,
+            lockAboveGround,
+            maxCameraHeight: maxHeightValue,
+        });
+    }
+
+    // Wire checkbox change events
+    ['meta-viewer-lock-orbit', 'meta-viewer-lock-orbit-distance', 'meta-viewer-lock-above-ground', 'meta-viewer-lock-max-height'].forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        if (el) el.addEventListener('change', applyLiveConstraints);
+    });
+
+    // Wire max height value input — re-apply on change
+    const maxHeightInput = document.getElementById('meta-viewer-max-height-value') as HTMLInputElement | null;
+    if (maxHeightInput) maxHeightInput.addEventListener('input', applyLiveConstraints);
+
+    // "Set to current" button for max height
+    const setMaxHeightBtn = document.getElementById('btn-set-max-height-current');
+    if (setMaxHeightBtn) {
+        setMaxHeightBtn.addEventListener('click', () => {
+            if (!deps.getControls) return;
+            const { camera: cam } = deps.getControls();
+            if (!cam) return;
+            const input = document.getElementById('meta-viewer-max-height-value') as HTMLInputElement;
+            if (input) {
+                input.value = cam.position.y.toFixed(2);
+                applyLiveConstraints();
+            }
+        });
+    }
+
     // Map picker for GPS coordinates
     setupMapPicker();
 }
@@ -665,7 +767,7 @@ export function setupMetadataSidebar(deps: MetadataDeps = {}): void {
 /**
  * Wire up the map picker button for GPS coordinate selection.
  */
-export function setupMapPicker(): void {
+function setupMapPicker(): void {
     const btn = document.getElementById('btn-pick-map');
     if (!btn) return;
 
@@ -730,7 +832,7 @@ export function formatFileSize(bytes: number): string {
 /**
  * Update quality stats display in metadata panel
  */
-export function updateMetadataStats(deps: MetadataDeps = {}): void {
+function updateMetadataStats(deps: MetadataDeps = {}): void {
     const { state = {} as AppState, annotationSystem, currentSplatBlob, currentMeshBlob, currentPointcloudBlob } = deps;
 
     // Splat count
@@ -790,7 +892,7 @@ export function updateMetadataStats(deps: MetadataDeps = {}): void {
 /**
  * Update asset status in metadata panel
  */
-export function updateAssetStatus(deps: MetadataDeps = {}): void {
+function updateAssetStatus(deps: MetadataDeps = {}): void {
     const { state = {} as AppState } = deps;
 
     // Splat asset
@@ -882,7 +984,7 @@ export function addCustomField(): void {
 /**
  * Add a processing software row with name, version, and URL fields
  */
-export function addProcessingSoftware(): void {
+function addProcessingSoftware(): void {
     const container = document.getElementById('processing-software-list');
     if (!container) return;
 
@@ -920,7 +1022,7 @@ export function addProcessingSoftware(): void {
 /**
  * Add a related object row with title, description, and URL fields
  */
-export function addRelatedObject(): void {
+function addRelatedObject(): void {
     const container = document.getElementById('related-objects-list');
     if (!container) return;
 
@@ -958,7 +1060,7 @@ export function addRelatedObject(): void {
 /**
  * Add a version history row with version and description fields
  */
-export function addVersionEntry(): void {
+function addVersionEntry(): void {
     const container = document.getElementById('version-history-list');
     if (!container) {
         log.warn('Version history container not found');
@@ -1067,7 +1169,7 @@ function validateField(fieldId: string): boolean {
  * Attach blur-event validation listeners to all validated fields.
  * Called once from setupMetadataSidebar().
  */
-export function setupFieldValidation(): void {
+function setupFieldValidation(): void {
     for (const fieldId in VALIDATION_RULES) {
         const field = document.getElementById(fieldId);
         if (field) {
@@ -1118,6 +1220,62 @@ function updateCameraSaveDisplay(): void {
         if (hint) hint.style.display = '';
         if (clearBtn) clearBtn.style.display = 'none';
     }
+}
+
+/**
+ * Apply camera constraints to OrbitControls based on settings.
+ * Called on checkbox toggle (live preview) and on archive load.
+ * Returns a cleanup function for the height clamp listener, or null.
+ */
+export function applyCameraConstraints(
+    controls: any,
+    camera: any,
+    settings: {
+        lockOrbit: boolean;
+        lockDistance: number | null;
+        lockAboveGround: boolean;
+        maxCameraHeight: number | null;
+    }
+): (() => void) | null {
+    // Lock orbit point (disable panning)
+    controls.enablePan = !settings.lockOrbit;
+
+    // Lock camera distance
+    if (settings.lockDistance !== null) {
+        controls.minDistance = settings.lockDistance;
+        controls.maxDistance = settings.lockDistance;
+    } else {
+        controls.minDistance = 0.1;  // ORBIT_CONTROLS.MIN_DISTANCE
+        controls.maxDistance = 100;  // ORBIT_CONTROLS.MAX_DISTANCE
+    }
+
+    // Keep camera above ground
+    controls.maxPolarAngle = settings.lockAboveGround ? Math.PI / 2 : Math.PI;
+
+    // Max camera height — dynamically constrain minPolarAngle so the camera
+    // smoothly stops at the ceiling while still orbiting freely horizontally.
+    if (settings.maxCameraHeight !== null) {
+        const maxY = settings.maxCameraHeight;
+        const updateHeightConstraint = () => {
+            const distance = camera.position.distanceTo(controls.target);
+            const targetY = controls.target.y;
+            if (distance === 0 || maxY >= targetY + distance) {
+                // Camera can never reach maxY at this distance — no constraint needed
+                controls.minPolarAngle = 0;
+            } else {
+                const ratio = Math.min(1, Math.max(-1, (maxY - targetY) / distance));
+                controls.minPolarAngle = Math.acos(ratio);
+            }
+        };
+        controls.addEventListener('change', updateHeightConstraint);
+        // Apply immediately
+        updateHeightConstraint();
+        return updateHeightConstraint;
+    } else {
+        controls.minPolarAngle = 0;
+    }
+
+    return null;
 }
 
 /**
@@ -1268,8 +1426,11 @@ export function collectMetadata(): CollectedMetadata {
         includeIntegrity: (document.getElementById('meta-include-integrity') as HTMLInputElement)?.checked ?? true,
         viewerSettings: {
             singleSided: (document.getElementById('meta-viewer-single-sided') as HTMLInputElement)?.checked ?? true,
-            backgroundColor: (document.getElementById('meta-viewer-bg-override') as HTMLInputElement)?.checked
-                ? ((document.getElementById('meta-viewer-bg-color') as HTMLInputElement)?.value || '#1a1a2e')
+            meshBackgroundColor: (document.getElementById('meta-viewer-mesh-bg-override') as HTMLInputElement)?.checked
+                ? ((document.getElementById('meta-viewer-mesh-bg-color') as HTMLInputElement)?.value || '#1a1a2e')
+                : null,
+            splatBackgroundColor: (document.getElementById('meta-viewer-splat-bg-override') as HTMLInputElement)?.checked
+                ? ((document.getElementById('meta-viewer-splat-bg-color') as HTMLInputElement)?.value || '#1a1a2e')
                 : null,
             displayMode: (document.getElementById('meta-viewer-display-mode') as HTMLSelectElement)?.value || '',
             defaultMatcap: (document.getElementById('meta-viewer-default-matcap') as HTMLSelectElement)?.value || '',
@@ -1277,6 +1438,51 @@ export function collectMetadata(): CollectedMetadata {
             cameraTarget: getCameraFromHiddenFields('target'),
             autoRotate: (document.getElementById('meta-viewer-auto-rotate') as HTMLInputElement)?.checked ?? false,
             annotationsVisible: (document.getElementById('meta-viewer-annotations-visible') as HTMLInputElement)?.checked ?? true,
+            lockOrbit: (document.getElementById('meta-viewer-lock-orbit') as HTMLInputElement)?.checked ?? false,
+            lockDistance: (document.getElementById('meta-viewer-lock-orbit-distance') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-lock-distance-value') as HTMLInputElement)?.value) || null
+                : null,
+            lockAboveGround: (document.getElementById('meta-viewer-lock-above-ground') as HTMLInputElement)?.checked ?? false,
+            maxCameraHeight: (document.getElementById('meta-viewer-lock-max-height') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-max-height-value') as HTMLInputElement)?.value) || null
+                : null,
+            // Lighting (only when enabled)
+            ambientIntensity: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-ambient-intensity') as HTMLInputElement)?.value) ?? null
+                : null,
+            hemisphereIntensity: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-hemisphere-intensity') as HTMLInputElement)?.value) ?? null
+                : null,
+            directional1Intensity: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-directional1-intensity') as HTMLInputElement)?.value) ?? null
+                : null,
+            directional2Intensity: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-directional2-intensity') as HTMLInputElement)?.value) ?? null
+                : null,
+            shadowsEnabled: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
+                ? (document.getElementById('meta-viewer-shadows-enabled') as HTMLInputElement)?.checked ?? null
+                : null,
+            shadowOpacity: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-shadow-opacity') as HTMLInputElement)?.value) ?? null
+                : null,
+            // Tone Mapping (only when enabled)
+            toneMappingMethod: (document.getElementById('meta-viewer-tone-mapping-enabled') as HTMLInputElement)?.checked
+                ? (document.getElementById('meta-viewer-tone-mapping-method') as HTMLSelectElement)?.value || null
+                : null,
+            toneMappingExposure: (document.getElementById('meta-viewer-tone-mapping-enabled') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-tone-mapping-exposure') as HTMLInputElement)?.value) ?? null
+                : null,
+            // Environment IBL (only when enabled)
+            environmentPreset: (document.getElementById('meta-viewer-env-enabled') as HTMLInputElement)?.checked
+                ? (document.getElementById('meta-viewer-env-preset') as HTMLSelectElement)?.value || null
+                : null,
+            environmentAsBackground: (document.getElementById('meta-viewer-env-enabled') as HTMLInputElement)?.checked
+                ? (document.getElementById('meta-viewer-env-as-background') as HTMLInputElement)?.checked ?? null
+                : null,
+            measurementScale: null,  // Populated by export-controller from measurementSystem
+            measurementUnit: null,
+            // Post-processing (only when enabled)
+            postProcessing: postProcessing.isEnabled() ? postProcessing.getConfig() : null,
         }
     };
 
@@ -1743,20 +1949,33 @@ export function prefillMetadataFromArchive(manifest: any): void {
         const singleSidedEl = document.getElementById('meta-viewer-single-sided') as HTMLInputElement | null;
         if (singleSidedEl) singleSidedEl.checked = manifest.viewer_settings.single_sided ?? true;
 
-        const bgOverrideEl = document.getElementById('meta-viewer-bg-override') as HTMLInputElement | null;
-        const bgColorEl = document.getElementById('meta-viewer-bg-color') as HTMLInputElement | null;
-        const bgColorRow = document.getElementById('meta-viewer-bg-color-row');
-        const hasBgColor = !!manifest.viewer_settings.background_color;
-        if (bgOverrideEl) {
-            bgOverrideEl.checked = hasBgColor;
+        // Backward compat: old archives have background_color, new ones have mesh/splat variants
+        const legacyBg = manifest.viewer_settings.background_color || null;
+        const meshBg = manifest.viewer_settings.mesh_background_color || legacyBg;
+        const splatBg = manifest.viewer_settings.splat_background_color || legacyBg;
+
+        // Mesh background
+        const meshBgOverrideEl = document.getElementById('meta-viewer-mesh-bg-override') as HTMLInputElement | null;
+        const meshBgColorEl = document.getElementById('meta-viewer-mesh-bg-color') as HTMLInputElement | null;
+        const meshBgColorRow = document.getElementById('meta-viewer-mesh-bg-color-row');
+        if (meshBgOverrideEl) meshBgOverrideEl.checked = !!meshBg;
+        if (meshBgColorRow) meshBgColorRow.style.display = meshBg ? '' : 'none';
+        if (meshBgColorEl && meshBg) {
+            meshBgColorEl.value = meshBg;
+            const hexLabel = document.getElementById('meta-viewer-mesh-bg-color-hex');
+            if (hexLabel) hexLabel.textContent = meshBg;
         }
-        if (bgColorRow) {
-            bgColorRow.style.display = hasBgColor ? '' : 'none';
-        }
-        if (bgColorEl && hasBgColor) {
-            bgColorEl.value = manifest.viewer_settings.background_color;
-            const hexLabel = document.getElementById('meta-viewer-bg-color-hex');
-            if (hexLabel) hexLabel.textContent = manifest.viewer_settings.background_color;
+
+        // Splat background
+        const splatBgOverrideEl = document.getElementById('meta-viewer-splat-bg-override') as HTMLInputElement | null;
+        const splatBgColorEl = document.getElementById('meta-viewer-splat-bg-color') as HTMLInputElement | null;
+        const splatBgColorRow = document.getElementById('meta-viewer-splat-bg-color-row');
+        if (splatBgOverrideEl) splatBgOverrideEl.checked = !!splatBg;
+        if (splatBgColorRow) splatBgColorRow.style.display = splatBg ? '' : 'none';
+        if (splatBgColorEl && splatBg) {
+            splatBgColorEl.value = splatBg;
+            const hexLabel = document.getElementById('meta-viewer-splat-bg-color-hex');
+            if (hexLabel) hexLabel.textContent = splatBg;
         }
 
         // Display mode
@@ -1789,6 +2008,82 @@ export function prefillMetadataFromArchive(manifest: any): void {
         // Annotations visible
         const annoVisEl = document.getElementById('meta-viewer-annotations-visible') as HTMLInputElement | null;
         if (annoVisEl) annoVisEl.checked = manifest.viewer_settings.annotations_visible ?? true;
+
+        // Camera constraints
+        const lockOrbitEl = document.getElementById('meta-viewer-lock-orbit') as HTMLInputElement | null;
+        if (lockOrbitEl) lockOrbitEl.checked = manifest.viewer_settings.lock_orbit ?? false;
+
+        const lockDistanceEl = document.getElementById('meta-viewer-lock-orbit-distance') as HTMLInputElement | null;
+        if (lockDistanceEl) lockDistanceEl.checked = manifest.viewer_settings.lock_distance != null;
+        const lockDistanceValEl = document.getElementById('meta-viewer-lock-distance-value') as HTMLInputElement | null;
+        if (lockDistanceValEl && manifest.viewer_settings.lock_distance != null) {
+            lockDistanceValEl.value = String(manifest.viewer_settings.lock_distance);
+        }
+
+        const lockAboveGroundEl = document.getElementById('meta-viewer-lock-above-ground') as HTMLInputElement | null;
+        if (lockAboveGroundEl) lockAboveGroundEl.checked = manifest.viewer_settings.lock_above_ground ?? false;
+
+        const lockMaxHeightEl = document.getElementById('meta-viewer-lock-max-height') as HTMLInputElement | null;
+        const maxHeightControls = document.getElementById('max-height-controls');
+        const maxHeightValEl = document.getElementById('meta-viewer-max-height-value') as HTMLInputElement | null;
+        if (lockMaxHeightEl) lockMaxHeightEl.checked = manifest.viewer_settings.max_camera_height != null;
+        if (maxHeightControls) maxHeightControls.style.display = manifest.viewer_settings.max_camera_height != null ? '' : 'none';
+        if (maxHeightValEl && manifest.viewer_settings.max_camera_height != null) {
+            maxHeightValEl.value = String(manifest.viewer_settings.max_camera_height);
+        }
+
+        // Lighting defaults
+        const hasLighting = manifest.viewer_settings.ambient_intensity != null;
+        const lightingEnabledEl = document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement | null;
+        const lightingControlsEl = document.getElementById('meta-viewer-lighting-controls');
+        if (lightingEnabledEl) lightingEnabledEl.checked = hasLighting;
+        if (lightingControlsEl) lightingControlsEl.style.display = hasLighting ? '' : 'none';
+        if (hasLighting) {
+            const setSlider = (id: string, val: number | null | undefined) => {
+                const el = document.getElementById(id) as HTMLInputElement | null;
+                const valEl = document.getElementById(id + '-value');
+                if (el && val != null) { el.value = String(val); if (valEl) valEl.textContent = String(val); }
+            };
+            setSlider('meta-viewer-ambient-intensity', manifest.viewer_settings.ambient_intensity);
+            setSlider('meta-viewer-hemisphere-intensity', manifest.viewer_settings.hemisphere_intensity);
+            setSlider('meta-viewer-directional1-intensity', manifest.viewer_settings.directional1_intensity);
+            setSlider('meta-viewer-directional2-intensity', manifest.viewer_settings.directional2_intensity);
+            const shadowsEl = document.getElementById('meta-viewer-shadows-enabled') as HTMLInputElement | null;
+            if (shadowsEl && manifest.viewer_settings.shadows_enabled != null) shadowsEl.checked = manifest.viewer_settings.shadows_enabled;
+            const shadowOpacityGroup = document.getElementById('meta-viewer-shadow-opacity-group');
+            if (shadowOpacityGroup) shadowOpacityGroup.style.display = manifest.viewer_settings.shadows_enabled ? '' : 'none';
+            setSlider('meta-viewer-shadow-opacity', manifest.viewer_settings.shadow_opacity);
+        }
+
+        // Tone Mapping defaults
+        const hasToneMapping = manifest.viewer_settings.tone_mapping_method != null;
+        const tmEnabledEl = document.getElementById('meta-viewer-tone-mapping-enabled') as HTMLInputElement | null;
+        const tmControlsEl = document.getElementById('meta-viewer-tone-mapping-controls');
+        if (tmEnabledEl) tmEnabledEl.checked = hasToneMapping;
+        if (tmControlsEl) tmControlsEl.style.display = hasToneMapping ? '' : 'none';
+        if (hasToneMapping) {
+            const tmMethodEl = document.getElementById('meta-viewer-tone-mapping-method') as HTMLSelectElement | null;
+            if (tmMethodEl) tmMethodEl.value = manifest.viewer_settings.tone_mapping_method || 'None';
+            const tmExpEl = document.getElementById('meta-viewer-tone-mapping-exposure') as HTMLInputElement | null;
+            const tmExpValEl = document.getElementById('meta-viewer-tone-mapping-exposure-value');
+            if (tmExpEl && manifest.viewer_settings.tone_mapping_exposure != null) {
+                tmExpEl.value = String(manifest.viewer_settings.tone_mapping_exposure);
+                if (tmExpValEl) tmExpValEl.textContent = String(manifest.viewer_settings.tone_mapping_exposure);
+            }
+        }
+
+        // Environment defaults
+        const hasEnv = manifest.viewer_settings.environment_preset != null;
+        const envEnabledEl = document.getElementById('meta-viewer-env-enabled') as HTMLInputElement | null;
+        const envControlsEl = document.getElementById('meta-viewer-env-controls');
+        if (envEnabledEl) envEnabledEl.checked = hasEnv;
+        if (envControlsEl) envControlsEl.style.display = hasEnv ? '' : 'none';
+        if (hasEnv) {
+            const envPresetEl = document.getElementById('meta-viewer-env-preset') as HTMLSelectElement | null;
+            if (envPresetEl) envPresetEl.value = manifest.viewer_settings.environment_preset || '';
+            const envBgEl = document.getElementById('meta-viewer-env-as-background') as HTMLInputElement | null;
+            if (envBgEl && manifest.viewer_settings.environment_as_background != null) envBgEl.checked = manifest.viewer_settings.environment_as_background;
+        }
     }
 
     // Custom fields from _meta
@@ -2398,7 +2693,7 @@ export function updateAnnotationPopupPosition(currentPopupAnnotationId: string |
     if (!currentPopupAnnotationId) return;
 
     // On mobile kiosk, popup is hidden — annotation content shown in bottom sheet
-    if (window.innerWidth <= 768 && document.body.classList.contains('kiosk-mode')) return;
+    if (window.innerWidth <= 699 && document.body.classList.contains('kiosk-mode')) return;
 
     const popup = document.getElementById('annotation-info-popup');
     if (!popup || popup.classList.contains('hidden')) return;
@@ -2527,7 +2822,7 @@ export function openImageLightbox(src: string, alt: string): void {
 /**
  * Close the fullscreen image lightbox overlay.
  */
-export function closeImageLightbox(): void {
+function closeImageLightbox(): void {
     const lightbox = document.getElementById('image-lightbox');
     if (!lightbox) return;
 

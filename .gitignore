@@ -13,4 +13,11 @@ src-tauri/target/
 # Node
 node_modules/
 package-lock.json
+!docker/package-lock.json
 src-tauri/tauri.conf.json.bak
+.worktrees/
+
+# Local environment overrides
+.env
+docker-compose.override.yml
+docs/plans/

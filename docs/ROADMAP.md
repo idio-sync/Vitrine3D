@@ -24,7 +24,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 ## Mobile Support
 - [x] **Done** — Add mobile friendly layout and view for kiosk mode
 - [x] **Done** — Display proxy (LOD) support in archives — upload pre-simplified mesh and/or splat, kiosk viewer loads them automatically
-- [x] **Done** — Auto-detect mobile/low-end devices in kiosk viewer via `quality-tier.js` and default to SD (proxy) assets; SD/HD toggle lets users switch manually
+- [x] **Done** — Auto-detect mobile/low-end devices in kiosk viewer via `quality-tier.ts` and default to SD (proxy) assets; SD/HD toggle lets users switch manually
 
 ### Measurement & Analysis Tools
 - [x] **Done** — Point-to-point distance measurement (two-click flow, 3D line overlay, DOM markers, configurable units m/cm/mm/in/ft; works in main editor and kiosk viewer)
@@ -69,9 +69,13 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 
 ## Medium Priority
 
+### Infrastructure
+- [x] **Done** — Split Vite build into minimal public kiosk bundle (`/`) and full editor bundle (`/editor/`); established `kiosk-main.ts` as the shared viewer layer
+- [ ] Auth gate for `/editor/`: add Cloudflare Access protection to the nginx `/editor/` location block (mirrors existing admin route protection)
+
 ### Code Quality (from Code Review)
 - [x] **Done** — Add ESLint 9 + Prettier linting (lenient baseline, 0 errors)
-- [x] **Done** — Refactor main.js from ~3,900 to ~1,680 lines (9 module extractions across Phase 1-2)
+- [x] **Done** — Refactor main.ts from ~3,900 to ~1,900 lines (module extractions across Phase 1-4)
 - [ ] Add file size limits for uploaded/downloaded files (e.g., 500 MB max)
 - [ ] Replace inline style manipulation with CSS classes and custom properties
 - [ ] Add WebGL context loss handler with user-friendly recovery message
@@ -87,7 +91,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 ### Type Safety
 - [x] **Done** — Add shared TypeScript types (`src/types.ts`): `AppState`, `SceneRefs`, deps interfaces with JSDoc `@returns` on factory functions
 - [x] **Done** — TypeScript migration Phases 1–3 complete: 26 of 29 modules converted to `.ts`, hybrid `allowJs: true` setup, `@types/three` installed
-- [x] **Done** — Phase 4: Convert `main.js` → `main.ts` (~1,450 lines), extract `source-files-manager.ts` and `file-input-handlers.ts`
+- [x] **Done** — Phase 4: Convert `main.js` → `main.ts` (~1,900 lines), extract `source-files-manager.ts` and `file-input-handlers.ts`
 - [ ] Phase 5: Enable `strict: true` and fix resulting type errors
 - [ ] Add comprehensive JSDoc type annotations to any remaining `.js` exported functions
 
@@ -103,10 +107,10 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [ ] Cache fetched CDN dependencies (Cache API or IndexedDB) so kiosk exports survive CDN outages
 - [ ] Bundle CDN dependencies as local assets for air-gapped/institutional deployments
 
-### Kiosk Viewer Durability
-- [ ] Base64-encode the archive ZIP data within a `<script>` tag instead of appending raw binary after `</html>` (fragile polyglot format)
-- [ ] Include `viewer_version` and `viewer_created_date` in kiosk HTML metadata
-- [ ] Add a visible message: "This viewer was created on [date] and may not work in future browsers"
+### ~~Kiosk Viewer Durability~~ (DEPRECATED — downloadable kiosk viewer is deprecated; kiosk is now served directly at `/` via the Vite build)
+- ~~Base64-encode the archive ZIP data within a `<script>` tag~~
+- ~~Include `viewer_version` and `viewer_created_date` in kiosk HTML metadata~~
+- ~~Add a visible message: "This viewer was created on [date] and may not work in future browsers"~~
 - [ ] Investigate pre-rendered turntable images/video as a preservation fallback
 
 ### Preservation Standards
@@ -126,7 +130,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 
 ### Progressive Loading
 - [x] **Done** — Multi-resolution archives with LOD proxy variants in the manifest (`lod: "proxy"`, `derived_from`)
-- [ ] In-browser mesh decimation via meshoptimizer WASM (for meshes under 2M faces)
+- [x] **Done** — In-browser mesh decimation via meshoptimizer WASM with configurable presets, texture downscaling, and SD proxy GLB generation in the editor
 - [ ] Octree-based point cloud renderer that loads visible nodes on demand
 - [x] **Done** — Draco/meshopt geometry compression for smaller archive transfer size (Draco-compressed GLB files now supported via DRACOLoader; WASM decoder served from `public/draco/`)
 

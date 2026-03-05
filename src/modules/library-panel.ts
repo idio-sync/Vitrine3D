@@ -8,6 +8,7 @@
 
 import { Logger, notify } from './utilities.js';
 import { activateTool } from './ui-controller.js';
+import { initCollectionManager, getActiveCollectionArchives, updateChipsForArchive } from './collection-manager.js';
 
 const log = Logger.getLogger('library-panel');
 
@@ -48,8 +49,11 @@ let selectedHash: string | null = null;
 let initialized = false;
 let authCredentials: string | null = null;
 let hasFetched = false;
+let searchQuery = '';
+let activeCollectionHashes: string[] | null = null;
 let uploadQueue: File[] = [];
 let uploading = false;
+let csrfToken: string | null = null;
 
 const CHUNK_SIZE = 50 * 1024 * 1024; // 50 MB — safely under Cloudflare's 100 MB request limit
 const CHUNK_CONCURRENCY = 3;          // parallel in-flight chunk uploads
@@ -109,11 +113,23 @@ function escapeHtml(s: string): string {
 
 // ── API ──
 
-function authHeaders(): HeadersInit {
-    if (authCredentials) {
-        return { 'Authorization': 'Basic ' + authCredentials };
+function authHeaders(): Record<string, string> {
+    const h: Record<string, string> = {};
+    if (authCredentials) h['Authorization'] = 'Basic ' + authCredentials;
+    if (csrfToken) h['X-CSRF-Token'] = csrfToken;
+    return h;
+}
+
+async function fetchCsrfToken(): Promise<void> {
+    try {
+        const res = await apiFetch('/api/csrf-token');
+        if (res.ok) {
+            const data = await res.json() as { token?: string };
+            csrfToken = data.token || null;
+        }
+    } catch {
+        log.warn('Failed to fetch CSRF token');
     }
-    return {};
 }
 
 async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> {
@@ -171,6 +187,7 @@ function uploadFileChunked(file: File): Promise<Archive> {
             xhr.open('POST', '/api/archives/chunks?' + params.toString());
             xhr.withCredentials = true;
             if (authCredentials) xhr.setRequestHeader('Authorization', 'Basic ' + authCredentials);
+            if (csrfToken) xhr.setRequestHeader('X-CSRF-Token', csrfToken);
             xhr.setRequestHeader('Content-Type', 'application/octet-stream');
             xhr.send(chunk);
         });
@@ -179,7 +196,7 @@ function uploadFileChunked(file: File): Promise<Archive> {
         fetch('/api/archives/chunks/' + uploadId + '/complete', {
             method: 'POST',
             credentials: 'include',
-            headers: authCredentials ? { 'Authorization': 'Basic ' + authCredentials } : {}
+            headers: authHeaders()
         }).then(async (res) => {
             if (res.status === 401) throw new AuthError();
             if (!res.ok) {
@@ -233,9 +250,8 @@ function uploadFile(file: File): Promise<Archive> {
 
         xhr.open('POST', '/api/archives');
         xhr.withCredentials = true;
-        if (authCredentials) {
-            xhr.setRequestHeader('Authorization', 'Basic ' + authCredentials);
-        }
+        if (authCredentials) xhr.setRequestHeader('Authorization', 'Basic ' + authCredentials);
+        if (csrfToken) xhr.setRequestHeader('X-CSRF-Token', csrfToken);
         xhr.send(form);
     });
 }
@@ -312,10 +328,40 @@ function render(): void {
         return;
     }
 
-    if (emptyState) emptyState.style.display = 'none';
-    if (countEl) countEl.textContent = archives.length + ' archive' + (archives.length !== 1 ? 's' : '');
+    // Filter by search query (title + tags)
+    const filtered = searchQuery
+        ? archives.filter(a => {
+            if (a.title.toLowerCase().includes(searchQuery)) return true;
+            const tags = a.metadataFields?.['project.tags'];
+            if (typeof tags === 'string' && tags.toLowerCase().includes(searchQuery)) return true;
+            return false;
+        })
+        : archives;
 
-    const sorted = [...archives].sort((a, b) => {
+    if (filtered.length === 0) {
+        if (emptyState) emptyState.style.display = '';
+        if (countEl) countEl.textContent = 'No matches';
+        return;
+    }
+
+    // Apply collection filter if active
+    let collectionFiltered = filtered;
+    if (activeCollectionHashes !== null) {
+        const hashSet = new Set(activeCollectionHashes);
+        collectionFiltered = filtered.filter(a => hashSet.has(a.hash));
+    }
+
+    if (collectionFiltered.length === 0) {
+        if (emptyState) emptyState.style.display = '';
+        if (countEl) countEl.textContent = 'No matches';
+        return;
+    }
+
+    if (emptyState) emptyState.style.display = 'none';
+    if (countEl) countEl.textContent = collectionFiltered.length + ' archive' + (collectionFiltered.length !== 1 ? 's' : '')
+        + (searchQuery ? ' (filtered)' : '');
+
+    const sorted = [...collectionFiltered].sort((a, b) => {
         let cmp = 0;
         if (currentSort === 'name') cmp = a.title.localeCompare(b.title);
         else if (currentSort === 'date') cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime();
@@ -369,6 +415,9 @@ function selectArchive(hash: string): void {
 
     renderAssets(archive);
     renderMetadata(archive);
+
+    // Update collection chips in detail pane
+    updateChipsForArchive(hash);
 }
 
 function showDetailEmpty(): void {
@@ -565,7 +614,18 @@ async function processUploadQueue(): Promise<void> {
         if (uploadZone) uploadZone.classList.add('uploading');
 
         try {
-            const archive = await uploadFile(file);
+            let archive: Archive;
+            try {
+                archive = await uploadFile(file);
+            } catch (err) {
+                // On CSRF failure, re-fetch token and retry once
+                if ((err as Error).message?.includes('CSRF')) {
+                    await fetchCsrfToken();
+                    archive = await uploadFile(file);
+                } else {
+                    throw err;
+                }
+            }
             archives.push(archive);
             render();
             notify.success('Uploaded ' + archive.filename);
@@ -843,6 +903,29 @@ export function initLibraryPanel(): void {
     setupUpload();
     setupDetailActions();
 
+    // Initialize collection manager
+    initCollectionManager({
+        getAuthHeaders: authHeaders,
+        getCsrfToken: () => csrfToken,
+        onFilterChange: async (slug) => {
+            if (slug) {
+                activeCollectionHashes = await getActiveCollectionArchives() || [];
+            } else {
+                activeCollectionHashes = null;
+            }
+            render();
+        },
+    });
+
+    // Search filter
+    const searchInput = document.getElementById('library-search') as HTMLInputElement | null;
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            searchQuery = searchInput.value.trim().toLowerCase();
+            render();
+        });
+    }
+
     // Auth form
     document.getElementById('library-auth-submit')?.addEventListener('click', handleAuth);
     const passInput = document.getElementById('library-auth-pass');
@@ -860,6 +943,8 @@ export function initLibraryPanel(): void {
  */
 export async function onLibraryActivated(): Promise<void> {
     if (!initialized) return;
+    // Fetch CSRF token if we don't have one yet
+    if (!csrfToken) await fetchCsrfToken();
     // Only fetch if we haven't fetched yet and auth form isn't showing
     const authVisible = authPanel && authPanel.style.display !== 'none';
     if (!hasFetched && !authVisible) {
@@ -889,6 +974,10 @@ export async function onLibraryActivated(): Promise<void> {
  */
 export function getAuthCredentials(): string | null {
     return authCredentials;
+}
+
+export function getCsrfToken(): string | null {
+    return csrfToken;
 }
 
 export async function refreshLibrary(): Promise<void> {

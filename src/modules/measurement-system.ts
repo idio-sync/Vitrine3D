@@ -43,8 +43,9 @@ export class MeasurementSystem {
     private pendingMarkerEl: HTMLElement | null;
     private measureCount: number;
 
-    private scaleValue: number;
-    private scaleUnit: string;
+    private baseScale: number;    // scene-units → real-world in baseUnit
+    private baseUnit: string;     // the unit the archive was calibrated in
+    private displayUnit: string;  // what the user currently wants to see
 
     private raycaster: THREE.Raycaster;
     private mouse: THREE.Vector2;
@@ -56,6 +57,15 @@ export class MeasurementSystem {
 
     // Bound event handler
     private _onClick: (event: MouseEvent) => void;
+
+    static readonly UNIT_TO_METERS: Record<string, number> = {
+        m: 1,
+        cm: 0.01,
+        mm: 0.001,
+        ft: 0.3048,
+        in: 0.0254,
+    };
+    static readonly DISPLAY_UNITS: string[] = ['ft', 'in', 'm', 'cm', 'mm'];
 
     // Optional callback for mode changes (e.g. to update button state)
     onMeasureModeChanged: ((active: boolean) => void) | null;
@@ -72,8 +82,9 @@ export class MeasurementSystem {
         this.pendingMarkerEl = null;
         this.measureCount = 0;
 
-        this.scaleValue = 1;
-        this.scaleUnit = 'm';
+        this.baseScale = 1;
+        this.baseUnit = 'm';
+        this.displayUnit = 'm';
 
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
@@ -230,6 +241,15 @@ export class MeasurementSystem {
         distSpan.className = 'measure-label-text';
         distSpan.textContent = this._getDisplayDistance(rawDistance);
 
+        const unitBtn = document.createElement('button');
+        unitBtn.className = 'measure-unit-btn';
+        unitBtn.textContent = this.displayUnit;
+        unitBtn.title = 'Change unit';
+        unitBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._showUnitDropdown(unitBtn);
+        });
+
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'measure-label-delete';
         deleteBtn.textContent = '×';
@@ -240,6 +260,7 @@ export class MeasurementSystem {
         });
 
         labelEl.appendChild(distSpan);
+        labelEl.appendChild(unitBtn);
         labelEl.appendChild(deleteBtn);
         this.markersContainer?.appendChild(labelEl);
 
@@ -258,19 +279,84 @@ export class MeasurementSystem {
     // -------------------------------------------------------------------------
 
     private _getDisplayDistance(rawDistance: number): string {
-        const converted = rawDistance * this.scaleValue;
-        return `${parseFloat(converted.toFixed(3))} ${this.scaleUnit}`;
+        const inBaseUnit = rawDistance * this.baseScale;
+        const inMeters = inBaseUnit * MeasurementSystem.UNIT_TO_METERS[this.baseUnit];
+        const inDisplayUnit = inMeters / MeasurementSystem.UNIT_TO_METERS[this.displayUnit];
+        return `${parseFloat(inDisplayUnit.toFixed(3))}`;
     }
 
     setScale(value: number, unit: string): void {
         if (isNaN(value) || value <= 0) return;
-        this.scaleValue = value;
-        this.scaleUnit = unit;
-        // Update all existing labels
+        this.baseScale = value;
+        this.baseUnit = unit;
+        this._refreshAllLabels();
+    }
+
+    setBaseScale(value: number, unit: string): void {
+        this.setScale(value, unit);
+    }
+
+    setDisplayUnit(unit: string): void {
+        if (!MeasurementSystem.UNIT_TO_METERS[unit]) return;
+        this.displayUnit = unit;
+        this._refreshAllLabels();
+    }
+
+    getScale(): number { return this.baseScale; }
+    getUnit(): string { return this.baseUnit; }
+    getDisplayUnit(): string { return this.displayUnit; }
+    isCalibrated(): boolean { return this.baseScale !== 1 || this.baseUnit !== 'm'; }
+
+    calibrate(rawDistance: number, realDistance: number, unit: string): void {
+        if (rawDistance <= 0 || realDistance <= 0) return;
+        this.baseScale = realDistance / rawDistance;
+        this.baseUnit = unit;
+        this._refreshAllLabels();
+    }
+
+    getMeasurements(): ReadonlyArray<ActiveMeasurement> { return this.measurements; }
+
+    private _refreshAllLabels(): void {
         for (const m of this.measurements) {
             const textEl = m.labelEl.querySelector('.measure-label-text') as HTMLElement | null;
             if (textEl) textEl.textContent = this._getDisplayDistance(m.rawDistance);
+            const unitEl = m.labelEl.querySelector('.measure-unit-btn') as HTMLElement | null;
+            if (unitEl) unitEl.textContent = this.displayUnit;
         }
+    }
+
+    private _showUnitDropdown(anchorEl: HTMLElement): void {
+        const existing = document.querySelector('.measure-unit-dropdown');
+        if (existing) { existing.remove(); return; }
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'measure-unit-dropdown';
+
+        for (const unit of MeasurementSystem.DISPLAY_UNITS) {
+            const opt = document.createElement('button');
+            opt.className = 'measure-unit-option';
+            if (unit === this.displayUnit) opt.classList.add('active');
+            opt.textContent = unit;
+            opt.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.setDisplayUnit(unit);
+                dropdown.remove();
+            });
+            dropdown.appendChild(opt);
+        }
+
+        const rect = anchorEl.getBoundingClientRect();
+        dropdown.style.left = rect.left + 'px';
+        dropdown.style.top = (rect.bottom + 4) + 'px';
+        document.body.appendChild(dropdown);
+
+        const closeHandler = (e: MouseEvent) => {
+            if (!dropdown.contains(e.target as Node)) {
+                dropdown.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeHandler), 0);
     }
 
     // -------------------------------------------------------------------------

@@ -1,0 +1,9 @@
+/*
+ * @theme    Gallery
+ * @layout   gallery
+ * @scene-bg #11304e
+ * @description Cinematic full-bleed layout. Scene-first, all chrome auto-hides.
+ */
+
+/* Inherits default kiosk variables from kiosk.css (gold/navy palette).
+   Add overrides here only if this theme diverges from the defaults. */

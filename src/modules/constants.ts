@@ -213,3 +213,82 @@ export const ENVIRONMENT = {
         { name: 'Sunset', url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr' }
     ]
 } as const;
+
+// =============================================================================
+// POST-PROCESSING EFFECT DEFAULTS
+// =============================================================================
+
+export const POST_PROCESSING = {
+    SSAO: { enabled: false, radius: 0.5, intensity: 1.0 },
+    BLOOM: { enabled: false, strength: 0.5, radius: 0.4, threshold: 0.85 },
+    SHARPEN: { enabled: false, intensity: 0.3 },
+    VIGNETTE: { enabled: false, intensity: 0.5, offset: 1.0 },
+    CHROMATIC_ABERRATION: { enabled: false, intensity: 0.005 },
+    COLOR_BALANCE: { enabled: false, shadows: [0, 0, 0] as [number, number, number], midtones: [0, 0, 0] as [number, number, number], highlights: [0, 0, 0] as [number, number, number] },
+    GRAIN: { enabled: false, intensity: 0.05 },
+} as const;
+
+// =============================================================================
+// DECIMATION PRESETS (SD proxy generation)
+// =============================================================================
+
+export interface DecimationPreset {
+    name: string;
+    targetRatio: number;
+    maxFaces: number;
+    errorThreshold: number;
+    lockBorder: boolean;
+    preserveUVSeams: boolean;
+    textureMaxRes: number;
+    textureFormat: 'jpeg' | 'png' | 'keep';
+    textureQuality: number;
+}
+
+export const DECIMATION_PRESETS: Record<string, DecimationPreset> = {
+    'ultra-light': {
+        name: 'Ultra Light',
+        targetRatio: 0.01,
+        maxFaces: 25_000,
+        errorThreshold: 0.5,
+        lockBorder: true,
+        preserveUVSeams: false,
+        textureMaxRes: 512,
+        textureFormat: 'jpeg',
+        textureQuality: 0.80,
+    },
+    light: {
+        name: 'Light',
+        targetRatio: 0.05,
+        maxFaces: 50_000,
+        errorThreshold: 0.2,
+        lockBorder: true,
+        preserveUVSeams: true,
+        textureMaxRes: 1024,
+        textureFormat: 'jpeg',
+        textureQuality: 0.85,
+    },
+    medium: {
+        name: 'Medium',
+        targetRatio: 0.10,
+        maxFaces: 100_000,
+        errorThreshold: 0.1,
+        lockBorder: true,
+        preserveUVSeams: true,
+        textureMaxRes: 1024,
+        textureFormat: 'jpeg',
+        textureQuality: 0.85,
+    },
+    high: {
+        name: 'High',
+        targetRatio: 0.25,
+        maxFaces: 250_000,
+        errorThreshold: 0.05,
+        lockBorder: true,
+        preserveUVSeams: true,
+        textureMaxRes: 2048,
+        textureFormat: 'jpeg',
+        textureQuality: 0.90,
+    },
+} as const;
+
+export const DEFAULT_DECIMATION_PRESET = 'medium';

@@ -1,0 +1,13 @@
+{
+  "name": "vitrine3d-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vitrine3D API server dependencies",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "busboy": "^1.6.0"
+  }
+}

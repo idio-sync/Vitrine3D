@@ -306,8 +306,8 @@ describe('detectDeviceTier', () => {
             get: () => 'Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)'
         });
 
-        // Should lose mobile point (score 4/5 without GL, still HD)
-        expect(detectDeviceTier()).toBe('hd');
+        // iOS/iPadOS forced to SD to prevent Safari tab crashes from GPU memory exhaustion
+        expect(detectDeviceTier()).toBe('sd');
     });
 
     it('detects Android as mobile device', () => {
@@ -330,5 +330,27 @@ describe('detectDeviceTier', () => {
 
         // Score: 0 (mem) + 1 (cores) + 0 (width) + 1 (no GL) + 0 (mobile) = 2 -> SD
         expect(detectDeviceTier()).toBe('sd');
+    });
+
+    it('forces SD for Android devices', () => {
+        Object.defineProperty(Navigator.prototype, 'userAgent', {
+            get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+            configurable: true
+        });
+        // Give it high scores on everything else — Android should still force SD
+        Object.defineProperty(Navigator.prototype, 'deviceMemory', { get: () => 12, configurable: true });
+        Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => 8, configurable: true });
+        Object.defineProperty(Screen.prototype, 'width', { get: () => 1080, configurable: true });
+
+        const mockGl = {
+            MAX_TEXTURE_SIZE: 0x0D33,
+            getParameter: vi.fn((param) => {
+                if (param === 0x0D33) return 16384;
+                return null;
+            })
+        } as any;
+
+        const result = detectDeviceTier(mockGl as any);
+        expect(result).toBe('sd');
     });
 });

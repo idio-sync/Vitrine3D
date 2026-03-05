@@ -17,7 +17,7 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { SplatMesh } from '@sparkjsdev/spark';
+import { SplatMesh, PackedSplats, unpackSplats } from '@sparkjsdev/spark';
 import { ArchiveLoader } from './archive-loader.js';
 import { TIMING, ASSET_STATE } from './constants.js';
 import { Logger, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, computeTextureInfo, disposeObject, fetchWithProgress } from './utilities.js';
@@ -38,6 +38,11 @@ if (_dracoOfflineSrc) {
     (dracoLoader as any)._loadLibrary = () => Promise.resolve(_dracoOfflineSrc);
 } else {
     dracoLoader.setDecoderPath('/draco/');
+    // Force JS decoder — Blender 5.x Draco-compressed GLBs crash the WASM decoder
+    // with Aborted(). The JS decoder (draco_decoder.js) is ~2x slower but handles
+    // all Draco-encoded files reliably. If WASM compatibility is resolved upstream,
+    // remove this line to re-enable the faster WASM path.
+    dracoLoader.setDecoderConfig({ type: 'js' });
 }
 
 /**
@@ -46,13 +51,31 @@ if (_dracoOfflineSrc) {
  */
 const SPLAT_FILE_TYPE_MAP: Record<string, string> = {
     ply: 'ply', spz: 'spz', splat: 'splat', ksplat: 'ksplat', rad: 'rad',
-    // Note: .sog (SOGS) format is not supported in Spark 2.0 preview.
-    // Convert .sog files to .spz using splat-transform or SuperSplat.
+    sog: 'pcsogszip',
 };
 
-function getSplatFileType(fileNameOrUrl: string): string | undefined {
+export function getSplatFileType(fileNameOrUrl: string): string | undefined {
     const ext = fileNameOrUrl.split(/[?#]/)[0].split('.').pop()?.toLowerCase();
     return ext ? SPLAT_FILE_TYPE_MAP[ext] : undefined;
+}
+
+/**
+ * Create a SplatMesh from a URL (blob: or http:) with file type detection.
+ *
+ * .sog (pcsogszip) files require a workaround: Spark 2.0's new PackedSplats worker
+ * path uses decode_to_packedsplats WASM which doesn't support pcsogszip.
+ * We pre-decode via the exported unpackSplats() (old worker) then hand the
+ * decoded PackedSplats to SplatMesh directly.
+ */
+async function createSplatMesh(url: string, fileType?: string): Promise<any> {
+    if (fileType === 'pcsogszip') {
+        const response = await fetch(url);
+        const fileBytes = new Uint8Array(await response.arrayBuffer());
+        const decoded = await unpackSplats({ input: fileBytes, fileType: 'pcsogszip' });
+        const packedSplats = new PackedSplats(decoded);
+        return new SplatMesh({ packedSplats });
+    }
+    return new SplatMesh({ url, ...(fileType && { fileType }) });
 }
 
 // Lazy-loaded E57 support
@@ -239,8 +262,8 @@ export async function loadSplatFromFile(file: File, deps: LoadSplatDeps): Promis
     // Pass fileType for blob URLs where Spark 2.0 can't detect format from path
     const fileType = getSplatFileType(file.name);
 
-    // Create SplatMesh using Spark
-    const splatMesh = new SplatMesh({ url: fileUrl, ...(fileType && { fileType }) });
+    // Create SplatMesh (.sog pre-decoded via legacy worker; other formats use native path)
+    const splatMesh = await createSplatMesh(fileUrl, fileType);
 
     // Apply default rotation to correct upside-down orientation
     splatMesh.rotation.x = Math.PI;
@@ -328,8 +351,8 @@ export async function loadSplatFromUrl(url: string, deps: LoadSplatDeps, onProgr
     // Pass fileType for blob URLs where Spark 2.0 can't detect format from path
     const fileType = getSplatFileType(url);
 
-    // Create SplatMesh using Spark
-    const splatMesh = new SplatMesh({ url: blobUrl, ...(fileType && { fileType }) });
+    // Create SplatMesh (.sog pre-decoded via legacy worker; other formats use native path)
+    const splatMesh = await createSplatMesh(blobUrl, fileType);
 
     // Apply default rotation
     splatMesh.rotation.x = Math.PI;
@@ -388,8 +411,8 @@ export async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, de
     // Pass fileType for blob URLs where Spark 2.0 can't detect format from path
     const fileType = getSplatFileType(fileName);
 
-    // Create SplatMesh using Spark
-    const splatMesh = new SplatMesh({ url: blobUrl, ...(fileType && { fileType }) });
+    // Create SplatMesh (.sog pre-decoded via legacy worker; other formats use native path)
+    const splatMesh = await createSplatMesh(blobUrl, fileType);
 
     // Apply default rotation
     splatMesh.rotation.x = Math.PI;
@@ -461,7 +484,7 @@ const TEXTURE_EXTS = new Set(['png', 'jpg', 'jpeg', 'tga', 'bmp', 'webp']);
  * to blob URLs via a LoadingManager URL modifier, then loaded by name.
  * This ensures MTLLoader resolves texture references correctly.
  */
-export function loadOBJ(objFile: File, mtlFile: File | null, textureFiles?: File[]): Promise<THREE.Group> {
+function loadOBJ(objFile: File, mtlFile: File | null, textureFiles?: File[]): Promise<THREE.Group> {
     // Map all files by their original filename → blob URL (Three.js docs pattern)
     const blobMap = new Map<string, string>();
     const allBlobUrls: string[] = [];
@@ -479,10 +502,11 @@ export function loadOBJ(objFile: File, mtlFile: File | null, textureFiles?: File
         for (const file of textureFiles) mapFile(file);
     }
 
-    const hasTextures = textureFiles && textureFiles.length > 0;
-
     // LoadingManager URL modifier maps filenames to blob URLs
     const manager = new THREE.LoadingManager();
+    manager.onError = (url: string) => {
+        log.warn('Failed to load OBJ resource:', url);
+    };
     manager.setURLModifier((url: string) => {
         // Try exact match
         if (blobMap.has(url)) return blobMap.get(url)!;
@@ -493,6 +517,7 @@ export function loadOBJ(objFile: File, mtlFile: File | null, textureFiles?: File
         const filename = url.split(/[/\\]/).pop() || '';
         if (blobMap.has(filename)) return blobMap.get(filename)!;
         if (blobMap.has(filename.toLowerCase())) return blobMap.get(filename.toLowerCase())!;
+        log.warn('URL modifier: no blob match for', url, '— available:', [...blobMap.keys()]);
         return url;
     });
 
@@ -518,9 +543,9 @@ export function loadOBJ(objFile: File, mtlFile: File | null, textureFiles?: File
                     objLoader.load(
                         objFile.name,
                         (object) => {
-                            // Preserve textures when MTL loaded them; only force default if no textures
+                            // MTL loaded successfully — preserve its materials (colors, textures, etc.)
                             processMeshMaterials(object, {
-                                forceDefaultMaterial: !hasTextures,
+                                forceDefaultMaterial: false,
                                 preserveTextures: true
                             });
                             // Delay blob cleanup to ensure GPU texture upload completes
@@ -584,7 +609,7 @@ export interface OBJGroup {
  * Parse a FileList into OBJ groups — each OBJ matched with its MTL by base name.
  * All texture images are shared across groups (MTLLoader requests only what it needs).
  */
-export function parseMultiPartOBJ(files: File[]): OBJGroup[] {
+function parseMultiPartOBJ(files: File[]): OBJGroup[] {
     const objFiles: File[] = [];
     const mtlFiles: File[] = [];
     const textureFiles: File[] = [];
@@ -624,7 +649,7 @@ export function parseMultiPartOBJ(files: File[]): OBJGroup[] {
 /**
  * Load multiple OBJ parts into a single combined THREE.Group.
  */
-export async function loadMultiPartOBJ(groups: OBJGroup[]): Promise<THREE.Group> {
+async function loadMultiPartOBJ(groups: OBJGroup[]): Promise<THREE.Group> {
     const combinedGroup = new THREE.Group();
     combinedGroup.name = 'multi_obj_combined';
 
@@ -642,7 +667,7 @@ export async function loadMultiPartOBJ(groups: OBJGroup[]): Promise<THREE.Group>
  * Export a THREE.Object3D to a self-contained GLB Blob.
  * Used to convert multi-part OBJ scenes into a single archivable binary.
  */
-export async function exportToGLB(object: THREE.Object3D): Promise<Blob> {
+async function exportToGLB(object: THREE.Object3D): Promise<Blob> {
     const exporter = new GLTFExporter();
     const glbBuffer = await exporter.parseAsync(object, { binary: true });
     return new Blob([glbBuffer as ArrayBuffer], { type: 'model/gltf-binary' });
@@ -670,7 +695,7 @@ export function loadOBJFromUrl(url: string, onProgress?: (loaded: number, total:
  * Load STL from a File object
  * STLLoader returns a BufferGeometry, so we wrap it in a Mesh.
  */
-export function loadSTL(fileOrUrl: File | string): Promise<THREE.Mesh> {
+function loadSTL(fileOrUrl: File | string): Promise<THREE.Mesh> {
     return new Promise((resolve, reject) => {
         const loader = new STLLoader();
         const url = typeof fileOrUrl === 'string' ? fileOrUrl : URL.createObjectURL(fileOrUrl);
@@ -729,7 +754,7 @@ export function loadSTLFromUrl(url: string, onProgress?: (loaded: number, total:
 /**
  * Load a standalone Draco-compressed geometry file (.drc)
  */
-export function loadDRC(source: File | string, onProgress?: (loaded: number, total: number) => void): Promise<THREE.Group> {
+function loadDRC(source: File | string, onProgress?: (loaded: number, total: number) => void): Promise<THREE.Group> {
     return new Promise((resolve, reject) => {
         const url = source instanceof File ? URL.createObjectURL(source) : source;
         const isFile = source instanceof File;
@@ -1949,13 +1974,6 @@ function generateMatcapTexture(style: string): THREE.CanvasTexture {
 }
 
 /**
- * Return the list of available matcap preset names.
- */
-export function getMatcapPresets(): string[] {
-    return ['clay', 'chrome', 'pearl', 'jade', 'copper', 'bronze', 'dark-bronze'];
-}
-
-/**
  * Toggle matcap rendering mode on all meshes in a model group.
  * When enabled, replaces materials with MeshMatcapMaterial.
  * When disabled, restores original materials.
@@ -2181,7 +2199,7 @@ export function updateModelSpecularF0(modelGroup: THREE.Group, enabled: boolean)
  * E57 files from surveying/scanning use Z-up convention, so we rotate
  * the geometry to Three.js Y-up coordinate system.
  */
-export async function loadE57(url: string, onProgress?: (loaded: number, total: number) => void): Promise<THREE.Group> {
+async function loadE57(url: string, onProgress?: (loaded: number, total: number) => void): Promise<THREE.Group> {
     const E57Loader = await getE57Loader();
     if (!E57Loader) {
         throw new Error('E57 point cloud loading is not available. The three-e57-loader module could not be loaded (requires network access).');

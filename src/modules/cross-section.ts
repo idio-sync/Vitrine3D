@@ -48,6 +48,11 @@ export class CrossSectionTool {
     /** Group that holds cap meshes in the scene. */
     private _capGroup: THREE.Group;
 
+    /** Reusable temporaries for updatePlane() — avoids per-frame allocations. */
+    private readonly _tmpPos = new THREE.Vector3();
+    private readonly _tmpQuat = new THREE.Quaternion();
+    private readonly _tmpNormal = new THREE.Vector3();
+
     constructor(
         private readonly _scene: THREE.Scene,
         private readonly _camera: any,
@@ -114,7 +119,7 @@ export class CrossSectionTool {
     start(center: THREE.Vector3): void {
         this._active = true;
         this._planeAnchor.position.copy(center);
-        this._planeAnchor.rotation.set(0, 0, 0);
+        this._planeAnchor.rotation.set(Math.PI, 0, 0);
         this._transformControls.setMode('translate');
         this._transformControls.getHelper().visible = true;
         this._planeMesh.visible = true;
@@ -145,18 +150,16 @@ export class CrossSectionTool {
     updatePlane(): void {
         if (!this._active) return;
 
-        const pos = new THREE.Vector3();
-        const quat = new THREE.Quaternion();
-        this._planeAnchor.getWorldPosition(pos);
-        this._planeAnchor.getWorldQuaternion(quat);
+        this._planeAnchor.getWorldPosition(this._tmpPos);
+        this._planeAnchor.getWorldQuaternion(this._tmpQuat);
 
         // Anchor's local +Y is the plane normal
-        const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(quat);
-        this._plane.setFromNormalAndCoplanarPoint(normal, pos);
+        this._tmpNormal.set(0, 1, 0).applyQuaternion(this._tmpQuat);
+        this._plane.setFromNormalAndCoplanarPoint(this._tmpNormal, this._tmpPos);
 
         // Keep visual mesh aligned with anchor
-        this._planeMesh.position.copy(pos);
-        this._planeMesh.quaternion.copy(quat);
+        this._planeMesh.position.copy(this._tmpPos);
+        this._planeMesh.quaternion.copy(this._tmpQuat);
     }
 
     // ─── Controls ─────────────────────────────────────────────
@@ -171,7 +174,7 @@ export class CrossSectionTool {
      * 'x' → XZ plane, 'y' → XZ horizontal (default), 'z' → XY plane.
      */
     setAxis(axis: 'x' | 'y' | 'z'): void {
-        this._planeAnchor.rotation.set(0, 0, 0);
+        this._planeAnchor.rotation.set(Math.PI, 0, 0);
         if (axis === 'x') {
             // Normal points +X: rotate anchor -90° around Z
             this._planeAnchor.rotation.z = -Math.PI / 2;
@@ -192,7 +195,7 @@ export class CrossSectionTool {
     /** Recentre the plane at `center` and restore the default Y-up orientation. */
     reset(center: THREE.Vector3): void {
         this._planeAnchor.position.copy(center);
-        this._planeAnchor.rotation.set(0, 0, 0);
+        this._planeAnchor.rotation.set(Math.PI, 0, 0);
         this.updatePlane();
     }
 
@@ -324,7 +327,7 @@ export class CrossSectionTool {
             mesh.updateWorldMatrix(true, false);
 
             const capMat = new THREE.MeshBasicMaterial({
-                color: 0xc9a87c,
+                color: 0xFEC03A,
                 side: THREE.BackSide,
                 clippingPlanes: [this._plane],
             });

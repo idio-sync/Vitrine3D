@@ -4,7 +4,7 @@
 
 import { Zip, ZipPassThrough, strToU8 } from 'fflate';
 import { Logger } from './utilities.js';
-import type { Annotation } from '@/types.js';
+import type { Annotation, PostProcessingEffectConfig } from '@/types.js';
 import type { ManifestCompliance } from './sip-validator.js';
 
 // Create logger for this module
@@ -111,12 +111,31 @@ export interface ArchivalRecord {
 
 export interface ViewerSettings {
     singleSided?: boolean;
-    backgroundColor?: string | null;
+    meshBackgroundColor?: string | null;
+    splatBackgroundColor?: string | null;
     displayMode?: string;
+    defaultMatcap?: string;
     cameraPosition?: { x: number; y: number; z: number } | null;
     cameraTarget?: { x: number; y: number; z: number } | null;
     autoRotate?: boolean;
     annotationsVisible?: boolean;
+    lockOrbit?: boolean;
+    lockDistance?: number | null;
+    lockAboveGround?: boolean;
+    maxCameraHeight?: number | null;
+    ambientIntensity?: number | null;
+    hemisphereIntensity?: number | null;
+    directional1Intensity?: number | null;
+    directional2Intensity?: number | null;
+    shadowsEnabled?: boolean | null;
+    shadowOpacity?: number | null;
+    toneMappingMethod?: string | null;
+    toneMappingExposure?: number | null;
+    environmentPreset?: string | null;
+    environmentAsBackground?: boolean | null;
+    measurementScale?: number | null;
+    measurementUnit?: string | null;
+    postProcessing?: PostProcessingEffectConfig | null;
 }
 
 export interface MaterialStandard {
@@ -267,12 +286,31 @@ export interface Manifest {
     };
     viewer_settings: {
         single_sided: boolean;
-        background_color: string | null;
+        mesh_background_color: string | null;
+        splat_background_color: string | null;
         display_mode: string;
         camera_position: { x: number; y: number; z: number } | null;
         camera_target: { x: number; y: number; z: number } | null;
         auto_rotate: boolean;
         annotations_visible: boolean;
+        lock_orbit: boolean;
+        lock_distance: number | null;
+        lock_above_ground: boolean;
+        max_camera_height: number | null;
+        ambient_intensity: number | null;
+        hemisphere_intensity: number | null;
+        directional1_intensity: number | null;
+        directional2_intensity: number | null;
+        shadows_enabled: boolean | null;
+        shadow_opacity: number | null;
+        tone_mapping_method: string | null;
+        tone_mapping_exposure: number | null;
+        environment_preset: string | null;
+        environment_as_background: boolean | null;
+        measurement_scale: number | null;
+        measurement_unit: string | null;
+        post_processing: PostProcessingEffectConfig | null;
+        [key: string]: any;
     };
     alignment?: {
         splat?: { position: number[]; rotation: number[]; scale: number | [number, number, number] } | null;
@@ -339,6 +377,7 @@ export interface AddAssetOptions {
 export interface AddProxyOptions extends AddAssetOptions {
     derived_from?: string;
     face_count?: number;
+    decimation?: Record<string, any>;
 }
 
 export interface AddSourceFileOptions {
@@ -624,12 +663,30 @@ export class ArchiveCreator {
             },
             viewer_settings: {
                 single_sided: true,
-                background_color: null,
+                mesh_background_color: null,
+                splat_background_color: null,
                 display_mode: '',
                 camera_position: null,
                 camera_target: null,
                 auto_rotate: false,
                 annotations_visible: true,
+                lock_orbit: false,
+                lock_distance: null,
+                lock_above_ground: false,
+                max_camera_height: null,
+                ambient_intensity: null,
+                hemisphere_intensity: null,
+                directional1_intensity: null,
+                directional2_intensity: null,
+                shadows_enabled: null,
+                shadow_opacity: null,
+                tone_mapping_method: null,
+                tone_mapping_exposure: null,
+                environment_preset: null,
+                environment_as_background: null,
+                measurement_scale: null,
+                measurement_unit: null,
+                post_processing: null,
             },
             alignment: null,
             preservation: {
@@ -1090,13 +1147,31 @@ export class ArchiveCreator {
         if (!settings) return;
 
         if (settings.singleSided !== undefined) this.manifest.viewer_settings.single_sided = settings.singleSided;
-        if (settings.backgroundColor !== undefined) this.manifest.viewer_settings.background_color = settings.backgroundColor;
+        if (settings.meshBackgroundColor !== undefined) this.manifest.viewer_settings.mesh_background_color = settings.meshBackgroundColor;
+        if (settings.splatBackgroundColor !== undefined) this.manifest.viewer_settings.splat_background_color = settings.splatBackgroundColor;
         if (settings.displayMode !== undefined) this.manifest.viewer_settings.display_mode = settings.displayMode;
         if (settings.defaultMatcap !== undefined) this.manifest.viewer_settings.default_matcap = settings.defaultMatcap;
         if (settings.cameraPosition !== undefined) this.manifest.viewer_settings.camera_position = settings.cameraPosition;
         if (settings.cameraTarget !== undefined) this.manifest.viewer_settings.camera_target = settings.cameraTarget;
         if (settings.autoRotate !== undefined) this.manifest.viewer_settings.auto_rotate = settings.autoRotate;
         if (settings.annotationsVisible !== undefined) this.manifest.viewer_settings.annotations_visible = settings.annotationsVisible;
+        if (settings.lockOrbit !== undefined) this.manifest.viewer_settings.lock_orbit = settings.lockOrbit;
+        if (settings.lockDistance !== undefined) this.manifest.viewer_settings.lock_distance = settings.lockDistance;
+        if (settings.lockAboveGround !== undefined) this.manifest.viewer_settings.lock_above_ground = settings.lockAboveGround;
+        if (settings.maxCameraHeight !== undefined) this.manifest.viewer_settings.max_camera_height = settings.maxCameraHeight;
+        if (settings.ambientIntensity !== undefined) this.manifest.viewer_settings.ambient_intensity = settings.ambientIntensity;
+        if (settings.hemisphereIntensity !== undefined) this.manifest.viewer_settings.hemisphere_intensity = settings.hemisphereIntensity;
+        if (settings.directional1Intensity !== undefined) this.manifest.viewer_settings.directional1_intensity = settings.directional1Intensity;
+        if (settings.directional2Intensity !== undefined) this.manifest.viewer_settings.directional2_intensity = settings.directional2Intensity;
+        if (settings.shadowsEnabled !== undefined) this.manifest.viewer_settings.shadows_enabled = settings.shadowsEnabled;
+        if (settings.shadowOpacity !== undefined) this.manifest.viewer_settings.shadow_opacity = settings.shadowOpacity;
+        if (settings.toneMappingMethod !== undefined) this.manifest.viewer_settings.tone_mapping_method = settings.toneMappingMethod;
+        if (settings.toneMappingExposure !== undefined) this.manifest.viewer_settings.tone_mapping_exposure = settings.toneMappingExposure;
+        if (settings.environmentPreset !== undefined) this.manifest.viewer_settings.environment_preset = settings.environmentPreset;
+        if (settings.environmentAsBackground !== undefined) this.manifest.viewer_settings.environment_as_background = settings.environmentAsBackground;
+        if (settings.measurementScale !== undefined) this.manifest.viewer_settings.measurement_scale = settings.measurementScale;
+        if (settings.measurementUnit !== undefined) this.manifest.viewer_settings.measurement_unit = settings.measurementUnit;
+        if (settings.postProcessing !== undefined) this.manifest.viewer_settings.post_processing = settings.postProcessing;
     }
 
     setAlignment(data: {
@@ -1296,6 +1371,10 @@ export class ArchiveCreator {
 
         if (options.face_count !== undefined) {
             this.manifest.data_entries[entryKey].face_count = options.face_count;
+        }
+
+        if (options.decimation) {
+            this.manifest.data_entries[entryKey].decimation = options.decimation;
         }
 
         return entryKey;

@@ -7,7 +7,7 @@
  */
 
 import * as THREE from 'three';
-import { SplatMesh } from '@sparkjsdev/spark';
+import { SplatMesh, PackedSplats, unpackSplats } from '@sparkjsdev/spark';
 import { ArchiveLoader } from './archive-loader.js';
 import { hasAnyProxy } from './quality-tier.js';
 import { ASSET_STATE } from './constants.js';
@@ -21,11 +21,13 @@ import {
     loadDrawingFromBlobUrl as loadDrawingFromBlobUrlHandler,
     loadArchiveFullResMesh, loadArchiveFullResSplat,
     loadArchiveProxyMesh, loadArchiveProxySplat,
-    getPrimaryAssetType
+    getPrimaryAssetType,
+    getSplatFileType
 } from './file-handlers.js';
 import { loadCADFromBlobUrl } from './cad-loader.js';
 import { centerModelOnGrid } from './alignment.js';
-import { updatePronomRegistry } from './metadata-manager.js';
+import { updatePronomRegistry, applyCameraConstraints } from './metadata-manager.js';
+import * as postProcessing from './post-processing.js';
 import type { ArchivePipelineDeps } from '@/types.js';
 import { normalizeScale } from '@/types.js';
 
@@ -55,8 +57,18 @@ async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
     // Ensure WASM is ready (required for compressed formats like .sog, .spz)
     await SplatMesh.staticInitialized;
 
-    // Create SplatMesh using Spark
-    const newSplatMesh = new SplatMesh({ url: blobUrl });
+    // .sog (pcsogszip) must be pre-decoded via legacy worker; new WASM path doesn't support it
+    const fileType = getSplatFileType(fileName);
+    let newSplatMesh: any;
+    if (fileType === 'pcsogszip') {
+        const response = await fetch(blobUrl);
+        const fileBytes = new Uint8Array(await response.arrayBuffer());
+        const decoded = await unpackSplats({ input: fileBytes, fileType: 'pcsogszip' });
+        const packedSplats = new PackedSplats(decoded);
+        newSplatMesh = new SplatMesh({ packedSplats });
+    } else {
+        newSplatMesh = new SplatMesh({ url: blobUrl, ...(fileType && { fileType }) });
+    }
     setSplatMesh(newSplatMesh);
 
     // Apply default rotation to correct upside-down orientation
@@ -523,6 +535,27 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
         // Prefill metadata panel from loaded archive
         deps.metadata.prefillMetadataFromArchive(manifest);
 
+        // Apply saved measurement calibration from archive
+        if (deps.measurementSystem &&
+            manifest?.viewer_settings?.measurement_scale != null &&
+            manifest?.viewer_settings?.measurement_unit) {
+            deps.measurementSystem.setBaseScale(
+                manifest.viewer_settings.measurement_scale,
+                manifest.viewer_settings.measurement_unit
+            );
+            // Update the manual scale inputs to reflect saved values
+            const scaleInput = document.getElementById('measure-scale-value') as HTMLInputElement | null;
+            const unitSelect = document.getElementById('measure-scale-unit') as HTMLSelectElement | null;
+            if (scaleInput) scaleInput.value = String(manifest.viewer_settings.measurement_scale);
+            if (unitSelect) unitSelect.value = manifest.viewer_settings.measurement_unit;
+            // Update calibration status display
+            const statusEl = document.getElementById('measure-calibrate-status');
+            if (statusEl) {
+                statusEl.textContent = `Calibrated: 1 unit = ${parseFloat(manifest.viewer_settings.measurement_scale.toFixed(4))} ${manifest.viewer_settings.measurement_unit}`;
+                statusEl.classList.add('calibrated');
+            }
+        }
+
         const contentInfo = archiveLoader.getContentInfo();
 
         // Populate proxy filenames in the file menu (even when loading at HD quality)
@@ -531,6 +564,41 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
             if (proxyMeshEntry) {
                 const proxyFilenameEl = document.getElementById('proxy-mesh-filename');
                 if (proxyFilenameEl) proxyFilenameEl.textContent = proxyMeshEntry.file_name.split('/').pop() || proxyMeshEntry.file_name;
+            }
+
+            // Restore decimation settings from manifest metadata
+            if (proxyMeshEntry) {
+                const manifestEntries = manifest?.data_entries;
+                if (manifestEntries) {
+                    const entryKey = Object.keys(manifestEntries).find(
+                        (k: string) => manifestEntries[k].file_name === proxyMeshEntry.file_name
+                    );
+                    const entry = entryKey ? manifestEntries[entryKey] : null;
+                    if (entry?.decimation) {
+                        state.proxyMeshSettings = {
+                            preset: entry.decimation.preset || 'custom',
+                            targetRatio: entry.decimation.targetRatio || 0.1,
+                            targetFaceCount: null,
+                            errorThreshold: entry.decimation.errorThreshold || 0.01,
+                            lockBorder: true,
+                            preserveUVSeams: true,
+                            textureMaxRes: entry.decimation.textureMaxRes || 1024,
+                            textureFormat: entry.decimation.textureFormat || 'jpeg',
+                            textureQuality: 0.85,
+                        };
+                        state.proxyMeshFaceCount = entry.decimation.resultFaces || null;
+
+                        // Populate the decimation panel UI
+                        const presetSelect = document.getElementById('decimation-preset') as HTMLSelectElement | null;
+                        if (presetSelect) presetSelect.value = entry.decimation.preset || 'custom';
+                        const statusDiv = document.getElementById('decimation-status');
+                        const statusText = document.getElementById('decimation-status-text');
+                        if (statusDiv && statusText && entry.decimation.resultFaces) {
+                            statusText.textContent = `Proxy loaded (${entry.decimation.resultFaces.toLocaleString()} faces)`;
+                            statusDiv.classList.remove('hidden');
+                        }
+                    }
+                }
             }
         }
         if (contentInfo.hasSceneProxy) {
@@ -718,14 +786,34 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
         if (el) el.checked = settings.single_sided;
     }
 
-    // Background color
-    if (settings.background_color) {
-        if (sceneRefs.scene) sceneRefs.scene.background = new THREE.Color(settings.background_color);
-        // Sync sidebar color input
-        const colorEl = document.getElementById('meta-viewer-bg-color') as HTMLInputElement | null;
-        if (colorEl) colorEl.value = settings.background_color;
-        const hexLabel = document.getElementById('meta-viewer-bg-color-hex');
-        if (hexLabel) hexLabel.textContent = settings.background_color;
+    // Background color — per-mode overrides (with backward compat for old single background_color)
+    const legacyBg = settings.background_color || null;
+    const meshBg = settings.mesh_background_color || legacyBg;
+    const splatBg = settings.splat_background_color || legacyBg;
+    deps.state.meshBackgroundColor = meshBg;
+    deps.state.splatBackgroundColor = splatBg;
+
+    // Apply correct background for current display mode
+    let activeBg: string | null = null;
+    if (deps.state.displayMode === 'model') activeBg = meshBg;
+    else if (deps.state.displayMode === 'splat' || deps.state.displayMode === 'both') activeBg = splatBg;
+    if (activeBg && sceneRefs.scene) {
+        sceneRefs.scene.background = new THREE.Color(activeBg);
+    }
+
+    // Sync sidebar mesh background UI
+    if (meshBg) {
+        const meshColorEl = document.getElementById('meta-viewer-mesh-bg-color') as HTMLInputElement | null;
+        if (meshColorEl) meshColorEl.value = meshBg;
+        const meshHexLabel = document.getElementById('meta-viewer-mesh-bg-color-hex');
+        if (meshHexLabel) meshHexLabel.textContent = meshBg;
+    }
+    // Sync sidebar splat background UI
+    if (splatBg) {
+        const splatColorEl = document.getElementById('meta-viewer-splat-bg-color') as HTMLInputElement | null;
+        if (splatColorEl) splatColorEl.value = splatBg;
+        const splatHexLabel = document.getElementById('meta-viewer-splat-bg-color-hex');
+        if (splatHexLabel) splatHexLabel.textContent = splatBg;
     }
 
     // Apply saved camera position and target
@@ -738,6 +826,72 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
             camera.position.set(cp.x, cp.y, cp.z);
             controls.target.set(ct.x, ct.y, ct.z);
             controls.update();
+        }
+    }
+
+    // Apply camera constraints
+    const lockControls = sceneRefs.controls;
+    const lockCamera = sceneRefs.camera;
+    if (lockControls && lockCamera) {
+        applyCameraConstraints(lockControls, lockCamera, {
+            lockOrbit: settings.lock_orbit ?? false,
+            lockDistance: settings.lock_distance ?? null,
+            lockAboveGround: settings.lock_above_ground ?? false,
+            maxCameraHeight: settings.max_camera_height ?? null,
+        });
+    }
+
+    // Apply saved lighting intensities
+    if (settings.ambient_intensity != null) {
+        const ambientLight = sceneRefs.scene?.children.find((c: any) => c.isAmbientLight);
+        if (ambientLight) (ambientLight as any).intensity = settings.ambient_intensity;
+    }
+    if (settings.hemisphere_intensity != null) {
+        const hemiLight = sceneRefs.scene?.children.find((c: any) => c.isHemisphereLight);
+        if (hemiLight) (hemiLight as any).intensity = settings.hemisphere_intensity;
+    }
+    if (settings.directional1_intensity != null || settings.directional2_intensity != null) {
+        const dirLights = sceneRefs.scene?.children.filter((c: any) => c.isDirectionalLight) || [];
+        if (dirLights[0] && settings.directional1_intensity != null) (dirLights[0] as any).intensity = settings.directional1_intensity;
+        if (dirLights[1] && settings.directional2_intensity != null) (dirLights[1] as any).intensity = settings.directional2_intensity;
+    }
+
+    // Apply saved tone mapping
+    if (settings.tone_mapping_method != null && sceneRefs.renderer) {
+        const toneMapTypes: Record<string, number> = {
+            'None': THREE.NoToneMapping,
+            'Linear': THREE.LinearToneMapping,
+            'Reinhard': THREE.ReinhardToneMapping,
+            'Cineon': THREE.CineonToneMapping,
+            'ACESFilmic': THREE.ACESFilmicToneMapping,
+            'AgX': THREE.AgXToneMapping,
+        };
+        sceneRefs.renderer.toneMapping = toneMapTypes[settings.tone_mapping_method] ?? THREE.NoToneMapping;
+    }
+    if (settings.tone_mapping_exposure != null && sceneRefs.renderer) {
+        sceneRefs.renderer.toneMappingExposure = settings.tone_mapping_exposure;
+    }
+
+    // NOTE: environment_preset IBL would require async HDR loading; skipped here.
+
+    // Apply post-processing settings
+    if (settings.post_processing) {
+        const renderer = sceneRefs.renderer;
+        const camera = sceneRefs.camera;
+        const scene = sceneRefs.scene;
+        if (renderer && scene && camera) {
+            if (!postProcessing.isEnabled()) {
+                postProcessing.enable(renderer, scene, camera as any);
+                deps.sceneManager?.setPostProcessing?.(postProcessing);
+            }
+            postProcessing.setConfig(settings.post_processing);
+            // Sync editor UI checkboxes/sliders
+            const masterCb = document.getElementById('pp-master-enable') as HTMLInputElement | null;
+            if (masterCb) {
+                masterCb.checked = true;
+                const controlsDiv = document.getElementById('pp-controls');
+                if (controlsDiv) controlsDiv.style.display = '';
+            }
         }
     }
 

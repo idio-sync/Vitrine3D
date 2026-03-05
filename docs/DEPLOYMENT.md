@@ -53,14 +53,15 @@ docker compose up -d
 | `DEFAULT_SPLAT_URL` | _(empty)_ | Splat file URL to auto-load |
 | `DEFAULT_MODEL_URL` | _(empty)_ | Model file URL to auto-load |
 | `DEFAULT_POINTCLOUD_URL` | _(empty)_ | Point cloud URL to auto-load |
-| `SHOW_CONTROLS` | `true` | Show/hide the controls panel |
 | `LOD_BUDGET_SD` | `1000000` | Splat LOD budget (max splats per frame) for SD quality tier |
 | `LOD_BUDGET_HD` | `5000000` | Splat LOD budget (max splats per frame) for HD quality tier |
+| `SPARK_VERSION` | `2.0` | Spark.js renderer version: `2.0` (default, with LOD/foveation) or `0.1` (legacy `OldSparkRenderer`). Both renderers ship in the same bundle. |
 | `ADMIN_ENABLED` | `false` | Enable admin panel and library. See [Admin Panel](#admin-panel) and [Library Panel](#library-panel) |
-| `ADMIN_USER` | `admin` | Admin basic auth username |
-| `ADMIN_PASS` | _(empty)_ | Admin basic auth password (required when ADMIN_ENABLED=true) |
 | `MAX_UPLOAD_SIZE` | `1024` | Maximum upload size in MB |
-| `DEFAULT_KIOSK_THEME` | _(empty)_ | Default theme for clean URL kiosk views (e.g., `editorial`). See [Clean Archive URLs](#clean-archive-urls) |
+| `CHUNKED_UPLOAD` | `false` | Enable chunked upload mode for large archives (splits into 50 MB chunks) |
+| `APP_TITLE` | `Vitrine3D` | Browser tab title shown in the page `<title>` tag |
+| `DEFAULT_KIOSK_THEME` | `editorial` | Default theme for clean URL kiosk views. See [Clean Archive URLs](#clean-archive-urls) |
+| `DEV_AUTH_USER` | _(empty)_ | **Local dev only.** Email injected as the Cloudflare Access header so the admin API authenticates without a real Cloudflare tunnel. Remove before production. |
 
 ### 3. Docker Compose
 
@@ -75,7 +76,7 @@ services:
     environment:
       - ALLOWED_DOMAINS=assets.yourcompany.com
       - FRAME_ANCESTORS='self' https://yourcompany.com https://*.yourcompany.com
-      - SHOW_CONTROLS=true
+      - ADMIN_ENABLED=true
 ```
 
 ## Archive Storage (Cloudflare R2)
@@ -156,8 +157,8 @@ Embed the viewer on your company website using existing URL parameters:
 | `mode` | `splat`, `model`, `pointcloud`, `both`, `split` | Initial display mode |
 | `toolbar` | `show`, `hide` | Toolbar visibility |
 | `sidebar` | `closed`, `view`, `edit` | Metadata sidebar state |
-| `theme` | theme folder name | Kiosk theme (e.g., `editorial`, `minimal`) |
-| `layout` | `sidebar`, `editorial` | Layout override (overrides theme default) |
+| `theme` | theme folder name | Kiosk theme (e.g., `editorial`, `gallery`, `exhibit`, `minimal`) |
+| `layout` | `sidebar`, `editorial`, `gallery`, `exhibit` | Layout override (overrides theme default) |
 | `autoload` | `true`, `false` | Auto-load archive (default `true`; `false` shows click-to-load gate) |
 
 ### Required Configuration
@@ -348,11 +349,11 @@ volumes:
 
 ## Admin Panel
 
-The container includes an optional admin panel at `/admin` for browser-based archive management: upload, delete, rename, and a gallery view. Protected by HTTP basic auth. Enabling the admin panel also activates the [Library Panel](#library-panel) inside the main viewer.
+The container includes an optional admin panel at `/admin` for browser-based archive management: upload, delete, rename, and a gallery view. Protected by **Cloudflare Access** (JWT-based identity). Enabling the admin panel also activates the [Library Panel](#library-panel) inside the main viewer.
 
 ### Enabling the Admin Panel
 
-Set `ADMIN_ENABLED=true` and provide `ADMIN_PASS`:
+Set `ADMIN_ENABLED=true`. The admin routes are protected by Cloudflare Access — no username/password env vars are required:
 
 ```yaml
 services:
@@ -363,36 +364,46 @@ services:
       - "80:80"
     environment:
       - ADMIN_ENABLED=true
-      - ADMIN_USER=admin
-      - ADMIN_PASS=your-secure-password
       - MAX_UPLOAD_SIZE=1024
       # Archives must be mounted read-write for upload/delete/rename
     volumes:
       - ./archives:/usr/share/nginx/html/archives:rw
+      - vitrine_db:/data
 ```
 
-**Important:** The archives volume must be mounted with `:rw` (not `:ro`) when the admin panel is enabled.
+**Important:** The archives volume must be mounted with `:rw` (not `:ro`) when the admin panel is enabled. Mount `/data` as a named volume to persist the SQLite archive database across container restarts.
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ADMIN_ENABLED` | `false` | Master switch for admin panel |
-| `ADMIN_USER` | `admin` | Basic auth username |
-| `ADMIN_PASS` | _(required)_ | Basic auth password. Container refuses to start if not set when `ADMIN_ENABLED=true` |
 | `MAX_UPLOAD_SIZE` | `1024` | Maximum upload size in MB |
+| `CHUNKED_UPLOAD` | `false` | Enable chunked upload for large archives |
 
 ### How It Works
 
 - The admin panel is served by the same Node.js meta-server that handles OG/oEmbed
-- nginx protects `/admin` and `/api/*` routes with HTTP basic auth (htpasswd generated at container start)
+- nginx forwards `/admin` and `/api/*` routes to the meta-server, passing through the `Cf-Access-Authenticated-User-Email` header injected by Cloudflare Access
+- The meta-server validates the header on every request — unauthenticated requests receive 401
+- Archive metadata is stored in a SQLite database at `/data/vitrine.db`
 - Uploads are streamed to disk (no in-memory buffering) — supports files up to `MAX_UPLOAD_SIZE`
 - After upload, `extract-meta.sh` runs automatically to generate metadata sidecars and thumbnails
 - The admin panel works independently of OG/oEmbed (`ADMIN_ENABLED=true` alone starts the meta-server)
 
+### Local Development
+
+Without a Cloudflare tunnel, set `DEV_AUTH_USER` to an email address. nginx will inject it as the auth header so the API authenticates without real Cloudflare:
+
+```yaml
+environment:
+  - ADMIN_ENABLED=true
+  - DEV_AUTH_USER=dev@example.com   # REMOVE BEFORE PRODUCTION
+```
+
 ### API Endpoints
 
-All API routes require basic auth and are proxied through nginx:
+All API routes require a valid `Cf-Access-Authenticated-User-Email` header and are proxied through nginx:
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -404,28 +415,29 @@ All API routes require basic auth and are proxied through nginx:
 
 ### Security Notes
 
-- **HTTPS required in production.** Basic auth sends credentials as base64 — always deploy behind TLS (Cloudflare, Caddy, or similar)
+- Authentication is enforced by Cloudflare Access at the edge — only Cloudflare can set the auth header inside the tunnel
 - Path traversal protection on all operations (uploads sanitized, deletes/renames resolved via hash lookup)
 - Uploads validated: file extension check, size limit enforced by both nginx and Node.js
 - The admin panel does not affect existing deployments — all features are opt-in via `ADMIN_ENABLED`
 
+### Migrating Existing Archives to SQLite
+
+If you have archives that were extracted before the SQLite migration (i.e., `/meta/*.json` sidecar files exist but the database is empty), run the migration script once inside the container:
+
+```bash
+docker exec <container-name> node /opt/migrate-to-sqlite.js
+```
+
+This reads all existing `meta/{hash}.json` sidecars and imports them into `/data/vitrine.db`. Safe to re-run — uses `INSERT OR REPLACE` so it corrects any previously bad records.
+
 ### Verifying It Works
 
 ```bash
-# Test API (with basic auth)
-curl -u admin:your-secure-password https://viewer.yourcompany.com/api/archives
+# Health check (no auth required)
+curl https://viewer.yourcompany.com/health
 
-# Upload an archive
-curl -u admin:your-secure-password -F file=@scan.a3d https://viewer.yourcompany.com/api/archives
-
-# Delete by hash (hash from the list response)
-curl -u admin:your-secure-password -X DELETE https://viewer.yourcompany.com/api/archives/a1b2c3d4e5f6g7h8
-
-# Rename
-curl -u admin:your-secure-password -X PATCH \
-  -H "Content-Type: application/json" \
-  -d '{"filename":"new-name.a3d"}' \
-  https://viewer.yourcompany.com/api/archives/a1b2c3d4e5f6g7h8
+# Test API via Cloudflare Access (token from CF dashboard)
+curl -H "Cf-Access-Jwt-Assertion: <token>" https://viewer.yourcompany.com/api/archives
 ```
 
 ## Library Panel
@@ -459,7 +471,7 @@ The Library panel includes a drag-and-drop upload zone at the bottom. Drop `.a3d
 
 ### Authentication
 
-The Library panel uses the same HTTP Basic Auth credentials as the admin panel (`ADMIN_USER`/`ADMIN_PASS`). On first access, if the API returns 401, a login form is displayed. Credentials are stored in memory for the session (not persisted).
+The Library panel uses Cloudflare Access — the same identity that protects `/admin`. The `Cf-Access-Authenticated-User-Email` header is passed automatically by the Cloudflare tunnel on every request. No in-app login form is shown in production.
 
 ### Save to Library
 
@@ -470,7 +482,7 @@ When `ADMIN_ENABLED=true`, a **Save to Library** button appears in the export pa
 | Feature | Admin Page (`/admin`) | Library Panel (viewer) |
 |---------|----------------------|----------------------|
 | URL | `/admin` | Main viewer, Library tool button |
-| Authentication | nginx basic auth prompt | In-app login form |
+| Authentication | Cloudflare Access | Cloudflare Access (cookie-based) |
 | Archive gallery | Standalone HTML page | Integrated into viewport |
 | Upload | Drag-and-drop | Drag-and-drop |
 | Share dialog | Built-in | Built-in (with QR codes) |
@@ -507,7 +519,7 @@ The 16-character hex hash is a truncated SHA-256 of the archive's URL path (e.g.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DEFAULT_KIOSK_THEME` | _(empty)_ | Theme applied to all clean URL views (e.g., `editorial`, `museum`, `technical`) |
+| `DEFAULT_KIOSK_THEME` | `editorial` | Theme applied to all clean URL views (e.g., `editorial`, `minimal`) |
 
 ### Share Dialog Integration
 
@@ -524,8 +536,6 @@ services:
       - "80:80"
     environment:
       - ADMIN_ENABLED=true
-      - ADMIN_USER=admin
-      - ADMIN_PASS=${ADMIN_PASS}
       - MAX_UPLOAD_SIZE=1024
       - OG_ENABLED=true
       - SITE_URL=https://viewer.yourcompany.com
@@ -535,6 +545,10 @@ services:
     volumes:
       - ./archives:/usr/share/nginx/html/archives:rw
       - ./thumbs/default.jpg:/usr/share/nginx/html/thumbs/default.jpg:ro
+      - vitrine_db:/data
+
+volumes:
+  vitrine_db:
 ```
 
 ## Nginx Configuration
@@ -556,7 +570,7 @@ This section consolidates all deployment-relevant security controls. For securit
 
 Two layers of CSP are applied:
 
-**1. Meta tag in `index.html` (lines 8–23)** — Controls script sources, style sources, connect targets, and other resource origins:
+**1. Meta tag in `index.html` and `editor/index.html`** — Controls script sources, style sources, connect targets, and other resource origins:
 
 ```
 default-src 'self';
@@ -618,14 +632,14 @@ const ALLOWED_EXTERNAL_DOMAINS = [
 ```
 
 **Important: URL validation is implemented in two places** with separate domain allowlists:
-- `config.js` (line 56) — validates URL parameters at boot
-- `main.js` (line 157) — validates URLs entered via prompt dialogs
+- `config.js` — validates URL parameters at boot
+- `main.ts` — validates URLs entered via prompt dialogs
 
-In Docker deployments, both share the list from `ALLOWED_DOMAINS` because `config.js.template` merges the env var into `ALLOWED_EXTERNAL_DOMAINS` and passes it to `main.js` via `window.APP_CONFIG.allowedDomains`. In local development, `main.js` reads from `APP_CONFIG` as well, but if you hardcode domains directly into `config.js`, `main.js` must also be updated.
+In Docker deployments, both share the list from `ALLOWED_DOMAINS` because `config.js.template` merges the env var into `ALLOWED_EXTERNAL_DOMAINS` and passes it to `main.ts` via `window.APP_CONFIG.allowedDomains`. In local development, `main.ts` reads from `APP_CONFIG` as well, but if you hardcode domains directly into `config.js`, `main.ts` must also be updated.
 
 ### Archive Filename Sanitization
 
-When extracting files from `.a3d`/`.a3z` archives, all filenames are sanitized by `sanitizeArchiveFilename()` in `archive-loader.js` (lines 37–99). This prevents:
+When extracting files from `.a3d`/`.a3z` archives, all filenames are sanitized by `sanitizeArchiveFilename()` in `archive-loader.ts`. This prevents:
 
 | Attack | Protection |
 |--------|-----------|
@@ -644,7 +658,7 @@ When embedding the viewer via `<iframe>` on client websites, four environment va
 
 | Variable | Example | Description |
 |----------|---------|-------------|
-| `KIOSK_LOCK` | `true` | Forces kiosk mode server-side. Ignores privilege-escalating URL params (`?kiosk`, `?controls`, `?sidebar`, `?toolbar`, `?splat`, `?model`, `?pointcloud`, `?alignment`). The `?archive=` param still works (needed for per-embed URLs). Theme/layout params are allowed (cosmetic only). |
+| `KIOSK_LOCK` | `true` | **Superseded by the kiosk/editor bundle split** — the kiosk bundle at `/` no longer includes editor code, so privilege escalation via URL params is not possible. This env var is retained for backward compatibility but is no longer necessary. |
 | `ARCHIVE_PATH_PREFIX` | `/archives/` | When set with `KIOSK_LOCK`, only allows loading archives whose path starts with this prefix. Prevents path traversal (`../`) via URL normalization using `new URL()`. New archives added to the directory work immediately with no config changes. |
 | `EMBED_REFERERS` | `client.com *.client.com` | nginx `valid_referers` check. Rejects requests from unlisted domains. Direct browser visits (no referer) are still allowed. Space-separated list; supports wildcards. |
 | `FRAME_ANCESTORS` | `https://client.com` | CSP `frame-ancestors` directive set via nginx HTTP header. Prevents the viewer from being embedded in iframes on unauthorized sites (clickjacking prevention). |
@@ -668,9 +682,9 @@ docker run -e KIOSK_LOCK=true \
 
 | Layer | What It Prevents |
 |-------|-----------------|
-| `KIOSK_LOCK` | Switching to editor mode via URL params |
+| `KIOSK_LOCK` | Switching to editor mode via URL params (superseded by bundle split — kiosk at `/` has no editor code) |
 | `ARCHIVE_PATH_PREFIX` | Loading files outside the archives directory |
-| nginx module blocking | Loading editor JS modules (`archive-creator`, `share-dialog`, `kiosk-viewer`) even via devtools |
+| Bundle split | Editor code is in a separate bundle at `/editor/` — not present in the kiosk bundle at `/` |
 | `EMBED_REFERERS` | Accessing the viewer from unlisted domains |
 | `FRAME_ANCESTORS` | Embedding the viewer iframe on unauthorized sites |
 | Non-guessable paths | Guessing other clients' archive URLs |

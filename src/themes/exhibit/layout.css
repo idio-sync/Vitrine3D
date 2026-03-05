@@ -1,0 +1,1242 @@
+/* =============================================================================
+   Exhibit Layout — Institutional kiosk layout with attract mode.
+   All rules scoped under body.kiosk-mode.kiosk-exhibit.
+   Part of the 'exhibit' theme package.
+   ============================================================================= */
+
+/* Base typography and chrome-hiding inherited from kiosk.css shared rules. */
+
+/* =============================================================================
+   TITLE PLAQUE — bottom-left wall label, persistent
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque {
+    position: fixed;
+    bottom: 80px;
+    left: 24px;
+    max-width: 300px;
+    padding: 18px 22px 16px;
+    z-index: 90;
+    background: rgba(var(--kiosk-surface-rgb), 0.92);
+    border-left: 3px solid var(--kiosk-accent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transition: opacity 0.5s ease, transform 0.6s cubic-bezier(0.33, 1, 0.68, 1);
+    animation: exhibitFadeIn 0.6s ease-out 0.3s both;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque-title {
+    font-family: var(--kiosk-font-display);
+    font-size: 1.15rem;
+    font-weight: 400;
+    line-height: 1.2;
+    color: rgba(var(--kiosk-text-heading-rgb), 0.95);
+    margin: 0 0 8px 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque-rule {
+    width: 36px;
+    height: 2px;
+    background: var(--kiosk-accent);
+    margin-bottom: 10px;
+    transform-origin: left;
+    animation: exhibitRuleDraw 0.5s cubic-bezier(0.33, 1, 0.68, 1) 0.5s both;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque-fields {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque-field {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque-field dt {
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    min-width: 52px;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque-field dd {
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+    margin: 0;
+}
+
+/* --- Splash state (full-screen on load) --- */
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque.splash {
+    inset: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: 0;
+    max-width: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+    background: rgba(var(--kiosk-bg-deep-rgb), 0.96);
+    border-left: none;
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    z-index: 300;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque.splash .exhibit-plaque-title {
+    font-size: 2.2rem;
+    text-align: center;
+    margin-bottom: 14px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque.splash .exhibit-plaque-rule {
+    width: 64px;
+    margin: 0 auto 18px;
+    transform-origin: center;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque.splash .exhibit-plaque-fields {
+    align-items: center;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque.splash .exhibit-plaque-field {
+    justify-content: center;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque.splash .exhibit-plaque-field dt {
+    font-size: 0.62rem;
+    min-width: auto;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque.splash .exhibit-plaque-field dd {
+    font-size: 0.82rem;
+}
+
+/* =============================================================================
+   BOTTOM TOOLBAR — persistent full-width bar
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-exhibit .exhibit-toolbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    background: rgba(var(--kiosk-surface-rgb), 0.94);
+    border-top: 1px solid var(--kiosk-border-subtle);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transition: transform 0.5s cubic-bezier(0.33, 1, 0.68, 1);
+    animation: exhibitSlideUp 0.4s ease-out 0.4s both;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-toolbar-sep {
+    width: 1px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 0 6px;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-tool-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 56px;
+    height: 48px;
+    padding: 4px 10px;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
+    transition: color 0.15s, background 0.15s;
+    position: relative;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-tool-btn:hover {
+    color: rgba(var(--kiosk-text-bright-rgb), 0.95);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-tool-btn.active {
+    color: var(--kiosk-accent);
+    background: rgba(var(--kiosk-accent-rgb), 0.1);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-tool-btn svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-tool-label {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.56rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-tool-btn.off {
+    opacity: 0.4;
+}
+
+/* =============================================================================
+   ANNOTATION STRIP — above toolbar, horizontal scroll
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-exhibit .exhibit-anno-strip {
+    position: fixed;
+    bottom: 56px;
+    left: 0;
+    right: 0;
+    z-index: 95;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    background: rgba(var(--kiosk-surface-rgb), 0.8);
+    border-top: 1px solid var(--kiosk-border-subtle);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    overflow-x: auto;
+    scrollbar-width: none;
+    transition: opacity 0.4s ease;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-anno-strip::-webkit-scrollbar {
+    display: none;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-anno-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-anno-btn:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--kiosk-border-subtle);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-anno-btn.active {
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+    border-color: rgba(var(--kiosk-accent-rgb), 0.2);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-anno-num {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--kiosk-accent);
+    line-height: 1;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-anno-title {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    line-height: 1;
+}
+
+/* =============================================================================
+   ANNOTATION MARKER OVERRIDES — larger touch targets
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-exhibit .annotation-marker {
+    width: 36px;
+    height: 36px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    background: rgba(var(--kiosk-accent-rgb), 0.65);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    transition: background 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+body.kiosk-mode.kiosk-exhibit .annotation-marker:hover {
+    background: rgba(var(--kiosk-accent-rgb), 0.9);
+    box-shadow: 0 4px 18px rgba(var(--kiosk-accent-rgb), 0.4);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+body.kiosk-mode.kiosk-exhibit .annotation-marker.selected {
+    background: var(--kiosk-accent);
+    border-color: rgba(255, 255, 255, 0.7);
+    box-shadow: 0 0 0 4px rgba(var(--kiosk-accent-rgb), 0.2),
+                0 4px 18px rgba(var(--kiosk-accent-rgb), 0.4);
+}
+
+/* =============================================================================
+   FULL-SCREEN INFO OVERLAY — bottom-sheet slide-up
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(var(--kiosk-bg-deep-rgb), 0.97);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    transform: translateY(100%);
+    transition: transform 0.45s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-overlay.open {
+    transform: translateY(0);
+}
+
+/* Close header bar */
+body.kiosk-mode.kiosk-exhibit .exhibit-info-header-bar {
+    position: sticky;
+    top: 0;
+    z-index: 210;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 12px 24px;
+    background: rgba(var(--kiosk-bg-deep-rgb), 0.9);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-close {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    background: rgba(var(--kiosk-surface-rgb), 0.6);
+    border: 1px solid var(--kiosk-border-subtle);
+    border-radius: 4px;
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+    font-family: var(--kiosk-font-body);
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-close:hover {
+    color: rgba(var(--kiosk-text-bright-rgb), 1);
+    background: rgba(var(--kiosk-surface-rgb), 0.8);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-close svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Content body */
+body.kiosk-mode.kiosk-exhibit .exhibit-info-content {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 40px 80px;
+}
+
+/* Hero image */
+body.kiosk-mode.kiosk-exhibit .exhibit-info-hero {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: 4px;
+    margin-bottom: 32px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-hero img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Title area */
+body.kiosk-mode.kiosk-exhibit .exhibit-info-title {
+    font-family: var(--kiosk-font-display);
+    font-size: 2.4rem;
+    font-weight: 400;
+    line-height: 1.1;
+    color: rgba(var(--kiosk-text-heading-rgb), 0.95);
+    margin: 0 0 12px 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-title-bar {
+    width: 56px;
+    height: 2px;
+    background: var(--kiosk-accent);
+    margin-bottom: 14px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-byline {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: rgba(var(--kiosk-text-body-rgb), 0.8);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin: 0 0 8px 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-model-stats {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.8);
+    margin-bottom: 28px;
+    letter-spacing: 0.02em;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-model-stats strong {
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+    font-weight: 600;
+}
+
+/* Description */
+body.kiosk-mode.kiosk-exhibit .exhibit-info-description {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+    margin-bottom: 36px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-description p {
+    margin: 0 0 0.8em 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-description img {
+    max-width: 100%;
+    border-radius: 4px;
+    margin: 12px 0;
+    cursor: pointer;
+}
+
+/* =============================================================================
+   INFO CARD GRID — 2-column layout replacing collapsibles
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 32px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-card {
+    background: rgba(var(--kiosk-surface-rgb), 0.45);
+    border: 1px solid var(--kiosk-border-subtle);
+    border-radius: 4px;
+    padding: 20px 22px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-info-card-eyebrow {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--kiosk-accent);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 14px;
+}
+
+/* Detail grids inside cards */
+body.kiosk-mode.kiosk-exhibit .exhibit-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-detail-label {
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.65);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-detail-value {
+    font-size: 0.78rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+}
+
+/* Credit line */
+body.kiosk-mode.kiosk-exhibit .exhibit-credit-line {
+    font-size: 0.78rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.8);
+    margin-bottom: 12px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-credit-line .org {
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-body-rgb), 0.95);
+}
+
+/* Software line */
+body.kiosk-mode.kiosk-exhibit .exhibit-software-line {
+    font-size: 0.78rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.8);
+    margin-bottom: 8px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-software-line strong {
+    color: rgba(var(--kiosk-text-dim-rgb), 0.8);
+    font-weight: 600;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: 8px;
+}
+
+/* Prose blocks */
+body.kiosk-mode.kiosk-exhibit .exhibit-prose-labeled {
+    margin-top: 12px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-prose-sub-label {
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.65);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-prose-block {
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: rgba(var(--kiosk-text-body-rgb), 0.85);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-prose-block p {
+    margin: 0 0 0.6em 0;
+}
+
+/* Location name */
+body.kiosk-mode.kiosk-exhibit .exhibit-location-name {
+    font-size: 0.82rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+    margin-bottom: 4px;
+}
+
+/* Asset items */
+body.kiosk-mode.kiosk-exhibit .exhibit-asset-item {
+    padding: 10px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-asset-item:first-child {
+    border-top: none;
+    padding-top: 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-asset-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-asset-role {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--kiosk-accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-asset-filename {
+    font-size: 0.75rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+    font-family: var(--kiosk-font-mono, monospace);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-asset-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-asset-meta-chip {
+    font-size: 0.65rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.8);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 2px 8px;
+    border-radius: 3px;
+}
+
+/* Tech sub-header */
+body.kiosk-mode.kiosk-exhibit .exhibit-tech-sub-header {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.65);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 14px;
+    margin-bottom: 6px;
+}
+
+/* Significant properties */
+body.kiosk-mode.kiosk-exhibit .exhibit-sig-props {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-sig-prop {
+    font-size: 0.68rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.8);
+    background: rgba(var(--kiosk-accent-rgb), 0.08);
+    border: 1px solid rgba(var(--kiosk-accent-rgb), 0.15);
+    padding: 2px 8px;
+    border-radius: 3px;
+}
+
+/* Hash list */
+body.kiosk-mode.kiosk-exhibit .exhibit-hash-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-hash-list li {
+    font-size: 0.68rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.7);
+    padding: 3px 0;
+    font-family: var(--kiosk-font-mono, monospace);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-hash-list li span {
+    color: rgba(var(--kiosk-text-body-rgb), 0.8);
+    font-family: var(--kiosk-font-body);
+}
+
+/* Tags */
+body.kiosk-mode.kiosk-exhibit .exhibit-info-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-tag-chip {
+    font-size: 0.68rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.8);
+    background: rgba(var(--kiosk-accent-rgb), 0.1);
+    border: 1px solid rgba(var(--kiosk-accent-rgb), 0.2);
+    padding: 3px 10px;
+    border-radius: 3px;
+}
+
+/* License */
+body.kiosk-mode.kiosk-exhibit .exhibit-info-license {
+    font-size: 0.68rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.6);
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--kiosk-border-subtle);
+}
+
+/* =============================================================================
+   ATTRACT MODE — chrome transitions
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-exhibit .exhibit-toolbar.exhibit-attract {
+    transform: translateY(100%);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-anno-strip.exhibit-attract {
+    opacity: 0;
+    pointer-events: none;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-plaque.exhibit-attract {
+    opacity: 0.4;
+}
+
+/* =============================================================================
+   WALKTHROUGH — flanking arrows, step strip, stop card
+   ============================================================================= */
+
+/* Prev / Next arrows */
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-prev,
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-next {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 95;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(var(--kiosk-surface-rgb), 0.8);
+    border: 1px solid var(--kiosk-border-subtle);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s, transform 0.15s;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-prev { left: 20px; }
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-next { right: 20px; }
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-prev:hover,
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-next:hover {
+    background: rgba(var(--kiosk-surface-rgb), 0.95);
+    color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-prev svg,
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-next svg {
+    width: 22px;
+    height: 22px;
+}
+
+/* Step strip (replaces annotation strip during walkthrough) */
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-strip {
+    position: fixed;
+    bottom: 56px;
+    left: 0;
+    right: 0;
+    z-index: 95;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 8px 16px;
+    background: rgba(var(--kiosk-surface-rgb), 0.8);
+    border-top: 1px solid var(--kiosk-border-subtle);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-strip::-webkit-scrollbar {
+    display: none;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-step:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--kiosk-border-subtle);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-step.active {
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+    border-color: rgba(var(--kiosk-accent-rgb), 0.2);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-step.visited .exhibit-wt-step-num {
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-step-num {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.6);
+    line-height: 1;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-step.active .exhibit-wt-step-num {
+    color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-step-title {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    line-height: 1;
+}
+
+/* Connector between steps */
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-connector {
+    width: 20px;
+    height: 2px;
+    background: rgba(var(--kiosk-text-dim-rgb), 0.2);
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-connector::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    width: 0;
+    background: rgba(var(--kiosk-accent-rgb), 0.5);
+    transition: width 0.4s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-connector.filled::after {
+    width: 100%;
+}
+
+/* Stop card */
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-card {
+    position: fixed;
+    bottom: 108px;
+    left: 50%;
+    transform: translateX(-50%) translateY(12px);
+    z-index: 92;
+    max-width: 400px;
+    padding: 16px 20px;
+    background: rgba(var(--kiosk-surface-rgb), 0.92);
+    border-left: 3px solid var(--kiosk-accent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-card.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-card-number {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.58rem;
+    font-weight: 700;
+    color: var(--kiosk-accent);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-card-title {
+    font-family: var(--kiosk-font-display);
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.25;
+    color: rgba(var(--kiosk-text-heading-rgb), 0.95);
+    margin: 0 0 6px 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-wt-card-desc {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: rgba(var(--kiosk-text-body-rgb), 0.85);
+    margin: 0;
+}
+
+/* =============================================================================
+   LOADING / GATE / PICKER
+   ============================================================================= */
+
+/* Loading screen */
+body.kiosk-mode.kiosk-exhibit .exhibit-loading-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-loading-eyebrow {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--kiosk-accent);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 20px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 2px solid rgba(var(--kiosk-accent-rgb), 0.15);
+    border-top-color: var(--kiosk-accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-loading-rule {
+    width: 36px;
+    height: 2px;
+    background: var(--kiosk-accent);
+    margin: 18px auto 0;
+    transform-origin: center;
+    animation: exhibitRuleDraw 0.5s cubic-bezier(0.33, 1, 0.68, 1) 0.2s both;
+}
+
+body.kiosk-mode.kiosk-exhibit #loading-overlay #loading-text {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.6);
+    letter-spacing: 0.02em;
+    margin-top: 14px;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-loading-bottom {
+    position: absolute;
+    bottom: 24px;
+    left: 0;
+    right: 0;
+    text-align: center;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-loading-bottom #loading-progress-container {
+    width: 200px;
+    height: 2px;
+    background: rgba(var(--kiosk-accent-rgb), 0.1);
+    border-radius: 0;
+    margin: 0 auto;
+    overflow: hidden;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-loading-bottom #loading-progress-bar {
+    height: 100%;
+    background: var(--kiosk-accent);
+    transition: width 0.15s ease-out;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-loading-bottom #loading-progress-text {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 8px;
+}
+
+/* Click gate */
+body.kiosk-mode.kiosk-exhibit #kiosk-click-gate {
+    background: rgb(var(--kiosk-bg-deep-rgb));
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-gate-backdrop {
+    position: absolute;
+    inset: 0;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-gate-backdrop #kiosk-gate-poster {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.3;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-gate-backdrop #kiosk-gate-poster[src=""] {
+    display: none;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-gate-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg,
+        rgba(var(--kiosk-bg-deep-rgb), 0.5) 0%,
+        rgba(var(--kiosk-bg-deep-rgb), 0.3) 40%,
+        rgba(var(--kiosk-bg-deep-rgb), 0.7) 70%,
+        rgba(var(--kiosk-bg-deep-rgb), 0.95) 100%
+    );
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-gate-content {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    opacity: 0;
+    animation: exhibitGateFadeUp 0.6s cubic-bezier(0.33, 1, 0.68, 1) 0.15s forwards;
+}
+
+body.kiosk-mode.kiosk-exhibit #kiosk-gate-title {
+    font-family: var(--kiosk-font-display, var(--kiosk-font-body));
+    font-size: 1.6rem;
+    font-weight: 400;
+    color: rgba(var(--kiosk-text-heading-rgb), 0.95);
+    margin: 0 0 12px;
+    text-align: center;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.6);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-gate-rule {
+    width: 48px;
+    height: 2px;
+    background: var(--kiosk-accent);
+    margin: 0 auto 12px;
+    transform-origin: center;
+    animation: exhibitRuleDraw 0.5s cubic-bezier(0.33, 1, 0.68, 1) 0.4s both;
+}
+
+body.kiosk-mode.kiosk-exhibit #kiosk-gate-types {
+    font-size: 0.72rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.7);
+    text-align: center;
+    margin: 0 0 24px;
+    animation: exhibitGateFadeIn 0.4s ease-out 0.5s both;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-gate-play {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 36px;
+    background: none;
+    border: 2px solid rgba(var(--kiosk-accent-rgb), 0.5);
+    border-radius: 4px;
+    color: var(--kiosk-accent);
+    font-family: var(--kiosk-font-body);
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    animation: exhibitGateFadeIn 0.5s ease-out 0.6s both;
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-gate-play:hover {
+    background: rgba(var(--kiosk-accent-rgb), 0.1);
+    border-color: var(--kiosk-accent);
+    transform: scale(1.02);
+}
+
+body.kiosk-mode.kiosk-exhibit .exhibit-gate-play svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+}
+
+@keyframes exhibitGateFadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes exhibitGateFadeIn {
+    from { opacity: 0; }
+}
+
+@keyframes exhibitRuleDraw {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+}
+
+/* =============================================================================
+   MOBILE ADAPTATION
+   ============================================================================= */
+
+/* Tier 2: 700–1023px */
+@media (max-width: 1023px) {
+    body.kiosk-mode.kiosk-exhibit .exhibit-plaque {
+        max-width: 240px;
+        padding: 14px 18px 12px;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-plaque-title {
+        font-size: 1rem;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-tool-label {
+        display: none;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-tool-btn {
+        min-width: 44px;
+        height: 44px;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-anno-title {
+        display: none;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-wt-step-title {
+        display: none;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Tier 3: <700px */
+@media (max-width: 700px) {
+    body.kiosk-mode.kiosk-exhibit .exhibit-plaque {
+        bottom: auto;
+        top: 12px;
+        left: 12px;
+        max-width: 200px;
+        padding: 10px 14px 8px;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-plaque-title {
+        font-size: 0.88rem;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-plaque-field dt {
+        font-size: 0.52rem;
+        min-width: 40px;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-plaque-field dd {
+        font-size: 0.65rem;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-toolbar {
+        height: 48px;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-tool-btn {
+        min-width: 40px;
+        height: 40px;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-anno-strip {
+        bottom: 48px;
+        padding: 4px 10px;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-anno-btn {
+        padding: 4px 10px;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-info-content {
+        padding: 16px 20px 60px;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-info-title {
+        font-size: 1.6rem;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-wt-prev,
+    body.kiosk-mode.kiosk-exhibit .exhibit-wt-next {
+        top: auto;
+        bottom: 108px;
+        width: 40px;
+        height: 40px;
+        transform: none;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-wt-prev { left: 12px; }
+    body.kiosk-mode.kiosk-exhibit .exhibit-wt-next { right: 12px; }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-wt-strip {
+        bottom: 48px;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-wt-card {
+        bottom: 100px;
+        left: 12px;
+        right: 12px;
+        max-width: none;
+        transform: translateY(12px);
+        border-radius: 4px;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-wt-card.visible {
+        transform: translateY(0);
+    }
+}
+
+/* Tier 4: <480px */
+@media (max-width: 480px) {
+    body.kiosk-mode.kiosk-exhibit .exhibit-plaque {
+        display: none;
+    }
+
+    body.kiosk-mode.kiosk-exhibit .exhibit-anno-strip {
+        display: none;
+    }
+}
+
+/* =============================================================================
+   ANIMATIONS
+   ============================================================================= */
+
+@keyframes exhibitFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes exhibitRuleDraw {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+
+@keyframes exhibitSlideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}

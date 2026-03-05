@@ -5,7 +5,7 @@
   "identifier": "com.vitrine3d.app",
   "build": {
     "beforeDevCommand": "npx vite --port 8080",
-    "devUrl": "http://localhost:8080/?kiosk=true&theme=editorial",
+    "devUrl": "http://localhost:8080/?home=true&kiosk=true&theme=editorial",
     "beforeBuildCommand": "npx vite build",
     "frontendDist": "../dist"
   },
@@ -14,7 +14,7 @@
     "windows": [
       {
         "title": "Vitrine3D",
-        "url": "index.html?kiosk=true&theme=editorial",
+        "url": "index.html?home=true&kiosk=true&theme=editorial",
         "width": 1400,
         "height": 900,
         "resizable": true,
@@ -33,7 +33,7 @@
         "script-src": "'self' 'unsafe-eval' 'unsafe-inline'",
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' blob: data: asset: https://asset.localhost",
-        "connect-src": "'self' blob: data: ipc: http://ipc.localhost asset: https://asset.localhost",
+        "connect-src": "'self' blob: data: ipc: http://ipc.localhost asset: https://asset.localhost https:",
         "worker-src": "'self' blob:",
         "font-src": "'self'",
         "media-src": "'self' blob:",

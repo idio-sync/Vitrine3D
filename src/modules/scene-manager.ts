@@ -82,6 +82,7 @@ export class SceneManager {
     private _canvas: HTMLCanvasElement | null;
     private _canvasRight: HTMLCanvasElement | null;
     private _antialias: boolean;
+    private postProcessing: any = null;
     onRendererChanged: ((renderer: any) => void) | null;
 
     // Lighting
@@ -242,7 +243,13 @@ export class SceneManager {
         } else {
             newRenderer = new WebGLRenderer({ canvas, antialias: this._antialias });
         }
-        newRenderer.setPixelRatio(Math.min(window.devicePixelRatio, RENDERER.MAX_PIXEL_RATIO));
+        // iOS/iPadOS: cap pixel ratio lower to reduce GPU memory pressure.
+        // Safari kills tabs that exceed ~1.5 GB; 2x-3x Retina framebuffers
+        // combined with splat rendering and post-processing easily exceed that.
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const maxRatio = isIOS ? Math.min(RENDERER.MAX_PIXEL_RATIO, 1.5) : RENDERER.MAX_PIXEL_RATIO;
+        newRenderer.setPixelRatio(Math.min(window.devicePixelRatio, maxRatio));
         newRenderer.outputColorSpace = THREE.SRGBColorSpace;
         newRenderer.toneMapping = THREE.NoToneMapping;
         newRenderer.toneMappingExposure = 1.0;
@@ -1186,11 +1193,17 @@ export class SceneManager {
             this.camera!.aspect = halfWidth / container.clientHeight;
             this.camera!.updateProjectionMatrix();
             this.renderer!.setSize(halfWidth, container.clientHeight);
+            if (this.postProcessing?.isEnabled()) {
+                this.postProcessing.resize(halfWidth, container.clientHeight, this.renderer!.getPixelRatio());
+            }
             this.rendererRight!.setSize(halfWidth, container.clientHeight);
         } else {
             this.camera!.aspect = container.clientWidth / container.clientHeight;
             this.camera!.updateProjectionMatrix();
             this.renderer!.setSize(container.clientWidth, container.clientHeight);
+            if (this.postProcessing?.isEnabled()) {
+                this.postProcessing.resize(container.clientWidth, container.clientHeight, this.renderer!.getPixelRatio());
+            }
         }
     }
 
@@ -1251,6 +1264,10 @@ export class SceneManager {
         }
     }
 
+    setPostProcessing(pp: any): void {
+        this.postProcessing = pp;
+    }
+
     /**
      * Update FPS counter
      */
@@ -1293,7 +1310,11 @@ export class SceneManager {
             if (modelGroup) modelGroup.visible = false;
             if (pointcloudGroup) pointcloudGroup.visible = false;
             if (stlGroup) stlGroup.visible = false;
-            this.renderer!.render(this.scene!, this.camera!);
+            if (this.postProcessing?.isEnabled()) {
+                this.postProcessing.render();
+            } else {
+                this.renderer!.render(this.scene!, this.camera!);
+            }
 
             // Right view - model + pointcloud + stl
             if (splatMesh) splatMesh.visible = false;
@@ -1309,7 +1330,11 @@ export class SceneManager {
             if (stlGroup) stlGroup.visible = stlVisible;
         } else {
             // Normal view
-            this.renderer!.render(this.scene!, this.camera!);
+            if (this.postProcessing?.isEnabled()) {
+                this.postProcessing.render();
+            } else {
+                this.renderer!.render(this.scene!, this.camera!);
+            }
         }
     }
 
@@ -1399,14 +1424,5 @@ export class SceneManager {
 // =============================================================================
 // FACTORY FUNCTION
 // =============================================================================
-
-/**
- * Create and initialize a scene manager
- */
-export async function createSceneManager(canvas: HTMLCanvasElement, canvasRight: HTMLCanvasElement): Promise<SceneManager | null> {
-    const manager = new SceneManager();
-    const success = await manager.init(canvas, canvasRight);
-    return success ? manager : null;
-}
 
 export default SceneManager;

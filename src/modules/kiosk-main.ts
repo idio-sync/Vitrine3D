@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import type { Annotation, DisplayMode } from '@/types.js';
 import { normalizeScale } from '@/types.js';
 import { SceneManager } from './scene-manager.js';
-import { SparkRenderer } from '@sparkjsdev/spark';
+import { createSparkRenderer, isSparkV2 } from './spark-compat.js';
 
 // Local AssetType (not exported from types.ts)
 type AssetType = 'splat' | 'mesh' | 'pointcloud';
@@ -20,7 +20,7 @@ import { FlyControls } from './fly-controls.js';
 import { AnnotationSystem } from './annotation-system.js';
 import { MeasurementSystem } from './measurement-system.js';
 import { CrossSectionTool } from './cross-section.js';
-import { CAMERA, ASSET_STATE, QUALITY_TIER, WALKTHROUGH } from './constants.js';
+import { CAMERA, ASSET_STATE, QUALITY_TIER, WALKTHROUGH, COLORS } from './constants.js';
 import { WalkthroughEngine } from './walkthrough-engine.js';
 import type { WalkthroughPlaybackState } from './walkthrough-engine.js';
 import type { Walkthrough, WalkthroughStop } from '../types.js';
@@ -56,8 +56,10 @@ import {
 import { loadTheme } from './theme-loader.js';
 import type { LayoutModule } from './theme-loader.js';
 import { ArchiveLoader } from './archive-loader.js';
+import { loadCADFromBlobUrl } from './cad-loader.js';
 import { KIOSK_SECTION_TIERS, EDITORIAL_SECTION_TIERS, isTierVisible } from './metadata-profile.js';
 import type { MetadataProfile } from './metadata-profile.js';
+import * as postProcessing from './post-processing.js';
 
 
 // =============================================================================
@@ -86,10 +88,13 @@ interface KioskState {
     imageAssets: Map<string, any>;
     qualityTier: string;
     qualityResolved: string;
+    meshBackgroundColor: string | null;
+    splatBackgroundColor: string | null;
     archiveSourceUrl?: string | null;
 }
 
 interface AppConfig {
+    home?: boolean;
     theme?: string;
     layout?: string;
     defaultArchiveUrl?: string;
@@ -220,7 +225,9 @@ const state: KioskState = {
     assetStates: { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED },
     imageAssets: new Map(),
     qualityTier: QUALITY_TIER.AUTO,
-    qualityResolved: QUALITY_TIER.HD
+    qualityResolved: QUALITY_TIER.HD,
+    meshBackgroundColor: null,
+    splatBackgroundColor: null
 };
 
 // =============================================================================
@@ -278,7 +285,7 @@ export async function init(): Promise<void> {
     // will be created in onRendererChanged when switching to WebGL for splat loading.
     if (sceneManager.rendererType === 'webgl') {
         const lodBudget = getLodBudget(state.qualityResolved || QUALITY_TIER.HD);
-        sparkRenderer = new SparkRenderer({
+        sparkRenderer = createSparkRenderer({
             renderer: renderer,
             clipXY: 2.0,           // Prevent edge popping without excessive overdraw (default: 1.4)
             autoUpdate: true,
@@ -318,7 +325,7 @@ export async function init(): Promise<void> {
             if (sparkRenderer.dispose) sparkRenderer.dispose();
         }
         const lodBudget = getLodBudget(state.qualityResolved || QUALITY_TIER.HD);
-        sparkRenderer = new SparkRenderer({
+        sparkRenderer = createSparkRenderer({
             renderer: newRenderer,
             clipXY: 2.0,
             autoUpdate: true,
@@ -374,6 +381,12 @@ export async function init(): Promise<void> {
 
     // Load theme and determine layout
     const config = window.APP_CONFIG || {};
+    // kiosk-main.ts is always the kiosk bundle entry — force kiosk mode and apply
+    // a default theme. config.js only sets kiosk=true / theme=editorial when the URL
+    // contains ?kiosk=true or KIOSK_LOCK is active, but the kiosk bundle is *always*
+    // kiosk mode regardless of URL params.
+    config.kiosk = true;
+    if (!config.theme) config.theme = 'editorial';
     const themeMeta = await loadTheme(config.theme, { layoutOverride: config.layout || undefined });
 
     // ?layout= overrides theme's @layout; theme overrides default 'sidebar'
@@ -592,10 +605,20 @@ function createFilePicker(): HTMLElement {
     const picker = document.createElement('div');
     picker.id = 'kiosk-file-picker';
     picker.className = 'hidden';
+
+    // "Browse Library" button — shown only on Tauri home screen when server URL is configured
+    const config = window.APP_CONFIG || {};
+    const libraryUrl = (import.meta.env.VITE_APP_LIBRARY_URL as string | undefined) || '';
+    const showLibrary = config.home && libraryUrl;
+    const libraryHtml = showLibrary
+        ? `<button id="kiosk-library-btn" class="kiosk-library-btn" type="button">Browse Library</button>`
+        : '';
+
     picker.innerHTML = `
         <div class="kiosk-picker-content">
             <h1>Vitrine3D</h1>
             <p>Open a 3D file or archive to view its content.</p>
+            ${libraryHtml}
             <div class="kiosk-picker-box" id="kiosk-drop-zone">
                 <div class="kiosk-picker-icon">&#128194;</div>
                 <p>Select a <strong>3D file</strong> or <strong>archive</strong></p>
@@ -611,6 +634,18 @@ function createFilePicker(): HTMLElement {
             <input type="file" id="kiosk-picker-input" accept=".a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">
         </div>
     `;
+
+    // Wire up library button
+    if (showLibrary) {
+        const libraryBtn = picker.querySelector('#kiosk-library-btn');
+        if (libraryBtn) {
+            libraryBtn.addEventListener('click', () => {
+                log.info('Navigating to library:', libraryUrl);
+                window.location.href = libraryUrl + '/library';
+            });
+        }
+    }
+
     document.body.appendChild(picker);
     return picker;
 }
@@ -943,7 +978,7 @@ function onDirectFileLoaded(fileName: string | null): void {
     // Resolve quality tier for direct file loads (archive flow resolves earlier)
     const glCtx = renderer ? renderer.getContext() : null;
     state.qualityResolved = resolveQualityTier(state.qualityTier, glCtx);
-    if (sparkRenderer) sparkRenderer.lodSplatCount = getLodBudget(state.qualityResolved);
+    if (sparkRenderer && isSparkV2) sparkRenderer.lodSplatCount = getLodBudget(state.qualityResolved);
 
     // Fit camera to loaded content
     fitCameraToScene();
@@ -1329,6 +1364,30 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             }
         }
 
+        // Load CAD asset if present
+        if (contentInfo.hasCAD && sceneManager.cadGroup) {
+            const cadEntry = archiveLoader.getCADEntry();
+            if (cadEntry) {
+                const cadData = await archiveLoader.extractFile(cadEntry.file_name);
+                if (cadData) {
+                    await loadCADFromBlobUrl(cadData.url, cadEntry.file_name, {
+                        cadGroup: sceneManager.cadGroup,
+                        state: state as any,
+                    });
+                    const cadTransform = archiveLoader.getEntryTransform(cadEntry);
+                    const cadGrp = sceneManager.cadGroup;
+                    const cs = normalizeScale(cadTransform.scale);
+                    if (cadTransform.position.some((v: number) => v !== 0) ||
+                        cadTransform.rotation.some((v: number) => v !== 0) ||
+                        cs.some((v: number) => v !== 1)) {
+                        cadGrp.position.fromArray(cadTransform.position);
+                        cadGrp.rotation.set(...cadTransform.rotation as [number, number, number]);
+                        cadGrp.scale.set(...cs as [number, number, number]);
+                    }
+                }
+            }
+        }
+
         // Apply global alignment if present
         const globalAlignment = archiveLoader.getGlobalAlignment();
         if (globalAlignment) {
@@ -1472,9 +1531,11 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                     });
                 }
             }
-            if (manifest.viewer_settings.background_color && scene) {
-                scene.background = new THREE.Color(manifest.viewer_settings.background_color);
-            }
+            // Per-mode background overrides (with backward compat for legacy background_color)
+            const legacyBg = manifest.viewer_settings.background_color || null;
+            state.meshBackgroundColor = manifest.viewer_settings.mesh_background_color || legacyBg;
+            state.splatBackgroundColor = manifest.viewer_settings.splat_background_color || legacyBg;
+            applyBackgroundForMode(state.displayMode);
             // Apply saved camera position and target (overrides fitCameraToScene result)
             const savedCamPos = manifest.viewer_settings.camera_position;
             const savedCamTarget = manifest.viewer_settings.camera_target;
@@ -1482,6 +1543,43 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 camera.position.set(savedCamPos.x, savedCamPos.y, savedCamPos.z);
                 controls.target.set(savedCamTarget.x, savedCamTarget.y, savedCamTarget.z);
                 controls.update();
+            }
+            // Apply camera constraints
+            if (controls) {
+                // Lock orbit point
+                if (manifest.viewer_settings.lock_orbit) {
+                    controls.enablePan = false;
+                }
+
+                // Lock camera distance
+                if (manifest.viewer_settings.lock_distance != null) {
+                    controls.minDistance = manifest.viewer_settings.lock_distance;
+                    controls.maxDistance = manifest.viewer_settings.lock_distance;
+                }
+
+                // Keep camera above ground
+                if (manifest.viewer_settings.lock_above_ground) {
+                    controls.maxPolarAngle = Math.PI / 2;
+                }
+
+                // Max camera height — dynamically constrain minPolarAngle so the
+                // camera smoothly stops at the ceiling while still orbiting freely.
+                if (manifest.viewer_settings.max_camera_height != null) {
+                    const maxY = manifest.viewer_settings.max_camera_height;
+                    const updateHeightConstraint = () => {
+                        if (!camera || !controls) return;
+                        const distance = camera.position.distanceTo(controls.target);
+                        const targetY = controls.target.y;
+                        if (distance === 0 || maxY >= targetY + distance) {
+                            controls.minPolarAngle = 0;
+                        } else {
+                            const ratio = Math.min(1, Math.max(-1, (maxY - targetY) / distance));
+                            controls.minPolarAngle = Math.acos(ratio);
+                        }
+                    };
+                    controls.addEventListener('change', updateHeightConstraint);
+                    updateHeightConstraint();
+                }
             }
             // Apply default matcap
             if (manifest.viewer_settings.default_matcap && modelGroup) {
@@ -1499,7 +1597,72 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 const markersContainer = document.getElementById('annotation-markers');
                 if (markersContainer) markersContainer.style.display = 'none';
             }
+
+            // Apply saved lighting intensities
+            if (manifest.viewer_settings.ambient_intensity != null) {
+                const ambientLight = scene?.children.find((c: any) => c.isAmbientLight);
+                if (ambientLight) (ambientLight as any).intensity = manifest.viewer_settings.ambient_intensity;
+            }
+            if (manifest.viewer_settings.hemisphere_intensity != null) {
+                const hemiLight = scene?.children.find((c: any) => c.isHemisphereLight);
+                if (hemiLight) (hemiLight as any).intensity = manifest.viewer_settings.hemisphere_intensity;
+            }
+            if (manifest.viewer_settings.directional1_intensity != null || manifest.viewer_settings.directional2_intensity != null) {
+                const dirLights = scene?.children.filter((c: any) => c.isDirectionalLight) || [];
+                if (dirLights[0] && manifest.viewer_settings.directional1_intensity != null) (dirLights[0] as any).intensity = manifest.viewer_settings.directional1_intensity;
+                if (dirLights[1] && manifest.viewer_settings.directional2_intensity != null) (dirLights[1] as any).intensity = manifest.viewer_settings.directional2_intensity;
+            }
+
+            // Apply saved tone mapping
+            if (manifest.viewer_settings.tone_mapping_method != null && renderer) {
+                const toneMapTypes: Record<string, number> = {
+                    'None': THREE.NoToneMapping,
+                    'Linear': THREE.LinearToneMapping,
+                    'Reinhard': THREE.ReinhardToneMapping,
+                    'Cineon': THREE.CineonToneMapping,
+                    'ACESFilmic': THREE.ACESFilmicToneMapping,
+                    'AgX': THREE.AgXToneMapping,
+                };
+                renderer.toneMapping = toneMapTypes[manifest.viewer_settings.tone_mapping_method] ?? THREE.NoToneMapping;
+            }
+            if (manifest.viewer_settings.tone_mapping_exposure != null && renderer) {
+                renderer.toneMappingExposure = manifest.viewer_settings.tone_mapping_exposure;
+            }
+
+            // NOTE: environment_preset IBL would require async HDR loading; skipped here.
+
+            // Apply saved measurement calibration
+            if (manifest.viewer_settings.measurement_scale != null &&
+                manifest.viewer_settings.measurement_unit &&
+                measurementSystem) {
+                measurementSystem.setBaseScale(
+                    manifest.viewer_settings.measurement_scale,
+                    manifest.viewer_settings.measurement_unit
+                );
+                // Hide the manual scale panel — calibration is embedded in the archive
+                const scalePanel = document.getElementById('measure-scale-panel');
+                if (scalePanel) scalePanel.style.display = 'none';
+                log.info('Applied measurement calibration:',
+                    manifest.viewer_settings.measurement_scale,
+                    manifest.viewer_settings.measurement_unit);
+            }
+
             log.info('Applied viewer settings:', manifest.viewer_settings);
+
+            // Apply post-processing from archive settings
+            if (manifest.viewer_settings.post_processing) {
+                const ppSettings = manifest.viewer_settings.post_processing;
+                // Check if any effect is enabled
+                const anyEnabled = ppSettings.ssao?.enabled || ppSettings.bloom?.enabled ||
+                    ppSettings.sharpen?.enabled || ppSettings.vignette?.enabled ||
+                    ppSettings.chromaticAberration?.enabled || ppSettings.colorBalance?.enabled ||
+                    ppSettings.grain?.enabled;
+                if (anyEnabled && renderer && scene && camera) {
+                    postProcessing.enable(renderer, scene, camera);
+                    postProcessing.setConfig(ppSettings);
+                    sceneManager?.setPostProcessing(postProcessing);
+                }
+            }
         }
 
         updateProgress(100, 'Complete');
@@ -1655,8 +1818,8 @@ async function switchQualityTier(newTier: string): Promise<void> {
         btn.classList.add('loading');
     });
 
-    // Update SparkRenderer LOD budget (works even without proxy assets)
-    if (sparkRenderer) {
+    // Update SparkRenderer LOD budget (works even without proxy assets; v2.0 only)
+    if (sparkRenderer && isSparkV2) {
         sparkRenderer.lodSplatCount = getLodBudget(newTier);
         log.info(`SparkRenderer lodSplatCount updated to ${getLodBudget(newTier)}`);
     }
@@ -1957,6 +2120,7 @@ function createLayoutDeps(): any {
         crossSection,
         pointcloudGroup,
         setLocalClippingEnabled: (enabled: boolean) => sceneManager?.setLocalClippingEnabled(enabled),
+        applyBackgroundForMode,
     };
 }
 
@@ -2431,10 +2595,32 @@ function setupViewerKeyboardShortcuts(): void {
 // VIEW SWITCHER
 // =============================================================================
 
+function applyBackgroundForMode(mode: string): void {
+    if (!scene) return;
+    // If no overrides configured at all, don't touch the background
+    if (!state.meshBackgroundColor && !state.splatBackgroundColor) return;
+
+    let color: string | null = null;
+    if (mode === 'model') color = state.meshBackgroundColor;
+    else if (mode === 'splat' || mode === 'both') color = state.splatBackgroundColor;
+
+    if (color) {
+        // Use setBackgroundColor to sync savedBackgroundColor — prevents theme
+        // color from being restored by clearEnvironment / setEnvironmentAsBackground
+        log.info(`Applying background override for "${mode}": ${color}`);
+        sceneManager?.setBackgroundColor(color);
+    } else {
+        // Restore theme/default background
+        scene.background = sceneManager?.savedBackgroundColor?.clone()
+            || new THREE.Color(COLORS.SCENE_BACKGROUND);
+    }
+}
+
 function switchViewMode(mode: string): void {
     state.displayMode = mode;
     setDisplayMode(mode as DisplayMode, createDisplayModeDeps());
     triggerLazyLoad(mode);
+    applyBackgroundForMode(mode);
 
     // Update active button state (sidebar layout)
     document.querySelectorAll('.kiosk-view-btn').forEach(btn => {
@@ -2598,7 +2784,7 @@ function createWallLabel(): void {
     const detailsBtn = label.querySelector('.wall-label-details-btn');
     if (detailsBtn) {
         detailsBtn.addEventListener('click', () => {
-            if (window.innerWidth > 768) {
+            if (window.innerWidth > 699) {
                 toggleInfoOverlay(true);
             } else {
                 showMetadataSidebar('view', { state: state as any, annotationSystem, imageAssets: state.imageAssets });

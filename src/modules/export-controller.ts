@@ -12,7 +12,7 @@ import { validateSIP, toManifestCompliance } from './sip-validator.js';
 import type { SIPValidationResult } from './sip-validator.js';
 import { getStore } from './asset-store.js';
 import { captureWalkthroughForArchive } from './walkthrough-controller.js';
-import { getAuthCredentials, refreshLibrary } from './library-panel.js';
+import { getAuthCredentials, getCsrfToken, refreshLibrary } from './library-panel.js';
 import type { ExportDeps } from '@/types.js';
 
 const log = Logger.getLogger('export-controller');
@@ -31,7 +31,7 @@ export function showExportPanel(deps: ExportDeps): void {
 /**
  * Update archive asset checkboxes based on loaded state.
  */
-export function updateArchiveAssetCheckboxes(deps: ExportDeps): void {
+function updateArchiveAssetCheckboxes(deps: ExportDeps): void {
     const { sceneRefs, state } = deps;
     const { annotationSystem } = sceneRefs;
 
@@ -170,6 +170,13 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     log.info(' Collecting metadata');
     const metadata = metadataFns.collectMetadata();
     log.info(' Metadata collected:', metadata);
+
+    // Inject current measurement calibration into viewer settings
+    const ms = (deps as any).measurementSystem || deps.sceneRefs?.measurementSystem;
+    if (ms && ms.isCalibrated && ms.isCalibrated()) {
+        metadata.viewerSettings.measurementScale = ms.getScale();
+        metadata.viewerSettings.measurementUnit = ms.getUnit();
+    }
 
     // Get export options
     const formatRadio = document.querySelector('input[name="export-format"]:checked') as HTMLInputElement | null;
@@ -314,7 +321,17 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         log.info(' Adding mesh proxy:', { proxyFileName });
         archiveCreator.addMeshProxy(assets.proxyMeshBlob, proxyFileName, {
             position, rotation, scale,
-            derived_from: 'mesh_0'
+            derived_from: 'mesh_0',
+            face_count: state.proxyMeshFaceCount || undefined,
+            decimation: state.proxyMeshSettings ? {
+                preset: state.proxyMeshSettings.preset,
+                targetRatio: state.proxyMeshSettings.targetRatio,
+                errorThreshold: state.proxyMeshSettings.errorThreshold,
+                textureMaxRes: state.proxyMeshSettings.textureMaxRes,
+                textureFormat: state.proxyMeshSettings.textureFormat,
+                originalFaces: state.meshFaceCount || 0,
+                resultFaces: state.proxyMeshFaceCount || 0,
+            } : undefined,
         });
     }
 
@@ -556,10 +573,7 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
     if (!archiveCreator) return;
 
     const creds = getAuthCredentials();
-    if (!creds) {
-        notify.warning('Please authenticate in the Library panel first.');
-        return;
-    }
+    const csrf = getCsrfToken();
 
     log.info(' Starting save to library');
     deps.ui.showLoading('Creating archive...', true);
@@ -577,6 +591,10 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
         deps.ui.updateProgress(82, 'Uploading to library...');
 
         // Upload via XHR for progress tracking
+        const csrfHeaders: Record<string, string> = {};
+        if (creds) csrfHeaders['Authorization'] = 'Basic ' + creds;
+        if (csrf) csrfHeaders['X-CSRF-Token'] = csrf;
+
         const chunkedEnabled = (window as unknown as { APP_CONFIG?: { chunkedUpload?: boolean } }).APP_CONFIG?.chunkedUpload;
         if (chunkedEnabled && blob.size > CHUNK_SIZE) {
             // Chunked upload — split into 50 MB pieces to stay under Cloudflare's 100 MB request limit
@@ -612,7 +630,8 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
                 xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
                 xhr.open('POST', '/api/archives/chunks?' + params.toString());
                 xhr.withCredentials = true;
-                xhr.setRequestHeader('Authorization', 'Basic ' + creds);
+                if (creds) xhr.setRequestHeader('Authorization', 'Basic ' + creds);
+                if (csrf) xhr.setRequestHeader('X-CSRF-Token', csrf);
                 xhr.setRequestHeader('Content-Type', 'application/octet-stream');
                 xhr.send(chunk);
             });
@@ -623,13 +642,13 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
             // Trigger assembly; on 409 (file exists) delete and retry
             const doComplete = () => fetch('/api/archives/chunks/' + uploadId + '/complete', {
                 method: 'POST', credentials: 'include',
-                headers: { 'Authorization': 'Basic ' + creds }
+                headers: csrfHeaders
             });
             let completeRes = await doComplete();
             if (completeRes.status === 409) {
                 const delRes = await fetch('/api/archives/' + encodeURIComponent(filename), {
                     method: 'DELETE', credentials: 'include',
-                    headers: { 'Authorization': 'Basic ' + creds }
+                    headers: csrfHeaders
                 });
                 if (!delRes.ok) throw new Error('Archive already exists and could not be overwritten');
                 completeRes = await doComplete();
@@ -662,7 +681,7 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
                         fetch('/api/archives/' + encodeURIComponent(filename), {
                             method: 'DELETE',
                             credentials: 'include',
-                            headers: { 'Authorization': 'Basic ' + creds }
+                            headers: csrfHeaders
                         }).then(delRes => {
                             if (!delRes.ok) {
                                 reject(new Error('Archive already exists and could not be overwritten'));
@@ -678,7 +697,8 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
                             retryXhr.addEventListener('error', () => reject(new Error('Re-upload network error')));
                             retryXhr.open('POST', '/api/archives');
                             retryXhr.withCredentials = true;
-                            retryXhr.setRequestHeader('Authorization', 'Basic ' + creds);
+                            if (creds) retryXhr.setRequestHeader('Authorization', 'Basic ' + creds);
+                            if (csrf) retryXhr.setRequestHeader('X-CSRF-Token', csrf);
                             retryXhr.send(retryForm);
                         }).catch(reject);
                     } else {
@@ -692,7 +712,8 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
 
                 xhr.open('POST', '/api/archives');
                 xhr.withCredentials = true;
-                xhr.setRequestHeader('Authorization', 'Basic ' + creds);
+                if (creds) xhr.setRequestHeader('Authorization', 'Basic ' + creds);
+                if (csrf) xhr.setRequestHeader('X-CSRF-Token', csrf);
                 xhr.send(form);
             });
         }
@@ -777,6 +798,14 @@ export async function exportMetadataManifest(deps: ExportDeps): Promise<void> {
     }
 
     const metadata = metadataFns.collectMetadata();
+
+    // Inject current measurement calibration into viewer settings
+    const ms = (deps as any).measurementSystem || deps.sceneRefs?.measurementSystem;
+    if (ms && ms.isCalibrated && ms.isCalibrated()) {
+        metadata.viewerSettings.measurementScale = ms.getScale();
+        metadata.viewerSettings.measurementUnit = ms.getUnit();
+    }
+
     tempCreator.applyMetadata(metadata);
     tempCreator.setMetadataProfile(getActiveProfile());
 

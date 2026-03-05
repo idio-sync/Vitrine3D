@@ -941,95 +941,95 @@ The following is a complete manifest demonstrating all sections at Conformance L
     "container_version": "1.0",
     "packer": "vitrine3d",
     "packer_version": "1.0.0",
-    "_creation_date": "2026-02-05T12:00:00.000Z",
+    "_creation_date": "2026-03-01T14:30:00.000Z",
 
     "project": {
-        "title": "East Facade of St. Mary's Church",
-        "id": "st-marys-east-facade-2026",
-        "description": "Photogrammetric capture of the east facade.",
-        "license": "CC-BY-4.0"
+        "title": "The Three Soldiers — Vietnam Veterans Memorial",
+        "id": "three-soldiers-vvm-2026",
+        "description": "High-resolution 3D capture of *The Three Soldiers* (also known as *The Three Servicemen*), a bronze sculpture by Frederick Hart located on the National Mall in Washington, D.C. The statue depicts three young American servicemen — one White, one African American, and one Hispanic — and was unveiled on Veterans Day 1984 as a figurative complement to Maya Lin's abstract memorial wall.",
+        "license": "CC-BY-NC-4.0"
     },
 
     "relationships": {
-        "part_of": "St. Mary's Church Conservation Survey 2026",
-        "derived_from": "raw-scan-001",
+        "part_of": "Vietnam Veterans Memorial Documentation Project 2026",
+        "derived_from": "raw-scan-003",
         "replaces": "",
         "related_objects": [
-            "west-facade",
+            "vietnam-veterans-memorial-wall",
             {
-                "title": "Interior Nave Scan",
-                "description": "Companion interior laser scan.",
+                "title": "Vietnam Women's Memorial",
+                "description": "Bronze sculpture by Glenna Goodacre, dedicated 1993, located 300 ft south of The Wall.",
                 "url": ""
             }
         ]
     },
 
     "provenance": {
-        "capture_date": "2026-01-15",
+        "capture_date": "2026-02-18",
         "capture_device": "Leica RTC360",
-        "device_serial": "SN-12345",
-        "operator": "Jane Smith, Heritage Survey Team",
-        "operator_orcid": "0000-0002-1234-5678",
-        "location": "Oxford, UK",
+        "device_serial": "SN-55892",
+        "operator": "Michael Torres, National Mall Survey Team",
+        "operator_orcid": "0000-0003-4567-8901",
+        "location": "Washington, D.C., USA",
         "convention_hints": ["Y-up", "meters", "right-handed"],
         "processing_software": [
-            { "name": "Reality Capture", "version": "1.4", "url": "https://www.capturingreality.com/" },
-            { "name": "CloudCompare", "version": "2.13" }
+            { "name": "Reality Capture", "version": "1.5", "url": "https://www.capturingreality.com/" },
+            { "name": "Blender", "version": "5.0" }
         ],
-        "processing_notes": "Aligned from 847 images, cleaned and decimated."
+        "processing_notes": "Captured across two sessions (morning and afternoon) for optimal lighting. 1,240 images aligned, dense cloud cleaned of tourist occlusion, mesh decimated for web delivery."
     },
 
     "quality_metrics": {
         "tier": "reference",
         "accuracy_grade": "A",
-        "capture_resolution": { "value": 2, "unit": "mm", "type": "GSD" },
-        "alignment_error": { "value": 0.5, "unit": "mm", "method": "RMSE" },
-        "scale_verification": "Verified with calibrated scale bar.",
+        "capture_resolution": { "value": 1.5, "unit": "mm", "type": "GSD" },
+        "alignment_error": { "value": 0.4, "unit": "mm", "method": "RMSE" },
+        "scale_verification": "Verified against known plinth dimensions (base width 2.44 m).",
         "data_quality": {
-            "coverage_gaps": "Minor occlusion behind downpipe.",
-            "reconstruction_areas": "None.",
-            "color_calibration": "X-Rite ColorChecker used.",
-            "measurement_uncertainty": "0.3mm"
+            "coverage_gaps": "Minor occlusion under rifle sling and between figures at rear contact points.",
+            "reconstruction_areas": "Small infill on underside of helmet brims.",
+            "color_calibration": "X-Rite ColorChecker used, white balance corrected per session.",
+            "measurement_uncertainty": "0.4mm"
         }
     },
 
     "archival_record": {
         "standard": "Dublin Core",
-        "title": "East Facade of St. Mary's Church",
-        "alternate_titles": [],
+        "title": "The Three Soldiers (The Three Servicemen)",
+        "alternate_titles": ["The Three Servicemen Statue", "Three Soldiers Statue"],
         "ids": {
-            "accession_number": "2026.001.0042",
+            "accession_number": "VVMF-1984-002",
             "siris_id": "",
-            "uri": "https://collection.example.org/objects/42"
+            "uri": "https://www.nps.gov/vive/learn/the-three-soldiers.htm"
         },
         "creation": {
-            "creator": "Unknown (attributed to George Edmund Street)",
-            "date_created": "1860-1875",
-            "period": "Gothic Revival",
-            "culture": "English"
+            "creator": "Frederick Hart",
+            "date_created": "1984",
+            "period": "Late 20th Century",
+            "culture": "American"
         },
         "physical_description": {
-            "medium": "Limestone ashlar with flint infill",
-            "dimensions": { "height": "15m", "width": "22m", "depth": "1.2m" },
-            "condition": "Fair — weathering to upper tracery."
+            "medium": "Cast bronze on granite base",
+            "dimensions": { "height": "2.13m", "width": "3.05m", "depth": "2.44m" },
+            "condition": "Good — characteristic green-brown patina with high-touch polish on hands and faces from visitor contact."
         },
-        "provenance": "Parish of St. Mary the Virgin since construction.",
+        "provenance": "Commissioned by the Vietnam Veterans Memorial Fund. Unveiled November 9, 1984. Administered by the National Park Service.",
         "rights": {
-            "copyright_status": "CC-BY-4.0",
-            "credit_line": "Heritage Survey Team, 2026"
+            "copyright_status": "CC-BY-NC-4.0",
+            "credit_line": "National Mall Survey Team, 2026. Sculpture by Frederick Hart, 1984."
         },
         "context": {
-            "description": "East-facing facade with decorated tracery window.",
-            "location_history": "Original location since construction."
+            "description": "The sculpture stands in a small grove of trees approximately 120 ft from the west end of The Wall (Vietnam Veterans Memorial). The three figures face The Wall, creating a symbolic connection between the figurative soldiers and the 58,318 names inscribed on the black granite panels. Hart's sculpture was added as a compromise after controversy over Maya Lin's abstract design.",
+            "location_history": "Installed at the current site on the National Mall, November 9, 1984. Has not been relocated."
         },
         "coverage": {
             "spatial": {
-                "location_name": "Oxford, UK",
-                "coordinates": { "latitude": "51.752", "longitude": "-1.258" }
+                "location_name": "National Mall, Washington, D.C., USA",
+                "coordinates": { "latitude": "38.8911", "longitude": "-77.0478" }
             },
             "temporal": {
-                "subject_period": "1860-1875",
-                "subject_date_circa": true
+                "subject_period": "1984",
+                "subject_date_circa": false
             }
         }
     },
@@ -1049,7 +1049,7 @@ The following is a complete manifest demonstrating all sections at Conformance L
         },
         "significant_properties": [
             "Geometric accuracy (point positions)",
-            "Color fidelity",
+            "Color fidelity (patina surface variation)",
             "Real-world scale"
         ],
         "rendering_requirements": "WebGL 2.0 with EXT_color_buffer_float for Gaussian splat rendering.",
@@ -1060,8 +1060,8 @@ The following is a complete manifest demonstrating all sections at Conformance L
         "scene_0": {
             "file_name": "assets/scene_0.ply",
             "created_by": "nerfstudio",
-            "_created_by_version": "1.1.0",
-            "_source_notes": "Trained for 30k iterations from 847 images.",
+            "_created_by_version": "1.1.4",
+            "_source_notes": "Trained for 50k iterations from 1,240 images. Two lighting conditions blended.",
             "role": "derived",
             "_parameters": {
                 "position": [0, 0, 0],
@@ -1072,8 +1072,8 @@ The following is a complete manifest demonstrating all sections at Conformance L
         "mesh_0": {
             "file_name": "assets/mesh_0.glb",
             "created_by": "Reality Capture",
-            "_created_by_version": "1.4",
-            "_source_notes": "Decimated from 200M to 10M faces.",
+            "_created_by_version": "1.5",
+            "_source_notes": "Decimated from 180M to 8M faces. PBR textures baked at 8K.",
             "role": "derived",
             "_parameters": {
                 "position": [0, 0, 0],
@@ -1092,8 +1092,8 @@ The following is a complete manifest demonstrating all sections at Conformance L
         "pointcloud_0": {
             "file_name": "assets/pointcloud_0.e57",
             "created_by": "Leica Cyclone",
-            "_created_by_version": "2024.1.0",
-            "_source_notes": "Registered from 12 scan positions.",
+            "_created_by_version": "2025.2.0",
+            "_source_notes": "Registered from 8 scan positions around the sculpture group.",
             "role": "primary",
             "_parameters": {
                 "position": [0, 0, 0],
@@ -1110,19 +1110,32 @@ The following is a complete manifest demonstrating all sections at Conformance L
     "annotations": [
         {
             "id": "anno_1",
-            "title": "Crack in tracery",
-            "body": "Structural crack running NE-SW, approximately 2.3m in length.",
-            "position": { "x": 1.2, "y": 3.4, "z": -0.1 },
-            "camera_position": { "x": 2.0, "y": 4.0, "z": 3.0 },
-            "camera_target": { "x": 1.2, "y": 3.4, "z": -0.1 }
+            "title": "Polished contact area — lead figure's right hand",
+            "body": "Surface patina worn to bright bronze from decades of visitor contact. Demonstrates public interaction with the memorial.",
+            "position": { "x": 0.15, "y": 1.35, "z": 0.42 },
+            "camera_position": { "x": 1.0, "y": 1.5, "z": 1.8 },
+            "camera_target": { "x": 0.15, "y": 1.35, "z": 0.42 }
+        },
+        {
+            "id": "anno_2",
+            "title": "Orientation toward The Wall",
+            "body": "All three figures face east-southeast toward the Vietnam Veterans Memorial Wall. This sightline is a deliberate design element by Frederick Hart.",
+            "position": { "x": -0.3, "y": 1.6, "z": -0.1 },
+            "camera_position": { "x": -2.5, "y": 2.0, "z": 2.0 },
+            "camera_target": { "x": -0.3, "y": 1.6, "z": -0.1 }
         }
     ],
 
     "version_history": [
         {
             "version": "1.0",
-            "date": "2026-01-15T08:30:00Z",
+            "date": "2026-02-18T16:00:00Z",
             "description": "Initial capture and processing."
+        },
+        {
+            "version": "1.1",
+            "date": "2026-03-01T14:30:00Z",
+            "description": "Added afternoon session data for improved coverage of rear contact points."
         }
     ],
 
@@ -1141,7 +1154,7 @@ The following is a complete manifest demonstrating all sections at Conformance L
         "profile": "archival",
         "status": "pass",
         "score": 100,
-        "checked_at": "2026-02-05T12:00:00.000Z",
+        "checked_at": "2026-03-01T14:30:00.000Z",
         "errors": [],
         "warnings": [],
         "overridden": false
@@ -1149,14 +1162,15 @@ The following is a complete manifest demonstrating all sections at Conformance L
 
     "_meta": {
         "quality": {
-            "splat_count": 2000000,
-            "mesh_polygons": 10000000,
-            "mesh_vertices": 5000000,
-            "pointcloud_points": 50000000
+            "splat_count": 3500000,
+            "mesh_polygons": 8000000,
+            "mesh_vertices": 4000000,
+            "pointcloud_points": 42000000
         },
         "custom_fields": {
-            "diocese": "Oxford",
-            "listed_grade": "Grade I"
+            "nps_unit_code": "VIVE",
+            "nps_alpha_code": "Vietnam Veterans Memorial",
+            "sculptor": "Frederick Hart"
         }
     }
 }

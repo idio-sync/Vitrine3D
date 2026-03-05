@@ -131,6 +131,9 @@
     // Clean URL injection (set by meta-server for /view/{hash} routes)
     const _inj = window.__VITRINE_CLEAN_URL || {};
 
+    // Library mode (set by meta-server for /library route)
+    const _libraryMode = window.__VITRINE_LIBRARY === true;
+
     // Get and validate URL parameters
     const archiveUrl = validateUrl(params.get('archive') || _inj.archive || '', 'archive');
     const splatUrl = validateUrl(params.get('splat'), 'splat');
@@ -214,7 +217,18 @@
         lodBudgetSd: 0,
         lodBudgetHd: 0,
 
+        collectionSlug: _inj.collection || null,
+
+        // Library browser page — set by meta-server /library route injection
+        library: _libraryMode,
+
+        // Home screen (Tauri desktop launcher) — activated by ?home=true
+        home: params.get('home') === 'true',
+
         // Library (archive management) — disabled in local dev, enabled via ADMIN_ENABLED in Docker
-        libraryEnabled: false
+        libraryEnabled: false,
+
+        // Spark.js renderer version: '2.0' (default, with LOD) or '0.1' (legacy OldSparkRenderer)
+        sparkVersion: '2.0'
     };
 })();

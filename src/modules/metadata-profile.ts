@@ -27,7 +27,6 @@ export const TAB_TIERS: Record<string, MetadataProfile> = {
     material:     'archival',
     preservation: 'archival',
     integrity:    'archival',
-    viewer:       'basic',
 };
 
 /** Maps kiosk detail section titles (from createDetailSection() in kiosk-main.ts) to tiers */
@@ -144,24 +143,6 @@ export const CRITICAL_FIELDS: Record<MetadataProfile, Record<string, string>> = 
         'meta-coverage-location': 'Subject Location',
     },
 };
-
-/**
- * Check which critical fields are empty for the given profile.
- * Returns array of { id, label } for missing fields.
- */
-export function getMissingCriticalFields(profile: MetadataProfile): Array<{ id: string; label: string }> {
-    const critical = CRITICAL_FIELDS[profile];
-    const missing: Array<{ id: string; label: string }> = [];
-    for (const [id, label] of Object.entries(critical)) {
-        const el = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
-        if (!el) continue;
-        const val = el.value?.trim() ?? '';
-        if (!val || (el instanceof HTMLSelectElement && (val === '' || val === 'Not specified'))) {
-            missing.push({ id, label });
-        }
-    }
-    return missing;
-}
 
 /** PRONOM format registry — maps file extensions to PUIDs and human-readable names. */
 export const PRONOM_REGISTRY: Record<string, { puid: string; name: string }> = {
