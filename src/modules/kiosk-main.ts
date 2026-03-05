@@ -2582,7 +2582,10 @@ function applyBackgroundForMode(mode: string): void {
     else if (mode === 'splat' || mode === 'both') color = state.splatBackgroundColor;
 
     if (color) {
-        scene.background = new THREE.Color(color);
+        // Use setBackgroundColor to sync savedBackgroundColor — prevents theme
+        // color from being restored by clearEnvironment / setEnvironmentAsBackground
+        log.info(`Applying background override for "${mode}": ${color}`);
+        sceneManager?.setBackgroundColor(color);
     } else {
         // Restore theme/default background
         scene.background = sceneManager?.savedBackgroundColor?.clone()
