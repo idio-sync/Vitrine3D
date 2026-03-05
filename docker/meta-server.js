@@ -217,6 +217,47 @@ function buildArchiveObjectFromRow(row) {
     };
 }
 
+/**
+ * Convert a SQLite row from the collections table into the API response object.
+ */
+function buildCollectionObject(row) {
+    return {
+        id: row.id,
+        slug: row.slug,
+        name: row.name,
+        description: row.description || '',
+        thumbnail: row.thumbnail || null,
+        theme: row.theme || null,
+        archiveCount: row.archive_count || 0,
+        created_at: row.created_at ? row.created_at.replace(' ', 'T') + 'Z' : row.created_at,
+        updated_at: row.updated_at ? row.updated_at.replace(' ', 'T') + 'Z' : row.updated_at,
+    };
+}
+
+/**
+ * Generate a URL-safe slug from a name string.
+ */
+function slugify(name) {
+    return name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80) || 'collection';
+}
+
+/**
+ * Read and parse a JSON request body. Calls cb(err, body).
+ */
+function readJsonBody(req, cb) {
+    let data = '';
+    req.on('data', chunk => { data += chunk; if (data.length > 1e6) req.destroy(); });
+    req.on('end', () => {
+        try { cb(null, JSON.parse(data)); }
+        catch (e) { cb(e, null); }
+    });
+    req.on('error', cb);
+}
+
 // --- Helpers ---
 
 /**
@@ -1024,6 +1065,386 @@ function handleRenameArchive(req, res, hash) {
     });
 }
 
+// --- Collection API Handlers ---
+
+/**
+ * GET /api/collections — list all collections with archive counts.
+ * Public endpoint (no auth required).
+ */
+function handleListCollections(req, res) {
+    try {
+        const rows = db.prepare(`
+            SELECT c.*, COUNT(ca.archive_id) AS archive_count
+            FROM collections c
+            LEFT JOIN collection_archives ca ON ca.collection_id = c.id
+            GROUP BY c.id
+            ORDER BY c.name ASC
+        `).all();
+        sendJson(res, 200, { collections: rows.map(buildCollectionObject) });
+    } catch (err) {
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * GET /api/collections/:slug — get a single collection with its ordered archives.
+ * Public endpoint (no auth required).
+ */
+function handleGetCollection(req, res, slug) {
+    try {
+        const row = db.prepare(`
+            SELECT c.*, COUNT(ca.archive_id) AS archive_count
+            FROM collections c
+            LEFT JOIN collection_archives ca ON ca.collection_id = c.id
+            WHERE c.slug = ?
+            GROUP BY c.id
+        `).get(slug);
+
+        if (!row) {
+            sendJson(res, 404, { error: 'Collection not found' });
+            return;
+        }
+
+        const archiveRows = db.prepare(`
+            SELECT a.* FROM archives a
+            JOIN collection_archives ca ON ca.archive_id = a.id
+            WHERE ca.collection_id = ?
+            ORDER BY ca.sort_order ASC, a.title ASC
+        `).all(row.id);
+
+        const collection = buildCollectionObject(row);
+        collection.archives = archiveRows.map(buildArchiveObjectFromRow);
+
+        if (!collection.thumbnail && collection.archives.length > 0) {
+            collection.thumbnail = collection.archives[0].thumbnail;
+        }
+
+        sendJson(res, 200, collection);
+    } catch (err) {
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * POST /api/collections — create a new collection.
+ * Admin-gated. Body: { name, slug?, description?, thumbnail?, theme? }
+ */
+function handleCreateCollection(req, res) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    readJsonBody(req, (err, body) => {
+        if (err) return sendJson(res, 400, { error: 'Invalid JSON' });
+        const name = (body.name || '').trim();
+        if (!name) return sendJson(res, 400, { error: 'Name is required' });
+
+        const slug = (body.slug || slugify(name)).trim();
+        if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(slug)) {
+            return sendJson(res, 400, { error: 'Invalid slug: lowercase alphanumeric and hyphens only, 1-80 chars' });
+        }
+
+        const description = (body.description || '').trim();
+        const thumbnail = body.thumbnail || null;
+        const theme = body.theme || null;
+
+        if (theme && !['editorial', 'gallery', 'exhibit', 'minimal'].includes(theme)) {
+            return sendJson(res, 400, { error: 'Invalid theme' });
+        }
+
+        try {
+            const existing = db.prepare('SELECT id FROM collections WHERE slug = ?').get(slug);
+            if (existing) return sendJson(res, 409, { error: 'A collection with this slug already exists' });
+
+            db.prepare(`
+                INSERT INTO collections (slug, name, description, thumbnail, theme)
+                VALUES (?, ?, ?, ?, ?)
+            `).run(slug, name, description, thumbnail, theme);
+
+            db.prepare(`INSERT INTO audit_log (actor, action, target, ip) VALUES (?, ?, ?, ?)`)
+                .run(actor, 'create_collection', slug, req.socket.remoteAddress);
+
+            const row = db.prepare('SELECT c.*, 0 AS archive_count FROM collections c WHERE slug = ?').get(slug);
+            sendJson(res, 201, buildCollectionObject(row));
+        } catch (err) {
+            sendJson(res, 500, { error: err.message });
+        }
+    });
+}
+
+/**
+ * PATCH /api/collections/:slug — update collection metadata.
+ */
+function handleUpdateCollection(req, res, slug) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    readJsonBody(req, (err, body) => {
+        if (err) return sendJson(res, 400, { error: 'Invalid JSON' });
+
+        const row = db.prepare('SELECT * FROM collections WHERE slug = ?').get(slug);
+        if (!row) return sendJson(res, 404, { error: 'Collection not found' });
+
+        const updates = {};
+        if (body.name !== undefined) updates.name = body.name.trim() || row.name;
+        if (body.description !== undefined) updates.description = body.description.trim();
+        if (body.thumbnail !== undefined) updates.thumbnail = body.thumbnail || null;
+        if (body.theme !== undefined) {
+            if (body.theme && !['editorial', 'gallery', 'exhibit', 'minimal'].includes(body.theme)) {
+                return sendJson(res, 400, { error: 'Invalid theme' });
+            }
+            updates.theme = body.theme || null;
+        }
+        if (body.slug !== undefined) {
+            const newSlug = body.slug.trim();
+            if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(newSlug)) {
+                return sendJson(res, 400, { error: 'Invalid slug' });
+            }
+            if (newSlug !== slug) {
+                const conflict = db.prepare('SELECT id FROM collections WHERE slug = ?').get(newSlug);
+                if (conflict) return sendJson(res, 409, { error: 'Slug already in use' });
+                updates.slug = newSlug;
+            }
+        }
+
+        if (Object.keys(updates).length === 0) {
+            return sendJson(res, 200, buildCollectionObject(row));
+        }
+
+        try {
+            const setClauses = Object.keys(updates).map(k => k + ' = ?');
+            setClauses.push("updated_at = datetime('now')");
+            const values = Object.values(updates);
+            values.push(row.id);
+
+            db.prepare('UPDATE collections SET ' + setClauses.join(', ') + ' WHERE id = ?').run(...values);
+
+            db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
+                .run(actor, 'update_collection', updates.slug || slug, JSON.stringify(updates), req.socket.remoteAddress);
+
+            const updatedRow = db.prepare(`
+                SELECT c.*, COUNT(ca.archive_id) AS archive_count
+                FROM collections c
+                LEFT JOIN collection_archives ca ON ca.collection_id = c.id
+                WHERE c.id = ?
+                GROUP BY c.id
+            `).get(row.id);
+            sendJson(res, 200, buildCollectionObject(updatedRow));
+        } catch (err) {
+            sendJson(res, 500, { error: err.message });
+        }
+    });
+}
+
+/**
+ * DELETE /api/collections/:slug — delete a collection.
+ * Archives are NOT deleted, only membership links (via CASCADE).
+ */
+function handleDeleteCollection(req, res, slug) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    try {
+        const row = db.prepare('SELECT * FROM collections WHERE slug = ?').get(slug);
+        if (!row) return sendJson(res, 404, { error: 'Collection not found' });
+
+        if (row.thumbnail && row.thumbnail.startsWith('/thumbs/collection-')) {
+            const thumbPath = path.join(HTML_ROOT, row.thumbnail);
+            try { fs.unlinkSync(thumbPath); } catch (_) { /* ignore */ }
+        }
+
+        db.prepare('DELETE FROM collections WHERE id = ?').run(row.id);
+
+        db.prepare('INSERT INTO audit_log (actor, action, target, ip) VALUES (?, ?, ?, ?)')
+            .run(actor, 'delete_collection', slug, req.socket.remoteAddress);
+
+        sendJson(res, 200, { ok: true });
+    } catch (err) {
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * POST /api/collections/:slug/archives — add archive(s) to a collection.
+ * Body: { hashes: ["abc123..."] }
+ */
+function handleAddCollectionArchives(req, res, slug) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    readJsonBody(req, (err, body) => {
+        if (err) return sendJson(res, 400, { error: 'Invalid JSON' });
+
+        const hashes = body.hashes;
+        if (!Array.isArray(hashes) || hashes.length === 0) {
+            return sendJson(res, 400, { error: 'hashes array is required' });
+        }
+
+        try {
+            const coll = db.prepare('SELECT id FROM collections WHERE slug = ?').get(slug);
+            if (!coll) return sendJson(res, 404, { error: 'Collection not found' });
+
+            const maxOrder = db.prepare(
+                'SELECT COALESCE(MAX(sort_order), -1) AS m FROM collection_archives WHERE collection_id = ?'
+            ).get(coll.id).m;
+
+            const insert = db.prepare(
+                'INSERT OR IGNORE INTO collection_archives (collection_id, archive_id, sort_order) VALUES (?, ?, ?)'
+            );
+
+            let added = 0;
+            for (let i = 0; i < hashes.length; i++) {
+                const archive = db.prepare('SELECT id FROM archives WHERE hash = ?').get(hashes[i]);
+                if (archive) {
+                    const result = insert.run(coll.id, archive.id, maxOrder + 1 + i);
+                    if (result.changes > 0) added++;
+                }
+            }
+
+            db.prepare("UPDATE collections SET updated_at = datetime('now') WHERE id = ?").run(coll.id);
+
+            db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
+                .run(actor, 'add_to_collection', slug, JSON.stringify({ hashes, added }), req.socket.remoteAddress);
+
+            sendJson(res, 200, { ok: true, added });
+        } catch (err) {
+            sendJson(res, 500, { error: err.message });
+        }
+    });
+}
+
+/**
+ * DELETE /api/collections/:slug/archives/:hash — remove one archive from a collection.
+ */
+function handleRemoveCollectionArchive(req, res, slug, archiveHash) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    try {
+        const coll = db.prepare('SELECT id FROM collections WHERE slug = ?').get(slug);
+        if (!coll) return sendJson(res, 404, { error: 'Collection not found' });
+
+        const archive = db.prepare('SELECT id FROM archives WHERE hash = ?').get(archiveHash);
+        if (!archive) return sendJson(res, 404, { error: 'Archive not found' });
+
+        db.prepare('DELETE FROM collection_archives WHERE collection_id = ? AND archive_id = ?')
+            .run(coll.id, archive.id);
+
+        db.prepare("UPDATE collections SET updated_at = datetime('now') WHERE id = ?").run(coll.id);
+
+        db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
+            .run(actor, 'remove_from_collection', slug, archiveHash, req.socket.remoteAddress);
+
+        sendJson(res, 200, { ok: true });
+    } catch (err) {
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * PATCH /api/collections/:slug/order — reorder archives in a collection.
+ * Body: { hashes: ["hash1", "hash2", ...] }
+ */
+function handleReorderCollection(req, res, slug) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    readJsonBody(req, (err, body) => {
+        if (err) return sendJson(res, 400, { error: 'Invalid JSON' });
+
+        const hashes = body.hashes;
+        if (!Array.isArray(hashes)) return sendJson(res, 400, { error: 'hashes array is required' });
+
+        try {
+            const coll = db.prepare('SELECT id FROM collections WHERE slug = ?').get(slug);
+            if (!coll) return sendJson(res, 404, { error: 'Collection not found' });
+
+            const update = db.prepare(
+                'UPDATE collection_archives SET sort_order = ? WHERE collection_id = ? AND archive_id = (SELECT id FROM archives WHERE hash = ?)'
+            );
+
+            const reorder = db.transaction(() => {
+                for (let i = 0; i < hashes.length; i++) {
+                    update.run(i, coll.id, hashes[i]);
+                }
+            });
+            reorder();
+
+            db.prepare("UPDATE collections SET updated_at = datetime('now') WHERE id = ?").run(coll.id);
+
+            sendJson(res, 200, { ok: true });
+        } catch (err) {
+            sendJson(res, 500, { error: err.message });
+        }
+    });
+}
+
+/**
+ * GET /collection/:slug — serve the kiosk HTML for a collection page.
+ * Injects collection slug into window.__VITRINE_CLEAN_URL for client-side rendering.
+ */
+function handleCollectionPage(req, res, slug) {
+    const row = db.prepare(`
+        SELECT c.*, COUNT(ca.archive_id) AS archive_count
+        FROM collections c
+        LEFT JOIN collection_archives ca ON ca.collection_id = c.id
+        WHERE c.slug = ?
+        GROUP BY c.id
+    `).get(slug);
+
+    if (!row) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Collection not found');
+        return;
+    }
+
+    if (isBotRequest(req)) {
+        let thumb = row.thumbnail ? SITE_URL + row.thumbnail : null;
+        if (!thumb) {
+            const firstArchive = db.prepare(`
+                SELECT a.thumbnail FROM archives a
+                JOIN collection_archives ca ON ca.archive_id = a.id
+                WHERE ca.collection_id = ?
+                ORDER BY ca.sort_order ASC LIMIT 1
+            `).get(row.id);
+            if (firstArchive && firstArchive.thumbnail) thumb = SITE_URL + firstArchive.thumbnail;
+        }
+        return serveOgHtml(
+            res,
+            row.name || SITE_NAME,
+            row.description || SITE_DESCRIPTION,
+            thumb,
+            SITE_URL + req.url,
+            null
+        );
+    }
+
+    const indexHtml = getIndexHtml();
+    if (!indexHtml) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('index.html not found');
+        return;
+    }
+
+    const inject = { collection: slug, kiosk: true };
+    if (row.theme) inject.theme = row.theme;
+    const injectTag = '<script>window.__VITRINE_CLEAN_URL=' + JSON.stringify(inject) + ';</script>\n';
+
+    let html = indexHtml.replace(/<head>/i, '<head>\n<base href="/">');
+    html = html.replace(/<script[\s>]/i, (m) => injectTag + m);
+
+    res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache'
+    });
+    res.end(html);
+}
+
 // --- Clean URL Handler ---
 
 /**
@@ -1345,6 +1766,22 @@ const server = http.createServer((req, res) => {
         return handleViewArchive(req, res, viewMatch[1]);
     }
 
+    // --- Collection routes (public reads) ---
+    if (pathname === '/api/collections' && req.method === 'GET') {
+        return handleListCollections(req, res);
+    }
+
+    const collSlugMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})$/);
+    if (collSlugMatch && req.method === 'GET') {
+        return handleGetCollection(req, res, collSlugMatch[1]);
+    }
+
+    // Collection pages: /collection/{slug}
+    const collPageMatch = pathname.match(/^\/collection\/([a-z0-9][a-z0-9-]{0,79})$/);
+    if (collPageMatch && req.method === 'GET') {
+        return handleCollectionPage(req, res, collPageMatch[1]);
+    }
+
     // Admin routes (only when enabled)
     if (ADMIN_ENABLED) {
         if (pathname === '/admin' && req.method === 'GET') {
@@ -1393,6 +1830,33 @@ const server = http.createServer((req, res) => {
             const hash = hashMatch[1];
             if (req.method === 'DELETE') return handleDeleteArchive(req, res, hash);
             if (req.method === 'PATCH') return handleRenameArchive(req, res, hash);
+        }
+
+        // --- Collection admin routes ---
+        if (pathname === '/api/collections' && req.method === 'POST') {
+            return handleCreateCollection(req, res);
+        }
+
+        const collSlugAdminMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})$/);
+        if (collSlugAdminMatch) {
+            const cSlug = collSlugAdminMatch[1];
+            if (req.method === 'PATCH') return handleUpdateCollection(req, res, cSlug);
+            if (req.method === 'DELETE') return handleDeleteCollection(req, res, cSlug);
+        }
+
+        const collArchivesMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})\/archives$/);
+        if (collArchivesMatch && req.method === 'POST') {
+            return handleAddCollectionArchives(req, res, collArchivesMatch[1]);
+        }
+
+        const collArchiveRemoveMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})\/archives\/([a-f0-9]{16})$/);
+        if (collArchiveRemoveMatch && req.method === 'DELETE') {
+            return handleRemoveCollectionArchive(req, res, collArchiveRemoveMatch[1], collArchiveRemoveMatch[2]);
+        }
+
+        const collOrderMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})\/order$/);
+        if (collOrderMatch && req.method === 'PATCH') {
+            return handleReorderCollection(req, res, collOrderMatch[1]);
         }
 
         if (req.method === 'GET' && pathname === '/api/me') {
