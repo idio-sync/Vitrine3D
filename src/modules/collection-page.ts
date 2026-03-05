@@ -128,9 +128,9 @@ export async function initCollectionPage(): Promise<boolean> {
 
     log.info('Loading collection:', slug);
 
-    // Hide the 3D viewport and show collection container
-    const viewport = document.getElementById('viewport') || document.getElementById('canvas-container');
-    if (viewport) viewport.style.display = 'none';
+    // Hide the entire app shell (tool rail, viewport, status bar, props panel)
+    const app = document.getElementById('app');
+    if (app) app.style.display = 'none';
 
     let container = document.getElementById('collection-container');
     if (!container) {
