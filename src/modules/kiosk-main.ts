@@ -631,7 +631,7 @@ function createFilePicker(): HTMLElement {
                     Point Clouds: .e57
                 </p>
             </div>
-            <input type="file" id="kiosk-picker-input" accept=".a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">
+            <input type="file" id="kiosk-picker-input" accept=".a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57,*/*" multiple style="display:none">
         </div>
     `;
 
