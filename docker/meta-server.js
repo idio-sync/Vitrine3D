@@ -594,6 +594,139 @@ function handleListArchives(req, res) {
 }
 
 /**
+ * GET /api/audit-log — list audit log entries with optional filtering
+ */
+function handleAuditLog(req, res) {
+    if (!requireAuth(req, res)) return;
+    try {
+        const query = url.parse(req.url, true).query;
+
+        let limit = parseInt(query.limit, 10) || 50;
+        if (limit > 200) limit = 200;
+        let offset = parseInt(query.offset, 10) || 0;
+        if (offset < 0) offset = 0;
+
+        const conditions = [];
+        const params = [];
+
+        if (query.actor) {
+            conditions.push('actor = ?');
+            params.push(query.actor);
+        }
+        if (query.action) {
+            conditions.push('action = ?');
+            params.push(query.action);
+        }
+        if (query.from) {
+            conditions.push("created_at >= datetime(?)");
+            params.push(query.from);
+        }
+        if (query.to) {
+            conditions.push("created_at <= datetime(?)");
+            params.push(query.to);
+        }
+
+        const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+        const total = db.prepare(`SELECT COUNT(*) AS cnt FROM audit_log ${where}`).get(...params).cnt;
+        const entries = db.prepare(`SELECT * FROM audit_log ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
+
+        const actors = db.prepare('SELECT DISTINCT actor FROM audit_log WHERE actor IS NOT NULL ORDER BY actor').all().map(r => r.actor);
+        const actions = db.prepare('SELECT DISTINCT action FROM audit_log WHERE action IS NOT NULL ORDER BY action').all().map(r => r.action);
+
+        sendJson(res, 200, { entries, total, limit, offset, actors, actions });
+    } catch (err) {
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * GET /api/storage — storage overview: archive list, disk usage, orphans
+ */
+function handleStorage(req, res) {
+    if (!requireAuth(req, res)) return;
+    try {
+        const rows = db.prepare('SELECT hash, filename, size, asset_types, created_at FROM archives ORDER BY size DESC').all();
+        const totalUsed = rows.reduce((sum, r) => sum + (r.size || 0), 0);
+
+        let diskFree = null;
+        let diskTotal = null;
+        try {
+            const stats = fs.statfsSync(ARCHIVES_DIR);
+            diskTotal = stats.bsize * stats.blocks;
+            diskFree = stats.bsize * stats.bfree;
+        } catch {}
+
+        let dbSize = null;
+        try { dbSize = fs.statSync(DB_PATH).size; } catch {}
+
+        const dbFilenames = new Set(rows.map(r => r.filename));
+        let orphans = [];
+        try {
+            const files = fs.readdirSync(ARCHIVES_DIR);
+            for (const file of files) {
+                if (!dbFilenames.has(file)) {
+                    let size = null;
+                    try { size = fs.statSync(path.join(ARCHIVES_DIR, file)).size; } catch {}
+                    orphans.push({ filename: file, size });
+                }
+            }
+        } catch {}
+
+        sendJson(res, 200, { archives: rows, totalUsed, diskFree, diskTotal, dbSize, orphans });
+    } catch (err) {
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * DELETE /api/storage/orphans/:filename — delete an orphaned archive file
+ */
+function handleDeleteOrphan(req, res, filename) {
+    if (!requireAuth(req, res)) return;
+    if (!checkCsrf(req, res)) return;
+
+    // Validate filename — no path separators, must end with .a3d or .a3z
+    if (filename.includes('/') || filename.includes('\\')) {
+        return sendJson(res, 400, { error: 'Invalid filename' });
+    }
+    if (!filename.endsWith('.a3d') && !filename.endsWith('.a3z')) {
+        return sendJson(res, 400, { error: 'Invalid file type' });
+    }
+
+    const filePath = path.join(ARCHIVES_DIR, filename);
+
+    // Path traversal protection
+    try {
+        const realPath = fs.realpathSync(filePath);
+        const realArchivesDir = fs.realpathSync(ARCHIVES_DIR);
+        if (!realPath.startsWith(realArchivesDir + '/') && realPath !== realArchivesDir) {
+            return sendJson(res, 403, { error: 'Access denied' });
+        }
+    } catch {
+        return sendJson(res, 404, { error: 'File not found' });
+    }
+
+    // Verify it's actually an orphan (not in DB)
+    const existing = db.prepare('SELECT id FROM archives WHERE filename = ?').get(filename);
+    if (existing) {
+        return sendJson(res, 409, { error: 'File is tracked in database — use DELETE /api/archives/:hash instead' });
+    }
+
+    try {
+        fs.unlinkSync(filePath);
+    } catch (err) {
+        return sendJson(res, 500, { error: err.message });
+    }
+
+    const orphanActor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
+    db.prepare(`INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)`)
+      .run(orphanActor, 'delete_orphan', filename, JSON.stringify({ orphan: true }), req.headers['x-real-ip'] || null);
+
+    sendJson(res, 200, { deleted: true, filename });
+}
+
+/**
  * POST /api/archives — upload a new archive
  */
 async function handleUploadArchive(req, res) {
@@ -760,6 +893,10 @@ function handleRegenerateArchive(req, res, hash) {
         metadata_raw: JSON.stringify(metaRaw),
         hash,
     });
+
+    const regenActor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
+    db.prepare(`INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)`)
+      .run(regenActor, 'regenerate', hash, JSON.stringify({ filename: row.filename }), req.headers['x-real-ip'] || null);
 
     const updatedRow = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
     sendJson(res, 200, buildArchiveObjectFromRow(updatedRow));
@@ -1150,6 +1287,10 @@ async function handleCompleteChunk(req, res, uploadId) {
             size: fs.statSync(finalPath).size,
         });
 
+        const chunkActor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
+        db.prepare(`INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)`)
+          .run(chunkActor, 'upload', filename, JSON.stringify({ filename, size: fs.statSync(finalPath).size, chunked: true }), req.headers['x-real-ip'] || null);
+
         const assembledRow = db.prepare('SELECT * FROM archives WHERE hash = ?').get(chunkHash);
         sendJson(res, 201, buildArchiveObjectFromRow(assembledRow));
     } catch (err) {
@@ -1190,6 +1331,16 @@ const server = http.createServer((req, res) => {
         }
         if (pathname === '/api/archives' && req.method === 'GET') {
             return handleListArchives(req, res);
+        }
+        if (pathname === '/api/audit-log' && req.method === 'GET') {
+            return handleAuditLog(req, res);
+        }
+        if (pathname === '/api/storage' && req.method === 'GET') {
+            return handleStorage(req, res);
+        }
+        const orphanMatch = pathname.match(/^\/api\/storage\/orphans\/(.+)$/);
+        if (orphanMatch && req.method === 'DELETE') {
+            return handleDeleteOrphan(req, res, decodeURIComponent(orphanMatch[1]));
         }
         if (pathname === '/api/archives' && req.method === 'POST') {
             handleUploadArchive(req, res);
