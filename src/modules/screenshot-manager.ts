@@ -16,19 +16,24 @@ interface ScreenshotDeps {
     scene: any;    // TODO: type when @types/three is installed (THREE.Scene)
     camera: any;   // TODO: type when @types/three is installed (THREE.PerspectiveCamera)
     state: AppState;
+    postProcessing?: { isEnabled(): boolean; render(): void };
 }
 
 /**
  * Capture a screenshot and add it to the screenshots list.
  */
 export async function captureScreenshotToList(deps: ScreenshotDeps): Promise<void> {
-    const { renderer, scene, camera, state } = deps;
+    const { renderer, scene, camera, state, postProcessing } = deps;
     if (!renderer) {
         notify.error('Renderer not ready');
         return;
     }
     try {
-        renderer.render(scene, camera);
+        if (postProcessing?.isEnabled()) {
+            postProcessing.render();
+        } else {
+            renderer.render(scene, camera);
+        }
         const blob = await captureScreenshot(renderer.domElement, { width: 1024, height: 1024 });
         if (!blob) {
             notify.error('Screenshot capture failed');
@@ -98,10 +103,14 @@ export function hideViewfinder(): void {
  * Capture a manual preview image and store it in state.
  */
 export async function captureManualPreview(deps: ScreenshotDeps): Promise<void> {
-    const { renderer, scene, camera, state } = deps;
+    const { renderer, scene, camera, state, postProcessing } = deps;
     if (!renderer) return;
     try {
-        renderer.render(scene, camera);
+        if (postProcessing?.isEnabled()) {
+            postProcessing.render();
+        } else {
+            renderer.render(scene, camera);
+        }
         const blob = await captureScreenshot(renderer.domElement, { width: 512, height: 512 });
         if (blob) {
             state.manualPreviewBlob = blob;

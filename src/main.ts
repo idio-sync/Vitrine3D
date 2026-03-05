@@ -25,6 +25,7 @@ import {
     isPreviewAnimating,
 } from './modules/walkthrough-controller.js';
 import { SceneManager } from './modules/scene-manager.js';
+import * as postProcessing from './modules/post-processing.js';
 import {
     LandmarkAlignment,
     autoCenterAlign as autoCenterAlignHandler,
@@ -755,6 +756,12 @@ async function init() {
         log.info('SparkRenderer deferred — will be created after WebGL switch');
     }
 
+    // Initialize post-processing pipeline (all effects disabled by default)
+    if (sceneManager.rendererType === 'webgl') {
+        postProcessing.enable(renderer, scene, camera);
+        sceneManager.setPostProcessing(postProcessing);
+    }
+
     // Register callback for renderer switches (WebGPU <-> WebGL)
     sceneManager.onRendererChanged = (newRenderer: any) => {
         renderer = newRenderer;
@@ -789,6 +796,16 @@ async function init() {
             log.info(`Renderer changed, SparkRenderer recreated for WebGL (lodSplatCount=${getLodBudget(QUALITY_TIER.HD)})`);
         } else {
             log.info('Renderer changed to WebGPU, SparkRenderer removed');
+        }
+        // Handle post-processing on renderer change
+        if (sceneManager.rendererType === 'webgl') {
+            postProcessing.enable(newRenderer, scene, camera);
+            sceneManager.setPostProcessing(postProcessing);
+        } else {
+            postProcessing.disable();
+            sceneManager.setPostProcessing(null);
+            const masterEl = document.getElementById('pp-master-enable') as HTMLInputElement;
+            if (masterEl) masterEl.checked = false;
         }
     };
 
@@ -1218,7 +1235,7 @@ async function showExportPanel() {
 // =============================================================================
 
 function captureScreenshotToList() {
-    return captureScreenshotToListHandler({ renderer, scene, camera, state });
+    return captureScreenshotToListHandler({ renderer, scene, camera, state, postProcessing });
 }
 
 function showViewfinder() {
@@ -1230,7 +1247,7 @@ function hideViewfinder() {
 }
 
 function captureManualPreview() {
-    return captureManualPreviewHandler({ renderer, scene, camera, state });
+    return captureManualPreviewHandler({ renderer, scene, camera, state, postProcessing });
 }
 
 // Download archive — delegated to export-controller.ts

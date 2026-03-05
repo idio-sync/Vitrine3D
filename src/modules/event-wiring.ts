@@ -29,6 +29,7 @@ import {
     updatePointcloudOpacity,
     updateModelTextures
 } from './file-handlers.js';
+import * as postProcessing from './post-processing.js';
 import type { EventWiringDeps } from '@/types.js';
 
 const log = Logger.getLogger('event-wiring');
@@ -624,6 +625,151 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         const val = parseFloat((e.target as HTMLInputElement).value);
         document.getElementById('tone-mapping-exposure-value')!.textContent = val.toFixed(1);
         if (sceneManager) sceneManager.setToneMappingExposure(val);
+    });
+
+    // ─── Scene settings — Post-Processing ────────────────────
+    addListener('pp-master-enable', 'change', async (e: Event) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        const ppControls = document.getElementById('pp-controls');
+        if (ppControls) ppControls.style.display = checked ? '' : 'none';
+        if (checked && sceneManager.rendererType === 'webgpu') {
+            // Force switch to WebGL — EffectComposer is WebGL-only
+            notify('Switching to WebGL for post-processing effects');
+            await sceneManager.switchRenderer('webgl');
+            // onRendererChanged callback in main.ts re-enables post-processing
+        }
+        if (!checked) {
+            // Disable all effects but keep pipeline alive
+            postProcessing.setConfig({
+                ssao: { enabled: false, radius: 0.5, intensity: 1.0 },
+                bloom: { enabled: false, strength: 0.5, radius: 0.4, threshold: 0.85 },
+                sharpen: { enabled: false, intensity: 0.3 },
+                vignette: { enabled: false, intensity: 0.5, offset: 1.0 },
+                chromaticAberration: { enabled: false, intensity: 0.005 },
+                colorBalance: { enabled: false, shadows: [0, 0, 0], midtones: [0, 0, 0], highlights: [0, 0, 0] },
+                grain: { enabled: false, intensity: 0.05 },
+            });
+            ['pp-ssao-enable', 'pp-bloom-enable', 'pp-sharpen-enable', 'pp-vignette-enable', 'pp-ca-enable', 'pp-cb-enable', 'pp-grain-enable'].forEach(id => {
+                const el = document.getElementById(id) as HTMLInputElement;
+                if (el) el.checked = false;
+            });
+        }
+    });
+
+    // SSAO
+    addListener('pp-ssao-enable', 'change', (e: Event) => {
+        postProcessing.setSSAO({ enabled: (e.target as HTMLInputElement).checked });
+    });
+    addListener('pp-ssao-radius', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-ssao-radius-value');
+        if (el) el.textContent = val.toFixed(2);
+        postProcessing.setSSAO({ radius: val });
+    });
+    addListener('pp-ssao-intensity', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-ssao-intensity-value');
+        if (el) el.textContent = val.toFixed(1);
+        postProcessing.setSSAO({ intensity: val });
+    });
+
+    // Bloom
+    addListener('pp-bloom-enable', 'change', (e: Event) => {
+        postProcessing.setBloom({ enabled: (e.target as HTMLInputElement).checked });
+    });
+    addListener('pp-bloom-strength', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-bloom-strength-value');
+        if (el) el.textContent = val.toFixed(2);
+        postProcessing.setBloom({ strength: val });
+    });
+    addListener('pp-bloom-radius', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-bloom-radius-value');
+        if (el) el.textContent = val.toFixed(2);
+        postProcessing.setBloom({ radius: val });
+    });
+    addListener('pp-bloom-threshold', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-bloom-threshold-value');
+        if (el) el.textContent = val.toFixed(2);
+        postProcessing.setBloom({ threshold: val });
+    });
+
+    // Sharpen
+    addListener('pp-sharpen-enable', 'change', (e: Event) => {
+        postProcessing.setUberEffects({ sharpen: { enabled: (e.target as HTMLInputElement).checked, intensity: postProcessing.getConfig().sharpen.intensity } });
+    });
+    addListener('pp-sharpen-intensity', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-sharpen-intensity-value');
+        if (el) el.textContent = val.toFixed(2);
+        postProcessing.setUberEffects({ sharpen: { enabled: postProcessing.getConfig().sharpen.enabled, intensity: val } });
+    });
+
+    // Vignette
+    addListener('pp-vignette-enable', 'change', (e: Event) => {
+        const cfg = postProcessing.getConfig().vignette;
+        postProcessing.setUberEffects({ vignette: { ...cfg, enabled: (e.target as HTMLInputElement).checked } });
+    });
+    addListener('pp-vignette-intensity', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-vignette-intensity-value');
+        if (el) el.textContent = val.toFixed(2);
+        const cfg = postProcessing.getConfig().vignette;
+        postProcessing.setUberEffects({ vignette: { ...cfg, intensity: val } });
+    });
+    addListener('pp-vignette-offset', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-vignette-offset-value');
+        if (el) el.textContent = val.toFixed(2);
+        const cfg = postProcessing.getConfig().vignette;
+        postProcessing.setUberEffects({ vignette: { ...cfg, offset: val } });
+    });
+
+    // Chromatic Aberration
+    addListener('pp-ca-enable', 'change', (e: Event) => {
+        const cfg = postProcessing.getConfig().chromaticAberration;
+        postProcessing.setUberEffects({ chromaticAberration: { ...cfg, enabled: (e.target as HTMLInputElement).checked } });
+    });
+    addListener('pp-ca-intensity', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-ca-intensity-value');
+        if (el) el.textContent = val.toFixed(3);
+        const cfg = postProcessing.getConfig().chromaticAberration;
+        postProcessing.setUberEffects({ chromaticAberration: { ...cfg, intensity: val } });
+    });
+
+    // Color Balance
+    addListener('pp-cb-enable', 'change', (e: Event) => {
+        const cfg = postProcessing.getConfig().colorBalance;
+        postProcessing.setUberEffects({ colorBalance: { ...cfg, enabled: (e.target as HTMLInputElement).checked } });
+    });
+    for (const zone of ['shadows', 'midtones', 'highlights'] as const) {
+        for (const [ch, idx] of [['r', 0], ['g', 1], ['b', 2]] as [string, number][]) {
+            addListener(`pp-cb-${zone}-${ch}`, 'input', (e: Event) => {
+                const val = parseFloat((e.target as HTMLInputElement).value);
+                const el = document.getElementById(`pp-cb-${zone}-${ch}-value`);
+                if (el) el.textContent = val.toFixed(2);
+                const cfg = postProcessing.getConfig().colorBalance;
+                const arr = [...cfg[zone]] as [number, number, number];
+                arr[idx] = val;
+                postProcessing.setUberEffects({ colorBalance: { ...cfg, [zone]: arr } });
+            });
+        }
+    }
+
+    // Grain
+    addListener('pp-grain-enable', 'change', (e: Event) => {
+        const cfg = postProcessing.getConfig().grain;
+        postProcessing.setUberEffects({ grain: { ...cfg, enabled: (e.target as HTMLInputElement).checked } });
+    });
+    addListener('pp-grain-intensity', 'input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
+        const el = document.getElementById('pp-grain-intensity-value');
+        if (el) el.textContent = val.toFixed(2);
+        const cfg = postProcessing.getConfig().grain;
+        postProcessing.setUberEffects({ grain: { ...cfg, intensity: val } });
     });
 
     // ─── Scene settings — Environment map (IBL) ─────────────

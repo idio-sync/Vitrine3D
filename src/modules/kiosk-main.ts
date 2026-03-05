@@ -59,6 +59,7 @@ import { ArchiveLoader } from './archive-loader.js';
 import { loadCADFromBlobUrl } from './cad-loader.js';
 import { KIOSK_SECTION_TIERS, EDITORIAL_SECTION_TIERS, isTierVisible } from './metadata-profile.js';
 import type { MetadataProfile } from './metadata-profile.js';
+import * as postProcessing from './post-processing.js';
 
 
 // =============================================================================
@@ -1624,6 +1625,21 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             }
 
             log.info('Applied viewer settings:', manifest.viewer_settings);
+
+            // Apply post-processing from archive settings
+            if (manifest.viewer_settings.post_processing) {
+                const ppSettings = manifest.viewer_settings.post_processing;
+                // Check if any effect is enabled
+                const anyEnabled = ppSettings.ssao?.enabled || ppSettings.bloom?.enabled ||
+                    ppSettings.sharpen?.enabled || ppSettings.vignette?.enabled ||
+                    ppSettings.chromaticAberration?.enabled || ppSettings.colorBalance?.enabled ||
+                    ppSettings.grain?.enabled;
+                if (anyEnabled && renderer && scene && camera) {
+                    postProcessing.enable(renderer, scene, camera);
+                    postProcessing.setConfig(ppSettings);
+                    sceneManager?.setPostProcessing(postProcessing);
+                }
+            }
         }
 
         updateProgress(100, 'Complete');

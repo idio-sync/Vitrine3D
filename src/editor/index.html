@@ -725,6 +725,143 @@
                     </div>
                 </div>
 
+                <!-- Post-Processing (Live) -->
+                <div class="prop-section">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Post-Processing (Live)</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="cb-row">
+                            <input type="checkbox" id="pp-master-enable">
+                            <label for="pp-master-enable">Enable Post-Processing</label>
+                        </div>
+                        <div id="pp-controls" style="display:none;">
+                            <!-- SSAO -->
+                            <div class="prop-subsection-title mt6">SSAO</div>
+                            <div class="cb-row">
+                                <input type="checkbox" id="pp-ssao-enable">
+                                <label for="pp-ssao-enable">Enable</label>
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Radius</span><span class="sl-val" id="pp-ssao-radius-value">0.5</span></div>
+                                <input type="range" id="pp-ssao-radius" min="0.1" max="2" step="0.05" value="0.5">
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Intensity</span><span class="sl-val" id="pp-ssao-intensity-value">1.0</span></div>
+                                <input type="range" id="pp-ssao-intensity" min="0" max="3" step="0.1" value="1">
+                            </div>
+                            <!-- Bloom -->
+                            <div class="prop-subsection-title mt6">Bloom</div>
+                            <div class="cb-row">
+                                <input type="checkbox" id="pp-bloom-enable">
+                                <label for="pp-bloom-enable">Enable</label>
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Strength</span><span class="sl-val" id="pp-bloom-strength-value">0.5</span></div>
+                                <input type="range" id="pp-bloom-strength" min="0" max="3" step="0.05" value="0.5">
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Radius</span><span class="sl-val" id="pp-bloom-radius-value">0.4</span></div>
+                                <input type="range" id="pp-bloom-radius" min="0" max="1" step="0.05" value="0.4">
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Threshold</span><span class="sl-val" id="pp-bloom-threshold-value">0.85</span></div>
+                                <input type="range" id="pp-bloom-threshold" min="0" max="1" step="0.05" value="0.85">
+                            </div>
+                            <!-- Sharpen -->
+                            <div class="prop-subsection-title mt6">Sharpen</div>
+                            <div class="cb-row">
+                                <input type="checkbox" id="pp-sharpen-enable">
+                                <label for="pp-sharpen-enable">Enable</label>
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Intensity</span><span class="sl-val" id="pp-sharpen-intensity-value">0.3</span></div>
+                                <input type="range" id="pp-sharpen-intensity" min="0" max="1" step="0.05" value="0.3">
+                            </div>
+                            <!-- Vignette -->
+                            <div class="prop-subsection-title mt6">Vignette</div>
+                            <div class="cb-row">
+                                <input type="checkbox" id="pp-vignette-enable">
+                                <label for="pp-vignette-enable">Enable</label>
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Intensity</span><span class="sl-val" id="pp-vignette-intensity-value">0.5</span></div>
+                                <input type="range" id="pp-vignette-intensity" min="0" max="1.5" step="0.05" value="0.5">
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Offset</span><span class="sl-val" id="pp-vignette-offset-value">1.0</span></div>
+                                <input type="range" id="pp-vignette-offset" min="0" max="2" step="0.05" value="1">
+                            </div>
+                            <!-- Chromatic Aberration -->
+                            <div class="prop-subsection-title mt6">Chromatic Aberration</div>
+                            <div class="cb-row">
+                                <input type="checkbox" id="pp-ca-enable">
+                                <label for="pp-ca-enable">Enable</label>
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Intensity</span><span class="sl-val" id="pp-ca-intensity-value">0.005</span></div>
+                                <input type="range" id="pp-ca-intensity" min="0" max="0.05" step="0.001" value="0.005">
+                            </div>
+                            <!-- Color Balance -->
+                            <div class="prop-subsection-title mt6">Color Balance</div>
+                            <div class="cb-row">
+                                <input type="checkbox" id="pp-cb-enable">
+                                <label for="pp-cb-enable">Enable</label>
+                            </div>
+                            <div class="prop-hint">Shadows</div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">R</span><span class="sl-val" id="pp-cb-shadows-r-value">0</span></div>
+                                <input type="range" id="pp-cb-shadows-r" min="-1" max="1" step="0.05" value="0">
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">G</span><span class="sl-val" id="pp-cb-shadows-g-value">0</span></div>
+                                <input type="range" id="pp-cb-shadows-g" min="-1" max="1" step="0.05" value="0">
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">B</span><span class="sl-val" id="pp-cb-shadows-b-value">0</span></div>
+                                <input type="range" id="pp-cb-shadows-b" min="-1" max="1" step="0.05" value="0">
+                            </div>
+                            <div class="prop-hint">Midtones</div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">R</span><span class="sl-val" id="pp-cb-midtones-r-value">0</span></div>
+                                <input type="range" id="pp-cb-midtones-r" min="-1" max="1" step="0.05" value="0">
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">G</span><span class="sl-val" id="pp-cb-midtones-g-value">0</span></div>
+                                <input type="range" id="pp-cb-midtones-g" min="-1" max="1" step="0.05" value="0">
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">B</span><span class="sl-val" id="pp-cb-midtones-b-value">0</span></div>
+                                <input type="range" id="pp-cb-midtones-b" min="-1" max="1" step="0.05" value="0">
+                            </div>
+                            <div class="prop-hint">Highlights</div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">R</span><span class="sl-val" id="pp-cb-highlights-r-value">0</span></div>
+                                <input type="range" id="pp-cb-highlights-r" min="-1" max="1" step="0.05" value="0">
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">G</span><span class="sl-val" id="pp-cb-highlights-g-value">0</span></div>
+                                <input type="range" id="pp-cb-highlights-g" min="-1" max="1" step="0.05" value="0">
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">B</span><span class="sl-val" id="pp-cb-highlights-b-value">0</span></div>
+                                <input type="range" id="pp-cb-highlights-b" min="-1" max="1" step="0.05" value="0">
+                            </div>
+                            <!-- Grain -->
+                            <div class="prop-subsection-title mt6">Grain</div>
+                            <div class="cb-row">
+                                <input type="checkbox" id="pp-grain-enable">
+                                <label for="pp-grain-enable">Enable</label>
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Intensity</span><span class="sl-val" id="pp-grain-intensity-value">0.05</span></div>
+                                <input type="range" id="pp-grain-intensity" min="0" max="0.5" step="0.01" value="0.05">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Environment (IBL) -->
                 <div class="prop-section">
                     <div class="prop-section-hd">

@@ -152,7 +152,7 @@ let _renderer:  WebGLRenderer | null   = null;
 let _scene:     Scene | null           = null;
 let _camera:    PerspectiveCamera | null = null;
 
-let config: PostProcessingEffectConfig = {
+const config: PostProcessingEffectConfig = {
     ssao:               { enabled: POST_PROCESSING.SSAO.enabled, radius: POST_PROCESSING.SSAO.radius, intensity: POST_PROCESSING.SSAO.intensity },
     bloom:              { enabled: POST_PROCESSING.BLOOM.enabled, strength: POST_PROCESSING.BLOOM.strength, radius: POST_PROCESSING.BLOOM.radius, threshold: POST_PROCESSING.BLOOM.threshold },
     sharpen:            { enabled: POST_PROCESSING.SHARPEN.enabled, intensity: POST_PROCESSING.SHARPEN.intensity },

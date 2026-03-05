@@ -670,8 +670,19 @@ input, select, textarea {
     line-height: 1.3;
 }
 
+/* Prop subsection title (within a prop-section-body) */
+.prop-subsection-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary, #888);
+    padding: 2px 0;
+}
+
 /* Spacing utilities */
 .mb4 { margin-bottom: 4px; }
+.mt6 { margin-top: 6px; }
 .mt4 { margin-top: 4px; }
 
 /* Radio group */

@@ -82,6 +82,7 @@ export class SceneManager {
     private _canvas: HTMLCanvasElement | null;
     private _canvasRight: HTMLCanvasElement | null;
     private _antialias: boolean;
+    private postProcessing: any = null;
     onRendererChanged: ((renderer: any) => void) | null;
 
     // Lighting
@@ -1186,11 +1187,17 @@ export class SceneManager {
             this.camera!.aspect = halfWidth / container.clientHeight;
             this.camera!.updateProjectionMatrix();
             this.renderer!.setSize(halfWidth, container.clientHeight);
+            if (this.postProcessing?.isEnabled()) {
+                this.postProcessing.resize(halfWidth, container.clientHeight, this.renderer!.getPixelRatio());
+            }
             this.rendererRight!.setSize(halfWidth, container.clientHeight);
         } else {
             this.camera!.aspect = container.clientWidth / container.clientHeight;
             this.camera!.updateProjectionMatrix();
             this.renderer!.setSize(container.clientWidth, container.clientHeight);
+            if (this.postProcessing?.isEnabled()) {
+                this.postProcessing.resize(container.clientWidth, container.clientHeight, this.renderer!.getPixelRatio());
+            }
         }
     }
 
@@ -1251,6 +1258,10 @@ export class SceneManager {
         }
     }
 
+    setPostProcessing(pp: any): void {
+        this.postProcessing = pp;
+    }
+
     /**
      * Update FPS counter
      */
@@ -1293,7 +1304,11 @@ export class SceneManager {
             if (modelGroup) modelGroup.visible = false;
             if (pointcloudGroup) pointcloudGroup.visible = false;
             if (stlGroup) stlGroup.visible = false;
-            this.renderer!.render(this.scene!, this.camera!);
+            if (this.postProcessing?.isEnabled()) {
+                this.postProcessing.render();
+            } else {
+                this.renderer!.render(this.scene!, this.camera!);
+            }
 
             // Right view - model + pointcloud + stl
             if (splatMesh) splatMesh.visible = false;
@@ -1309,7 +1324,11 @@ export class SceneManager {
             if (stlGroup) stlGroup.visible = stlVisible;
         } else {
             // Normal view
-            this.renderer!.render(this.scene!, this.camera!);
+            if (this.postProcessing?.isEnabled()) {
+                this.postProcessing.render();
+            } else {
+                this.renderer!.render(this.scene!, this.camera!);
+            }
         }
     }
 

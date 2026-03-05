@@ -27,6 +27,7 @@ import {
 import { loadCADFromBlobUrl } from './cad-loader.js';
 import { centerModelOnGrid } from './alignment.js';
 import { updatePronomRegistry, applyCameraConstraints } from './metadata-manager.js';
+import * as postProcessing from './post-processing.js';
 import type { ArchivePipelineDeps } from '@/types.js';
 import { normalizeScale } from '@/types.js';
 
@@ -837,6 +838,27 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
     }
 
     // NOTE: environment_preset IBL would require async HDR loading; skipped here.
+
+    // Apply post-processing settings
+    if (settings.post_processing) {
+        const renderer = sceneRefs.renderer;
+        const camera = sceneRefs.camera;
+        const scene = sceneRefs.scene;
+        if (renderer && scene && camera) {
+            if (!postProcessing.isEnabled()) {
+                postProcessing.enable(renderer, scene, camera as any);
+                deps.sceneManager?.setPostProcessing?.(postProcessing);
+            }
+            postProcessing.setConfig(settings.post_processing);
+            // Sync editor UI checkboxes/sliders
+            const masterCb = document.getElementById('pp-master-enable') as HTMLInputElement | null;
+            if (masterCb) {
+                masterCb.checked = true;
+                const controlsDiv = document.getElementById('pp-controls');
+                if (controlsDiv) controlsDiv.style.display = '';
+            }
+        }
+    }
 
     log.info('Applied viewer settings:', settings);
 }

@@ -4,7 +4,7 @@
 
 import { Zip, ZipPassThrough, strToU8 } from 'fflate';
 import { Logger } from './utilities.js';
-import type { Annotation } from '@/types.js';
+import type { Annotation, PostProcessingEffectConfig } from '@/types.js';
 import type { ManifestCompliance } from './sip-validator.js';
 
 // Create logger for this module
@@ -135,6 +135,7 @@ export interface ViewerSettings {
     environmentAsBackground?: boolean | null;
     measurementScale?: number | null;
     measurementUnit?: string | null;
+    postProcessing?: PostProcessingEffectConfig | null;
 }
 
 export interface MaterialStandard {
@@ -308,6 +309,7 @@ export interface Manifest {
         environment_as_background: boolean | null;
         measurement_scale: number | null;
         measurement_unit: string | null;
+        post_processing: PostProcessingEffectConfig | null;
         [key: string]: any;
     };
     alignment?: {
@@ -683,6 +685,7 @@ export class ArchiveCreator {
                 environment_as_background: null,
                 measurement_scale: null,
                 measurement_unit: null,
+                post_processing: null,
             },
             alignment: null,
             preservation: {
@@ -1167,6 +1170,7 @@ export class ArchiveCreator {
         if (settings.environmentAsBackground !== undefined) this.manifest.viewer_settings.environment_as_background = settings.environmentAsBackground;
         if (settings.measurementScale !== undefined) this.manifest.viewer_settings.measurement_scale = settings.measurementScale;
         if (settings.measurementUnit !== undefined) this.manifest.viewer_settings.measurement_unit = settings.measurementUnit;
+        if (settings.postProcessing !== undefined) this.manifest.viewer_settings.post_processing = settings.postProcessing;
     }
 
     setAlignment(data: {

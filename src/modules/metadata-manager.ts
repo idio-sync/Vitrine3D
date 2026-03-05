@@ -12,7 +12,8 @@
  */
 
 import { Logger, parseMarkdown, resolveAssetRefs } from './utilities.js';
-import type { AppState, Annotation } from '@/types.js';
+import type { AppState, Annotation, PostProcessingEffectConfig } from '@/types.js';
+import * as postProcessing from './post-processing.js';
 import type { MetadataProfile } from './metadata-profile.js';
 import { TAB_TIERS, isTierVisible, computeCompleteness, PROFILE_ORDER, PRONOM_REGISTRY } from './metadata-profile.js';
 
@@ -216,6 +217,7 @@ export interface ViewerSettings {
     environmentAsBackground: boolean | null;
     measurementScale: number | null;
     measurementUnit: string | null;
+    postProcessing?: PostProcessingEffectConfig | null;
 }
 
 export interface VersionHistoryEntry {
@@ -1479,6 +1481,8 @@ export function collectMetadata(): CollectedMetadata {
                 : null,
             measurementScale: null,  // Populated by export-controller from measurementSystem
             measurementUnit: null,
+            // Post-processing (only when enabled)
+            postProcessing: postProcessing.isEnabled() ? postProcessing.getConfig() : null,
         }
     };
 
