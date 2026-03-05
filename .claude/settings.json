@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(git check-ignore -q .worktrees)",
-      "Bash(gh api repos/blender/blender/git/trees/main --jq '.tree[] | select\\(.path | startswith\\(\"\"scripts/addons\"\"\\)\\) | .path')"
+      "Bash(gh api repos/blender/blender/git/trees/main --jq '.tree[] | select\\(.path | startswith\\(\"\"scripts/addons\"\"\\)\\) | .path')",
+      "mcp__plugin_oh-my-claudecode_g__wait_for_job",
+      "Bash(gh run list --limit 5)",
+      "Bash(npm ls meshoptimizer)"
     ],
     "additionalDirectories": [
       "\\tmp"

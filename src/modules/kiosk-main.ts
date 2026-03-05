@@ -1538,6 +1538,13 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             const legacyBg = manifest.viewer_settings.background_color || null;
             state.meshBackgroundColor = manifest.viewer_settings.mesh_background_color || legacyBg;
             state.splatBackgroundColor = manifest.viewer_settings.splat_background_color || legacyBg;
+            // DEBUG: trace background override values
+            log.info(`[BG-DEBUG] manifest bg values: legacy=${legacyBg}, mesh=${state.meshBackgroundColor}, splat=${state.splatBackgroundColor}, mode=${state.displayMode}`);
+            log.info(`[BG-DEBUG] raw manifest viewer_settings:`, JSON.stringify({
+                background_color: manifest.viewer_settings.background_color,
+                mesh_background_color: manifest.viewer_settings.mesh_background_color,
+                splat_background_color: manifest.viewer_settings.splat_background_color,
+            }));
             applyBackgroundForMode(state.displayMode);
             // Apply saved camera position and target (overrides fitCameraToScene result)
             const savedCamPos = manifest.viewer_settings.camera_position;
@@ -1669,6 +1676,9 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         }
 
         updateProgress(100, 'Complete');
+
+        // DEBUG: check final background state
+        log.info(`[BG-DEBUG] Final scene.background:`, scene?.background, `savedBg:`, sceneManager?.savedBackgroundColor, `state: mesh=${state.meshBackgroundColor} splat=${state.splatBackgroundColor}`);
 
         // Smooth entry transition: fade overlay + camera ease-in
         smoothTransitionIn();

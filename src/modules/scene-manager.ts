@@ -892,6 +892,8 @@ export class SceneManager {
         this.envAsBackground = false;
         this.clearBackgroundImage();
         document.documentElement.style.setProperty('--scene-bg-color', hexColor);
+        // DEBUG: trace every background color change
+        log.info(`[BG-DEBUG] setBackgroundColor("${hexColor}") called from:`, new Error().stack?.split('\n').slice(1, 4).join(' <- '));
     }
 
     // =========================================================================
