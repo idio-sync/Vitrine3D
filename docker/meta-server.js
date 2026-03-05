@@ -141,6 +141,7 @@ function initDb() {
     db = new Database(DB_PATH);
     db.pragma('journal_mode = WAL');
     db.pragma('synchronous = NORMAL');
+    db.pragma('foreign_keys = ON');
 
     db.exec(`
         CREATE TABLE IF NOT EXISTS archives (
@@ -169,6 +170,26 @@ function initDb() {
             ip         TEXT,
             created_at TEXT    NOT NULL DEFAULT (datetime('now'))
         );
+
+        CREATE TABLE IF NOT EXISTS collections (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            slug        TEXT    UNIQUE NOT NULL,
+            name        TEXT    NOT NULL,
+            description TEXT    DEFAULT '',
+            thumbnail   TEXT,
+            theme       TEXT,
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+            updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_collections_slug ON collections(slug);
+
+        CREATE TABLE IF NOT EXISTS collection_archives (
+            collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+            archive_id    INTEGER NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
+            sort_order    INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (collection_id, archive_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ca_archive ON collection_archives(archive_id);
     `);
 }
 

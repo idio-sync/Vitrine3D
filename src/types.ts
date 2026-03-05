@@ -167,6 +167,28 @@ export interface AssetStore {
     sourceFiles: Array<{ name: string; blob: Blob }>;
 }
 
+// ===== Library Collections =====
+
+/** A named collection of archives, displayed as a group in the library and kiosk. */
+export interface Collection {
+    id: number;
+    slug: string;
+    name: string;
+    description: string;
+    thumbnail: string | null;
+    theme: string | null;
+    archiveCount: number;
+    created_at: string;
+    updated_at: string;
+}
+
+/** An archive's membership in a collection, with sort order. */
+export interface CollectionArchive {
+    collection_id: number;
+    archive_id: number;
+    sort_order: number;
+}
+
 // ===== Module Dependencies =====
 
 export interface ExportDeps {
