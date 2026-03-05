@@ -325,3 +325,18 @@ export interface EventWiringDeps {
         wireNativeDialogsIfAvailable: () => void;
     };
 }
+
+export interface PostProcessingEffectConfig {
+    ssao: { enabled: boolean; radius: number; intensity: number };
+    bloom: { enabled: boolean; strength: number; radius: number; threshold: number };
+    sharpen: { enabled: boolean; intensity: number };
+    vignette: { enabled: boolean; intensity: number; offset: number };
+    chromaticAberration: { enabled: boolean; intensity: number };
+    colorBalance: {
+        enabled: boolean;
+        shadows: [number, number, number];
+        midtones: [number, number, number];
+        highlights: [number, number, number];
+    };
+    grain: { enabled: boolean; intensity: number };
+}

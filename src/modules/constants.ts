@@ -213,3 +213,17 @@ export const ENVIRONMENT = {
         { name: 'Sunset', url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr' }
     ]
 } as const;
+
+// =============================================================================
+// POST-PROCESSING EFFECT DEFAULTS
+// =============================================================================
+
+export const POST_PROCESSING = {
+    SSAO: { enabled: false, radius: 0.5, intensity: 1.0 },
+    BLOOM: { enabled: false, strength: 0.5, radius: 0.4, threshold: 0.85 },
+    SHARPEN: { enabled: false, intensity: 0.3 },
+    VIGNETTE: { enabled: false, intensity: 0.5, offset: 1.0 },
+    CHROMATIC_ABERRATION: { enabled: false, intensity: 0.005 },
+    COLOR_BALANCE: { enabled: false, shadows: [0, 0, 0] as [number, number, number], midtones: [0, 0, 0] as [number, number, number], highlights: [0, 0, 0] as [number, number, number] },
+    GRAIN: { enabled: false, intensity: 0.05 },
+} as const;
