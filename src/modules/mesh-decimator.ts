@@ -102,48 +102,10 @@ export async function decimateGeometry(
         ? posAttr.data.stride : 3;
     const indices = new Uint32Array(indexAttr.array);
 
-    // Build attribute array (normals + UVs) for quality-aware simplification
-    let attribArray = new Float32Array(0);
-    let attribStride = 0;
-    const attribWeights: number[] = [];
-
-    const hasNormals = !!geo.attributes.normal;
-    const hasUVs = !!geo.attributes.uv;
-
-    if (options.preserveUVSeams || hasNormals) {
-        attribStride = (hasNormals ? 3 : 0) + (hasUVs ? 2 : 0);
-        if (attribStride > 0) {
-            attribArray = new Float32Array(vertexCount * attribStride);
-
-            for (let i = 0; i < vertexCount; i++) {
-                let offset = 0;
-                if (hasNormals) {
-                    const n = geo.attributes.normal;
-                    attribArray[i * attribStride + offset++] = n.getX(i);
-                    attribArray[i * attribStride + offset++] = n.getY(i);
-                    attribArray[i * attribStride + offset++] = n.getZ(i);
-                }
-                if (hasUVs) {
-                    const uv = geo.attributes.uv;
-                    attribArray[i * attribStride + offset++] = uv.getX(i);
-                    attribArray[i * attribStride + offset++] = uv.getY(i);
-                }
-            }
-
-            // Weights: normals at 1.0, UVs at 1.0 when preserving seams
-            if (hasNormals) attribWeights.push(1.0, 1.0, 1.0);
-            if (hasUVs) {
-                const uvWeight = options.preserveUVSeams ? 1.0 : 0.0;
-                attribWeights.push(uvWeight, uvWeight);
-            }
-        }
-    }
-
     const targetIndexCount = computeTargetIndexCount(originalFaceCount, options);
 
     log.info(`Decimation input: ${vertexCount} verts, ${originalFaceCount} faces, stride=${stride}, indexed=${!!geometry.index}`);
-    log.info(`Decimation target: ${targetIndexCount / 3} faces (ratio=${options.targetRatio}, maxFaces=${DECIMATION_PRESETS[options.preset]?.maxFaces}, errorThreshold=${options.errorThreshold})`);
-    log.info(`Attributes: hasNormals=${hasNormals}, hasUVs=${hasUVs}, attribStride=${attribStride}, weights=[${attribWeights}], lockBorder=${options.lockBorder}`);
+    log.info(`Decimation target: ${targetIndexCount / 3} faces (ratio=${options.targetRatio}, errorThreshold=${options.errorThreshold}, lockBorder=${options.lockBorder})`);
 
     onProgress?.('Simplifying', 30);
 
@@ -151,27 +113,17 @@ export async function decimateGeometry(
     const flags: string[] = [];
     if (options.lockBorder) flags.push('LockBorder');
 
-    // Run simplification
-    let result: [Uint32Array, number];
-    if (attribStride > 0) {
-        log.info('Using simplifyWithAttributes');
-        result = MeshoptSimplifier.simplifyWithAttributes(
-            indices, positions, stride,
-            attribArray, attribStride, attribWeights,
-            null, // no vertex locks
-            targetIndexCount,
-            options.errorThreshold,
-            flags,
-        );
-    } else {
-        log.info('Using simplify (no attributes)');
-        result = MeshoptSimplifier.simplify(
-            indices, positions, stride,
-            targetIndexCount,
-            options.errorThreshold,
-            flags,
-        );
-    }
+    // Use position-only simplification for SD proxies. Attribute-aware
+    // simplification (simplifyWithAttributes) is too constrained for dense
+    // scan meshes — per-vertex normals and UV seams prevent meaningful
+    // edge collapses, resulting in near-zero reduction. Plain simplify
+    // produces much better results; normals are recomputed after export.
+    const result = MeshoptSimplifier.simplify(
+        indices, positions, stride,
+        targetIndexCount,
+        options.errorThreshold,
+        flags,
+    );
 
     const [newIndices, error] = result;
     const newFaceCount = newIndices.length / 3;
