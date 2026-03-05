@@ -1084,25 +1084,115 @@
                     </div>
                 </div>
 
-                <!-- Display Proxies -->
-                <div class="prop-section archived">
+                <!-- SD Proxy (Decimation) -->
+                <div class="prop-section" id="proxy-section">
                     <div class="prop-section-hd">
-                        <span class="prop-section-title">Display Proxies</span>
-                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-title">SD Proxy</span>
                         <span class="prop-section-chevron">&#9654;</span>
                     </div>
                     <div class="prop-section-body">
-                        <label for="proxy-mesh-input" class="prop-btn" style="font-size:10px; cursor:pointer;">Mesh Proxy (.glb, .obj)</label>
-                        <input type="file" id="proxy-mesh-input" accept=".glb,.gltf,.obj" style="display:none" />
-                        <span id="proxy-mesh-filename" class="prop-hint">No proxy loaded</span>
+                        <!-- Preset selector -->
+                        <label class="prop-label">Preset</label>
+                        <select class="prop-select" id="decimation-preset">
+                            <option value="ultra-light">Ultra Light</option>
+                            <option value="light">Light</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="custom">Custom</option>
+                        </select>
 
-                        <label for="proxy-splat-input" class="prop-btn mt4" style="font-size:10px; cursor:pointer;">Splat Proxy (.ply, .spz)</label>
-                        <input type="file" id="proxy-splat-input" accept=".ply,.spz,.ksplat,.sog,.splat" style="display:none" />
-                        <span id="proxy-splat-filename" class="prop-hint">No proxy loaded</span>
+                        <!-- Face count display -->
+                        <div id="decimation-face-counts" class="prop-hint mt4">
+                            <div>HD: <span id="decimation-hd-faces">&mdash;</span> faces</div>
+                            <div>SD: ~<span id="decimation-sd-faces">&mdash;</span> faces (est.)</div>
+                        </div>
 
-                        <p class="prop-hint mt4">Pre-simplified assets for mobile/tablet viewers.</p>
+                        <!-- Advanced geometry settings (collapsed) -->
+                        <div class="prop-subsection-toggle mt4" id="decimation-advanced-toggle">
+                            <span class="prop-subsection-chevron">&#9654;</span> Advanced
+                        </div>
+                        <div class="prop-subsection-body hidden" id="decimation-advanced-body">
+                            <label class="prop-label">Target Ratio</label>
+                            <input type="number" class="prop-input" id="decimation-target-ratio"
+                                   min="0.001" max="1" step="0.01" value="0.10" />
 
-                        <button class="prop-btn mt4" id="btn-load-full-res" style="display:none;">Load Full Resolution Mesh</button>
+                            <label class="prop-label mt4">Target Face Count (override)</label>
+                            <input type="number" class="prop-input" id="decimation-target-faces"
+                                   min="0" step="1000" placeholder="Leave empty for ratio-based" />
+
+                            <label class="prop-label mt4">Max Error Threshold</label>
+                            <input type="number" class="prop-input" id="decimation-error-threshold"
+                                   min="0.001" max="1" step="0.001" value="0.01" />
+
+                            <label class="prop-label mt4">
+                                <input type="checkbox" id="decimation-lock-border" checked /> Lock border edges
+                            </label>
+
+                            <label class="prop-label">
+                                <input type="checkbox" id="decimation-preserve-uvs" checked /> Preserve UV seams
+                            </label>
+                        </div>
+
+                        <!-- Texture settings (collapsed) -->
+                        <div class="prop-subsection-toggle mt4" id="decimation-texture-toggle">
+                            <span class="prop-subsection-chevron">&#9654;</span> Texture Settings
+                        </div>
+                        <div class="prop-subsection-body hidden" id="decimation-texture-body">
+                            <label class="prop-label">Max Resolution</label>
+                            <select class="prop-select" id="decimation-texture-res">
+                                <option value="256">256</option>
+                                <option value="512">512</option>
+                                <option value="1024" selected>1024</option>
+                                <option value="2048">2048</option>
+                                <option value="4096">4096</option>
+                            </select>
+
+                            <label class="prop-label mt4">Format</label>
+                            <select class="prop-select" id="decimation-texture-format">
+                                <option value="jpeg" selected>JPEG</option>
+                                <option value="png">PNG</option>
+                                <option value="keep">Keep Original</option>
+                            </select>
+
+                            <label class="prop-label mt4">JPEG Quality</label>
+                            <input type="range" class="prop-range" id="decimation-texture-quality"
+                                   min="0.1" max="1" step="0.05" value="0.85" />
+                            <span class="prop-hint" id="decimation-texture-quality-label">85%</span>
+                        </div>
+
+                        <!-- Action buttons -->
+                        <button class="prop-btn mt4" id="btn-generate-proxy">Generate SD Proxy</button>
+
+                        <!-- Status area (hidden until proxy exists) -->
+                        <div id="decimation-status" class="hidden mt4">
+                            <span class="prop-hint" id="decimation-status-text"></span>
+                            <div class="mt4">
+                                <button class="prop-btn small" id="btn-preview-proxy">Preview SD</button>
+                                <button class="prop-btn small danger" id="btn-remove-proxy">Remove Proxy</button>
+                            </div>
+                        </div>
+
+                        <!-- Progress bar (hidden until generating) -->
+                        <div id="decimation-progress" class="hidden mt4">
+                            <div class="progress-bar">
+                                <div class="progress-bar-fill" id="decimation-progress-fill"></div>
+                            </div>
+                            <span class="prop-hint" id="decimation-progress-text">Preparing...</span>
+                        </div>
+
+                        <!-- Manual proxy upload (collapsed, for backwards compat) -->
+                        <div class="prop-subsection-toggle mt4" id="decimation-manual-toggle">
+                            <span class="prop-subsection-chevron">&#9654;</span> Manual Proxy Upload
+                        </div>
+                        <div class="prop-subsection-body hidden" id="decimation-manual-body">
+                            <label for="proxy-mesh-input" class="prop-btn" style="font-size:10px; cursor:pointer;">Mesh Proxy (.glb, .obj)</label>
+                            <input type="file" id="proxy-mesh-input" accept=".glb,.gltf,.obj" style="display:none" />
+                            <span id="proxy-mesh-filename" class="prop-hint">No proxy loaded</span>
+
+                            <label for="proxy-splat-input" class="prop-btn mt4" style="font-size:10px; cursor:pointer;">Splat Proxy (.ply, .spz)</label>
+                            <input type="file" id="proxy-splat-input" accept=".ply,.spz,.ksplat,.sog,.splat" style="display:none" />
+                            <span id="proxy-splat-filename" class="prop-hint">No proxy loaded</span>
+                        </div>
                     </div>
                 </div>
 

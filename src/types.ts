@@ -7,6 +7,27 @@ export type RotationPivot = 'object' | 'origin';
 export type QualityTier = 'sd' | 'hd';
 export type AssetStateValue = 'unloaded' | 'loading' | 'loaded' | 'error';
 
+export interface DecimationOptions {
+    preset: string;
+    targetRatio: number;
+    targetFaceCount: number | null;
+    errorThreshold: number;
+    lockBorder: boolean;
+    preserveUVSeams: boolean;
+    textureMaxRes: number;
+    textureFormat: 'jpeg' | 'png' | 'keep';
+    textureQuality: number;
+}
+
+export interface DecimationResult {
+    faceCount: number;
+    vertexCount: number;
+    originalFaceCount: number;
+    blob: Blob;
+    preset: string;
+    options: DecimationOptions;
+}
+
 // ===== Main State =====
 
 export interface AppState {
@@ -52,6 +73,10 @@ export interface AppState {
     imageAssets: Map<string, any>;         // Map of asset key → blob URL or metadata
     screenshots: Array<{ id: string; blob: Blob; dataUrl: string; timestamp: number }>;
     manualPreviewBlob: Blob | null;
+    // Decimation / SD proxy state
+    proxyMeshGroup: any | null;
+    proxyMeshSettings: DecimationOptions | null;
+    proxyMeshFaceCount: number | null;
     // Detected asset format extensions (set during file load)
     meshFormat: string | null;
     pointcloudFormat: string | null;

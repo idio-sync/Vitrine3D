@@ -7,9 +7,9 @@ import { AnnotationSystem } from './modules/annotation-system.js';
 import { CrossSectionTool } from './modules/cross-section.js';
 import { MeasurementSystem } from './modules/measurement-system.js';
 import { ArchiveCreator, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
-import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS } from './modules/constants.js';
+import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS, DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET } from './modules/constants.js';
 import { getLodBudget } from './modules/quality-tier.js';
-import { Logger, notify } from './modules/utilities.js';
+import { Logger, notify, disposeObject } from './modules/utilities.js';
 import { FlyControls } from './modules/fly-controls.js';
 import { getStore } from './modules/asset-store.js';
 import { validateUserUrl as validateUserUrlCore } from './modules/url-validation.js';
@@ -154,7 +154,8 @@ import {
 import {
     setupUIEvents as setupUIEventsCtrl
 } from './modules/event-wiring.js';
-import type { AppState, SceneRefs, ExportDeps, ArchivePipelineDeps, EventWiringDeps, DisplayMode, SelectedObject, TransformMode } from './types.js';
+import type { AppState, SceneRefs, ExportDeps, ArchivePipelineDeps, EventWiringDeps, DisplayMode, SelectedObject, TransformMode, DecimationOptions } from './types.js';
+import { generateProxy, estimateFaceCount } from './modules/mesh-decimator.js';
 // kiosk-viewer.js is loaded dynamically in downloadGenericViewer() to avoid
 // blocking the main application if the module fails to load.
 
@@ -290,6 +291,11 @@ const state: AppState = {
     // Screenshot captures for archive export
     screenshots: [],          // Array of { id, blob, dataUrl, timestamp }
     manualPreviewBlob: null,  // If set, overrides auto-capture during export
+    // Decimation / SD proxy
+    meshFaceCount: 0,
+    proxyMeshGroup: null,
+    proxyMeshSettings: null,
+    proxyMeshFaceCount: null,
     // Detected asset format extensions (set during file load)
     meshFormat: null,
     pointcloudFormat: null,
@@ -415,6 +421,7 @@ function createFileHandlerDeps(): any {
                 updatePronomRegistry(state);
             },
             onModelLoaded: (object: any, file: any, faceCount: number) => {
+                state.meshFaceCount = faceCount;
                 // Detect mesh format — prefer _meshFileName (set by loadModelFromFile for GLB conversions)
                 const meshName = state._meshFileName || file?.name || '';
                 const meshExt = meshName.split('.').pop()?.toLowerCase() || 'glb';
@@ -437,6 +444,15 @@ function createFileHandlerDeps(): any {
                     facesEl.textContent = (faceCount || 0).toLocaleString();
                     const facesRow = document.getElementById('model-faces-row');
                     if (facesRow) facesRow.style.display = '';
+                }
+                // Update decimation panel estimate
+                const hdFacesEl = document.getElementById('decimation-hd-faces');
+                if (hdFacesEl) hdFacesEl.textContent = (faceCount || 0).toLocaleString();
+                const sdFacesEl = document.getElementById('decimation-sd-faces');
+                if (sdFacesEl) {
+                    const presetSelect = document.getElementById('decimation-preset') as HTMLSelectElement | null;
+                    const est = estimateFaceCount(faceCount, { preset: presetSelect?.value || DEFAULT_DECIMATION_PRESET });
+                    sdFacesEl.textContent = est.toLocaleString();
                 }
                 // Update texture info display
                 if (state.meshTextureInfo) {
@@ -695,6 +711,196 @@ function createEventWiringDeps(): EventWiringDeps {
     };
 }
 
+/** Wire up the SD Proxy / Decimation panel events. */
+function setupDecimationPanel(): void {
+    const presetSelect = document.getElementById('decimation-preset') as HTMLSelectElement | null;
+    const sdFacesEl = document.getElementById('decimation-sd-faces');
+    const advancedToggle = document.getElementById('decimation-advanced-toggle');
+    const advancedBody = document.getElementById('decimation-advanced-body');
+    const textureToggle = document.getElementById('decimation-texture-toggle');
+    const textureBody = document.getElementById('decimation-texture-body');
+    const manualToggle = document.getElementById('decimation-manual-toggle');
+    const manualBody = document.getElementById('decimation-manual-body');
+    const ratioInput = document.getElementById('decimation-target-ratio') as HTMLInputElement | null;
+    const facesInput = document.getElementById('decimation-target-faces') as HTMLInputElement | null;
+    const errorInput = document.getElementById('decimation-error-threshold') as HTMLInputElement | null;
+    const lockBorderInput = document.getElementById('decimation-lock-border') as HTMLInputElement | null;
+    const preserveUvsInput = document.getElementById('decimation-preserve-uvs') as HTMLInputElement | null;
+    const texResSelect = document.getElementById('decimation-texture-res') as HTMLSelectElement | null;
+    const texFormatSelect = document.getElementById('decimation-texture-format') as HTMLSelectElement | null;
+    const texQualityInput = document.getElementById('decimation-texture-quality') as HTMLInputElement | null;
+    const texQualityLabel = document.getElementById('decimation-texture-quality-label');
+    const generateBtn = document.getElementById('btn-generate-proxy') as HTMLButtonElement | null;
+    const statusDiv = document.getElementById('decimation-status');
+    const statusText = document.getElementById('decimation-status-text');
+    const progressDiv = document.getElementById('decimation-progress');
+    const progressFill = document.getElementById('decimation-progress-fill');
+    const progressText = document.getElementById('decimation-progress-text');
+    const previewBtn = document.getElementById('btn-preview-proxy');
+    const _removeBtn = document.getElementById('btn-remove-proxy');
+
+    function readOptionsFromUI(): Partial<DecimationOptions> {
+        return {
+            preset: presetSelect?.value || DEFAULT_DECIMATION_PRESET,
+            targetRatio: ratioInput ? parseFloat(ratioInput.value) : undefined,
+            targetFaceCount: facesInput?.value ? parseInt(facesInput.value, 10) : null,
+            errorThreshold: errorInput ? parseFloat(errorInput.value) : undefined,
+            lockBorder: lockBorderInput?.checked,
+            preserveUVSeams: preserveUvsInput?.checked,
+            textureMaxRes: texResSelect ? parseInt(texResSelect.value, 10) : undefined,
+            textureFormat: texFormatSelect?.value as DecimationOptions['textureFormat'],
+            textureQuality: texQualityInput ? parseFloat(texQualityInput.value) : undefined,
+        };
+    }
+
+    function updateEstimate(): void {
+        const hdFaces = state.meshFaceCount || 0;
+        if (!hdFaces || !sdFacesEl) return;
+        const opts = readOptionsFromUI();
+        const est = estimateFaceCount(hdFaces, opts);
+        sdFacesEl.textContent = est.toLocaleString();
+    }
+
+    function applyPresetToUI(presetKey: string): void {
+        const preset = DECIMATION_PRESETS[presetKey];
+        if (!preset) return;
+        if (ratioInput) ratioInput.value = String(preset.targetRatio);
+        if (facesInput) facesInput.value = '';
+        if (errorInput) errorInput.value = String(preset.errorThreshold);
+        if (lockBorderInput) lockBorderInput.checked = preset.lockBorder;
+        if (preserveUvsInput) preserveUvsInput.checked = preset.preserveUVSeams;
+        if (texResSelect) texResSelect.value = String(preset.textureMaxRes);
+        if (texFormatSelect) texFormatSelect.value = preset.textureFormat;
+        if (texQualityInput) texQualityInput.value = String(preset.textureQuality);
+        if (texQualityLabel) texQualityLabel.textContent = `${Math.round(preset.textureQuality * 100)}%`;
+        updateEstimate();
+    }
+
+    // Collapsible subsections
+    function wireToggle(toggle: HTMLElement | null, body: HTMLElement | null): void {
+        if (!toggle || !body) return;
+        toggle.addEventListener('click', () => {
+            toggle.classList.toggle('open');
+            body.classList.toggle('hidden');
+        });
+    }
+    wireToggle(advancedToggle, advancedBody);
+    wireToggle(textureToggle, textureBody);
+    wireToggle(manualToggle, manualBody);
+
+    // Preset change
+    presetSelect?.addEventListener('change', () => {
+        const key = presetSelect.value;
+        if (key !== 'custom') applyPresetToUI(key);
+        updateEstimate();
+    });
+
+    // Advanced field changes -> switch to Custom
+    const advancedInputs = [ratioInput, facesInput, errorInput, lockBorderInput, preserveUvsInput,
+                            texResSelect, texFormatSelect, texQualityInput];
+    for (const input of advancedInputs) {
+        input?.addEventListener('change', () => {
+            if (presetSelect && presetSelect.value !== 'custom') {
+                presetSelect.value = 'custom';
+            }
+            updateEstimate();
+        });
+    }
+
+    // Texture quality label
+    texQualityInput?.addEventListener('input', () => {
+        if (texQualityLabel) texQualityLabel.textContent = `${Math.round(parseFloat(texQualityInput.value) * 100)}%`;
+    });
+
+    // Generate SD Proxy
+    addListener('btn-generate-proxy', 'click', async () => {
+        if (!modelGroup || !state.modelLoaded) {
+            notify('No mesh loaded to decimate', 'warning');
+            return;
+        }
+
+        progressDiv?.classList.remove('hidden');
+        statusDiv?.classList.add('hidden');
+        if (generateBtn) generateBtn.disabled = true;
+
+        try {
+            const userOpts = readOptionsFromUI();
+            const result = await generateProxy(modelGroup, userOpts, (stage, pct) => {
+                if (progressFill) (progressFill as HTMLElement).style.width = `${pct}%`;
+                if (progressText) progressText.textContent = stage;
+            });
+
+            // Store result
+            const assets = getStore();
+            assets.proxyMeshBlob = result.blob;
+            state.proxyMeshSettings = result.options;
+            state.proxyMeshFaceCount = result.faceCount;
+
+            // Clean up old proxy preview
+            if (state.proxyMeshGroup) {
+                scene.remove(state.proxyMeshGroup);
+                disposeObject(state.proxyMeshGroup);
+                state.proxyMeshGroup = null;
+            }
+
+            // Load the decimated GLB as a preview group
+            const blobUrl = URL.createObjectURL(result.blob);
+            try {
+                const { loadGLTF } = await import('./modules/file-handlers.js');
+                const loaded = await loadGLTF(blobUrl);
+                state.proxyMeshGroup = loaded;
+                state.proxyMeshGroup.visible = false;
+                scene.add(state.proxyMeshGroup);
+            } finally {
+                URL.revokeObjectURL(blobUrl);
+            }
+
+            // Update UI
+            if (statusText) statusText.textContent = `Proxy ready (${result.faceCount.toLocaleString()} faces, ${(result.blob.size / 1024 / 1024).toFixed(1)} MB)`;
+            statusDiv?.classList.remove('hidden');
+            if (previewBtn) previewBtn.textContent = 'Preview SD';
+            notify(`SD proxy generated: ${result.faceCount.toLocaleString()} faces`, 'success');
+        } catch (err: any) {
+            log.error('Decimation failed:', err);
+            notify(`Decimation failed: ${err.message}`, 'error');
+        } finally {
+            progressDiv?.classList.add('hidden');
+            if (generateBtn) generateBtn.disabled = false;
+        }
+    });
+
+    // Preview toggle
+    addListener('btn-preview-proxy', 'click', () => {
+        if (!state.proxyMeshGroup || !modelGroup) return;
+        const showingProxy = state.proxyMeshGroup.visible;
+        if (showingProxy) {
+            state.proxyMeshGroup.visible = false;
+            modelGroup.visible = true;
+            if (previewBtn) previewBtn.textContent = 'Preview SD';
+        } else {
+            state.proxyMeshGroup.visible = true;
+            modelGroup.visible = false;
+            if (previewBtn) previewBtn.textContent = 'Preview HD';
+        }
+    });
+
+    // Remove proxy
+    addListener('btn-remove-proxy', 'click', () => {
+        const assets = getStore();
+        assets.proxyMeshBlob = null;
+        if (state.proxyMeshGroup) {
+            scene.remove(state.proxyMeshGroup);
+            disposeObject(state.proxyMeshGroup);
+            state.proxyMeshGroup = null;
+        }
+        state.proxyMeshSettings = null;
+        state.proxyMeshFaceCount = null;
+        modelGroup.visible = true;
+        statusDiv?.classList.add('hidden');
+        notify('SD proxy removed', 'info');
+    });
+}
+
 // Initialize the scene
 async function init() {
     log.info(' init() starting...');
@@ -894,6 +1100,9 @@ async function init() {
 
     // Initialize library panel (shows rail button if libraryEnabled)
     initLibraryPanel();
+
+    // Wire up SD Proxy / Decimation panel
+    setupDecimationPanel();
 
     // Apply initial controls visibility and mode
     applyControlsVisibility();

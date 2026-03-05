@@ -565,6 +565,41 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
                 const proxyFilenameEl = document.getElementById('proxy-mesh-filename');
                 if (proxyFilenameEl) proxyFilenameEl.textContent = proxyMeshEntry.file_name.split('/').pop() || proxyMeshEntry.file_name;
             }
+
+            // Restore decimation settings from manifest metadata
+            if (proxyMeshEntry) {
+                const manifestEntries = manifest?.data_entries;
+                if (manifestEntries) {
+                    const entryKey = Object.keys(manifestEntries).find(
+                        (k: string) => manifestEntries[k].file_name === proxyMeshEntry.file_name
+                    );
+                    const entry = entryKey ? manifestEntries[entryKey] : null;
+                    if (entry?.decimation) {
+                        state.proxyMeshSettings = {
+                            preset: entry.decimation.preset || 'custom',
+                            targetRatio: entry.decimation.targetRatio || 0.1,
+                            targetFaceCount: null,
+                            errorThreshold: entry.decimation.errorThreshold || 0.01,
+                            lockBorder: true,
+                            preserveUVSeams: true,
+                            textureMaxRes: entry.decimation.textureMaxRes || 1024,
+                            textureFormat: entry.decimation.textureFormat || 'jpeg',
+                            textureQuality: 0.85,
+                        };
+                        state.proxyMeshFaceCount = entry.decimation.resultFaces || null;
+
+                        // Populate the decimation panel UI
+                        const presetSelect = document.getElementById('decimation-preset') as HTMLSelectElement | null;
+                        if (presetSelect) presetSelect.value = entry.decimation.preset || 'custom';
+                        const statusDiv = document.getElementById('decimation-status');
+                        const statusText = document.getElementById('decimation-status-text');
+                        if (statusDiv && statusText && entry.decimation.resultFaces) {
+                            statusText.textContent = `Proxy loaded (${entry.decimation.resultFaces.toLocaleString()} faces)`;
+                            statusDiv.classList.remove('hidden');
+                        }
+                    }
+                }
+            }
         }
         if (contentInfo.hasSceneProxy) {
             const proxySplatEntry = archiveLoader.getSceneProxyEntry();

@@ -130,7 +130,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 
 ### Progressive Loading
 - [x] **Done** — Multi-resolution archives with LOD proxy variants in the manifest (`lod: "proxy"`, `derived_from`)
-- [ ] In-browser mesh decimation via meshoptimizer WASM (for meshes under 2M faces)
+- [x] **Done** — In-browser mesh decimation via meshoptimizer WASM with configurable presets, texture downscaling, and SD proxy GLB generation in the editor
 - [ ] Octree-based point cloud renderer that loads visible nodes on demand
 - [x] **Done** — Draco/meshopt geometry compression for smaller archive transfer size (Draco-compressed GLB files now supported via DRACOLoader; WASM decoder served from `public/draco/`)
 

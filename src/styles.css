@@ -415,6 +415,50 @@ input, select, textarea {
     display: block;
 }
 
+/* --- SD Proxy / Decimation panel --- */
+.prop-subsection-toggle {
+    font-size: 11px;
+    color: var(--text-secondary, #999);
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.prop-subsection-toggle:hover { color: var(--text-primary, #ccc); }
+.prop-subsection-chevron {
+    font-size: 8px;
+    transition: transform 0.15s;
+    display: inline-block;
+}
+.prop-subsection-toggle.open .prop-subsection-chevron {
+    transform: rotate(90deg);
+}
+.prop-subsection-body {
+    padding: 4px 0 0 8px;
+}
+
+/* Decimation progress bar */
+.progress-bar {
+    height: 4px;
+    background: var(--bg-surface, #333);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+.progress-bar-fill {
+    height: 100%;
+    background: var(--accent, #4a9eff);
+    width: 0%;
+    transition: width 0.2s;
+    border-radius: 2px;
+}
+
+/* Face count estimate styling */
+#decimation-face-counts {
+    font-variant-numeric: tabular-nums;
+}
+
 /* Segmented control */
 .seg-ctrl {
     display: flex;

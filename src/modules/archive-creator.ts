@@ -377,6 +377,7 @@ export interface AddAssetOptions {
 export interface AddProxyOptions extends AddAssetOptions {
     derived_from?: string;
     face_count?: number;
+    decimation?: Record<string, any>;
 }
 
 export interface AddSourceFileOptions {
@@ -1370,6 +1371,10 @@ export class ArchiveCreator {
 
         if (options.face_count !== undefined) {
             this.manifest.data_entries[entryKey].face_count = options.face_count;
+        }
+
+        if (options.decimation) {
+            this.manifest.data_entries[entryKey].decimation = options.decimation;
         }
 
         return entryKey;

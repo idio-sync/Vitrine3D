@@ -321,7 +321,17 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         log.info(' Adding mesh proxy:', { proxyFileName });
         archiveCreator.addMeshProxy(assets.proxyMeshBlob, proxyFileName, {
             position, rotation, scale,
-            derived_from: 'mesh_0'
+            derived_from: 'mesh_0',
+            face_count: state.proxyMeshFaceCount || undefined,
+            decimation: state.proxyMeshSettings ? {
+                preset: state.proxyMeshSettings.preset,
+                targetRatio: state.proxyMeshSettings.targetRatio,
+                errorThreshold: state.proxyMeshSettings.errorThreshold,
+                textureMaxRes: state.proxyMeshSettings.textureMaxRes,
+                textureFormat: state.proxyMeshSettings.textureFormat,
+                originalFaces: state.meshFaceCount || 0,
+                resultFaces: state.proxyMeshFaceCount || 0,
+            } : undefined,
         });
     }
 
