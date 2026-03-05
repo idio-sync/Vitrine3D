@@ -186,7 +186,7 @@ function injectStyles(): void {
 .cp-grid {
     max-width: 960px;
     margin: 0 auto;
-    padding: 40px 48px 80px;
+    padding: 40px 48px 48px;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 24px;
@@ -289,30 +289,6 @@ function injectStyles(): void {
     white-space: nowrap;
 }
 
-/* Footer ribbon */
-.cp-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding: 0 20px 0 12px;
-    background: rgba(17, 48, 78, 0.88);
-    backdrop-filter: blur(12px);
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    z-index: 10;
-    animation: cpFadeIn 0.4s ease-out 0.6s both;
-}
-
-.cp-footer-logo {
-    height: 14px;
-    opacity: 0.6;
-    filter: brightness(1.5) drop-shadow(0 1px 3px rgba(0,0,0,0.4));
-}
-
 /* Error state */
 .cp-error {
     max-width: 960px;
@@ -329,7 +305,7 @@ function injectStyles(): void {
 /* Responsive */
 @media (max-width: 768px) {
     .cp-header { padding: 48px 24px 0; }
-    .cp-grid { padding: 32px 24px 80px; gap: 16px; }
+    .cp-grid { padding: 32px 24px 32px; gap: 16px; }
     .cp-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
     .cp-title { font-size: 1.4rem; }
     .cp-logo { height: 14px; margin-bottom: 24px; }
@@ -337,7 +313,7 @@ function injectStyles(): void {
 
 @media (max-width: 480px) {
     .cp-header { padding: 36px 16px 0; }
-    .cp-grid { padding: 24px 16px 72px; grid-template-columns: 1fr; }
+    .cp-grid { padding: 24px 16px 24px; grid-template-columns: 1fr; }
 }
 `;
     document.head.appendChild(style);
@@ -357,7 +333,8 @@ function getLogoSrc(): string {
 function renderCard(archive: CollectionArchive, index: number): HTMLElement {
     const card = document.createElement('a');
     card.className = 'cp-card';
-    card.href = archive.uuid ? '/view/' + archive.uuid : archive.viewerUrl;
+    const baseUrl = archive.uuid ? '/view/' + archive.uuid : archive.viewerUrl;
+    card.href = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'autoload=true';
     // Stagger animation delay
     card.style.animationDelay = (0.15 + index * 0.06) + 's';
 
@@ -411,11 +388,6 @@ function renderPage(container: HTMLElement, data: CollectionData): void {
         grid.appendChild(renderCard(archive, i));
     });
 
-    // Footer ribbon with logo
-    const footer = document.createElement('div');
-    footer.className = 'cp-footer';
-    footer.innerHTML = '<img class="cp-footer-logo" src="' + logoSrc + '" alt="" onerror="this.style.display=\'none\'">';
-
     // Gold spine
     const spine = document.createElement('div');
     spine.className = 'cp-spine';
@@ -423,7 +395,6 @@ function renderPage(container: HTMLElement, data: CollectionData): void {
     container.appendChild(spine);
     container.appendChild(header);
     container.appendChild(grid);
-    container.appendChild(footer);
 }
 
 function renderError(container: HTMLElement, message: string): void {
