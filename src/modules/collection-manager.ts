@@ -21,7 +21,7 @@ interface CollectionWithArchives extends Collection {
 
 let collections: Collection[] = [];
 let activeSlug: string = ''; // '' = All Archives
-let csrfTokenGetter: (() => string | null) | null = null;
+let _csrfTokenGetter: (() => string | null) | null = null;
 let authHeadersGetter: (() => Record<string, string>) | null = null;
 let onFilterChange: ((slug: string) => void) | null = null;
 
@@ -260,7 +260,7 @@ export interface CollectionManagerConfig {
  */
 export async function initCollectionManager(config: CollectionManagerConfig): Promise<void> {
     authHeadersGetter = config.getAuthHeaders;
-    csrfTokenGetter = config.getCsrfToken;
+    _csrfTokenGetter = config.getCsrfToken;
     onFilterChange = config.onFilterChange;
 
     sidebarList = document.getElementById('collection-sidebar-list');

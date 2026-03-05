@@ -8,7 +8,7 @@
 
 import { Logger, notify } from './utilities.js';
 import { activateTool } from './ui-controller.js';
-import { initCollectionManager, getActiveCollectionArchives, updateChipsForArchive, refreshCollections as refreshCollectionList } from './collection-manager.js';
+import { initCollectionManager, getActiveCollectionArchives, updateChipsForArchive } from './collection-manager.js';
 
 const log = Logger.getLogger('library-panel');
 
