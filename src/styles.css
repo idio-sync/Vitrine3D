@@ -5283,10 +5283,31 @@ input[type="range"]::-webkit-slider-thumb:hover {
     font-weight: 500;
 }
 
+.collection-sidebar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.collection-sidebar-share {
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    line-height: 0;
+}
+
+.collection-sidebar-item:hover .collection-sidebar-share {
+    opacity: 0.5;
+}
+
+.collection-sidebar-share:hover {
+    opacity: 1 !important;
+}
+
 .collection-sidebar-count {
     font-size: 10px;
     opacity: 0.5;
-    margin-left: 8px;
     flex-shrink: 0;
 }
 

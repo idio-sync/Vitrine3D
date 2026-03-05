@@ -106,12 +106,30 @@ function renderSidebar(): void {
         btn.dataset.slug = coll.slug;
         btn.innerHTML =
             '<span style="overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(coll.name) + '</span>' +
-            '<span class="collection-sidebar-count">' + coll.archiveCount + '</span>';
+            '<span class="collection-sidebar-actions">' +
+                '<span class="collection-sidebar-share" title="Copy collection link" data-slug="' + coll.slug + '">' +
+                    '<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 10l4-4"/><circle cx="4.5" cy="11.5" r="2"/><circle cx="11.5" cy="4.5" r="2"/></svg>' +
+                '</span>' +
+                '<span class="collection-sidebar-count">' + coll.archiveCount + '</span>' +
+            '</span>';
         btn.addEventListener('click', () => setActiveCollection(coll.slug));
         btn.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             handleDeleteCollection(coll);
         });
+        // Wire share button
+        const shareBtn = btn.querySelector('.collection-sidebar-share') as HTMLElement;
+        if (shareBtn) {
+            shareBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const url = window.location.origin + '/collection/' + coll.slug;
+                navigator.clipboard.writeText(url).then(() => {
+                    notify.success('Collection link copied');
+                }).catch(() => {
+                    notify.info(url);
+                });
+            });
+        }
         sidebarList.appendChild(btn);
     }
 }
