@@ -815,7 +815,7 @@ function setupDecimationPanel(): void {
     // Generate SD Proxy
     addListener('btn-generate-proxy', 'click', async () => {
         if (!modelGroup || !state.modelLoaded) {
-            notify('No mesh loaded to decimate', 'warning');
+            notify.warning('No mesh loaded to decimate');
             return;
         }
 
@@ -859,10 +859,10 @@ function setupDecimationPanel(): void {
             if (statusText) statusText.textContent = `Proxy ready (${result.faceCount.toLocaleString()} faces, ${(result.blob.size / 1024 / 1024).toFixed(1)} MB)`;
             statusDiv?.classList.remove('hidden');
             if (previewBtn) previewBtn.textContent = 'Preview SD';
-            notify(`SD proxy generated: ${result.faceCount.toLocaleString()} faces`, 'success');
+            notify.success(`SD proxy generated: ${result.faceCount.toLocaleString()} faces`);
         } catch (err: any) {
             log.error('Decimation failed:', err);
-            notify(`Decimation failed: ${err.message}`, 'error');
+            notify.error(`Decimation failed: ${err.message}`);
         } finally {
             progressDiv?.classList.add('hidden');
             if (generateBtn) generateBtn.disabled = false;
@@ -897,7 +897,7 @@ function setupDecimationPanel(): void {
         state.proxyMeshFaceCount = null;
         modelGroup.visible = true;
         statusDiv?.classList.add('hidden');
-        notify('SD proxy removed', 'info');
+        notify.info('SD proxy removed');
     });
 }
 
