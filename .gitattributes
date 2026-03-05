@@ -1,3 +1,4 @@
-# Shell scripts must keep LF endings (Docker runs Linux)
+# Shell scripts and s6-overlay service files must keep LF endings (Docker runs Linux)
 *.sh text eol=lf
 docker-entrypoint.sh text eol=lf
+docker/s6-rc.d/** text eol=lf
