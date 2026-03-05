@@ -256,6 +256,14 @@
 
             <!-- Library overlay — replaces canvas when Library mode is active -->
             <div id="library-overlay" class="hidden">
+                <!-- Collection sidebar -->
+                <div class="collection-sidebar" id="collection-sidebar">
+                    <div class="collection-sidebar-list" id="collection-sidebar-list">
+                        <button class="collection-sidebar-item active" data-slug="">All Archives</button>
+                    </div>
+                    <button class="collection-sidebar-add" id="collection-sidebar-add" title="New collection">+ New Collection</button>
+                </div>
+                <div class="library-main">
                 <div class="library-header">
                     <div class="library-header-left">
                         <span class="library-title">Library</span>
@@ -300,6 +308,7 @@
                         <input type="password" id="library-auth-pass" placeholder="Password" autocomplete="current-password">
                         <button class="library-auth-btn" id="library-auth-submit">Sign in</button>
                     </div>
+                </div>
                 </div>
             </div>
         </div>
@@ -2377,6 +2386,18 @@
                             <div class="prop-row"><span class="prop-row-label">Filename</span><span class="font-mono library-detail-val" id="library-detail-filename" style="font-size:10px;">-</span></div>
                             <div class="prop-row"><span class="prop-row-label">Size</span><span class="font-mono library-detail-val" id="library-detail-size" style="font-size:10px;">-</span></div>
                             <div class="prop-row"><span class="prop-row-label">Modified</span><span class="font-mono library-detail-val" id="library-detail-date" style="font-size:10px;">-</span></div>
+                        </div>
+                    </div>
+                    <div class="prop-section open" id="library-collections-section">
+                        <div class="prop-section-hd">
+                            <span class="prop-section-title">Collections</span>
+                            <span class="prop-section-chevron">&#9654;</span>
+                        </div>
+                        <div class="prop-section-body">
+                            <div class="library-collection-chips" id="library-collection-chips"></div>
+                            <select class="library-add-to-collection" id="library-add-to-collection" style="display:none">
+                                <option value="">+ Add to collection…</option>
+                            </select>
                         </div>
                     </div>
                     <div class="prop-section open">

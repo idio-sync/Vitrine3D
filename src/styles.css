@@ -5236,3 +5236,131 @@ input[type="range"]::-webkit-slider-thumb:hover {
     padding: 4rem 2rem;
     opacity: 0.5;
 }
+
+/* ===== Collection Sidebar (Editor Library) ===== */
+
+.collection-sidebar {
+    display: flex;
+    flex-direction: column;
+    min-width: 180px;
+    max-width: 200px;
+    border-right: 1px solid var(--border, rgba(255,255,255,0.08));
+    padding: 8px 0;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.collection-sidebar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.collection-sidebar-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: none;
+    border: none;
+    color: var(--text-secondary, #aaa);
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.1s;
+}
+
+.collection-sidebar-item:hover {
+    background: rgba(255,255,255,0.04);
+}
+
+.collection-sidebar-item.active {
+    background: rgba(255,255,255,0.08);
+    color: var(--text-primary, #e0e0e0);
+    font-weight: 500;
+}
+
+.collection-sidebar-count {
+    font-size: 10px;
+    opacity: 0.5;
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+.collection-sidebar-add {
+    margin: 8px 12px 0;
+    padding: 5px 8px;
+    background: none;
+    border: 1px dashed rgba(255,255,255,0.15);
+    border-radius: 4px;
+    color: var(--text-secondary, #aaa);
+    font-size: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.collection-sidebar-add:hover {
+    border-color: rgba(255,255,255,0.3);
+    color: var(--text-primary, #e0e0e0);
+}
+
+/* Make library-overlay a row layout when sidebar exists */
+#library-overlay {
+    display: flex;
+    flex-direction: row;
+}
+
+#library-overlay > .collection-sidebar {
+    flex-shrink: 0;
+}
+
+#library-overlay > .library-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Collection chips in detail pane */
+
+.library-collection-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.library-collection-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 10px;
+    font-size: 10px;
+    color: var(--text-secondary, #aaa);
+}
+
+.library-collection-chip-remove {
+    cursor: pointer;
+    opacity: 0.5;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.library-collection-chip-remove:hover {
+    opacity: 1;
+}
+
+.library-add-to-collection {
+    width: 100%;
+    padding: 4px 6px;
+    background: var(--bg-secondary, #1a1a1a);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 4px;
+    color: var(--text-secondary, #aaa);
+    font-size: 10px;
+}
