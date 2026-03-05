@@ -4,6 +4,16 @@
    Split from styles.css for cleaner separation of concerns.
    ============================================================================= */
 
+/* --- Safe area insets for devices with camera cutouts / notches --- */
+
+body.kiosk-mode {
+    padding:
+        env(safe-area-inset-top)
+        env(safe-area-inset-right)
+        env(safe-area-inset-bottom)
+        env(safe-area-inset-left);
+}
+
 /* --- Tag chip override for kiosk --- */
 
 body.kiosk-mode .tag-chip {
@@ -279,7 +289,7 @@ body.kiosk-mode #section-screenshots {
 
 body.kiosk-mode #kiosk-toolbar {
     position: fixed;
-    bottom: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom));
     left: 50%;
     transform: translateX(-50%);
     z-index: 200;
@@ -1424,8 +1434,8 @@ body.kiosk-mode #metadata-sidebar ::-webkit-scrollbar-thumb:hover {
 
     /* Kiosk toolbar: tighten spacing on mobile */
     body.kiosk-mode #kiosk-toolbar {
-        top: 10px;
-        left: 10px;
+        top: calc(10px + env(safe-area-inset-top));
+        left: calc(10px + env(safe-area-inset-left));
     }
 
     body.kiosk-mode .kiosk-tool-btn {
@@ -1451,7 +1461,7 @@ body.kiosk-mode #metadata-sidebar ::-webkit-scrollbar-thumb:hover {
 
     /* Toolbar: bottom-center, touch-sized on mobile */
     body.kiosk-mode #kiosk-toolbar {
-        bottom: 14px;
+        bottom: calc(14px + env(safe-area-inset-bottom));
         padding: 4px;
     }
 

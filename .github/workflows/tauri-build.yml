@@ -117,6 +117,13 @@ jobs:
       - name: Initialize Android scaffold
         run: npx tauri android init
 
+      - name: Enable display cutout support
+        run: |
+          STYLES="src-tauri/gen/android/app/src/main/res/values/styles.xml"
+          # Add windowLayoutInDisplayCutoutMode so the app renders edge-to-edge
+          # into notch/punch-hole areas. CSS env(safe-area-inset-*) handles padding.
+          sed -i 's|</style>|    <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>\n    </style>|' "$STYLES"
+
       - name: Build APK
         run: npx tauri android build --apk --target aarch64 --target armv7 --debug
 
