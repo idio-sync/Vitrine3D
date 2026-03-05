@@ -10,7 +10,7 @@ import { Logger } from './utilities.js';
 
 const log = Logger.getLogger('collection-page');
 
-interface CollectionArchive {
+export interface CollectionArchive {
     hash: string;
     uuid?: string;
     filename: string;
@@ -36,27 +36,27 @@ interface CollectionData {
 
 // ── Helpers ──
 
-function formatBytes(b: number): string {
+export function formatBytes(b: number): string {
     if (b === 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(b) / Math.log(1024));
     return (b / Math.pow(1024, i)).toFixed(i > 1 ? 1 : 0) + ' ' + units[i];
 }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
     const d = document.createElement('div');
     d.textContent = s;
     return d.innerHTML;
 }
 
-function formatDate(dateStr: string): string {
+export function formatDate(dateStr: string): string {
     try {
         const d = new Date(dateStr);
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     } catch { return ''; }
 }
 
-const ASSET_LABELS: Record<string, string> = {
+export const ASSET_LABELS: Record<string, string> = {
     splat: 'Gaussian Splat',
     mesh: 'Mesh',
     pointcloud: 'Point Cloud',
@@ -74,7 +74,7 @@ async function fetchCollection(slug: string): Promise<CollectionData> {
 
 // ── Inject Styles ──
 
-function injectStyles(): void {
+export function injectStyles(): void {
     if (document.getElementById('collection-page-styles')) return;
     const style = document.createElement('style');
     style.id = 'collection-page-styles';
@@ -322,7 +322,7 @@ function injectStyles(): void {
 // ── Logo ──
 
 /** Resolve the editorial theme logo path, handling both dev and Docker contexts. */
-function getLogoSrc(): string {
+export function getLogoSrc(): string {
     // In production builds, themes are copied to dist/themes/
     // In dev, Vite serves from src/ directly
     return '/themes/editorial/logo.png';
@@ -330,7 +330,7 @@ function getLogoSrc(): string {
 
 // ── Rendering ──
 
-function renderCard(archive: CollectionArchive, index: number): HTMLElement {
+export function renderCard(archive: CollectionArchive, index: number): HTMLElement {
     const card = document.createElement('a');
     card.className = 'cp-card';
     const baseUrl = archive.uuid ? '/view/' + archive.uuid : archive.viewerUrl;

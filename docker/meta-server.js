@@ -13,6 +13,7 @@
  *
  * Admin routes (active when ADMIN_ENABLED=true):
  *   GET  /admin              → Admin panel HTML page
+ *   GET  /library            → Library browser page (auth-gated, editorial card grid)
  *   GET  /api/archives       → List all archives with metadata
  *   POST /api/archives       → Upload new archive (multipart/form-data, streamed)
  *   DELETE /api/archives/:hash → Delete archive + sidecar files
@@ -638,6 +639,32 @@ function handleAdminPage(req, res) {
         'Cache-Control': 'no-cache'
     });
     res.end(ADMIN_HTML);
+}
+
+/**
+ * GET /library — serve the library browser page.
+ * Auth-gated like /admin. Injects __VITRINE_LIBRARY flag for client-side rendering.
+ */
+function handleLibraryPage(req, res) {
+    if (!requireAuth(req, res)) return;
+
+    const indexHtml = getIndexHtml();
+    if (!indexHtml) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('index.html not found');
+        return;
+    }
+
+    const injectTag = '<script>window.__VITRINE_LIBRARY=true;</script>\n';
+
+    let html = indexHtml.replace(/<head>/i, '<head>\n<base href="/">');
+    html = html.replace(/<script[\s>]/i, (m) => injectTag + m);
+
+    res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache'
+    });
+    res.end(html);
 }
 
 /**
@@ -1786,6 +1813,9 @@ const server = http.createServer((req, res) => {
     if (ADMIN_ENABLED) {
         if (pathname === '/admin' && req.method === 'GET') {
             return handleAdminPage(req, res);
+        }
+        if (pathname === '/library' && req.method === 'GET') {
+            return handleLibraryPage(req, res);
         }
         if (pathname === '/api/archives' && req.method === 'GET') {
             return handleListArchives(req, res);
