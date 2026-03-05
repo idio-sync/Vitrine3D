@@ -18,7 +18,7 @@ import type { ExportDeps } from '@/types.js';
 const log = Logger.getLogger('export-controller');
 
 const CHUNK_SIZE = 50 * 1024 * 1024; // 50 MB — safely under Cloudflare's 100 MB request limit
-const CHUNK_CONCURRENCY = 3;          // parallel in-flight chunk uploads
+const CHUNK_CONCURRENCY = 1;          // sequential — concurrent uploads cause HTTP/2 protocol errors behind Cloudflare
 
 /**
  * Show the export panel and sync asset checkboxes.
