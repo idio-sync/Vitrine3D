@@ -786,6 +786,7 @@ export function setup(manifest, deps) {
             state.displayMode = mode;
             setDisplayMode(mode, createDisplayModeDeps());
             triggerLazyLoad(mode);
+            if (deps.applyBackgroundForMode) deps.applyBackgroundForMode(mode);
             viewModes.querySelectorAll('.editorial-view-mode-link:not(.quality-toggle-btn)').forEach(l => {
                 l.classList.toggle('active', l.dataset.mode === mode);
             });

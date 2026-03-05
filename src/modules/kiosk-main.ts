@@ -2097,6 +2097,7 @@ function createLayoutDeps(): any {
         crossSection,
         pointcloudGroup,
         setLocalClippingEnabled: (enabled: boolean) => sceneManager?.setLocalClippingEnabled(enabled),
+        applyBackgroundForMode,
     };
 }
 

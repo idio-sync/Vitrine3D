@@ -644,6 +644,7 @@ function setup(manifest, deps) {
             state.displayMode = t.mode;
             setDisplayMode(t.mode, createDisplayModeDeps());
             triggerLazyLoad(t.mode);
+            if (deps.applyBackgroundForMode) deps.applyBackgroundForMode(t.mode);
             pill.querySelectorAll('.gallery-view-btn').forEach(function (b) {
                 b.classList.toggle('active', b.dataset.mode === t.mode);
             });
