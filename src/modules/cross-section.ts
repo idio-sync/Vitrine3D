@@ -119,7 +119,7 @@ export class CrossSectionTool {
     start(center: THREE.Vector3): void {
         this._active = true;
         this._planeAnchor.position.copy(center);
-        this._planeAnchor.rotation.set(0, 0, 0);
+        this._planeAnchor.rotation.set(Math.PI, 0, 0);
         this._transformControls.setMode('translate');
         this._transformControls.getHelper().visible = true;
         this._planeMesh.visible = true;
@@ -174,7 +174,7 @@ export class CrossSectionTool {
      * 'x' → XZ plane, 'y' → XZ horizontal (default), 'z' → XY plane.
      */
     setAxis(axis: 'x' | 'y' | 'z'): void {
-        this._planeAnchor.rotation.set(0, 0, 0);
+        this._planeAnchor.rotation.set(Math.PI, 0, 0);
         if (axis === 'x') {
             // Normal points +X: rotate anchor -90° around Z
             this._planeAnchor.rotation.z = -Math.PI / 2;
@@ -195,7 +195,7 @@ export class CrossSectionTool {
     /** Recentre the plane at `center` and restore the default Y-up orientation. */
     reset(center: THREE.Vector3): void {
         this._planeAnchor.position.copy(center);
-        this._planeAnchor.rotation.set(0, 0, 0);
+        this._planeAnchor.rotation.set(Math.PI, 0, 0);
         this.updatePlane();
     }
 
