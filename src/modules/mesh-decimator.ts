@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshoptSimplifier } from 'meshoptimizer';
 import { Logger } from './utilities.js';
 import { DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET } from './constants.js';
@@ -80,11 +81,12 @@ export async function decimateGeometry(
 ): Promise<THREE.BufferGeometry> {
     await ensureWasm();
 
-    // Ensure indexed geometry
+    // Ensure indexed geometry — meshoptimizer requires an index buffer.
+    // mergeVertices() deduplicates positions and creates an index.
     let geo = geometry;
     if (!geo.index) {
-        log.warn('Non-indexed geometry — converting to indexed');
-        geo = geo.toNonIndexed();
+        log.warn('Non-indexed geometry — merging vertices to create index');
+        geo = mergeVertices(geo);
     }
 
     const posAttr = geo.attributes.position;
