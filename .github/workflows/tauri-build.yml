@@ -117,7 +117,7 @@ jobs:
         run: npx tauri android init
 
       - name: Build APK
-        run: npx tauri android build --apk --target aarch64 --target armv7
+        run: npx tauri android build --apk --target aarch64 --target armv7 --debug
 
       - name: Determine release tag
         id: release_tag
@@ -135,6 +135,6 @@ jobs:
           tag_name: ${{ steps.release_tag.outputs.tag }}
           draft: true
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
+            src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
