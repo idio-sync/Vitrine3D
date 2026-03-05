@@ -133,6 +133,22 @@ jobs:
       - name: Build APK
         run: npx tauri android build --apk --target aarch64 --target armv7 --debug
 
+      - name: Locate built APKs
+        id: apks
+        run: |
+          echo "=== All APK files ==="
+          find src-tauri/gen/android -name "*.apk" -type f
+          # Prefer universal, fall back to arch-specific
+          APK=$(find src-tauri/gen/android -name "*.apk" -path "*/universal/*" -type f | head -1)
+          if [ -z "$APK" ]; then
+            APK=$(find src-tauri/gen/android -name "*.apk" -path "*/aarch64/*" -type f | head -1)
+          fi
+          if [ -z "$APK" ]; then
+            APK=$(find src-tauri/gen/android -name "*.apk" -type f | head -1)
+          fi
+          echo "Selected: $APK"
+          echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
+
       - name: Determine release tag
         id: release_tag
         shell: bash
@@ -144,11 +160,11 @@ jobs:
           fi
 
       - name: Upload APK to release
+        if: steps.apks.outputs.apk_path != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_tag.outputs.tag }}
           draft: true
-          files: |
-            src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+          files: ${{ steps.apks.outputs.apk_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
