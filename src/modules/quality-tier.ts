@@ -28,6 +28,13 @@ function isIOSDevice(): boolean {
 }
 
 /**
+ * Detect if the device is running Android.
+ */
+function isAndroidDevice(): boolean {
+    return /Android/i.test(navigator.userAgent);
+}
+
+/**
  * Detect device capability tier based on hardware signals.
  * Returns QUALITY_TIER.SD for low-end devices, QUALITY_TIER.HD for capable ones.
  *
@@ -44,6 +51,13 @@ export function detectDeviceTier(gl?: WebGLRenderingContext | WebGL2RenderingCon
     // and full-res render targets at 2x-3x pixel ratio.
     if (isIOSDevice()) {
         log.info(`Device tier detected: ${QUALITY_TIER.SD} (iOS/iPadOS — forced SD)`);
+        return QUALITY_TIER.SD;
+    }
+
+    // Android: force SD — WebView has lower memory ceiling and mobile GPUs
+    // struggle with HD splat budgets. Same rationale as iOS.
+    if (isAndroidDevice()) {
+        log.info(`Device tier detected: ${QUALITY_TIER.SD} (Android — forced SD)`);
         return QUALITY_TIER.SD;
     }
 
