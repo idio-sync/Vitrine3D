@@ -64,6 +64,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SITE_URL: ${{ vars.SITE_URL }}
         with:
           tagName: ${{ steps.release_tag.outputs.tag }}
           releaseName: 'Vitrine3D ${{ steps.release_tag.outputs.tag }}'
