@@ -199,6 +199,9 @@ input, select, textarea {
     border-radius: 0 1px 1px 0;
 }
 
+.rail-link { text-decoration: none; cursor: pointer; }
+.rail-link:hover { color: var(--text-primary); }
+
 .rail-spacer { flex: 1; }
 
 .rail-sep {
