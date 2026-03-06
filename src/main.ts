@@ -837,6 +837,10 @@ function setupDecimationPanel(): void {
             state.proxyMeshSettings = result.options;
             state.proxyMeshFaceCount = result.faceCount;
 
+            // Update proxy filename so export-controller uses a valid .glb extension
+            const proxyFilenameEl = document.getElementById('proxy-mesh-filename');
+            if (proxyFilenameEl) proxyFilenameEl.textContent = 'mesh_proxy.glb';
+
             // Clean up old proxy preview
             if (state.proxyMeshGroup) {
                 scene.remove(state.proxyMeshGroup);
