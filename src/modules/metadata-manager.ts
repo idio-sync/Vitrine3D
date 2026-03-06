@@ -205,6 +205,7 @@ export interface ViewerSettings {
     lockDistance: number | null;
     lockAboveGround: boolean;
     maxCameraHeight: number | null;
+    maxCameraDistance: number | null;
     ambientIntensity: number | null;
     hemisphereIntensity: number | null;
     directional1Intensity: number | null;
@@ -727,16 +728,29 @@ export function setupMetadataSidebar(deps: MetadataDeps = {}): void {
         const maxHeightRow = document.getElementById('max-height-controls');
         if (maxHeightRow) maxHeightRow.style.display = lockMaxHeightChecked ? '' : 'none';
 
+        // Max distance value
+        const lockMaxDistanceChecked = (document.getElementById('meta-viewer-lock-max-distance') as HTMLInputElement)?.checked ?? false;
+        let maxDistanceValue: number | null = null;
+        if (lockMaxDistanceChecked) {
+            const input = document.getElementById('meta-viewer-max-distance-value') as HTMLInputElement;
+            maxDistanceValue = input?.value ? parseFloat(input.value) : null;
+        }
+
+        // Show/hide max distance controls
+        const maxDistanceRow = document.getElementById('max-distance-controls');
+        if (maxDistanceRow) maxDistanceRow.style.display = lockMaxDistanceChecked ? '' : 'none';
+
         heightClampListener = applyCameraConstraints(ctrl, cam, {
             lockOrbit,
             lockDistance: lockDistanceValue,
             lockAboveGround,
             maxCameraHeight: maxHeightValue,
+            maxCameraDistance: maxDistanceValue,
         });
     }
 
     // Wire checkbox change events
-    ['meta-viewer-lock-orbit', 'meta-viewer-lock-orbit-distance', 'meta-viewer-lock-above-ground', 'meta-viewer-lock-max-height'].forEach(id => {
+    ['meta-viewer-lock-orbit', 'meta-viewer-lock-orbit-distance', 'meta-viewer-lock-above-ground', 'meta-viewer-lock-max-height', 'meta-viewer-lock-max-distance'].forEach(id => {
         const el = document.getElementById(id) as HTMLInputElement | null;
         if (el) el.addEventListener('change', applyLiveConstraints);
     });
@@ -755,6 +769,25 @@ export function setupMetadataSidebar(deps: MetadataDeps = {}): void {
             const input = document.getElementById('meta-viewer-max-height-value') as HTMLInputElement;
             if (input) {
                 input.value = cam.position.y.toFixed(2);
+                applyLiveConstraints();
+            }
+        });
+    }
+
+    // Wire max distance value input — re-apply on change
+    const maxDistInput = document.getElementById('meta-viewer-max-distance-value') as HTMLInputElement | null;
+    if (maxDistInput) maxDistInput.addEventListener('input', applyLiveConstraints);
+
+    // "Set to current" button for max distance
+    const setMaxDistBtn = document.getElementById('btn-set-max-distance-current');
+    if (setMaxDistBtn) {
+        setMaxDistBtn.addEventListener('click', () => {
+            if (!deps.getControls) return;
+            const { controls: ctrl, camera: cam } = deps.getControls();
+            if (!cam || !ctrl) return;
+            const input = document.getElementById('meta-viewer-max-distance-value') as HTMLInputElement;
+            if (input) {
+                input.value = cam.position.distanceTo(ctrl.target).toFixed(2);
                 applyLiveConstraints();
             }
         });
@@ -1235,6 +1268,7 @@ export function applyCameraConstraints(
         lockDistance: number | null;
         lockAboveGround: boolean;
         maxCameraHeight: number | null;
+        maxCameraDistance: number | null;
     }
 ): (() => void) | null {
     // Lock orbit point (disable panning)
@@ -1246,7 +1280,7 @@ export function applyCameraConstraints(
         controls.maxDistance = settings.lockDistance;
     } else {
         controls.minDistance = 0.1;  // ORBIT_CONTROLS.MIN_DISTANCE
-        controls.maxDistance = 100;  // ORBIT_CONTROLS.MAX_DISTANCE
+        controls.maxDistance = settings.maxCameraDistance ?? 100;  // ORBIT_CONTROLS.MAX_DISTANCE
     }
 
     // Keep camera above ground
@@ -1445,6 +1479,9 @@ export function collectMetadata(): CollectedMetadata {
             lockAboveGround: (document.getElementById('meta-viewer-lock-above-ground') as HTMLInputElement)?.checked ?? false,
             maxCameraHeight: (document.getElementById('meta-viewer-lock-max-height') as HTMLInputElement)?.checked
                 ? parseFloat((document.getElementById('meta-viewer-max-height-value') as HTMLInputElement)?.value) || null
+                : null,
+            maxCameraDistance: (document.getElementById('meta-viewer-lock-max-distance') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-max-distance-value') as HTMLInputElement)?.value) || null
                 : null,
             // Lighting (only when enabled)
             ambientIntensity: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
@@ -2030,6 +2067,15 @@ export function prefillMetadataFromArchive(manifest: any): void {
         if (maxHeightControls) maxHeightControls.style.display = manifest.viewer_settings.max_camera_height != null ? '' : 'none';
         if (maxHeightValEl && manifest.viewer_settings.max_camera_height != null) {
             maxHeightValEl.value = String(manifest.viewer_settings.max_camera_height);
+        }
+
+        const lockMaxDistanceEl = document.getElementById('meta-viewer-lock-max-distance') as HTMLInputElement | null;
+        const maxDistanceControls = document.getElementById('max-distance-controls');
+        const maxDistanceValEl = document.getElementById('meta-viewer-max-distance-value') as HTMLInputElement | null;
+        if (lockMaxDistanceEl) lockMaxDistanceEl.checked = manifest.viewer_settings.max_camera_distance != null;
+        if (maxDistanceControls) maxDistanceControls.style.display = manifest.viewer_settings.max_camera_distance != null ? '' : 'none';
+        if (maxDistanceValEl && manifest.viewer_settings.max_camera_distance != null) {
+            maxDistanceValEl.value = String(manifest.viewer_settings.max_camera_distance);
         }
 
         // Lighting defaults

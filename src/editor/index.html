@@ -553,6 +553,19 @@
                                 <button id="btn-set-max-height-current" class="prop-btn" style="font-size: 10px; padding: 2px 8px; white-space: nowrap;">Set to current</button>
                             </div>
                         </div>
+
+                        <div class="cb-row mt6">
+                            <input type="checkbox" id="meta-viewer-lock-max-distance">
+                            <label for="meta-viewer-lock-max-distance">Limit Camera Distance</label>
+                        </div>
+                        <span class="prop-hint">Cap how far the camera can zoom out from the target.</span>
+                        <div id="max-distance-controls" style="display: none; margin-top: 4px; padding-left: 24px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label for="meta-viewer-max-distance-value" style="white-space: nowrap; font-size: 12px;">Max Dist:</label>
+                                <input type="number" id="meta-viewer-max-distance-value" step="0.1" min="0.1" style="width: 80px; font-size: 12px;" placeholder="0.0">
+                                <button id="btn-set-max-distance-current" class="prop-btn" style="font-size: 10px; padding: 2px 8px; white-space: nowrap;">Set to current</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

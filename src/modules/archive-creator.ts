@@ -123,6 +123,7 @@ export interface ViewerSettings {
     lockDistance?: number | null;
     lockAboveGround?: boolean;
     maxCameraHeight?: number | null;
+    maxCameraDistance?: number | null;
     ambientIntensity?: number | null;
     hemisphereIntensity?: number | null;
     directional1Intensity?: number | null;
@@ -297,6 +298,7 @@ export interface Manifest {
         lock_distance: number | null;
         lock_above_ground: boolean;
         max_camera_height: number | null;
+        max_camera_distance: number | null;
         ambient_intensity: number | null;
         hemisphere_intensity: number | null;
         directional1_intensity: number | null;
@@ -674,6 +676,7 @@ export class ArchiveCreator {
                 lock_distance: null,
                 lock_above_ground: false,
                 max_camera_height: null,
+                max_camera_distance: null,
                 ambient_intensity: null,
                 hemisphere_intensity: null,
                 directional1_intensity: null,
@@ -1159,6 +1162,7 @@ export class ArchiveCreator {
         if (settings.lockDistance !== undefined) this.manifest.viewer_settings.lock_distance = settings.lockDistance;
         if (settings.lockAboveGround !== undefined) this.manifest.viewer_settings.lock_above_ground = settings.lockAboveGround;
         if (settings.maxCameraHeight !== undefined) this.manifest.viewer_settings.max_camera_height = settings.maxCameraHeight;
+        if (settings.maxCameraDistance !== undefined) this.manifest.viewer_settings.max_camera_distance = settings.maxCameraDistance;
         if (settings.ambientIntensity !== undefined) this.manifest.viewer_settings.ambient_intensity = settings.ambientIntensity;
         if (settings.hemisphereIntensity !== undefined) this.manifest.viewer_settings.hemisphere_intensity = settings.hemisphereIntensity;
         if (settings.directional1Intensity !== undefined) this.manifest.viewer_settings.directional1_intensity = settings.directional1Intensity;

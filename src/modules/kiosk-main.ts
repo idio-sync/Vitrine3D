@@ -1663,6 +1663,8 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 if (manifest.viewer_settings.lock_distance != null) {
                     controls.minDistance = manifest.viewer_settings.lock_distance;
                     controls.maxDistance = manifest.viewer_settings.lock_distance;
+                } else if (manifest.viewer_settings.max_camera_distance != null) {
+                    controls.maxDistance = manifest.viewer_settings.max_camera_distance;
                 }
 
                 // Keep camera above ground

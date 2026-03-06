@@ -846,6 +846,7 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
             lockDistance: settings.lock_distance ?? null,
             lockAboveGround: settings.lock_above_ground ?? false,
             maxCameraHeight: settings.max_camera_height ?? null,
+            maxCameraDistance: settings.max_camera_distance ?? null,
         });
     }
 
