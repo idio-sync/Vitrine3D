@@ -204,19 +204,25 @@ fn ipc_close_file(handle_id: String, store: State<FileHandleStore>) -> Result<()
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .manage(FileHandleStore::default())
         .invoke_handler(tauri::generate_handler![
             ipc_open_file,
             ipc_read_bytes,
             ipc_close_file
-        ])
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // Bring existing window to front when a deep link launches a second instance
+        ]);
+
+    // Single-instance plugin is desktop-only (not available on Android/iOS)
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
             }
-        }))
+        }));
+    }
+
+    builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())

@@ -866,28 +866,59 @@ function setupFilePicker(): void {
                     if (!result) return;
                     picker!.classList.add('hidden');
 
-                    const ext = result.name.split('.').pop()?.toLowerCase() ?? '';
-                    if (ext === 'a3d' || ext === 'a3z') {
-                        // Archive: IPC byte serving — reads bytes directly via Rust.
-                        // On Android, ipc_open_file handles content:// URIs transparently.
+                    if (isAndroid && result.filePath.startsWith('content://')) {
+                        // Android content:// URIs: read entire file via FS plugin or IPC,
+                        // then detect type from magic bytes (URI filename is unreliable).
+                        updateProgress(5, 'Reading file...');
+                        let bytes: Uint8Array;
                         try {
-                            await loadArchiveFromIpc(result.filePath, result.name);
-                        } catch {
-                            if (!isAndroid) {
-                                await loadArchiveFromAssetUrl(result.assetUrl, result.name, () => loadArchiveFromTauri(result.filePath));
-                            } else {
-                                throw new Error('IPC archive loading failed for content URI');
-                            }
+                            // Strategy 1: Tauri FS plugin (recent versions handle content URIs)
+                            log.info('Android: trying fs.readFile for content URI');
+                            const rawData = await window.__TAURI__!.fs.readFile(result.filePath);
+                            bytes = rawData instanceof Uint8Array ? rawData : new Uint8Array(rawData);
+                            log.info('Android: fs.readFile succeeded, got', bytes.length, 'bytes');
+                        } catch (fsErr) {
+                            // Strategy 2: IPC (Rust JNI ContentResolver copy to temp file)
+                            log.warn('Android: fs.readFile failed, trying IPC:', (fsErr as Error).message);
+                            const { handleId, size } = await ipcOpenFile(result.filePath);
+                            bytes = await ipcReadBytes(handleId, 0, size);
+                            await ipcCloseFile(handleId);
+                            log.info('Android: IPC read succeeded, got', bytes.length, 'bytes');
+                        }
+
+                        // Detect file type from magic bytes — content URI filenames are unreliable
+                        const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4B;
+                        const name = isZip && !result.name.match(/\.(a3d|a3z|zip)$/i)
+                            ? result.name.replace(/\.[^.]*$/, '') + '.a3d'  // Assume archive
+                            : result.name;
+
+                        if (isZip) {
+                            log.info('Android: detected ZIP archive, loading as archive');
+                            const file = new File([bytes as BlobPart], name);
+                            await handleArchiveFile(file);
+                        } else {
+                            log.info('Android: non-archive file, loading directly');
+                            const file = new File([bytes as BlobPart], name);
+                            handlePickedFiles([file], null);
                         }
                     } else {
-                        // Direct file (splat, mesh, etc.): read full contents via IPC.
-                        // Uses ipc_open_file which handles both paths and content:// URIs.
-                        updateProgress(5, 'Reading file...');
-                        const { handleId, size } = await ipcOpenFile(result.filePath);
-                        const contents = await ipcReadBytes(handleId, 0, size);
-                        await ipcCloseFile(handleId);
-                        const file = new File([contents as BlobPart], result.name);
-                        handlePickedFiles([file], null);
+                        // Desktop / non-content paths: use IPC byte serving for archives,
+                        // full read for direct files.
+                        const ext = result.name.split('.').pop()?.toLowerCase() ?? '';
+                        if (ext === 'a3d' || ext === 'a3z') {
+                            try {
+                                await loadArchiveFromIpc(result.filePath, result.name);
+                            } catch {
+                                await loadArchiveFromAssetUrl(result.assetUrl, result.name, () => loadArchiveFromTauri(result.filePath));
+                            }
+                        } else {
+                            updateProgress(5, 'Reading file...');
+                            const { handleId, size } = await ipcOpenFile(result.filePath);
+                            const contents = await ipcReadBytes(handleId, 0, size);
+                            await ipcCloseFile(handleId);
+                            const file = new File([contents as BlobPart], result.name);
+                            handlePickedFiles([file], null);
+                        }
                     }
                 } catch (err) {
                     log.error('Native file dialog failed:', (err as Error).message, err);
