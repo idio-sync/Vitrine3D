@@ -856,6 +856,12 @@ function setupDecimationPanel(): void {
                 const { loadGLTF } = await import('./modules/file-handlers.js');
                 const loaded = await loadGLTF(blobUrl);
                 state.proxyMeshGroup = loaded;
+                // Copy transform from full-res model (proxy GLB is in local space)
+                if (modelGroup) {
+                    loaded.position.copy(modelGroup.position);
+                    loaded.rotation.copy(modelGroup.rotation);
+                    loaded.scale.copy(modelGroup.scale);
+                }
                 state.proxyMeshGroup.visible = false;
                 scene.add(state.proxyMeshGroup);
             } finally {
