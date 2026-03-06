@@ -482,6 +482,14 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
 
     // Add preview/thumbnail
     if (includePreview && renderer) {
+        // Hide grid helpers so they don't appear in preview images
+        const hiddenGrids: any[] = [];
+        for (const child of scene.children) {
+            if (child.type === 'GridHelper' && child.visible) {
+                child.visible = false;
+                hiddenGrids.push(child);
+            }
+        }
         try {
             let previewBlob;
             if (state.manualPreviewBlob) {
@@ -498,6 +506,10 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
             }
         } catch (e) {
             log.warn(' Failed to capture preview:', e);
+        } finally {
+            for (const child of hiddenGrids) {
+                child.visible = true;
+            }
         }
     }
 
