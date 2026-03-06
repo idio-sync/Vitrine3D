@@ -26,7 +26,14 @@ if ((window as any).__TAURI__) {
         onOpenUrl((urls) => { urls.forEach(handleDeepLinkUrl); });
     }).catch(() => { /* deep-link plugin not available */ });
 
-    // Strategy 2: global function callable from Rust eval() in single-instance callback.
+    // Strategy 2: Tauri event from single-instance callback (app.emit)
+    (window as any).__TAURI__.event.listen('deep-link-received', (event: any) => {
+        if (typeof event.payload === 'string') {
+            handleDeepLinkUrl(event.payload);
+        }
+    });
+
+    // Strategy 3: global function callable from Rust eval() in single-instance callback.
     // Also handles CustomEvent('vitrine3d:deep-link') dispatched from Rust eval().
     (window as any).__vitrine3dDeepLink = handleDeepLinkUrl;
     window.addEventListener('vitrine3d:deep-link', ((event: CustomEvent) => {

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::sync::Mutex;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 use uuid::Uuid;
 
 // =============================================================================
@@ -221,10 +221,14 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
-                // Inject deep link URLs directly into the webview JS context.
-                // Try both a global function call and a CustomEvent for reliability.
+                // Forward deep link URLs via multiple strategies for reliability:
+                // 1. Tauri event system (app.emit → JS listen)
+                // 2. Direct JS eval (global function or CustomEvent)
                 for arg in &args {
                     if arg.starts_with("vitrine3d://") {
+                        // Strategy 1: Tauri event
+                        let _ = app.emit("deep-link-received", arg.clone());
+                        // Strategy 2: eval into webview
                         let escaped = arg.replace('\\', "\\\\").replace('\"', "\\\"");
                         let js = format!(
                             "if(window.__vitrine3dDeepLink){{window.__vitrine3dDeepLink(\"{0}\")}}else{{window.dispatchEvent(new CustomEvent('vitrine3d:deep-link',{{detail:\"{0}\"}}))}}",
