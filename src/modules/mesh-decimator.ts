@@ -13,6 +13,10 @@ import { Logger } from './utilities.js';
 import { DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET } from './constants.js';
 import type { DecimationOptions, DecimationResult } from '@/types.js';
 import type { DecimationPreset } from './constants.js';
+import { WebIO } from '@gltf-transform/core';
+import { KHRDracoMeshCompression } from '@gltf-transform/extensions';
+import { draco } from '@gltf-transform/functions';
+import draco3d from 'draco3dgltf';
 
 const log = Logger.getLogger('mesh-decimator');
 
@@ -25,6 +29,23 @@ async function ensureWasm(): Promise<void> {
     await MeshoptSimplifier.ready;
     _wasmReady = true;
     log.info('meshoptimizer WASM ready');
+}
+
+// ===== Draco Compression (gltf-transform) =====
+
+let _dracoIO: WebIO | null = null;
+
+async function ensureDracoIO(): Promise<WebIO> {
+    if (_dracoIO) return _dracoIO;
+    const io = new WebIO()
+        .registerExtensions([KHRDracoMeshCompression])
+        .registerDependencies({
+            'draco3d.encoder': await draco3d.createEncoderModule(),
+            'draco3d.decoder': await draco3d.createDecoderModule(),
+        });
+    _dracoIO = io;
+    log.info('gltf-transform Draco IO ready');
+    return io;
 }
 
 // ===== Resolve Options =====
@@ -45,6 +66,7 @@ export function resolveOptions(opts?: Partial<DecimationOptions>): DecimationOpt
         textureMaxRes: opts?.textureMaxRes ?? preset.textureMaxRes,
         textureFormat: opts?.textureFormat ?? preset.textureFormat,
         textureQuality: opts?.textureQuality ?? preset.textureQuality,
+        dracoCompress: opts?.dracoCompress ?? true,
     };
 }
 
@@ -266,8 +288,15 @@ export async function decimateScene(
 
     log.info(`Decimating ${meshes.length} mesh(es)`);
 
-    // Deep clone the group so we don't mutate the original
+    // Deep clone the group so we don't mutate the original.
+    // Reset transforms on the clone so the exported GLB contains local-space
+    // geometry only — the manifest stores transforms separately and applies
+    // them on load.  Without this, transforms get baked into the GLB *and*
+    // re-applied from the manifest, causing double-rotation/offset.
     const cloned = group.clone(true);
+    cloned.position.set(0, 0, 0);
+    cloned.rotation.set(0, 0, 0);
+    cloned.scale.set(1, 1, 1);
 
     // Collect cloned meshes in the same order
     const clonedMeshes: THREE.Mesh[] = [];
@@ -313,10 +342,22 @@ export async function decimateScene(
 /**
  * Export a THREE.Group as a GLB Blob.
  */
-export async function exportAsGLB(group: THREE.Group): Promise<Blob> {
+export async function exportAsGLB(group: THREE.Group, dracoCompress = true): Promise<Blob> {
     const exporter = new GLTFExporter();
     const buffer = await exporter.parseAsync(group, { binary: true }) as ArrayBuffer;
-    return new Blob([buffer], { type: 'model/gltf-binary' });
+
+    if (!dracoCompress) {
+        return new Blob([buffer], { type: 'model/gltf-binary' });
+    }
+
+    const io = await ensureDracoIO();
+    const doc = await io.readBinary(new Uint8Array(buffer));
+    await doc.transform(draco({ method: 'edgebreaker' }));
+    const compressed = await io.writeBinary(doc);
+
+    log.info(`Draco compression: ${(buffer.byteLength / 1024).toFixed(0)} KB → ${(compressed.byteLength / 1024).toFixed(0)} KB`);
+
+    return new Blob([compressed], { type: 'model/gltf-binary' });
 }
 
 // ===== High-Level Pipeline =====
@@ -341,7 +382,7 @@ export async function generateProxy(
         });
 
     onProgress?.('Exporting GLB', 85);
-    const blob = await exportAsGLB(decimatedGroup);
+    const blob = await exportAsGLB(decimatedGroup, options.dracoCompress);
 
     onProgress?.('Done', 100);
     log.info(`Proxy GLB size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
