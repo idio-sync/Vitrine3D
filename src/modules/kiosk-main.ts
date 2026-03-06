@@ -778,14 +778,23 @@ function setupFilePicker(): void {
                         try {
                             await loadArchiveFromIpc(result.filePath, result.name);
                         } catch {
-                            await loadArchiveFromAssetUrl(result.assetUrl, result.name, () => loadArchiveFromTauri(result.filePath));
+                            await loadArchiveFromAssetUrl(result.assetUrl, result.name, () => loadArchiveFromTauri(result.filePath, result.assetUrl));
                         }
                     } else {
                         // Direct file (splat, mesh, etc.): full content needed by renderer.
-                        // Read by path using the already-resolved filePath — no second dialog.
                         updateProgress(5, 'Reading file...');
-                        const contents = await window.__TAURI__!.fs.readFile(result.filePath);
-                        const file = new File([contents as BlobPart], result.name);
+                        let file: File;
+                        if (result.filePath.startsWith('content://')) {
+                            // Android content:// URIs can't be read by fs.readFile or Rust
+                            // File::open — use fetch on the Tauri asset URL instead.
+                            const resp = await fetch(result.assetUrl);
+                            if (!resp.ok) throw new Error(`Asset fetch failed: ${resp.status}`);
+                            const buffer = await resp.arrayBuffer();
+                            file = new File([buffer], result.name);
+                        } else {
+                            const contents = await window.__TAURI__!.fs.readFile(result.filePath);
+                            file = new File([contents as BlobPart], result.name);
+                        }
                         handlePickedFiles([file], null);
                     }
                 } catch (err) {
@@ -1157,12 +1166,20 @@ async function loadArchiveFromUrl(url: string): Promise<void> {
  * Bypasses HTTP fetch entirely — no "Downloading..." phase.
  * @param {string} filePath - Local filesystem path to the archive
  */
-async function loadArchiveFromTauri(filePath: string): Promise<void> {
+async function loadArchiveFromTauri(filePath: string, assetUrl?: string): Promise<void> {
     showLoading('Loading archive...', true);
     try {
-        const { readFile } = window.__TAURI__.fs;
         updateProgress(5, 'Reading file...');
-        const contents = await readFile(filePath);
+        let contents: Uint8Array | ArrayBuffer;
+        if (filePath.startsWith('content://') && assetUrl) {
+            // Android content:// URIs can't be read by fs.readFile — fetch via asset URL
+            const resp = await fetch(assetUrl);
+            if (!resp.ok) throw new Error(`Asset fetch failed: ${resp.status}`);
+            contents = await resp.arrayBuffer();
+        } else {
+            const { readFile } = window.__TAURI__.fs;
+            contents = await readFile(filePath);
+        }
         const fileName = filePath.split(/[\\/]/).pop() || 'archive.a3d';
         const file = new File([contents], fileName);
         state.archiveSourceUrl = null;
