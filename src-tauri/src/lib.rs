@@ -221,12 +221,13 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
-                // Inject deep link URLs directly into the webview JS context
+                // Inject deep link URLs directly into the webview JS context.
+                // Try both a global function call and a CustomEvent for reliability.
                 for arg in &args {
                     if arg.starts_with("vitrine3d://") {
                         let escaped = arg.replace('\\', "\\\\").replace('\"', "\\\"");
                         let js = format!(
-                            "window.dispatchEvent(new CustomEvent('vitrine3d:deep-link', {{ detail: \"{}\" }}))",
+                            "if(window.__vitrine3dDeepLink){{window.__vitrine3dDeepLink(\"{0}\")}}else{{window.dispatchEvent(new CustomEvent('vitrine3d:deep-link',{{detail:\"{0}\"}}))}}",
                             escaped
                         );
                         let _ = window.eval(&js);

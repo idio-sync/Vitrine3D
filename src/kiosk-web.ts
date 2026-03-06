@@ -26,9 +26,9 @@ if ((window as any).__TAURI__) {
         onOpenUrl((urls) => { urls.forEach(handleDeepLinkUrl); });
     }).catch(() => { /* deep-link plugin not available */ });
 
-    // Strategy 2: custom event from single-instance callback (forwarded deep links)
-    // This catches URLs from second-instance launches that single-instance intercepts.
-    // The Rust side injects a CustomEvent('vitrine3d:deep-link') directly via eval().
+    // Strategy 2: global function callable from Rust eval() in single-instance callback.
+    // Also handles CustomEvent('vitrine3d:deep-link') dispatched from Rust eval().
+    (window as any).__vitrine3dDeepLink = handleDeepLinkUrl;
     window.addEventListener('vitrine3d:deep-link', ((event: CustomEvent) => {
         if (typeof event.detail === 'string') {
             handleDeepLinkUrl(event.detail);

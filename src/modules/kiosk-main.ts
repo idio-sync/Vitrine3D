@@ -733,9 +733,18 @@ function injectLibraryButton(): void {
         if (hasCfToken()) {
             await showLibraryInApp();
         } else if ((window as any).__TAURI__) {
-            log.info('Opening browser for CF Access auth');
-            const { open } = await import('@tauri-apps/plugin-shell');
-            await open(libraryUrl + '/api/auth-callback');
+            const isAndroid = /android/i.test(navigator.userAgent);
+            if (isAndroid) {
+                // Android has no deep-link scheme registered — open library directly in browser
+                log.info('Android: opening library in browser');
+                const { open } = await import('@tauri-apps/plugin-shell');
+                await open(libraryUrl + '/library');
+            } else {
+                // Desktop: open auth callback URL, deep link redirects back with token
+                log.info('Opening browser for CF Access auth');
+                const { open } = await import('@tauri-apps/plugin-shell');
+                await open(libraryUrl + '/api/auth-callback');
+            }
         } else {
             window.location.href = libraryUrl + '/library';
         }
