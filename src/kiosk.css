@@ -232,7 +232,11 @@ body.kiosk-mode.kiosk-gallery #kiosk-wall-label,
 body.kiosk-mode.kiosk-exhibit #metadata-sidebar,
 body.kiosk-mode.kiosk-exhibit .kiosk-view-switcher,
 body.kiosk-mode.kiosk-exhibit #kiosk-toolbar,
-body.kiosk-mode.kiosk-exhibit #kiosk-wall-label {
+body.kiosk-mode.kiosk-exhibit #kiosk-wall-label,
+body.kiosk-mode.kiosk-industrial #metadata-sidebar,
+body.kiosk-mode.kiosk-industrial .kiosk-view-switcher,
+body.kiosk-mode.kiosk-industrial #kiosk-toolbar,
+body.kiosk-mode.kiosk-industrial #kiosk-wall-label {
     display: none !important;
 }
 

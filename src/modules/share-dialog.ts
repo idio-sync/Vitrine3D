@@ -548,6 +548,7 @@ export function showShareDialog(state: ShareState | AppState): void {
                                 '<option value="editorial">Editorial</option>' +
                                 '<option value="gallery">Gallery</option>' +
                                 '<option value="exhibit">Exhibit</option>' +
+                                '<option value="industrial">Industrial</option>' +
                             '</select></div>' +
                         '<div class="share-field"><label>Display Mode</label>' +
                             '<select class="share-select" data-opt="displayMode">' +

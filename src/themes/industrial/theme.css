@@ -1,7 +1,7 @@
 /*
  * @theme    Industrial
  * @layout   industrial
- * @scene-bg #2a2a2a
+ * @scene-bg #535353
  * @description CAD workbench layout for mesh inspection. Toolbar top, status bar bottom.
  */
 
@@ -40,5 +40,5 @@ body.kiosk-mode {
     --kiosk-bg-deep: rgb(var(--kiosk-bg-deep-rgb));
 
     /* Scene background */
-    --kiosk-scene-bg: #2a2a2a;
+    --kiosk-scene-bg: #535353;
 }
