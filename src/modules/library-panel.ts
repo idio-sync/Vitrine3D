@@ -980,6 +980,8 @@ export function getCsrfToken(): string | null {
     return csrfToken;
 }
 
+export { fetchCsrfToken };
+
 export async function refreshLibrary(): Promise<void> {
     try {
         const data = await fetchArchives();

@@ -12,7 +12,7 @@ import { validateSIP, toManifestCompliance } from './sip-validator.js';
 import type { SIPValidationResult } from './sip-validator.js';
 import { getStore } from './asset-store.js';
 import { captureWalkthroughForArchive } from './walkthrough-controller.js';
-import { getAuthCredentials, getCsrfToken, refreshLibrary } from './library-panel.js';
+import { getAuthCredentials, getCsrfToken, fetchCsrfToken, refreshLibrary } from './library-panel.js';
 import type { ExportDeps } from '@/types.js';
 
 const log = Logger.getLogger('export-controller');
@@ -585,7 +585,8 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
     if (!archiveCreator) return;
 
     const creds = getAuthCredentials();
-    const csrf = getCsrfToken();
+    // Ensure we have a fresh CSRF token before starting the upload
+    if (!getCsrfToken()) await fetchCsrfToken();
 
     log.info(' Starting save to library');
     deps.ui.showLoading('Creating archive...', true);
@@ -603,6 +604,7 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
         deps.ui.updateProgress(82, 'Uploading to library...');
 
         // Upload via XHR for progress tracking
+        const csrf = getCsrfToken();
         const csrfHeaders: Record<string, string> = {};
         if (creds) csrfHeaders['Authorization'] = 'Basic ' + creds;
         if (csrf) csrfHeaders['X-CSRF-Token'] = csrf;

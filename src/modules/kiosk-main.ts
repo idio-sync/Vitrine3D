@@ -714,12 +714,14 @@ function injectLibraryButton(): void {
     btn.type = 'button';
     btn.textContent = 'Browse Library';
 
-    // Insert before the drop zone (or at end of picker if no drop zone)
-    const dropZone = picker.querySelector('#kiosk-drop-zone');
-    if (dropZone) {
-        dropZone.parentElement!.insertBefore(btn, dropZone);
+    // Insert after the "Browse Files" / "Select File" button so it sits alongside it
+    const browseBtn = picker.querySelector('#kiosk-picker-btn');
+    if (browseBtn && browseBtn.parentElement) {
+        browseBtn.parentElement.insertBefore(btn, browseBtn.nextSibling);
     } else {
-        picker.appendChild(btn);
+        const dropZone = picker.querySelector('#kiosk-drop-zone');
+        if (dropZone) dropZone.appendChild(btn);
+        else picker.appendChild(btn);
     }
 
     btn.addEventListener('click', async () => {

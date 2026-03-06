@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Manager, State};
 use uuid::Uuid;
 
 // =============================================================================
@@ -211,6 +211,12 @@ pub fn run() {
             ipc_read_bytes,
             ipc_close_file
         ])
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // Bring existing window to front when a deep link launches a second instance
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())

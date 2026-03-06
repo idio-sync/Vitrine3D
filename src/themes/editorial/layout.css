@@ -2084,6 +2084,25 @@ body.kiosk-mode.kiosk-editorial #kiosk-picker-btn:hover {
     background: rgba(var(--kiosk-accent-rgb), 0.22);
 }
 
+body.kiosk-mode.kiosk-editorial .kiosk-library-btn {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 12px 36px;
+    border: 1px solid var(--kiosk-accent);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--kiosk-accent);
+    margin: 10px auto 0;
+    transition: background 0.2s;
+}
+
+body.kiosk-mode.kiosk-editorial .kiosk-library-btn:hover {
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+}
+
 /* Prompt — sits where #loading-text would be */
 
 body.kiosk-mode.kiosk-editorial .kiosk-picker-prompt {
