@@ -35,14 +35,25 @@ async function ensureWasm(): Promise<void> {
 
 let _dracoIO: WebIO | null = null;
 
+async function fetchWasm(url: string): Promise<ArrayBuffer> {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
+    return res.arrayBuffer();
+}
+
 async function ensureDracoIO(): Promise<WebIO> {
     if (_dracoIO) return _dracoIO;
-    const wasmOpts = { locateFile: (file: string) => `/draco/${file}` };
+    // Fetch WASM binaries explicitly and pass as wasmBinary to bypass
+    // Emscripten's Node.js-oriented file loading (which breaks in Vite).
+    const [encoderWasm, decoderWasm] = await Promise.all([
+        fetchWasm('/draco/draco_encoder.wasm'),
+        fetchWasm('/draco/draco_decoder_gltf.wasm'),
+    ]);
     const io = new WebIO()
         .registerExtensions([KHRDracoMeshCompression])
         .registerDependencies({
-            'draco3d.encoder': await draco3d.createEncoderModule(wasmOpts),
-            'draco3d.decoder': await draco3d.createDecoderModule(wasmOpts),
+            'draco3d.encoder': await draco3d.createEncoderModule({ wasmBinary: encoderWasm }),
+            'draco3d.decoder': await draco3d.createDecoderModule({ wasmBinary: decoderWasm }),
         });
     _dracoIO = io;
     log.info('gltf-transform Draco IO ready');
