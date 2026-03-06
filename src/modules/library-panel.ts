@@ -577,6 +577,10 @@ async function handleDelete(archive: Archive): Promise<void> {
 async function handleRegenerate(archive: Archive): Promise<void> {
     try {
         const updated = await regenerateArchive(archive.hash);
+        // Cache-bust thumbnail so the browser fetches the freshly extracted image
+        if (updated.thumbnail) {
+            updated.thumbnail = updated.thumbnail.split('?')[0] + '?t=' + Date.now();
+        }
         const idx = archives.findIndex(a => a.hash === archive.hash);
         if (idx !== -1) archives[idx] = updated;
         render();
