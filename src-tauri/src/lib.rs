@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::sync::Mutex;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 use uuid::Uuid;
 
 // =============================================================================
@@ -212,12 +212,20 @@ pub fn run() {
             ipc_close_file
         ]);
 
-    // Single-instance plugin is desktop-only (not available on Android/iOS)
+    // Single-instance plugin is desktop-only (not available on Android/iOS).
+    // When a second instance is launched (e.g. via deep link), forward any
+    // vitrine3d:// URLs to the frontend so the auth flow completes.
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
+            }
+            // Forward deep link URLs from the second instance's CLI args
+            for arg in &args {
+                if arg.starts_with("vitrine3d://") {
+                    let _ = app.emit("deep-link-received", arg.clone());
+                }
             }
         }));
     }
