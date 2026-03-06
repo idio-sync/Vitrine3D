@@ -37,11 +37,12 @@ let _dracoIO: WebIO | null = null;
 
 async function ensureDracoIO(): Promise<WebIO> {
     if (_dracoIO) return _dracoIO;
+    const wasmOpts = { locateFile: (file: string) => `/draco/${file}` };
     const io = new WebIO()
         .registerExtensions([KHRDracoMeshCompression])
         .registerDependencies({
-            'draco3d.encoder': await draco3d.createEncoderModule(),
-            'draco3d.decoder': await draco3d.createDecoderModule(),
+            'draco3d.encoder': await draco3d.createEncoderModule(wasmOpts),
+            'draco3d.decoder': await draco3d.createDecoderModule(wasmOpts),
         });
     _dracoIO = io;
     log.info('gltf-transform Draco IO ready');
