@@ -115,13 +115,29 @@ export async function decimateGeometry(
 ): Promise<THREE.BufferGeometry> {
     await ensureWasm();
 
-    // Scan/photogrammetry GLBs have split vertices — every triangle has its
-    // own 3 vertices with per-face normals. This prevents meshoptimizer from
-    // finding shared edges. Solution: strip normals, then mergeVertices()
-    // creates shared edges by merging vertices with identical position+UV.
-    // UV seams are preserved (different UVs = different vertices). After
-    // simplification, normals are recomputed from the new topology.
+    // Draco-decoded geometries may use quantized typed arrays (Int16Array,
+    // Uint16Array with normalized=true) that break mergeVertices and
+    // computeVertexNormals. Convert all attributes to Float32Array first.
     const prepared = geometry.clone();
+    for (const name of Object.keys(prepared.attributes)) {
+        const attr = prepared.attributes[name];
+        if (attr && attr.array && !(attr.array instanceof Float32Array)) {
+            const count = attr.count;
+            const itemSize = attr.itemSize;
+            const f32 = new Float32Array(count * itemSize);
+            for (let i = 0; i < count; i++) {
+                for (let c = 0; c < itemSize; c++) {
+                    // Use getComponent to respect normalized flag (converts int → 0..1 range)
+                    f32[i * itemSize + c] = attr.getComponent(i, c);
+                }
+            }
+            prepared.setAttribute(name, new THREE.BufferAttribute(f32, itemSize));
+        }
+    }
+
+    // Strip normals, then mergeVertices() creates shared edges by merging
+    // vertices with identical position+UV. After simplification, normals
+    // are recomputed from the new topology.
     prepared.deleteAttribute('normal');
     const geo = mergeVertices(prepared);
     prepared.dispose();
