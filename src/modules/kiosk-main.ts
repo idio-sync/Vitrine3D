@@ -1711,10 +1711,10 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             hideMetadataSidebar();
         }
 
-        // Show quality toggle if archive has proxies OR splat is loaded (Spark 2.0 LOD budget).
+        // Show quality toggle if archive has proxies, splat (Spark 2.0 LOD budget), or mesh.
         // Layout modules with their own toggle handle this independently.
         const hasSplat = contentInfo.hasSplat || contentInfo.hasSceneProxy;
-        if ((hasAnyProxy(contentInfo) || hasSplat) && !layoutModule?.hasOwnQualityToggle) {
+        if ((hasAnyProxy(contentInfo) || hasSplat || contentInfo.hasMesh) && !layoutModule?.hasOwnQualityToggle) {
             showQualityToggle();
         }
 
@@ -1836,6 +1836,13 @@ async function switchQualityTier(newTier: string): Promise<void> {
     if (sparkRenderer && isSparkV2) {
         sparkRenderer.lodSplatCount = getLodBudget(newTier);
         log.info(`SparkRenderer lodSplatCount updated to ${getLodBudget(newTier)}`);
+    }
+
+    // Adjust renderer resolution — universal quality control that takes effect even
+    // when no proxy assets exist (makes SD/HD visible for models and low-proxy splats).
+    if (renderer) {
+        const targetRatio = newTier === 'hd' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+        renderer.setPixelRatio(targetRatio);
     }
 
     const archiveLoader = state.archiveLoader;
@@ -2125,6 +2132,7 @@ function createLayoutDeps(): any {
         themeAssets: window.__KIOSK_THEME_ASSETS__ || {},
         hasAnyProxy: hasAnyProxy(state.archiveLoader ? state.archiveLoader.getContentInfo() : {}),
         hasSplat: !!(state.archiveLoader?.getContentInfo()?.hasSplat || state.splatLoaded),
+        hasMesh: !!(state.archiveLoader?.getContentInfo()?.hasMesh || state.modelLoaded),
         qualityResolved: state.qualityResolved,
         switchQualityTier,
         metadataProfile: state.archiveManifest?.metadata_profile || 'archival',

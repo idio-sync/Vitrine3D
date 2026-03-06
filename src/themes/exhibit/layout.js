@@ -772,7 +772,7 @@ function setup(manifest, deps) {
     }
 
     // Quality group
-    if (deps.hasAnyProxy || deps.hasSplat) {
+    if (deps.hasAnyProxy || deps.hasSplat || deps.hasMesh) {
         var qualityGroup = document.createElement('div');
         qualityGroup.className = 'exhibit-toolbar-group';
 

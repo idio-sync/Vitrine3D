@@ -803,8 +803,8 @@ export function setup(manifest, deps) {
         viewModes.appendChild(link);
     });
 
-    // Quality toggle (SD/HD) — inline with view modes if archive has proxies or splat (Spark 2.0 LOD budget)
-    if (deps.hasAnyProxy || deps.hasSplat) {
+    // Quality toggle (SD/HD) — inline with view modes if archive has proxies, splat (Spark 2.0 LOD budget), or mesh
+    if (deps.hasAnyProxy || deps.hasSplat || deps.hasMesh) {
         const qualitySep = document.createElement('span');
         qualitySep.className = 'editorial-view-mode-sep';
         qualitySep.textContent = '|';
@@ -1438,7 +1438,7 @@ export function setup(manifest, deps) {
     mobileNav.appendChild(navViewBtn);
 
     // Quality toggle button (SD/HD)
-    if (deps.hasAnyProxy || deps.hasSplat) {
+    if (deps.hasAnyProxy || deps.hasSplat || deps.hasMesh) {
         const navQualityBtn = document.createElement('button');
         navQualityBtn.className = 'editorial-mobile-nav-btn';
         navQualityBtn.title = 'Quality';

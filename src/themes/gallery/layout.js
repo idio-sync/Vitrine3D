@@ -668,7 +668,7 @@ function setup(manifest, deps) {
     }
 
     // Quality toggle (SD / HD)
-    if (deps.hasAnyProxy || deps.hasSplat) {
+    if (deps.hasAnyProxy || deps.hasSplat || deps.hasMesh) {
         var sdBtn = document.createElement('button');
         sdBtn.className = 'gallery-pill-btn' + (deps.qualityResolved === 'sd' ? ' active' : '');
         sdBtn.dataset.tier = 'sd';
