@@ -1941,13 +1941,13 @@ function transcodeMedia(mediaId) {
 
     db.prepare("UPDATE media SET status = 'processing' WHERE id = ?").run(mediaId);
 
-    const trimStart = row.trim_start || 0;
-    const trimEnd = row.trim_end || 0;
+    const trimStart = Number.isFinite(row.trim_start) ? row.trim_start : 0;
+    const trimEnd = Number.isFinite(row.trim_end) ? row.trim_end : 0;
 
     // Build ffmpeg trim args
     const trimArgs = [];
     if (trimStart > 0) { trimArgs.push('-ss', String(trimStart)); }
-    if (trimEnd > trimStart) { trimArgs.push('-to', String(trimEnd)); }
+    if (trimEnd > trimStart && trimEnd < Infinity) { trimArgs.push('-to', String(trimEnd)); }
 
     // Step 1: WebM → MP4
     const mp4Args = [
@@ -2183,8 +2183,8 @@ function handleMediaUpload(req, res) {
         else if (name === 'title') title = val;
         else if (name === 'mode') mode = val;
         else if (name === 'duration_ms') duration_ms = parseInt(val, 10) || 0;
-        else if (name === 'trim_start') trim_start = parseFloat(val) || 0;
-        else if (name === 'trim_end') trim_end = parseFloat(val) || 0;
+        else if (name === 'trim_start') { trim_start = parseFloat(val); if (!Number.isFinite(trim_start) || trim_start < 0) trim_start = 0; }
+        else if (name === 'trim_end') { trim_end = parseFloat(val); if (!Number.isFinite(trim_end) || trim_end < 0) trim_end = 0; }
     });
 
     bb.on('file', (fieldname, file, info) => {

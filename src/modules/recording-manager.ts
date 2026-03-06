@@ -203,13 +203,16 @@ export async function uploadRecording(options: {
 
     _state = 'uploading';
 
+    const safeTrimStart = isFinite(options.trimStart) ? options.trimStart : 0;
+    const safeTrimEnd = isFinite(options.trimEnd) ? options.trimEnd : 0;
+
     const formData = new FormData();
     formData.append('video', _result.blob, 'recording.webm');
     formData.append('title', options.title);
     formData.append('mode', _result.mode);
     formData.append('duration_ms', String(_result.duration));
-    formData.append('trim_start', String(options.trimStart));
-    formData.append('trim_end', String(options.trimEnd));
+    formData.append('trim_start', String(safeTrimStart));
+    formData.append('trim_end', String(safeTrimEnd));
     if (options.archiveHash) {
         formData.append('archive_hash', options.archiveHash);
     }

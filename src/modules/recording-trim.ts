@@ -69,10 +69,24 @@ export function showTrimUI(
         }
 
         video.addEventListener('loadedmetadata', () => {
-            duration = video.duration;
-            trimEnd = duration;
-            updateRange();
-            log.info(`Trim UI loaded: duration=${duration.toFixed(1)}s`);
+            if (isFinite(video.duration) && video.duration > 0) {
+                duration = video.duration;
+                trimEnd = duration;
+                updateRange();
+                log.info(`Trim UI loaded: duration=${duration.toFixed(1)}s`);
+            } else {
+                // MediaRecorder WebM often reports Infinity duration.
+                // Seek to a large time to force the browser to resolve the real duration.
+                video.currentTime = 1e10;
+                video.addEventListener('seeked', function onSeeked() {
+                    video.removeEventListener('seeked', onSeeked);
+                    duration = isFinite(video.duration) ? video.duration : video.currentTime;
+                    trimEnd = duration;
+                    video.currentTime = 0;
+                    updateRange();
+                    log.info(`Trim UI loaded (resolved): duration=${duration.toFixed(1)}s`);
+                }, { once: true });
+            }
         });
 
         video.addEventListener('timeupdate', () => {
