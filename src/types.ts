@@ -17,6 +17,7 @@ export interface DecimationOptions {
     textureMaxRes: number;
     textureFormat: 'jpeg' | 'png' | 'keep';
     textureQuality: number;
+    dracoCompress: boolean;
 }
 
 export interface DecimationResult {

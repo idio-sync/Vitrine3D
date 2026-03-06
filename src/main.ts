@@ -731,6 +731,7 @@ function setupDecimationPanel(): void {
     const texFormatSelect = document.getElementById('decimation-texture-format') as HTMLSelectElement | null;
     const texQualityInput = document.getElementById('decimation-texture-quality') as HTMLInputElement | null;
     const texQualityLabel = document.getElementById('decimation-texture-quality-label');
+    const dracoInput = document.getElementById('decimation-draco') as HTMLInputElement | null;
     const generateBtn = document.getElementById('btn-generate-proxy') as HTMLButtonElement | null;
     const statusDiv = document.getElementById('decimation-status');
     const statusText = document.getElementById('decimation-status-text');
@@ -751,6 +752,7 @@ function setupDecimationPanel(): void {
             textureMaxRes: texResSelect ? parseInt(texResSelect.value, 10) : undefined,
             textureFormat: texFormatSelect?.value as DecimationOptions['textureFormat'],
             textureQuality: texQualityInput ? parseFloat(texQualityInput.value) : undefined,
+            dracoCompress: dracoInput?.checked ?? true,
         };
     }
 

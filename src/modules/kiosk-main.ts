@@ -1608,17 +1608,15 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                     });
                 }
             }
-            // Per-mode background overrides (with backward compat for legacy background_color)
+            // Background: legacy universal bg sets savedBackgroundColor;
+            // per-mode overrides only apply when explicitly set in manifest.
             const legacyBg = manifest.viewer_settings.background_color || null;
-            state.meshBackgroundColor = manifest.viewer_settings.mesh_background_color || legacyBg;
-            state.splatBackgroundColor = manifest.viewer_settings.splat_background_color || legacyBg;
-            // DEBUG: trace background override values
-            log.info(`[BG-DEBUG] manifest bg values: legacy=${legacyBg}, mesh=${state.meshBackgroundColor}, splat=${state.splatBackgroundColor}, mode=${state.displayMode}`);
-            log.info(`[BG-DEBUG] raw manifest viewer_settings:`, JSON.stringify({
-                background_color: manifest.viewer_settings.background_color,
-                mesh_background_color: manifest.viewer_settings.mesh_background_color,
-                splat_background_color: manifest.viewer_settings.splat_background_color,
-            }));
+            state.meshBackgroundColor = manifest.viewer_settings.mesh_background_color || null;
+            state.splatBackgroundColor = manifest.viewer_settings.splat_background_color || null;
+            if (legacyBg) {
+                sceneManager?.setBackgroundColor(legacyBg);
+            }
+            log.info(`[BG] manifest bg: legacy=${legacyBg}, mesh=${state.meshBackgroundColor}, splat=${state.splatBackgroundColor}, mode=${state.displayMode}`);
             applyBackgroundForMode(state.displayMode);
             // Apply saved camera position and target (overrides fitCameraToScene result)
             const savedCamPos = manifest.viewer_settings.camera_position;
@@ -2710,10 +2708,10 @@ function applyBackgroundForMode(mode: string): void {
     else if (mode === 'splat' || mode === 'both') color = state.splatBackgroundColor;
 
     if (color) {
-        // Use setBackgroundColor to sync savedBackgroundColor — prevents theme
-        // color from being restored by clearEnvironment / setEnvironmentAsBackground
+        // Set scene.background directly — do NOT use setBackgroundColor here,
+        // as that would clobber savedBackgroundColor (the general/universal bg).
         log.info(`Applying background override for "${mode}": ${color}`);
-        sceneManager?.setBackgroundColor(color);
+        if (scene) scene.background = new THREE.Color(color);
     } else {
         // Restore theme/default background
         scene.background = sceneManager?.savedBackgroundColor?.clone()
