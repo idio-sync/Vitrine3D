@@ -1304,23 +1304,24 @@ export class SceneManager {
         if (this.rendererType === 'webgpu' && !(this.renderer as any)?._initialized) {
             return;
         }
+        // Spark.js uses custom Uint32 textures that are incompatible with
+        // EffectComposer render targets (format/sampler mismatch). Bypass
+        // post-processing whenever a splat is visible to avoid WebGL errors.
+        const splatVisible = splatMesh ? splatMesh.visible : false;
+        const canPostProcess = this.postProcessing?.isEnabled() && !splatVisible;
+
         if (displayMode === 'split') {
             // Split view - render splat on left, model + pointcloud + stl on right
-            const splatVisible = splatMesh ? splatMesh.visible : false;
             const modelVisible = modelGroup ? modelGroup.visible : false;
             const pcVisible = pointcloudGroup ? pointcloudGroup.visible : false;
             const stlVisible = stlGroup ? stlGroup.visible : false;
 
-            // Left view - splat only
+            // Left view - splat only (never post-processed)
             if (splatMesh) splatMesh.visible = true;
             if (modelGroup) modelGroup.visible = false;
             if (pointcloudGroup) pointcloudGroup.visible = false;
             if (stlGroup) stlGroup.visible = false;
-            if (this.postProcessing?.isEnabled()) {
-                this.postProcessing.render();
-            } else {
-                this.renderer!.render(this.scene!, this.camera!);
-            }
+            this.renderer!.render(this.scene!, this.camera!);
 
             // Right view - model + pointcloud + stl
             if (splatMesh) splatMesh.visible = false;
@@ -1336,7 +1337,7 @@ export class SceneManager {
             if (stlGroup) stlGroup.visible = stlVisible;
         } else {
             // Normal view
-            if (this.postProcessing?.isEnabled()) {
+            if (canPostProcess) {
                 this.postProcessing.render();
             } else {
                 this.renderer!.render(this.scene!, this.camera!);
