@@ -242,6 +242,13 @@
                 </div>
             </div>
 
+            <!-- Recording indicator -->
+            <div id="rec-indicator" style="display:none; position:absolute; top:12px; right:12px; z-index:100; align-items:center; gap:6px; background:rgba(0,0,0,0.6); padding:4px 10px; border-radius:4px;">
+                <span style="width:8px; height:8px; border-radius:50%; background:#e53935; animation:rec-pulse 1s infinite; display:inline-block;"></span>
+                <span style="font-size:11px; color:#fff; font-weight:600;">REC</span>
+                <span id="rec-timer" style="font-size:11px; color:#ccc; font-family:monospace;">0:00</span>
+            </div>
+
             <!-- Viewport overlay: Display mode pill + quality toggle row -->
             <div class="vp-display-row">
                 <div class="hidden" id="quality-toggle-container">
@@ -1669,6 +1676,76 @@
                             <button id="btn-clear-manual-preview" style="font-size:9px; margin-left:6px; background:none; border:none; color:var(--danger); cursor:pointer;">Clear</button>
                         </div>
                         <div id="screenshots-list" class="mt4"></div>
+                    </div>
+                </div>
+
+                <!-- Recording -->
+                <div class="prop-section">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Recording</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <!-- Mode selector -->
+                        <div id="rec-mode-selector" style="display:flex; gap:4px; margin-bottom:8px;">
+                            <button class="prop-btn rec-mode-btn active" data-rec-mode="turntable" title="Turntable (360° rotation)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M3.6 9h16.8M3.6 15h16.8"/></svg>
+                                <span style="font-size:9px;">Turntable</span>
+                            </button>
+                            <button class="prop-btn rec-mode-btn" data-rec-mode="walkthrough" title="Replay walkthrough">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 3l14 9-14 9V3z"/></svg>
+                                <span style="font-size:9px;">Walkthrough</span>
+                            </button>
+                            <button class="prop-btn rec-mode-btn" data-rec-mode="annotation-tour" title="Annotation tour">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                                <span style="font-size:9px;">Tour</span>
+                            </button>
+                            <button class="prop-btn rec-mode-btn" data-rec-mode="free" title="Free camera recording">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+                                <span style="font-size:9px;">Free</span>
+                            </button>
+                        </div>
+
+                        <!-- Mode options (shown/hidden per mode) -->
+                        <div id="rec-options-turntable" class="rec-options">
+                            <label class="prop-label" style="font-size:10px;">Speed</label>
+                            <input type="range" id="rec-turntable-speed" min="1" max="5" value="2" style="width:100%;">
+                            <label style="font-size:10px; display:flex; align-items:center; gap:4px; margin-top:4px;">
+                                <input type="checkbox" id="rec-turntable-full360" checked> Full 360&deg;
+                            </label>
+                        </div>
+                        <div id="rec-options-walkthrough" class="rec-options hidden">
+                            <p class="prop-hint">Plays the current walkthrough sequence while recording.</p>
+                        </div>
+                        <div id="rec-options-annotation-tour" class="rec-options hidden">
+                            <label class="prop-label" style="font-size:10px;">Dwell per annotation</label>
+                            <input type="range" id="rec-tour-dwell" min="1" max="8" value="3" style="width:100%;">
+                            <span id="rec-tour-dwell-label" style="font-size:10px; color:#999;">3s</span>
+                        </div>
+                        <div id="rec-options-free" class="rec-options hidden">
+                            <p class="prop-hint">Move the camera freely. Click stop when done.</p>
+                        </div>
+
+                        <!-- Record / Stop button -->
+                        <div style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+                            <button class="prop-btn accent" id="btn-rec-start" style="display:flex; align-items:center; gap:6px;">
+                                <span style="width:10px; height:10px; border-radius:50%; background:#e53935; display:inline-block;"></span>
+                                Record
+                            </button>
+                            <button class="prop-btn" id="btn-rec-stop" style="display:none; align-items:center; gap:6px;">
+                                <span style="width:10px; height:10px; background:#e53935; display:inline-block;"></span>
+                                Stop
+                            </button>
+                            <span id="rec-elapsed" style="font-size:10px; color:#999; font-family:monospace;"></span>
+                        </div>
+
+                        <!-- Trim UI container (populated by recording-trim.ts) -->
+                        <div id="rec-trim-container" class="hidden" style="margin-top:8px;"></div>
+
+                        <!-- Upload status -->
+                        <div id="rec-upload-status" class="hidden" style="margin-top:8px;">
+                            <span id="rec-upload-text" style="font-size:10px; color:var(--accent);"></span>
+                        </div>
                     </div>
                 </div>
 

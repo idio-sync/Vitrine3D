@@ -114,6 +114,20 @@ import {
     captureManualPreview as captureManualPreviewHandler
 } from './modules/screenshot-manager.js';
 import {
+    initRecordingManager,
+    startRecording as startRecordingHandler,
+    stopRecording as stopRecordingHandler,
+    discardRecording,
+    uploadRecording,
+    pollMediaStatus,
+    type RecordingMode,
+} from './modules/recording-manager.js';
+import { showTrimUI } from './modules/recording-trim.js';
+import {
+    startAnnotationTour,
+    stopAnnotationTour,
+} from './modules/annotation-tour.js';
+import {
     setSelectedObject as setSelectedObjectHandler,
     syncBothObjects as syncBothObjectsHandler,
     storeLastPositions as storeLastPositionsHandler,
@@ -685,6 +699,7 @@ function createEventWiringDeps(): EventWiringDeps {
         },
         export: { showExportPanel, downloadArchive, downloadGenericViewer, saveToLibrary },
         screenshots: { captureScreenshotToList, showViewfinder, captureManualPreview, hideViewfinder },
+        recording: { startRecording: handleStartRecording, stopRecording: handleStopRecording },
         metadata: { hideMetadataPanel, toggleMetadataDisplay, setupMetadataSidebar, populateMetadataDisplay },
         share: { copyShareLink },
         transform: { setSelectedObject, setTransformMode, resetTransform },
@@ -1061,6 +1076,17 @@ async function init() {
         getAnnotations: () => annotationSystem ? annotationSystem.toJSON() : [],
     });
     log.info(' Walkthrough controller initialized');
+
+    // Initialize recording manager
+    initRecordingManager({
+        renderer,
+        scene,
+        camera,
+        controls,
+        canvas: renderer.domElement,
+        postProcessing,
+    });
+    log.info(' Recording manager initialized');
 
     // Initialize measurement system
     measurementSystem = new MeasurementSystem(scene, camera, renderer, controls);
@@ -1474,6 +1500,97 @@ function hideViewfinder() {
 
 function captureManualPreview() {
     return captureManualPreviewHandler({ renderer, scene, camera, state, postProcessing });
+}
+
+// =============================================================================
+// RECORDING FUNCTIONS (delegated to recording-manager.ts)
+// =============================================================================
+
+function handleStartRecording(): void {
+    const activeMode = document.querySelector('.rec-mode-btn.active') as HTMLElement | null;
+    const mode = (activeMode?.dataset.recMode || 'free') as RecordingMode;
+
+    const startBtn = document.getElementById('btn-rec-start');
+    const stopBtn = document.getElementById('btn-rec-stop');
+    if (startBtn) startBtn.style.display = 'none';
+    if (stopBtn) stopBtn.style.display = 'flex';
+
+    const started = startRecordingHandler(mode, async (result) => {
+        if (startBtn) startBtn.style.display = 'flex';
+        if (stopBtn) stopBtn.style.display = 'none';
+
+        const container = document.getElementById('rec-trim-container');
+        if (!container) return;
+
+        const archiveTitle = state.metadata?.title || 'Untitled';
+        const defaultTitle = `${archiveTitle} - ${mode} - ${new Date().toLocaleDateString()}`;
+
+        const trimResult = await showTrimUI(container, result.blob, defaultTitle);
+        if (!trimResult) {
+            discardRecording();
+            return;
+        }
+
+        const statusEl = document.getElementById('rec-upload-status');
+        const statusText = document.getElementById('rec-upload-text');
+        if (statusEl) statusEl.classList.remove('hidden');
+        if (statusText) statusText.textContent = 'Uploading...';
+
+        const uploadResult = await uploadRecording({
+            title: trimResult.title,
+            archiveHash: state.currentArchiveUrl || undefined,
+            trimStart: trimResult.trimStart,
+            trimEnd: trimResult.trimEnd,
+        });
+
+        if (uploadResult) {
+            if (statusText) statusText.textContent = 'Processing...';
+            pollMediaStatus(uploadResult.id, (status) => {
+                if (statusText) {
+                    if (status === 'ready') {
+                        statusText.textContent = 'Ready!';
+                        setTimeout(() => { if (statusEl) statusEl.classList.add('hidden'); }, 3000);
+                    } else if (status === 'error') {
+                        statusText.textContent = 'Transcode failed — try again';
+                    }
+                }
+            });
+        } else {
+            if (statusEl) statusEl.classList.add('hidden');
+        }
+    });
+
+    if (!started) {
+        if (startBtn) startBtn.style.display = 'flex';
+        if (stopBtn) stopBtn.style.display = 'none';
+        return;
+    }
+
+    // Mode-specific automation
+    if (mode === 'turntable') {
+        controls.autoRotate = true;
+        const speedSlider = document.getElementById('rec-turntable-speed') as HTMLInputElement | null;
+        controls.autoRotateSpeed = parseFloat(speedSlider?.value || '2') * 2;
+    } else if (mode === 'walkthrough') {
+        import('./modules/walkthrough-controller.js').then(wc => wc.playPreview());
+    } else if (mode === 'annotation-tour') {
+        const dwellSlider = document.getElementById('rec-tour-dwell') as HTMLInputElement | null;
+        const dwellTime = (parseInt(dwellSlider?.value || '3')) * 1000;
+        startAnnotationTour(
+            { camera, controls, annotationSystem },
+            {
+                dwellTime,
+                flyDuration: 1500,
+                onComplete: () => stopRecordingHandler(),
+            }
+        );
+    }
+}
+
+function handleStopRecording(): void {
+    stopRecordingHandler();
+    controls.autoRotate = false;
+    stopAnnotationTour();
 }
 
 // Download archive — delegated to export-controller.ts

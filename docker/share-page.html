@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{TITLE}} — {{SITE_NAME}}</title>
+
+    <!-- OpenGraph -->
+    <meta property="og:type" content="video.other">
+    <meta property="og:site_name" content="{{SITE_NAME}}">
+    <meta property="og:url" content="{{SITE_URL}}/share/{{MEDIA_ID}}">
+    <meta property="og:title" content="{{TITLE}}">
+    <meta property="og:description" content="{{DESCRIPTION}}">
+    <meta property="og:image" content="{{THUMB_URL}}">
+    <meta property="og:video" content="{{MP4_URL}}">
+    <meta property="og:video:type" content="video/mp4">
+    <meta property="og:video:width" content="1280">
+    <meta property="og:video:height" content="720">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="player">
+    <meta name="twitter:title" content="{{TITLE}}">
+    <meta name="twitter:description" content="{{DESCRIPTION}}">
+    <meta name="twitter:image" content="{{THUMB_URL}}">
+    <meta name="twitter:player" content="{{SITE_URL}}/share/{{MEDIA_ID}}">
+    <meta name="twitter:player:width" content="1280">
+    <meta name="twitter:player:height" content="720">
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: #111;
+            color: #eee;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+            min-height: 100vh;
+            padding: 24px 16px 48px;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        .site-name {
+            font-size: 13px;
+            color: #777;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 24px;
+        }
+
+        .video-wrap {
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+            margin-bottom: 24px;
+        }
+
+        video {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .meta {
+            margin-bottom: 24px;
+        }
+
+        .meta h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .meta .description {
+            color: #aaa;
+            font-size: 0.95rem;
+            margin-bottom: 8px;
+        }
+
+        .meta .creator {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .btn-primary,
+        .btn-secondary {
+            display: inline-block;
+            padding: 10px 22px;
+            border-radius: 999px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: opacity 0.15s;
+            white-space: nowrap;
+        }
+
+        .btn-primary:hover,
+        .btn-secondary:hover {
+            opacity: 0.82;
+        }
+
+        .btn-primary {
+            background: #5a9e97;
+            color: #fff;
+        }
+
+        .btn-secondary {
+            background: #333;
+            color: #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="site-name">{{SITE_NAME}}</div>
+
+        <div class="video-wrap">
+            <video
+                src="{{MP4_URL}}"
+                poster="{{THUMB_URL}}"
+                controls
+                autoplay
+                muted
+                loop
+                playsinline
+            ></video>
+        </div>
+
+        <div class="meta">
+            <h1>{{TITLE}}</h1>
+            <p class="description">{{DESCRIPTION}}</p>
+            <p class="creator">{{CREATOR}}</p>
+        </div>
+
+        <div class="actions">
+            {{VIEW_3D_LINK}}
+            {{GIF_LINK}}
+        </div>
+    </div>
+</body>
+</html>

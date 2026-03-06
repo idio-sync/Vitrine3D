@@ -1645,6 +1645,30 @@ input[type="range"]::-webkit-slider-thumb:hover {
     opacity: 0.85;
 }
 
+@keyframes rec-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+/* Recording mode selector buttons */
+.rec-mode-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 4px;
+    font-size: 9px;
+}
+.rec-mode-btn.active {
+    background: rgba(90, 158, 151, 0.2);
+    border-color: var(--accent);
+}
+.rec-options.hidden { display: none; }
+
+/* Trim timeline */
+.trim-timeline:hover { background: #222; }
+
 @keyframes measure-pulse {
     0%, 100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 2px 8px rgba(255, 107, 53, 0.5); }
     50% { transform: translate(-50%, -50%) scale(1.2); box-shadow: 0 2px 16px rgba(255, 107, 53, 0.8); }

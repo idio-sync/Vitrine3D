@@ -28,7 +28,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const url = require('url');
-const { execFileSync } = require('child_process');
+const { execFileSync, execFile } = require('child_process');
 const busboy = require('busboy');
 const Database = require('/opt/node_modules/better-sqlite3');
 
@@ -51,6 +51,7 @@ const HTML_ROOT = '/usr/share/nginx/html';
 const META_DIR = path.join(HTML_ROOT, 'meta');
 const THUMBS_DIR = path.join(HTML_ROOT, 'thumbs');
 const ARCHIVES_DIR = path.join(HTML_ROOT, 'archives');
+const MEDIA_ROOT = path.join(HTML_ROOT, 'media');
 const DB_PATH = process.env.DB_PATH || '/data/vitrine.db';
 
 // --- Cloudflare Access auth ---
@@ -191,6 +192,25 @@ function initDb() {
             PRIMARY KEY (collection_id, archive_id)
         );
         CREATE INDEX IF NOT EXISTS idx_ca_archive ON collection_archives(archive_id);
+
+        CREATE TABLE IF NOT EXISTS media (
+            id          TEXT PRIMARY KEY,
+            archive_id  INTEGER REFERENCES archives(id) ON DELETE SET NULL,
+            title       TEXT,
+            mode        TEXT,
+            duration_ms INTEGER,
+            status      TEXT DEFAULT 'pending',
+            error_msg   TEXT,
+            trim_start  REAL DEFAULT 0,
+            trim_end    REAL DEFAULT 0,
+            created_at  TEXT DEFAULT (datetime('now')),
+            mp4_path    TEXT,
+            gif_path    TEXT,
+            thumb_path  TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_media_archive ON media(archive_id);
+        CREATE INDEX IF NOT EXISTS idx_media_status ON media(status);
     `);
 }
 
@@ -267,6 +287,13 @@ function readJsonBody(req, cb) {
  */
 function archiveHash(archiveUrl) {
     return crypto.createHash('sha256').update(archiveUrl).digest('hex').slice(0, 16);
+}
+
+/**
+ * Generate a random 16-character hex ID for media records.
+ */
+function generateMediaId() {
+    return crypto.randomBytes(8).toString('hex');
 }
 
 
@@ -1450,6 +1477,77 @@ function handleReorderCollection(req, res, slug) {
     });
 }
 
+// Share page HTML (lazy-loaded)
+let _sharePageHtml = null;
+function getSharePageHtml() {
+    if (_sharePageHtml === null) {
+        try { _sharePageHtml = fs.readFileSync('/opt/share-page.html', 'utf8'); }
+        catch { _sharePageHtml = ''; }
+    }
+    return _sharePageHtml;
+}
+
+/**
+ * GET /share/:mediaId — serve the share preview page for a media item.
+ * Reads the share-page.html template and substitutes {{PLACEHOLDER}} values.
+ */
+function handleSharePage(req, res, mediaId) {
+    const row = db.prepare(`
+        SELECT m.*, a.hash AS archive_hash, a.title AS archive_title,
+               a.description AS archive_description, a.filename AS archive_filename
+        FROM media m
+        LEFT JOIN archives a ON a.id = m.archive_id
+        WHERE m.id = ? AND m.status = 'ready'
+    `).get(mediaId);
+
+    if (!row) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Share not found');
+        return;
+    }
+
+    const template = getSharePageHtml();
+    if (!template) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Share page template not found');
+        return;
+    }
+
+    const title = escapeHtml(row.title || row.archive_title || SITE_NAME);
+    const description = escapeHtml(row.archive_description || SITE_DESCRIPTION);
+    const creator = escapeHtml('');
+    const mp4Url = row.mp4_path ? SITE_URL + row.mp4_path : '';
+    const thumbUrl = row.thumb_path ? SITE_URL + row.thumb_path : '';
+
+    let view3dLink = '';
+    if (row.archive_filename) {
+        view3dLink = '<a class="btn-primary" href="/?archive=/archives/' + encodeURIComponent(row.archive_filename) + '">View in 3D</a>';
+    }
+
+    let gifLink = '';
+    if (row.gif_path) {
+        gifLink = '<a class="btn-secondary" href="' + escapeHtml(row.gif_path) + '" download>Download GIF</a>';
+    }
+
+    const html = template
+        .replace(/\{\{TITLE\}\}/g, title)
+        .replace(/\{\{DESCRIPTION\}\}/g, description)
+        .replace(/\{\{SITE_NAME\}\}/g, escapeHtml(SITE_NAME))
+        .replace(/\{\{SITE_URL\}\}/g, escapeHtml(SITE_URL))
+        .replace(/\{\{MEDIA_ID\}\}/g, escapeHtml(mediaId))
+        .replace(/\{\{MP4_URL\}\}/g, escapeHtml(mp4Url))
+        .replace(/\{\{THUMB_URL\}\}/g, escapeHtml(thumbUrl))
+        .replace(/\{\{CREATOR\}\}/g, creator)
+        .replace(/\{\{VIEW_3D_LINK\}\}/g, view3dLink)
+        .replace(/\{\{GIF_LINK\}\}/g, gifLink);
+
+    res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache'
+    });
+    res.end(html);
+}
+
 /**
  * GET /collection/:slug — serve the kiosk HTML for a collection page.
  * Injects collection slug into window.__VITRINE_CLEAN_URL for client-side rendering.
@@ -1807,9 +1905,320 @@ async function handleCompleteChunk(req, res, uploadId) {
     }
 }
 
+// --- Media Transcode Pipeline ---
+
+/**
+ * Finalise a completed transcode: update DB with paths, clean up raw + palette files.
+ */
+function finishTranscode(mediaId, mp4Path, gifPath, thumbPath, mediaDir, rawPath, palettePath) {
+    db.prepare(`
+        UPDATE media SET status = 'ready', mp4_path = ?, gif_path = ?, thumb_path = ? WHERE id = ?
+    `).run(
+        mp4Path.replace(HTML_ROOT, '') || null,
+        gifPath.replace(HTML_ROOT, '') || null,
+        thumbPath.replace(HTML_ROOT, '') || null,
+        mediaId
+    );
+    // Clean up raw WebM and GIF palette
+    try { fs.unlinkSync(rawPath); } catch {}
+    try { fs.unlinkSync(palettePath); } catch {}
+}
+
+/**
+ * Run ffmpeg transcode pipeline for a media record (non-blocking, callback-based).
+ * Steps: MP4 conversion → thumbnail → GIF palette → GIF encode → DB update.
+ */
+function transcodeMedia(mediaId) {
+    const row = db.prepare('SELECT * FROM media WHERE id = ?').get(mediaId);
+    if (!row) return;
+
+    const mediaDir = path.join(MEDIA_ROOT, mediaId);
+    const rawPath = path.join(mediaDir, 'raw.webm');
+    const mp4Path = path.join(mediaDir, 'output.mp4');
+    const thumbPath_ = path.join(mediaDir, 'thumb.jpg');
+    const palettePath = path.join(mediaDir, 'palette.png');
+    const gifPath = path.join(mediaDir, 'output.gif');
+
+    db.prepare("UPDATE media SET status = 'processing' WHERE id = ?").run(mediaId);
+
+    const trimStart = row.trim_start || 0;
+    const trimEnd = row.trim_end || 0;
+
+    // Build ffmpeg trim args
+    const trimArgs = [];
+    if (trimStart > 0) { trimArgs.push('-ss', String(trimStart)); }
+    if (trimEnd > trimStart) { trimArgs.push('-to', String(trimEnd)); }
+
+    // Step 1: WebM → MP4
+    const mp4Args = [
+        ...trimArgs,
+        '-i', rawPath,
+        '-c:v', 'libx264',
+        '-preset', 'fast',
+        '-crf', '23',
+        '-movflags', '+faststart',
+        '-an',
+        '-y', mp4Path
+    ];
+
+    execFile('ffmpeg', mp4Args, (err) => {
+        if (err) {
+            console.error('[media] ffmpeg MP4 error:', err.message);
+            db.prepare("UPDATE media SET status = 'error', error_msg = ? WHERE id = ?").run(err.message, mediaId);
+            return;
+        }
+
+        // Step 2: Thumbnail — first frame as 512x512 JPEG
+        const thumbArgs = [
+            '-i', mp4Path,
+            '-vframes', '1',
+            '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2',
+            '-y', thumbPath_
+        ];
+
+        execFile('ffmpeg', thumbArgs, (err2) => {
+            if (err2) {
+                console.error('[media] ffmpeg thumbnail error:', err2.message);
+                // Non-fatal — continue with GIF
+            }
+
+            // Step 3: GIF palette generation
+            const paletteArgs = [
+                ...trimArgs,
+                '-i', rawPath,
+                '-vf', 'fps=15,scale=480:-1:flags=lanczos,palettegen',
+                '-y', palettePath
+            ];
+
+            execFile('ffmpeg', paletteArgs, (err3) => {
+                if (err3) {
+                    console.error('[media] ffmpeg palette error:', err3.message);
+                    // Skip GIF, still mark ready with MP4 + thumb only
+                    finishTranscode(mediaId, mp4Path, '', thumbPath_, mediaDir, rawPath, palettePath);
+                    return;
+                }
+
+                // Step 4: GIF encode
+                const gifArgs = [
+                    ...trimArgs,
+                    '-i', rawPath,
+                    '-i', palettePath,
+                    '-lavfi', 'fps=15,scale=480:-1:flags=lanczos[x];[x][1:v]paletteuse',
+                    '-y', gifPath
+                ];
+
+                execFile('ffmpeg', gifArgs, (err4) => {
+                    if (err4) {
+                        console.error('[media] ffmpeg GIF error:', err4.message);
+                        finishTranscode(mediaId, mp4Path, '', thumbPath_, mediaDir, rawPath, palettePath);
+                        return;
+                    }
+                    finishTranscode(mediaId, mp4Path, gifPath, thumbPath_, mediaDir, rawPath, palettePath);
+                });
+            });
+        });
+    });
+}
+
+// --- Media API Handlers ---
+
+/**
+ * Convert a media DB row into an API response object.
+ */
+function buildMediaObject(row) {
+    return {
+        id: row.id,
+        archive_id: row.archive_id || null,
+        archive_hash: row.archive_hash || null,
+        archive_title: row.archive_title || null,
+        title: row.title || null,
+        mode: row.mode || null,
+        duration_ms: row.duration_ms || 0,
+        status: row.status,
+        error_msg: row.error_msg || null,
+        trim_start: row.trim_start || 0,
+        trim_end: row.trim_end || 0,
+        created_at: row.created_at ? row.created_at.replace(' ', 'T') + 'Z' : null,
+        mp4_path: row.mp4_path || null,
+        gif_path: row.gif_path || null,
+        thumb_path: row.thumb_path || null,
+        share_url: '/share/' + row.id,
+    };
+}
+
+/**
+ * GET /api/media/:id — get a single media record by ID, joined with archive info.
+ */
+function handleGetMedia(req, res, mediaId) {
+    try {
+        const row = db.prepare(`
+            SELECT m.*, a.hash AS archive_hash, a.title AS archive_title
+            FROM media m
+            LEFT JOIN archives a ON a.id = m.archive_id
+            WHERE m.id = ?
+        `).get(mediaId);
+        if (!row) return sendJson(res, 404, { error: 'Media not found' });
+        sendJson(res, 200, buildMediaObject(row));
+    } catch (err) {
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * GET /api/media — list media records, optionally filtered by archive_hash query param.
+ */
+function handleListMedia(req, res, query) {
+    try {
+        let sql = `
+            SELECT m.*, a.hash AS archive_hash, a.title AS archive_title
+            FROM media m
+            LEFT JOIN archives a ON a.id = m.archive_id
+        `;
+        const params = [];
+        if (query.archive_hash) {
+            sql += ' WHERE a.hash = ?';
+            params.push(query.archive_hash);
+        }
+        sql += ' ORDER BY m.created_at DESC';
+        const rows = db.prepare(sql).all(...params);
+        sendJson(res, 200, { media: rows.map(buildMediaObject) });
+    } catch (err) {
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * DELETE /api/media/:id — delete media files and DB row.
+ */
+function handleDeleteMedia(req, res, mediaId) {
+    if (!requireAuth(req, res)) return;
+    if (!checkCsrf(req, res)) return;
+
+    try {
+        const row = db.prepare('SELECT * FROM media WHERE id = ?').get(mediaId);
+        if (!row) return sendJson(res, 404, { error: 'Media not found' });
+
+        // Delete media directory (contains all generated files)
+        const mediaDir = path.join(MEDIA_ROOT, mediaId);
+        try { fs.rmSync(mediaDir, { recursive: true, force: true }); } catch {}
+
+        db.prepare('DELETE FROM media WHERE id = ?').run(mediaId);
+
+        sendJson(res, 200, { deleted: true, id: mediaId });
+    } catch (err) {
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * POST /api/media/upload — upload a WebM recording and kick off transcoding.
+ * Multipart fields: video (file), archive_hash, title, mode, duration_ms, trim_start, trim_end
+ */
+function handleMediaUpload(req, res) {
+    if (!requireAuth(req, res)) return;
+
+    const id = generateMediaId();
+    const mediaDir = path.join(MEDIA_ROOT, id);
+    let rawPath = path.join(mediaDir, 'raw.webm');
+
+    let archiveHash_ = '';
+    let title = '';
+    let mode = '';
+    let duration_ms = 0;
+    let trim_start = 0;
+    let trim_end = 0;
+
+    let bb;
+    try {
+        bb = busboy({ headers: req.headers, limits: { fileSize: 200 * 1024 * 1024 } });
+    } catch (err) {
+        return sendJson(res, 400, { error: err.message });
+    }
+
+    let fileReceived = false;
+    let settled = false;
+
+    function finish(err) {
+        if (settled) return;
+        settled = true;
+        if (err) {
+            try { fs.rmSync(mediaDir, { recursive: true, force: true }); } catch {}
+            if (err.message === 'LIMIT') {
+                return sendJson(res, 413, { error: 'Upload exceeds 200 MB limit' });
+            }
+            return sendJson(res, 500, { error: err.message });
+        }
+
+        // Look up archive_id from hash or URL
+        let archive_id = null;
+        if (archiveHash_) {
+            // archiveHash_ may be a hash or an archive URL — try both
+            let archiveRow = db.prepare('SELECT id FROM archives WHERE hash = ?').get(archiveHash_);
+            if (!archiveRow) {
+                // Try treating it as a URL and computing the hash
+                const computed = archiveHash(archiveHash_);
+                archiveRow = db.prepare('SELECT id FROM archives WHERE hash = ?').get(computed);
+            }
+            if (archiveRow) archive_id = archiveRow.id;
+        }
+
+        try {
+            db.prepare(`
+                INSERT INTO media (id, archive_id, title, mode, duration_ms, status, trim_start, trim_end)
+                VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
+            `).run(id, archive_id, title || null, mode || null, duration_ms || 0, trim_start || 0, trim_end || 0);
+        } catch (dbErr) {
+            try { fs.rmSync(mediaDir, { recursive: true, force: true }); } catch {}
+            return sendJson(res, 500, { error: dbErr.message });
+        }
+
+        sendJson(res, 200, { id, status: 'pending' });
+
+        // Kick off transcode asynchronously
+        transcodeMedia(id);
+    }
+
+    bb.on('field', (name, val) => {
+        if (name === 'archive_hash') archiveHash_ = val;
+        else if (name === 'title') title = val;
+        else if (name === 'mode') mode = val;
+        else if (name === 'duration_ms') duration_ms = parseInt(val, 10) || 0;
+        else if (name === 'trim_start') trim_start = parseFloat(val) || 0;
+        else if (name === 'trim_end') trim_end = parseFloat(val) || 0;
+    });
+
+    bb.on('file', (fieldname, file, info) => {
+        if (fieldname !== 'video') {
+            file.resume();
+            return;
+        }
+        fileReceived = true;
+        try { fs.mkdirSync(mediaDir, { recursive: true }); } catch {}
+        const writeStream = fs.createWriteStream(rawPath);
+        writeStream.on('error', finish);
+        file.on('limit', () => {
+            req.unpipe(bb);
+            bb.destroy();
+            finish(new Error('LIMIT'));
+        });
+        file.pipe(writeStream);
+    });
+
+    bb.on('close', () => {
+        if (!fileReceived) return finish(new Error('No video field in upload'));
+        finish(null);
+    });
+
+    bb.on('error', finish);
+    req.on('error', finish);
+    req.pipe(bb);
+}
+
 // --- Server ---
 
 initDb();
+if (!fs.existsSync(MEDIA_ROOT)) fs.mkdirSync(MEDIA_ROOT, { recursive: true });
+
 const server = http.createServer((req, res) => {
     const parsed = url.parse(req.url);
     const pathname = parsed.pathname;
@@ -1847,6 +2256,17 @@ const server = http.createServer((req, res) => {
     if (collPageMatch && req.method === 'GET') {
         return handleCollectionPage(req, res, collPageMatch[1]);
     }
+
+    // Share preview pages: /share/{16-char-hex-id}
+    const shareMatch = pathname.match(/^\/share\/([a-f0-9]{16})$/);
+    if (shareMatch) return handleSharePage(req, res, shareMatch[1]);
+
+    // Media routes (GET/LIST public; DELETE auth-gated inside handler)
+    const parsedUrl = url.parse(req.url, true);
+    const mediaMatch = pathname.match(/^\/api\/media\/([a-f0-9]{16})$/);
+    if (pathname === '/api/media' && req.method === 'GET') return handleListMedia(req, res, parsedUrl.query || {});
+    if (mediaMatch && req.method === 'GET') return handleGetMedia(req, res, mediaMatch[1]);
+    if (mediaMatch && req.method === 'DELETE') return handleDeleteMedia(req, res, mediaMatch[1]);
 
     // Admin routes (only when enabled)
     if (ADMIN_ENABLED) {
@@ -1937,6 +2357,9 @@ const server = http.createServer((req, res) => {
         if (req.method === 'GET' && pathname === '/api/csrf-token') {
             return handleCsrfToken(req, res);
         }
+
+        // Media routes
+        if (pathname === '/api/media/upload' && req.method === 'POST') return handleMediaUpload(req, res);
     }
 
     // Default: bot HTML response (nginx only routes bots here)

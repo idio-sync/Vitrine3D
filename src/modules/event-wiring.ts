@@ -524,6 +524,33 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         notify.success('Manual preview cleared');
     });
 
+    // ─── Recording controls ────────────────────────────────
+    if (deps.recording) {
+        // Mode selector buttons
+        document.querySelectorAll('.rec-mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.rec-mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const mode = (btn as HTMLElement).dataset.recMode || 'free';
+                document.querySelectorAll('.rec-options').forEach(el => el.classList.add('hidden'));
+                const optionsEl = document.getElementById(`rec-options-${mode}`);
+                if (optionsEl) optionsEl.classList.remove('hidden');
+            });
+        });
+
+        // Dwell time slider label sync
+        const dwellSlider = document.getElementById('rec-tour-dwell') as HTMLInputElement | null;
+        const dwellLabel = document.getElementById('rec-tour-dwell-label');
+        if (dwellSlider && dwellLabel) {
+            dwellSlider.addEventListener('input', () => {
+                dwellLabel.textContent = `${dwellSlider.value}s`;
+            });
+        }
+
+        addListener('btn-rec-start', 'click', deps.recording.startRecording);
+        addListener('btn-rec-stop', 'click', deps.recording.stopRecording);
+    }
+
     // ─── Metadata panel controls ─────────────────────────────
     addListener('btn-close-sidebar', 'click', deps.metadata.hideMetadataPanel);
     addListener('btn-add-custom-field', 'click', addCustomField);

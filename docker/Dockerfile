@@ -15,7 +15,7 @@ ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSIO
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-x86_64.tar.xz /tmp/
 # libstdc++ is required by the Node binary and better-sqlite3 native addon.
 # nodejs is NOT installed via apk — the build-stage binary is copied below for ABI compatibility.
-RUN apk add --no-cache xz gettext python3 unzip libstdc++ && \
+RUN apk add --no-cache xz gettext python3 unzip libstdc++ ffmpeg && \
     tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && \
     tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz && \
     rm /tmp/s6-overlay-*.tar.xz
@@ -38,12 +38,13 @@ COPY docker/config.js.template /usr/share/nginx/html/config.js.template
 # Copy OG/oEmbed API server, admin panel, and metadata extraction script
 COPY docker/meta-server.js /opt/meta-server.js
 COPY docker/admin.html /opt/admin.html
+COPY docker/share-page.html /opt/share-page.html
 COPY docker/extract-meta.sh /opt/extract-meta.sh
 RUN chmod +x /opt/extract-meta.sh
 COPY docker/migrate-to-sqlite.js /opt/migrate-to-sqlite.js
 
 # Create directories for archive metadata, thumbnails, and SQLite database
-RUN mkdir -p /usr/share/nginx/html/meta /usr/share/nginx/html/thumbs /data
+RUN mkdir -p /usr/share/nginx/html/meta /usr/share/nginx/html/thumbs /usr/share/nginx/html/media /data
 
 # Environment variables with defaults
 ENV DEFAULT_ARCHIVE_URL=""

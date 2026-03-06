@@ -370,6 +370,10 @@ export interface EventWiringDeps {
         playPreview: () => void;
         stopPreview: () => void;
     };
+    recording?: {
+        startRecording: () => void;
+        stopRecording: () => void;
+    };
     tauri: {
         wireNativeDialogsIfAvailable: () => void;
     };
