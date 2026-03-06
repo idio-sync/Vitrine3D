@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::sync::Mutex;
-use tauri::{Emitter, Manager, State};
+use tauri::{Manager, State};
 use uuid::Uuid;
 
 // =============================================================================
@@ -213,18 +213,24 @@ pub fn run() {
         ]);
 
     // Single-instance plugin is desktop-only (not available on Android/iOS).
-    // When a second instance is launched (e.g. via deep link), forward any
-    // vitrine3d:// URLs to the frontend so the auth flow completes.
+    // When a second instance is launched (e.g. via deep link), inject any
+    // vitrine3d:// URLs directly into the webview via eval() — more reliable
+    // than the Tauri event system for cross-process deep link delivery.
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
-            }
-            // Forward deep link URLs from the second instance's CLI args
-            for arg in &args {
-                if arg.starts_with("vitrine3d://") {
-                    let _ = app.emit("deep-link-received", arg.clone());
+                // Inject deep link URLs directly into the webview JS context
+                for arg in &args {
+                    if arg.starts_with("vitrine3d://") {
+                        let escaped = arg.replace('\\', "\\\\").replace('\"', "\\\"");
+                        let js = format!(
+                            "window.dispatchEvent(new CustomEvent('vitrine3d:deep-link', {{ detail: \"{}\" }}))",
+                            escaped
+                        );
+                        let _ = window.eval(&js);
+                    }
                 }
             }
         }));

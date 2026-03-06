@@ -28,11 +28,12 @@ if ((window as any).__TAURI__) {
 
     // Strategy 2: custom event from single-instance callback (forwarded deep links)
     // This catches URLs from second-instance launches that single-instance intercepts.
-    (window as any).__TAURI__.event.listen('deep-link-received', (event: any) => {
-        if (typeof event.payload === 'string') {
-            handleDeepLinkUrl(event.payload);
+    // The Rust side injects a CustomEvent('vitrine3d:deep-link') directly via eval().
+    window.addEventListener('vitrine3d:deep-link', ((event: CustomEvent) => {
+        if (typeof event.detail === 'string') {
+            handleDeepLinkUrl(event.detail);
         }
-    });
+    }) as EventListener);
 }
 
 // Check page modes in priority order:
