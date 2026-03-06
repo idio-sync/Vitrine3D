@@ -150,6 +150,19 @@ jobs:
             fi
           fi
 
+      - name: Register vitrine3d:// deep link scheme
+        run: |
+          MANIFEST=$(find src-tauri/gen/android -name "AndroidManifest.xml" -path "*/main/*" | head -1)
+          if [ -n "$MANIFEST" ]; then
+            echo "Patching $MANIFEST with vitrine3d:// intent filter"
+            # Insert intent filter before the closing </activity> tag
+            sed -i 's|</activity>|<intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="vitrine3d"/></intent-filter></activity>|' "$MANIFEST"
+            echo "=== Patched manifest ==="
+            cat "$MANIFEST"
+          else
+            echo "::warning::No AndroidManifest.xml found — skipping deep link patch"
+          fi
+
       - name: Build APK
         run: npx tauri android build --apk --target aarch64 --target armv7 --debug
 

@@ -733,18 +733,12 @@ function injectLibraryButton(): void {
         if (hasCfToken()) {
             await showLibraryInApp();
         } else if ((window as any).__TAURI__) {
-            const isAndroid = /android/i.test(navigator.userAgent);
-            if (isAndroid) {
-                // Android has no deep-link scheme — show library in-app directly
-                // (cfAuthFetch will make plain requests if no token is stored)
-                log.info('Android: showing library in-app without deep-link auth');
-                await showLibraryInApp();
-            } else {
-                // Desktop: open auth callback URL, deep link redirects back with token
-                log.info('Opening browser for CF Access auth');
-                const { open } = await import('@tauri-apps/plugin-shell');
-                await open(libraryUrl + '/api/auth-callback');
-            }
+            // Open browser for CF Access auth — after login, the server redirects
+            // to vitrine3d://auth?token=JWT which the app intercepts via deep link
+            // (desktop) or intent filter (Android, patched in CI).
+            log.info('Opening browser for CF Access auth');
+            const { open } = await import('@tauri-apps/plugin-shell');
+            await open(libraryUrl + '/api/auth-callback');
         } else {
             window.location.href = libraryUrl + '/library';
         }
