@@ -152,7 +152,11 @@ export class SceneManager {
         this.webgpuSupported = false;
         this._canvas = null;
         this._canvasRight = null;
-        this._antialias = true;
+        // iOS/iPadOS: disable antialias — MSAA buffers double GPU memory and
+        // Spark.js splat rendering doesn't benefit from hardware AA.
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        this._antialias = !isIOS;
         this.onRendererChanged = null;
 
         // Lighting
@@ -248,7 +252,7 @@ export class SceneManager {
         // combined with splat rendering and post-processing easily exceed that.
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
             || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        const maxRatio = isIOS ? Math.min(RENDERER.MAX_PIXEL_RATIO, 1.5) : RENDERER.MAX_PIXEL_RATIO;
+        const maxRatio = isIOS ? 1.0 : RENDERER.MAX_PIXEL_RATIO;
         newRenderer.setPixelRatio(Math.min(window.devicePixelRatio, maxRatio));
         newRenderer.outputColorSpace = THREE.SRGBColorSpace;
         newRenderer.toneMapping = THREE.NoToneMapping;

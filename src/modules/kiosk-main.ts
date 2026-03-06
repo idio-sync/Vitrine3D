@@ -1762,7 +1762,8 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             log.info('Applied viewer settings:', manifest.viewer_settings);
 
             // Apply post-processing from archive settings
-            if (manifest.viewer_settings.post_processing) {
+            // Skip on SD tier — render targets double GPU memory and Safari kills the tab
+            if (manifest.viewer_settings.post_processing && state.qualityResolved !== QUALITY_TIER.SD) {
                 const ppSettings = manifest.viewer_settings.post_processing;
                 // Check if any effect is enabled
                 const anyEnabled = ppSettings.ssao?.enabled || ppSettings.bloom?.enabled ||
