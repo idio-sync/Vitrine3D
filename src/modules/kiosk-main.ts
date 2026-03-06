@@ -340,11 +340,16 @@ export async function init(): Promise<void> {
     pointcloudGroup = sceneManager.pointcloudGroup;
     fpsElement = document.getElementById('fps-counter');
 
+    // Resolve quality tier early so SparkRenderer gets the correct LOD budget at creation
+    const glCtxInit = renderer ? renderer.getContext() : null;
+    state.qualityResolved = resolveQualityTier(state.qualityTier, glCtxInit);
+    log.info('Quality tier resolved at init:', state.qualityResolved);
+
     // Create SparkRenderer only when starting with WebGL — Spark.js requires
     // WebGL context (uses .flush()). If starting with WebGPU, SparkRenderer
     // will be created in onRendererChanged when switching to WebGL for splat loading.
     if (sceneManager.rendererType === 'webgl') {
-        const lodBudget = getLodBudget(state.qualityResolved || QUALITY_TIER.HD);
+        const lodBudget = getLodBudget(state.qualityResolved);
         sparkRenderer = createSparkRenderer({
             renderer: renderer,
             clipXY: 2.0,           // Prevent edge popping without excessive overdraw (default: 1.4)
@@ -384,7 +389,7 @@ export async function init(): Promise<void> {
             scene.remove(sparkRenderer);
             if (sparkRenderer.dispose) sparkRenderer.dispose();
         }
-        const lodBudget = getLodBudget(state.qualityResolved || QUALITY_TIER.HD);
+        const lodBudget = getLodBudget(state.qualityResolved);
         sparkRenderer = createSparkRenderer({
             renderer: newRenderer,
             clipXY: 2.0,
@@ -1459,6 +1464,14 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         // This avoids renderer switching mid-load which can cause rendering corruption
         if (contentInfo.hasSplat && sceneManager) {
             await sceneManager.ensureWebGLRenderer();
+        }
+
+        // Apply resolved LOD budget to SparkRenderer AFTER renderer switch —
+        // ensureWebGLRenderer may recreate SparkRenderer with the HD default,
+        // so we must override lodSplatCount after that completes.
+        if (sparkRenderer && isSparkV2) {
+            sparkRenderer.lodSplatCount = getLodBudget(state.qualityResolved);
+            log.info(`SparkRenderer lodSplatCount set to ${sparkRenderer.lodSplatCount} before asset load`);
         }
 
         // Show branded loading screen with thumbnail, title, and content types
