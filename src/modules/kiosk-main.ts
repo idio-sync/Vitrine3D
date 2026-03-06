@@ -735,10 +735,10 @@ function injectLibraryButton(): void {
         } else if ((window as any).__TAURI__) {
             const isAndroid = /android/i.test(navigator.userAgent);
             if (isAndroid) {
-                // Android has no deep-link scheme registered — open library directly in browser
-                log.info('Android: opening library in browser');
-                const { open } = await import('@tauri-apps/plugin-shell');
-                await open(libraryUrl + '/library');
+                // Android has no deep-link scheme — show library in-app directly
+                // (cfAuthFetch will make plain requests if no token is stored)
+                log.info('Android: showing library in-app without deep-link auth');
+                await showLibraryInApp();
             } else {
                 // Desktop: open auth callback URL, deep link redirects back with token
                 log.info('Opening browser for CF Access auth');
