@@ -492,6 +492,9 @@ export async function init(): Promise<void> {
         log.warn(`Layout "${requestedLayout}" requested but no layout module available — using sidebar`);
     }
 
+    // Inject library button after layout module may have replaced picker HTML
+    injectLibraryButton();
+
     // Wire up UI
     setupViewerUI();
     initImageLightbox();
@@ -666,19 +669,10 @@ function createFilePicker(): HTMLElement {
     picker.id = 'kiosk-file-picker';
     picker.className = 'hidden';
 
-    // "Browse Library" button — shown only on Tauri home screen when server URL is configured
-    const config = window.APP_CONFIG || {};
-    const libraryUrl = (import.meta.env.VITE_APP_LIBRARY_URL as string | undefined) || '';
-    const showLibrary = config.home && libraryUrl;
-    const libraryHtml = showLibrary
-        ? `<button id="kiosk-library-btn" class="kiosk-library-btn" type="button">Browse Library</button>`
-        : '';
-
     picker.innerHTML = `
         <div class="kiosk-picker-content">
             <h1>Vitrine3D</h1>
             <p>Open a 3D file or archive to view its content.</p>
-            ${libraryHtml}
             <div class="kiosk-picker-box" id="kiosk-drop-zone">
                 <div class="kiosk-picker-icon">&#128194;</div>
                 <p>Select a <strong>3D file</strong> or <strong>archive</strong></p>
@@ -695,32 +689,57 @@ function createFilePicker(): HTMLElement {
         </div>
     `;
 
-    // Wire up library button
-    if (showLibrary) {
-        const libraryBtn = picker.querySelector('#kiosk-library-btn');
-        if (libraryBtn) {
-            libraryBtn.addEventListener('click', async () => {
-                if (hasCfToken()) {
-                    await showLibraryInApp();
-                } else if ((window as any).__TAURI__) {
-                    // Open system browser for CF Access login
-                    log.info('Opening browser for CF Access auth');
-                    const { open } = await import('@tauri-apps/plugin-shell');
-                    await open(libraryUrl + '/api/auth-callback');
-                } else {
-                    window.location.href = libraryUrl + '/library';
-                }
-            });
-
-            // Listen for auth callback from deep link
-            window.addEventListener('vitrine3d:auth', () => {
-                showLibraryInApp();
-            }, { once: true });
-        }
-    }
-
     document.body.appendChild(picker);
     return picker;
+}
+
+/**
+ * Inject the "Browse Library" button into the file picker.
+ * Called AFTER layout module customization so it survives innerHTML replacement.
+ */
+function injectLibraryButton(): void {
+    const config = window.APP_CONFIG || {};
+    const libraryUrl = (import.meta.env.VITE_APP_LIBRARY_URL as string | undefined) || '';
+    if (!config.home || !libraryUrl) return;
+
+    const picker = document.getElementById('kiosk-file-picker');
+    if (!picker) return;
+
+    // Don't double-inject
+    if (picker.querySelector('#kiosk-library-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'kiosk-library-btn';
+    btn.className = 'kiosk-library-btn';
+    btn.type = 'button';
+    btn.textContent = 'Browse Library';
+
+    // Insert before the drop zone (or at end of picker if no drop zone)
+    const dropZone = picker.querySelector('#kiosk-drop-zone');
+    if (dropZone) {
+        dropZone.parentElement!.insertBefore(btn, dropZone);
+    } else {
+        picker.appendChild(btn);
+    }
+
+    btn.addEventListener('click', async () => {
+        if (hasCfToken()) {
+            await showLibraryInApp();
+        } else if ((window as any).__TAURI__) {
+            log.info('Opening browser for CF Access auth');
+            const { open } = await import('@tauri-apps/plugin-shell');
+            await open(libraryUrl + '/api/auth-callback');
+        } else {
+            window.location.href = libraryUrl + '/library';
+        }
+    });
+
+    // Listen for auth callback from deep link
+    window.addEventListener('vitrine3d:auth', () => {
+        showLibraryInApp();
+    }, { once: true });
+
+    log.info('Library button injected');
 }
 
 function createClickGate(): HTMLElement {

@@ -31,7 +31,7 @@ struct FileHandleStore {
 /// ipc_read_bytes/ipc_close_file commands work transparently.
 #[cfg(target_os = "android")]
 fn open_content_uri(uri: &str, store: &State<FileHandleStore>) -> Result<(String, u64), String> {
-    use jni::objects::{JObject, JValue};
+    use jni::objects::{JObject, JString, JValue};
     use std::io::Write;
 
     let ctx = ndk_context::android_context();
@@ -49,10 +49,11 @@ fn open_content_uri(uri: &str, store: &State<FileHandleStore>) -> Result<(String
 
     // Uri parsed = Uri.parse(uri);
     let uri_jstr = env.new_string(uri).map_err(|e| format!("new_string: {e}"))?;
+    let uri_jobj: JObject = uri_jstr.into();
     let parsed_uri = env.call_static_method(
         "android/net/Uri", "parse",
         "(Ljava/lang/String;)Landroid/net/Uri;",
-        &[JValue::Object(&uri_jstr.into())],
+        &[JValue::Object(&uri_jobj)],
     )
         .and_then(|v| v.l())
         .map_err(|e| format!("Uri.parse: {e}"))?;
@@ -73,11 +74,12 @@ fn open_content_uri(uri: &str, store: &State<FileHandleStore>) -> Result<(String
         "()Ljava/io/File;", &[])
         .and_then(|v| v.l())
         .map_err(|e| format!("getCacheDir: {e}"))?;
-    let cache_path_jstr = env.call_method(&cache_dir, "getAbsolutePath",
+    let cache_path_obj = env.call_method(&cache_dir, "getAbsolutePath",
         "()Ljava/lang/String;", &[])
         .and_then(|v| v.l())
         .map_err(|e| format!("getAbsolutePath: {e}"))?;
-    let cache_path: String = env.get_string((&cache_path_jstr).into())
+    let cache_path_jstring: JString = cache_path_obj.into();
+    let cache_path: String = env.get_string(&cache_path_jstring)
         .map_err(|e| format!("get_string: {e}"))?
         .into();
 
@@ -92,7 +94,7 @@ fn open_content_uri(uri: &str, store: &State<FileHandleStore>) -> Result<(String
 
     loop {
         let n = env.call_method(&input_stream, "read", "([B)I",
-            &[JValue::Object(jbuf.as_ref())])
+            &[JValue::Object(&jbuf)])
             .and_then(|v| v.i())
             .map_err(|e| format!("InputStream.read: {e}"))?;
         if n <= 0 { break; }
