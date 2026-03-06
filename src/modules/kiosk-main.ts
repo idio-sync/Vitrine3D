@@ -828,17 +828,17 @@ function setupFilePicker(): void {
     const dropZone = document.getElementById('kiosk-drop-zone');
 
     if (btn && input) {
-        // In Tauri, use native OS file dialog (browser <input type="file"> is not
-        // supported in Tauri's Android WebView). On Android, skip file extension
-        // filters because the dialog maps them to MIME types and custom extensions
-        // like .a3d/.a3z have no MIME mapping, making them unselectable.
-        if (window.__TAURI__) {
-            const isAndroid = /android/i.test(navigator.userAgent);
+        // On Android, the Tauri dialog returns content:// URIs that neither
+        // fs.readFile, Rust File::open, nor the asset protocol can read.
+        // Use the browser <input type="file"> instead — the accept attribute
+        // includes */* so all file types are selectable.
+        const isAndroid = /android/i.test(navigator.userAgent);
+        if (window.__TAURI__ && !isAndroid) {
             btn.addEventListener('click', async () => {
                 try {
                     const { openFileDialogPathOnly } = await import('./tauri-bridge.js');
                     const result = await openFileDialogPathOnly({
-                        filterKey: isAndroid ? 'none' : 'all',
+                        filterKey: 'all',
                         onDialogClose: () => showLoading('Loading archive...', true),
                     });
                     if (!result) return;
@@ -851,23 +851,14 @@ function setupFilePicker(): void {
                         try {
                             await loadArchiveFromIpc(result.filePath, result.name);
                         } catch {
-                            await loadArchiveFromAssetUrl(result.assetUrl, result.name, () => loadArchiveFromTauri(result.filePath, result.assetUrl));
+                            await loadArchiveFromAssetUrl(result.assetUrl, result.name, () => loadArchiveFromTauri(result.filePath));
                         }
                     } else {
                         // Direct file (splat, mesh, etc.): full content needed by renderer.
+                        // Read by path using the already-resolved filePath — no second dialog.
                         updateProgress(5, 'Reading file...');
-                        let file: File;
-                        if (result.filePath.startsWith('content://')) {
-                            // Android content:// URIs can't be read by fs.readFile or Rust
-                            // File::open — use fetch on the Tauri asset URL instead.
-                            const resp = await fetch(result.assetUrl);
-                            if (!resp.ok) throw new Error(`Asset fetch failed: ${resp.status}`);
-                            const buffer = await resp.arrayBuffer();
-                            file = new File([buffer], result.name);
-                        } else {
-                            const contents = await window.__TAURI__!.fs.readFile(result.filePath);
-                            file = new File([contents as BlobPart], result.name);
-                        }
+                        const contents = await window.__TAURI__!.fs.readFile(result.filePath);
+                        const file = new File([contents as BlobPart], result.name);
                         handlePickedFiles([file], null);
                     }
                 } catch (err) {
@@ -1239,20 +1230,12 @@ async function loadArchiveFromUrl(url: string): Promise<void> {
  * Bypasses HTTP fetch entirely — no "Downloading..." phase.
  * @param {string} filePath - Local filesystem path to the archive
  */
-async function loadArchiveFromTauri(filePath: string, assetUrl?: string): Promise<void> {
+async function loadArchiveFromTauri(filePath: string): Promise<void> {
     showLoading('Loading archive...', true);
     try {
+        const { readFile } = window.__TAURI__.fs;
         updateProgress(5, 'Reading file...');
-        let contents: Uint8Array | ArrayBuffer;
-        if (filePath.startsWith('content://') && assetUrl) {
-            // Android content:// URIs can't be read by fs.readFile — fetch via asset URL
-            const resp = await fetch(assetUrl);
-            if (!resp.ok) throw new Error(`Asset fetch failed: ${resp.status}`);
-            contents = await resp.arrayBuffer();
-        } else {
-            const { readFile } = window.__TAURI__.fs;
-            contents = await readFile(filePath);
-        }
+        const contents = await readFile(filePath);
         const fileName = filePath.split(/[\\/]/).pop() || 'archive.a3d';
         const file = new File([contents], fileName);
         state.archiveSourceUrl = null;
