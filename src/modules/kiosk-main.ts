@@ -828,41 +828,48 @@ function setupFilePicker(): void {
     const dropZone = document.getElementById('kiosk-drop-zone');
 
     if (btn && input) {
-        // On Android, the Tauri dialog returns content:// URIs that neither
-        // fs.readFile, Rust File::open, nor the asset protocol can read.
-        // Use the browser <input type="file"> instead — the accept attribute
-        // includes */* so all file types are selectable.
-        const isAndroid = /android/i.test(navigator.userAgent);
-        if (window.__TAURI__ && !isAndroid) {
+        // In Tauri, use native OS file dialog. On Android, the dialog returns
+        // content:// URIs — the Rust ipc_open_file command transparently copies
+        // these to a temp file via ContentResolver, so the IPC path works on
+        // all platforms. Skip extension filters on Android (custom extensions
+        // like .a3d/.a3z have no MIME mapping and become unselectable).
+        if (window.__TAURI__) {
+            const isAndroid = /android/i.test(navigator.userAgent);
             btn.addEventListener('click', async () => {
                 try {
-                    const { openFileDialogPathOnly } = await import('./tauri-bridge.js');
+                    const { openFileDialogPathOnly, ipcOpenFile, ipcReadBytes, ipcCloseFile } = await import('./tauri-bridge.js');
                     const result = await openFileDialogPathOnly({
-                        filterKey: 'all',
-                        onDialogClose: () => showLoading('Loading archive...', true),
+                        filterKey: isAndroid ? 'none' : 'all',
+                        onDialogClose: () => showLoading('Loading file...', true),
                     });
                     if (!result) return;
-                    picker.classList.add('hidden');
+                    picker!.classList.add('hidden');
 
                     const ext = result.name.split('.').pop()?.toLowerCase() ?? '';
                     if (ext === 'a3d' || ext === 'a3z') {
-                        // Archive: IPC byte serving is fastest — reads bytes directly from
-                        // disk via Rust. Falls back to asset URL Range requests, then full read.
+                        // Archive: IPC byte serving — reads bytes directly via Rust.
+                        // On Android, ipc_open_file handles content:// URIs transparently.
                         try {
                             await loadArchiveFromIpc(result.filePath, result.name);
                         } catch {
-                            await loadArchiveFromAssetUrl(result.assetUrl, result.name, () => loadArchiveFromTauri(result.filePath));
+                            if (!isAndroid) {
+                                await loadArchiveFromAssetUrl(result.assetUrl, result.name, () => loadArchiveFromTauri(result.filePath));
+                            } else {
+                                throw new Error('IPC archive loading failed for content URI');
+                            }
                         }
                     } else {
-                        // Direct file (splat, mesh, etc.): full content needed by renderer.
-                        // Read by path using the already-resolved filePath — no second dialog.
+                        // Direct file (splat, mesh, etc.): read full contents via IPC.
+                        // Uses ipc_open_file which handles both paths and content:// URIs.
                         updateProgress(5, 'Reading file...');
-                        const contents = await window.__TAURI__!.fs.readFile(result.filePath);
+                        const { handleId, size } = await ipcOpenFile(result.filePath);
+                        const contents = await ipcReadBytes(handleId, 0, size);
+                        await ipcCloseFile(handleId);
                         const file = new File([contents as BlobPart], result.name);
                         handlePickedFiles([file], null);
                     }
                 } catch (err) {
-                    log.error('Native file dialog failed:', err.message, err);
+                    log.error('Native file dialog failed:', (err as Error).message, err);
                     hideLoading();
                     notify.error('Could not open file: ' + (err as Error).message);
                 }

@@ -98,7 +98,7 @@ export default defineConfig({
 
     define: {
         'import.meta.env.VITE_APP_LIBRARY_URL': JSON.stringify(
-            process.env.SITE_URL || (process.env.TAURI_ENV_PLATFORM ? 'https://jakemarino.fyi' : '')
+            process.env.SITE_URL || 'https://jakemarino.fyi'
         ),
     },
 
