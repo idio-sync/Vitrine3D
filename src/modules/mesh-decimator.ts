@@ -175,19 +175,24 @@ export async function decimateGeometry(
     }
     newGeo.setIndex(new THREE.BufferAttribute(compactIndices, 1));
 
-    // Copy and compact each attribute from the merged geometry
+    // Copy and compact each attribute from the merged geometry.
+    // Use Float32Array for all output to handle Draco-decoded geometries
+    // that may use quantized types (Int16Array, Uint16Array, etc.).
     for (const name of Object.keys(geo.attributes)) {
         const src = geo.attributes[name];
+        if (!src || !src.array) {
+            log.warn(`Skipping attribute "${name}" — missing array`);
+            continue;
+        }
         const itemSize = src.itemSize;
-        const TypedCtor = (src.array as Float32Array).constructor as new (n: number) => Float32Array;
-        const dst = new TypedCtor(usedVerts.length * itemSize);
+        const dst = new Float32Array(usedVerts.length * itemSize);
         for (let i = 0; i < usedVerts.length; i++) {
             const si = usedVerts[i];
             for (let c = 0; c < itemSize; c++) {
                 dst[i * itemSize + c] = src.array[si * itemSize + c];
             }
         }
-        newGeo.setAttribute(name, new THREE.BufferAttribute(dst, itemSize, src.normalized));
+        newGeo.setAttribute(name, new THREE.BufferAttribute(dst, itemSize));
     }
 
     log.info(`Compacted: ${vertexCount} → ${usedVerts.length} vertices`);
