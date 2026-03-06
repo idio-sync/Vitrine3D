@@ -1,0 +1,44 @@
+/*
+ * @theme    Industrial
+ * @layout   industrial
+ * @scene-bg #2a2a2a
+ * @description CAD workbench layout for mesh inspection. Toolbar top, status bar bottom.
+ */
+
+body.kiosk-mode {
+    /* Accent — tool-blue */
+    --kiosk-accent: #4A9EFF;
+    --kiosk-accent-rgb: 74, 158, 255;
+
+    /* Surfaces — neutral dark grays */
+    --kiosk-surface-rgb: 38, 38, 42;
+    --kiosk-elevated-rgb: 52, 52, 58;
+    --kiosk-bg-deep-rgb: 24, 24, 28;
+
+    /* Text */
+    --kiosk-text-bright-rgb: 220, 220, 225;
+    --kiosk-text-body-rgb: 175, 175, 182;
+    --kiosk-text-dim-rgb: 120, 120, 130;
+    --kiosk-text-heading-rgb: 235, 235, 240;
+
+    /* Named text aliases */
+    --kiosk-text-primary: rgba(var(--kiosk-text-bright-rgb), 0.95);
+    --kiosk-text-secondary: rgba(var(--kiosk-text-body-rgb), 0.9);
+    --kiosk-text-muted: rgba(var(--kiosk-text-dim-rgb), 0.7);
+    --kiosk-text-faint: rgba(var(--kiosk-text-dim-rgb), 0.5);
+
+    /* Borders */
+    --kiosk-border-subtle: rgba(255, 255, 255, 0.06);
+    --kiosk-border-default: rgba(var(--kiosk-accent-rgb), 0.15);
+
+    /* Typography — clean sans-serif throughout */
+    --kiosk-font-display: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    --kiosk-font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    --kiosk-font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+    /* Deep background */
+    --kiosk-bg-deep: rgb(var(--kiosk-bg-deep-rgb));
+
+    /* Scene background */
+    --kiosk-scene-bg: #2a2a2a;
+}

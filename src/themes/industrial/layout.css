@@ -1,0 +1,350 @@
+/* =============================================================================
+   Industrial Layout — CAD workbench with top toolbar + bottom status bar.
+   All rules scoped under body.kiosk-mode.kiosk-industrial.
+   ============================================================================= */
+
+/* =============================================================================
+   TOP TOOLBAR — 40px, icon-only tool buttons in groups
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-toolbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    background: rgba(var(--kiosk-surface-rgb), 0.95);
+    border-bottom: 1px solid var(--kiosk-border-subtle);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-toolbar-sep {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 0 6px;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
+    transition: color 0.12s, background 0.12s;
+    position: relative;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn:hover {
+    color: rgba(var(--kiosk-text-bright-rgb), 0.95);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn.active {
+    color: var(--kiosk-accent);
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Tooltip */
+body.kiosk-mode.kiosk-industrial .ind-tool-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 6px;
+    padding: 4px 8px;
+    background: rgba(var(--kiosk-elevated-rgb), 0.95);
+    border: 1px solid var(--kiosk-border-subtle);
+    border-radius: 3px;
+    font-family: var(--kiosk-font-body);
+    font-size: 0.62rem;
+    font-weight: 500;
+    color: rgba(var(--kiosk-text-bright-rgb), 0.9);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 110;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn:hover::after {
+    opacity: 1;
+}
+
+/* =============================================================================
+   BOTTOM STATUS BAR — 28px, monospace metadata
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 28px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    background: rgba(var(--kiosk-surface-rgb), 0.95);
+    border-top: 1px solid var(--kiosk-border-subtle);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.68rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.8);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-status-field {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-status-sep {
+    margin: 0 10px;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.3);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-status-right {
+    margin-left: auto;
+    color: var(--kiosk-accent);
+    font-weight: 500;
+}
+
+/* =============================================================================
+   VIEWPORT OFFSET — clear toolbar and status bar
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial #viewer-container {
+    top: 40px !important;
+    bottom: 28px !important;
+}
+
+/* =============================================================================
+   LIGHT CONTROL WIDGET — hemisphere in top-right corner
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-light-widget {
+    position: fixed;
+    top: 52px;
+    right: 12px;
+    width: 80px;
+    height: 80px;
+    z-index: 95;
+    background: rgba(var(--kiosk-surface-rgb), 0.9);
+    border: 1px solid var(--kiosk-border-subtle);
+    border-radius: 50%;
+    cursor: grab;
+    display: none;
+    overflow: hidden;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-light-widget.visible {
+    display: block;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-light-widget canvas {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+}
+
+/* =============================================================================
+   CROSS-SECTION AXIS PICKER — small floating widget
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-section-controls {
+    position: fixed;
+    top: 52px;
+    left: 12px;
+    z-index: 95;
+    display: none;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    background: rgba(var(--kiosk-surface-rgb), 0.92);
+    border: 1px solid var(--kiosk-border-subtle);
+    border-radius: 4px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-section-controls.visible {
+    display: flex;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-section-axis-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.8);
+    transition: color 0.12s, background 0.12s;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-section-axis-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(var(--kiosk-text-bright-rgb), 0.95);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-section-axis-btn.active {
+    color: var(--kiosk-accent);
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-section-slider {
+    width: 120px;
+    height: 4px;
+    margin: 0 8px;
+    accent-color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-section-flip-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.8);
+    transition: color 0.12s, background 0.12s;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-section-flip-btn:hover {
+    color: rgba(var(--kiosk-text-bright-rgb), 0.95);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-section-flip-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* =============================================================================
+   LOADING OVERLAY — minimal progress bar, no spinner
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial #loading-overlay {
+    background: rgb(var(--kiosk-bg-deep-rgb));
+}
+
+body.kiosk-mode.kiosk-industrial .ind-loading-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+body.kiosk-mode.kiosk-industrial #loading-overlay #loading-text {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.6);
+    letter-spacing: 0.02em;
+    margin-top: 14px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-loading-bottom {
+    position: absolute;
+    bottom: 28px;
+    left: 0;
+    right: 0;
+    text-align: center;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-loading-bottom #loading-progress-container {
+    width: 240px;
+    height: 2px;
+    background: rgba(var(--kiosk-accent-rgb), 0.1);
+    border-radius: 0;
+    margin: 0 auto;
+    overflow: hidden;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-loading-bottom #loading-progress-bar {
+    height: 100%;
+    background: var(--kiosk-accent);
+    transition: width 0.15s ease-out;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-loading-bottom #loading-progress-text {
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.62rem;
+    font-weight: 500;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.5);
+    letter-spacing: 0.04em;
+    margin-top: 8px;
+}
+
+/* =============================================================================
+   ANNOTATION MARKER OVERRIDES — simple numbered circles
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .annotation-marker {
+    width: 28px;
+    height: 28px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: rgba(var(--kiosk-accent-rgb), 0.7);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+body.kiosk-mode.kiosk-industrial .annotation-marker:hover {
+    background: rgba(var(--kiosk-accent-rgb), 0.9);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+body.kiosk-mode.kiosk-industrial .annotation-marker.selected {
+    background: var(--kiosk-accent);
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 0 3px rgba(var(--kiosk-accent-rgb), 0.25);
+}
+
+/* Hide default kiosk sidebar elements */
+body.kiosk-mode.kiosk-industrial .kiosk-info-sidebar,
+body.kiosk-mode.kiosk-industrial .kiosk-wall-label,
+body.kiosk-mode.kiosk-industrial #kiosk-info-overlay {
+    display: none !important;
+}

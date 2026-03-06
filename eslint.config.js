@@ -90,7 +90,7 @@ export default [
             'dist/**',
             'src/config.js',
             'src/pre-module.js',
-            'src/themes/editorial/layout.js',
+            'src/themes/*/layout.js',
             'node_modules/**',
             'src-tauri/target/**'
         ]
