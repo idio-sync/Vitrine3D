@@ -89,7 +89,8 @@ export const COLORS = {
         DARK_PURPLE: '#1a1a2e',
         DARK_GRAY: '#2d2d2d',
         LIGHT_GRAY: '#808080',
-        WHITE: '#f0f0f0'
+        WHITE: '#f0f0f0',
+        EDITORIAL_NAVY: '#11304e'
     }
 } as const;
 
