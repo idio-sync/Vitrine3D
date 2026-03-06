@@ -60,6 +60,9 @@ import { loadCADFromBlobUrl } from './cad-loader.js';
 import { KIOSK_SECTION_TIERS, EDITORIAL_SECTION_TIERS, isTierVisible } from './metadata-profile.js';
 import type { MetadataProfile } from './metadata-profile.js';
 import * as postProcessing from './post-processing.js';
+import { hasCfToken } from './tauri-auth.js';
+import { initLibraryPage, setOnArchiveSelect } from './library-page.js';
+import type { CollectionArchive } from './collection-page.js';
 
 
 // =============================================================================
@@ -251,6 +254,63 @@ function classifyFile(filename: string): FileCategory | null {
         if (extensions.includes(ext)) return category as FileCategory;
     }
     return null;
+}
+
+// =============================================================================
+// LIBRARY INTEGRATION — in-app library with CF Access auth
+// =============================================================================
+
+let _launchedFromLibrary = false;
+
+async function showLibraryInApp(): Promise<void> {
+    log.info('Showing in-app library');
+
+    const config = (window as any).APP_CONFIG || {};
+    config.library = true;
+
+    const libraryUrl = (import.meta.env.VITE_APP_LIBRARY_URL as string | undefined) || '';
+
+    // Set up card click handler before init
+    setOnArchiveSelect((archive: CollectionArchive) => {
+        _launchedFromLibrary = true;
+        const archiveUrl = archive.path;
+        const fullUrl = archiveUrl.startsWith('http') ? archiveUrl : libraryUrl + archiveUrl;
+
+        // Hide library, show viewer
+        const libContainer = document.getElementById('library-container');
+        if (libContainer) libContainer.style.display = 'none';
+        const app = document.getElementById('app');
+        if (app) app.style.display = '';
+
+        // Show back button
+        const backBtn = document.getElementById('kiosk-back-library');
+        if (backBtn) backBtn.classList.remove('hidden');
+
+        // Hide the file picker
+        const picker = document.getElementById('kiosk-file-picker');
+        if (picker) picker.classList.add('hidden');
+
+        // Load the archive
+        log.info('Loading archive from library:', fullUrl);
+        loadArchiveFromUrl(fullUrl);
+    });
+
+    await initLibraryPage();
+}
+
+function returnToLibrary(): void {
+    log.info('Returning to library');
+    _launchedFromLibrary = false;
+
+    // Hide back button
+    const backBtn = document.getElementById('kiosk-back-library');
+    if (backBtn) backBtn.classList.add('hidden');
+
+    // Hide viewer app, show library
+    const app = document.getElementById('app');
+    if (app) app.style.display = 'none';
+    const libContainer = document.getElementById('library-container');
+    if (libContainer) libContainer.style.display = '';
 }
 
 // =============================================================================
@@ -639,10 +699,23 @@ function createFilePicker(): HTMLElement {
     if (showLibrary) {
         const libraryBtn = picker.querySelector('#kiosk-library-btn');
         if (libraryBtn) {
-            libraryBtn.addEventListener('click', () => {
-                log.info('Navigating to library:', libraryUrl);
-                window.location.href = libraryUrl + '/library';
+            libraryBtn.addEventListener('click', async () => {
+                if (hasCfToken()) {
+                    await showLibraryInApp();
+                } else if ((window as any).__TAURI__) {
+                    // Open system browser for CF Access login
+                    log.info('Opening browser for CF Access auth');
+                    const { open } = await import('@tauri-apps/plugin-shell');
+                    await open(libraryUrl + '/api/auth-callback');
+                } else {
+                    window.location.href = libraryUrl + '/library';
+                }
             });
+
+            // Listen for auth callback from deep link
+            window.addEventListener('vitrine3d:auth', () => {
+                showLibraryInApp();
+            }, { once: true });
         }
     }
 
@@ -1857,9 +1930,11 @@ async function switchQualityTier(newTier: string): Promise<void> {
 
     // Adjust renderer resolution — universal quality control that takes effect even
     // when no proxy assets exist (makes SD/HD visible for models and low-proxy splats).
+    // setPixelRatio alone doesn't resize the drawing buffer; onWindowResize applies it.
     if (renderer) {
         const targetRatio = newTier === 'hd' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
         renderer.setPixelRatio(targetRatio);
+        onWindowResize();
     }
 
     const archiveLoader = state.archiveLoader;
@@ -2599,6 +2674,14 @@ function setupViewerUI(): void {
     // On mobile, move annotation toggle out of toolbar so position:fixed works
     // (backdrop-filter on toolbar creates a containing block that breaks fixed positioning)
     repositionAnnotationToggle();
+
+    // Back to library button (Tauri only, shown when navigating from in-app library)
+    const backBtn = document.createElement('button');
+    backBtn.id = 'kiosk-back-library';
+    backBtn.className = 'kiosk-back-library hidden';
+    backBtn.textContent = '\u2190 Library';
+    backBtn.addEventListener('click', returnToLibrary);
+    document.body.appendChild(backBtn);
 }
 
 function setupViewerKeyboardShortcuts(): void {

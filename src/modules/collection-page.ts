@@ -393,13 +393,24 @@ export function getLogoSrc(): string {
 
 // ── Rendering ──
 
-export function renderCard(archive: CollectionArchive, index: number): HTMLElement {
+export function renderCard(
+    archive: CollectionArchive,
+    index: number,
+    onCardClick?: (archive: CollectionArchive) => void,
+): HTMLElement {
     const card = document.createElement('a');
     card.className = 'cp-card';
     const baseUrl = archive.uuid ? '/view/' + archive.uuid : archive.viewerUrl;
     card.href = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'autoload=true';
     // Stagger animation delay
     card.style.animationDelay = (0.15 + index * 0.06) + 's';
+
+    if (onCardClick) {
+        card.addEventListener('click', (e) => {
+            e.preventDefault();
+            onCardClick(archive);
+        });
+    }
 
     const thumbHtml = archive.thumbnail
         ? '<img src="' + escapeHtml(archive.thumbnail) + '" alt="" loading="lazy">'

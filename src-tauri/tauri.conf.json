@@ -53,5 +53,14 @@
       "icons/icon.ico"
     ]
   },
-  "plugins": {}
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["vitrine3d"]
+      },
+      "mobile": {
+        "schemes": ["vitrine3d"]
+      }
+    }
+  }
 }

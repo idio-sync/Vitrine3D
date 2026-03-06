@@ -668,6 +668,45 @@ function handleLibraryPage(req, res) {
 }
 
 /**
+ * GET /api/auth-callback — CF Access auth relay for Tauri app.
+ * After CF Access authenticates the user, this reads the CF_Authorization
+ * JWT cookie and redirects to the vitrine3d:// deep link with the token.
+ */
+function handleAuthCallback(req, res) {
+    if (!requireAuth(req, res)) return;
+
+    const cookieHeader = req.headers.cookie || '';
+    const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
+    const token = match ? match[1] : '';
+
+    const deepLink = 'vitrine3d://auth?token=' + encodeURIComponent(token);
+
+    const html = '<!DOCTYPE html>\n' +
+        '<html><head><meta charset="utf-8"><title>Vitrine3D — Authenticated</title>\n' +
+        '<style>\n' +
+        'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;\n' +
+        '       background: #08182a; color: #e8ecf0; display: flex; align-items: center;\n' +
+        '       justify-content: center; height: 100vh; margin: 0; text-align: center; }\n' +
+        '.card { max-width: 400px; padding: 40px; }\n' +
+        'h1 { font-size: 1.2rem; margin-bottom: 12px; }\n' +
+        'p { color: rgba(140,160,180,0.7); font-size: 0.9rem; line-height: 1.5; }\n' +
+        'a { color: #FEC03A; text-decoration: none; }\n' +
+        '</style>\n' +
+        '</head><body><div class="card">\n' +
+        '<h1>Authentication Successful</h1>\n' +
+        '<p>Returning to Vitrine3D...</p>\n' +
+        '<p style="margin-top: 24px; font-size: 0.8rem;">\n' +
+        'If the app didn\'t open, <a href="' + deepLink.replace(/"/g, '&quot;') + '">click here</a>.</p>\n' +
+        '<p style="font-size: 0.75rem; color: rgba(140,160,180,0.4);">You can close this tab.</p>\n' +
+        '</div>\n' +
+        '<script>window.location.href = ' + JSON.stringify(deepLink) + ';</script>\n' +
+        '</body></html>';
+
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(html);
+}
+
+/**
  * GET /api/archives — list all archives
  */
 function handleListArchives(req, res) {
@@ -1889,6 +1928,9 @@ const server = http.createServer((req, res) => {
             return handleReorderCollection(req, res, collOrderMatch[1]);
         }
 
+        if (req.method === 'GET' && pathname === '/api/auth-callback') {
+            return handleAuthCallback(req, res);
+        }
         if (req.method === 'GET' && pathname === '/api/me') {
             return handleMe(req, res);
         }

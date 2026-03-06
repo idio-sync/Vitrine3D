@@ -97,7 +97,9 @@ export default defineConfig({
     publicDir: resolve(__dirname, 'public'),
 
     define: {
-        'import.meta.env.VITE_APP_LIBRARY_URL': JSON.stringify(process.env.SITE_URL || ''),
+        'import.meta.env.VITE_APP_LIBRARY_URL': JSON.stringify(
+            process.env.SITE_URL || (process.env.TAURI_ENV_PLATFORM ? 'https://jakemarino.fyi' : '')
+        ),
     },
 
     build: {
