@@ -10,7 +10,7 @@ import { Logger } from './utilities.js';
 import {
     Scene, PerspectiveCamera, IcosahedronGeometry,
     MeshStandardMaterial, Mesh, DirectionalLight, AmbientLight, Color,
-    WebGLRenderer
+    WebGLRenderer, WebGLRenderTarget
 } from 'three';
 
 const log = Logger.getLogger('quality-tier');
@@ -61,10 +61,16 @@ export async function runGpuBenchmark(renderer: WebGLRenderer): Promise<number> 
 
     log.info('Starting GPU benchmark (~500ms)...');
 
+    // Render to an offscreen target so nothing is visible on the canvas.
+    // Use actual viewport dimensions to test real fill-rate cost.
+    const width = renderer.domElement.clientWidth || 1920;
+    const height = renderer.domElement.clientHeight || 1080;
+    const renderTarget = new WebGLRenderTarget(width, height);
+
     // Create temporary scene with ~410k triangles (5 icospheres @ detail 6)
     const benchScene = new Scene();
     benchScene.background = new Color(0x000000);
-    const benchCamera = new PerspectiveCamera(60, renderer.domElement.clientWidth / renderer.domElement.clientHeight, 0.1, 100);
+    const benchCamera = new PerspectiveCamera(60, width / height, 0.1, 100);
     benchCamera.position.set(0, 0, 8);
 
     // Lighting (matches real scene complexity)
@@ -87,48 +93,41 @@ export async function runGpuBenchmark(renderer: WebGLRenderer): Promise<number> 
         meshes.push(mesh);
     }
 
-    // Render 30 frames via requestAnimationFrame, discard first 2 as warm-up
-    const TOTAL_FRAMES = 30;
-    const WARMUP_FRAMES = 2;
+    // Render to offscreen target in a tight loop (no vsync cap).
+    // 2 warm-up frames for shader compilation, then measure until ~500ms elapsed.
+    renderer.setRenderTarget(renderTarget);
 
-    const fps = await new Promise<number>((resolve) => {
-        let frameCount = 0;
-        let warmupEndTime = 0;
+    // Warm-up: compile shaders, fill GPU pipeline
+    renderer.render(benchScene, benchCamera);
+    renderer.render(benchScene, benchCamera);
+    // Force GPU to finish warm-up before measuring
+    const gl = renderer.getContext();
+    gl.finish();
 
-        function renderFrame(): void {
-            renderer.render(benchScene, benchCamera);
-            frameCount++;
+    const startTime = performance.now();
+    let frameCount = 0;
+    const TARGET_DURATION_MS = 500;
 
-            if (frameCount === WARMUP_FRAMES) {
-                warmupEndTime = performance.now();
-            }
+    while (performance.now() - startTime < TARGET_DURATION_MS) {
+        renderer.render(benchScene, benchCamera);
+        frameCount++;
+    }
+    // Force GPU to complete all queued work before measuring end time
+    gl.finish();
+    const endTime = performance.now();
 
-            if (frameCount < TOTAL_FRAMES) {
-                requestAnimationFrame(renderFrame);
-            } else {
-                const endTime = performance.now();
-                const measuredFrames = TOTAL_FRAMES - WARMUP_FRAMES;
-                const elapsedSec = (endTime - warmupEndTime) / 1000;
-                const avgFps = measuredFrames / elapsedSec;
-                resolve(avgFps);
-            }
-        }
+    const elapsedSec = (endTime - startTime) / 1000;
+    const fps = frameCount / elapsedSec;
 
-        requestAnimationFrame(renderFrame);
-    });
-
-    // Cleanup: dispose geometry + material
+    // Cleanup: restore default render target, dispose resources
+    renderer.setRenderTarget(null);
+    renderTarget.dispose();
     geometry.dispose();
     material.dispose();
     meshes.length = 0;
 
-    // Clear canvas — render one empty frame to flush benchmark visuals
-    const clearScene = new Scene();
-    clearScene.background = new Color(0x000000);
-    renderer.render(clearScene, benchCamera);
-
     _benchmarkFps = fps;
-    log.info(`GPU benchmark complete: ${fps.toFixed(1)} FPS`);
+    log.info(`GPU benchmark complete: ${fps.toFixed(1)} FPS (${frameCount} frames in ${(elapsedSec * 1000).toFixed(0)}ms)`);
     return fps;
 }
 
