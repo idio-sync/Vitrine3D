@@ -110,6 +110,10 @@ describe('detectDeviceTier', () => {
         originalHardwareConcurrency = Object.getOwnPropertyDescriptor(Navigator.prototype, 'hardwareConcurrency');
         originalUserAgent = Object.getOwnPropertyDescriptor(Navigator.prototype, 'userAgent');
         originalScreenWidth = Object.getOwnPropertyDescriptor(Screen.prototype, 'width');
+
+        // Default to high benchmark score for existing tests so they
+        // continue testing the static heuristics in isolation
+        _setBenchmarkFpsForTest(500); // 2 points
     });
 
     afterEach(() => {
@@ -133,9 +137,11 @@ describe('detectDeviceTier', () => {
         if (originalScreenWidth) {
             Object.defineProperty(Screen.prototype, 'width', originalScreenWidth);
         }
+
+        _setBenchmarkFpsForTest(null);
     });
 
-    it('returns hd for desktop with high-end specs (score 5/5)', () => {
+    it('returns hd for desktop with high-end specs (score 7/7)', () => {
         // Mock all capabilities as high-end
         Object.defineProperty(Navigator.prototype, 'deviceMemory', {
             configurable: true,
@@ -166,7 +172,7 @@ describe('detectDeviceTier', () => {
         expect(detectDeviceTier(mockGl)).toBe('hd');
     });
 
-    it('returns sd for mobile device with low memory (score < 3)', () => {
+    it('returns sd for mobile device with low memory (iOS forced SD)', () => {
         // Mock mobile with low specs
         Object.defineProperty(Navigator.prototype, 'deviceMemory', {
             configurable: true,
@@ -398,5 +404,63 @@ describe('detectDeviceTier', () => {
 
         const result = detectDeviceTier(mockGl as any);
         expect(result).toBe('sd');
+    });
+
+    it('returns sd when benchmark score drags total below threshold', () => {
+        // Desktop with 4/5 static points but terrible GPU benchmark
+        _setBenchmarkFpsForTest(50); // 0 benchmark points
+
+        Object.defineProperty(Navigator.prototype, 'deviceMemory', {
+            configurable: true,
+            get: () => 8
+        });
+        Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', {
+            configurable: true,
+            get: () => 2 // Below threshold — loses 1 static point
+        });
+        Object.defineProperty(Screen.prototype, 'width', {
+            configurable: true,
+            get: () => 1920
+        });
+        Object.defineProperty(Navigator.prototype, 'userAgent', {
+            configurable: true,
+            get: () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        });
+
+        const mockGl = {
+            MAX_TEXTURE_SIZE: 0x0D33,
+            getParameter: vi.fn((param) => {
+                if (param === 0x0D33) return 4096; // Below threshold — loses 1 static point
+                return null;
+            })
+        } as any;
+
+        // Score: 1(mem) + 0(cores) + 1(width) + 0(texture) + 1(ua) + 0(bench) = 3 -> SD
+        expect(detectDeviceTier(mockGl)).toBe('sd');
+    });
+
+    it('returns hd when benchmark compensates for missing deviceMemory', () => {
+        // Firefox/Safari desktop: deviceMemory undefined, good benchmark
+        _setBenchmarkFpsForTest(300); // 2 benchmark points
+
+        Object.defineProperty(Navigator.prototype, 'deviceMemory', {
+            configurable: true,
+            get: () => undefined
+        });
+        Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', {
+            configurable: true,
+            get: () => 8
+        });
+        Object.defineProperty(Screen.prototype, 'width', {
+            configurable: true,
+            get: () => 1920
+        });
+        Object.defineProperty(Navigator.prototype, 'userAgent', {
+            configurable: true,
+            get: () => 'Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0'
+        });
+
+        // Score: 1(mem undefined=capable) + 1(cores) + 1(width) + 1(no gl=capable) + 1(ua) + 2(bench) = 7 -> HD
+        expect(detectDeviceTier()).toBe('hd');
     });
 });
