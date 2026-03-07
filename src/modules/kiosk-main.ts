@@ -1520,6 +1520,19 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         }
         updateProgress(30, 'Loading 3D data...');
         const primaryType = getPrimaryAssetType(state.displayMode, contentInfo);
+
+        // Progressive loading: if device is HD-capable and archive has a mesh proxy,
+        // load SD first for fast time-to-interactive, then upgrade to HD in background.
+        // Mobile devices (iOS/Android) stay SD — they only get HD via explicit toggle.
+        const shouldProgressiveLoad = state.qualityResolved === 'hd'
+            && contentInfo.hasMeshProxy
+            && (primaryType === 'mesh');
+        const originalQualityResolved = state.qualityResolved;
+        if (shouldProgressiveLoad) {
+            state.qualityResolved = 'sd';
+            log.info('Progressive load: using SD proxy for initial display');
+        }
+
         const primaryLoaded = await ensureAssetLoaded(primaryType as AssetType, (pct, stage) => {
             // Map 0-100% from loadArchiveAsset onto 30-80% of the overall progress bar
             updateProgress(30 + pct * 0.5, stage);
@@ -1537,6 +1550,11 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 notify.warning('Archive does not contain any viewable content.');
                 return;
             }
+        }
+
+        // Restore original quality tier after SD-first initial load
+        if (shouldProgressiveLoad) {
+            state.qualityResolved = originalQualityResolved;
         }
 
         // Load CAD asset if present
@@ -1894,6 +1912,27 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         notify.success(`Loaded: ${file.name}`);
 
         // === Phase 3: Background-load remaining assets ===
+
+        // Progressive mesh upgrade: swap SD proxy for HD in the background
+        if (shouldProgressiveLoad && state.archiveLoader) {
+            showBgLoadingIndicator();
+            log.info('Progressive load: starting background HD mesh upgrade');
+            setTimeout(async () => {
+                try {
+                    const result = await loadArchiveFullResMesh(state.archiveLoader!, createArchiveDeps());
+                    if (result.loaded) {
+                        log.info(`Progressive load: HD mesh swapped (${result.faceCount?.toLocaleString()} faces)`);
+                        const facesEl = document.getElementById('model-faces');
+                        if (facesEl && result.faceCount) facesEl.textContent = result.faceCount.toLocaleString();
+                    }
+                } catch (e: any) {
+                    log.warn('Progressive load: HD mesh upgrade failed, keeping SD proxy:', e.message);
+                } finally {
+                    hideBgLoadingIndicator();
+                }
+            }, 100);
+        }
+
         const remainingTypes = ['splat', 'mesh', 'pointcloud'].filter(
             t => state.assetStates[t] === ASSET_STATE.UNLOADED
         );
@@ -4201,6 +4240,25 @@ function createKioskToolbar(): void {
 function hideEl(id: string): void {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
+}
+
+/** Show the background loading indicator (bottom-left spinner) */
+function showBgLoadingIndicator(): void {
+    const el = document.getElementById('bg-loading-indicator');
+    if (el) {
+        el.classList.remove('hidden', 'fade-out');
+    }
+}
+
+/** Hide the background loading indicator with a fade-out */
+function hideBgLoadingIndicator(): void {
+    const el = document.getElementById('bg-loading-indicator');
+    if (!el || el.classList.contains('hidden')) return;
+    el.classList.add('fade-out');
+    setTimeout(() => {
+        el.classList.add('hidden');
+        el.classList.remove('fade-out');
+    }, 300);
 }
 
 /**

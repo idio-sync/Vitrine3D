@@ -1677,8 +1677,96 @@ export async function loadArchiveAsset(archiveLoader: ArchiveLoader, assetType: 
 }
 
 /**
+ * Parse a mesh from a blob URL into a temporary off-scene group.
+ * Returns the loaded object without adding it to any scene graph.
+ */
+async function parseMeshOffScene(blobUrl: string, fileName: string, onProgress?: (loaded: number, total: number) => void): Promise<{ object: THREE.Object3D; faceCount: number } | null> {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    let loadedObject: THREE.Object3D | undefined;
+
+    if (extension === 'glb' || extension === 'gltf') {
+        loadedObject = await loadGLTF(blobUrl, onProgress);
+    } else if (extension === 'obj') {
+        loadedObject = await loadOBJFromUrl(blobUrl, onProgress);
+    } else if (extension === 'stl') {
+        loadedObject = await loadSTLFromUrl(blobUrl, onProgress);
+    } else if (extension === 'drc') {
+        loadedObject = await loadDRC(blobUrl, onProgress);
+    }
+
+    if (!loadedObject) return null;
+
+    const faceCount = computeMeshFaceCount(loadedObject);
+    return { object: loadedObject, faceCount };
+}
+
+/**
+ * Swap mesh geometry and materials in-place on modelGroup.
+ * Performs a synchronous swap so the renderer never draws an empty frame.
+ *
+ * Strategy:
+ * - Collect all Mesh children from both old (modelGroup) and new (parsed HD object)
+ * - If counts match, swap geometry + material per-child (fastest, no scene graph change)
+ * - If counts differ, bulk remove-all + add-all in one synchronous block
+ * - Dispose old geometry/materials after swap
+ */
+function swapMeshChildren(modelGroup: THREE.Group, newObject: THREE.Object3D): void {
+    const oldMeshes: THREE.Mesh[] = [];
+    modelGroup.traverse((child: any) => {
+        if (child.isMesh) oldMeshes.push(child);
+    });
+
+    const newMeshes: THREE.Mesh[] = [];
+    newObject.traverse((child: any) => {
+        if (child.isMesh) newMeshes.push(child);
+    });
+
+    if (oldMeshes.length === newMeshes.length && oldMeshes.length > 0) {
+        // Per-child geometry/material swap — no scene graph mutation
+        for (let i = 0; i < oldMeshes.length; i++) {
+            const oldGeo = oldMeshes[i].geometry;
+            const oldMat = oldMeshes[i].material;
+
+            oldMeshes[i].geometry = newMeshes[i].geometry;
+            oldMeshes[i].material = newMeshes[i].material;
+
+            // Dispose old resources
+            if (oldGeo) oldGeo.dispose();
+            if (Array.isArray(oldMat)) {
+                oldMat.forEach(m => { if (m.dispose) m.dispose(); });
+            } else if (oldMat && (oldMat as THREE.Material).dispose) {
+                (oldMat as THREE.Material).dispose();
+            }
+        }
+    } else {
+        // Mesh count mismatch — bulk swap in one synchronous block
+        const oldChildren = [...modelGroup.children];
+
+        // Remove all old children
+        while (modelGroup.children.length > 0) {
+            modelGroup.remove(modelGroup.children[0]);
+        }
+
+        // Add all new children from loaded object
+        if (newObject.children) {
+            const newChildren = [...newObject.children];
+            for (const child of newChildren) {
+                modelGroup.add(child);
+            }
+        } else {
+            modelGroup.add(newObject);
+        }
+
+        // Dispose old resources
+        for (const child of oldChildren) {
+            disposeObject(child);
+        }
+    }
+}
+
+/**
  * Load the full-resolution mesh from an archive, replacing the currently displayed proxy.
- * Clears the existing modelGroup contents before loading.
+ * Uses off-scene parsing and in-place swap to avoid empty frames.
  */
 export async function loadArchiveFullResMesh(archiveLoader: ArchiveLoader, deps: LoadFullResDeps): Promise<AssetLoadResult> {
     const { state, callbacks = {} } = deps;
@@ -1692,34 +1780,41 @@ export async function loadArchiveFullResMesh(archiveLoader: ArchiveLoader, deps:
         return { loaded: false, blob: null, error: 'Failed to extract full-resolution mesh' };
     }
 
-    // Capture current modelGroup transform (preserves user edits during quality switch)
     const { modelGroup } = deps;
+
+    // Capture current modelGroup transform (preserves user edits during quality switch)
     const currentTransform = modelGroup ? {
         position: [modelGroup.position.x, modelGroup.position.y, modelGroup.position.z] as [number, number, number],
         rotation: [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z] as [number, number, number],
         scale: [modelGroup.scale.x, modelGroup.scale.y, modelGroup.scale.z] as [number, number, number]
     } : null;
 
-    // Clear existing model (the proxy) before loading
-    if (modelGroup) {
-        while (modelGroup.children.length > 0) {
-            const child = modelGroup.children[0];
-            modelGroup.remove(child);
-            disposeObject(child);
+    // Parse HD mesh off-scene (no visual disruption)
+    const parsed = await parseMeshOffScene(meshData.url, meshEntry.file_name);
+    if (!parsed) {
+        return { loaded: false, blob: null, error: 'Failed to parse full-resolution mesh' };
+    }
+
+    // In-place swap: synchronous, no empty frames
+    if (modelGroup && modelGroup.children.length > 0) {
+        swapMeshChildren(modelGroup, parsed.object);
+    } else {
+        // No existing mesh to swap — just add directly (first load, no proxy)
+        if (modelGroup) {
+            modelGroup.add(parsed.object);
         }
     }
 
-    state.modelLoaded = false;
-    const result = await loadModelFromBlobUrl(meshData.url, meshEntry.file_name, deps);
+    state.modelLoaded = true;
 
-    // Re-apply the captured transform (user's current position), falling back to manifest
+    // Re-apply the captured transform, falling back to manifest
     const transform = currentTransform || archiveLoader.getEntryTransform(meshEntry);
     if (callbacks.onApplyModelTransform) {
         callbacks.onApplyModelTransform(transform);
     }
 
     state.assetStates.mesh = ASSET_STATE.LOADED;
-    return { loaded: true, blob: meshData.blob, error: null, faceCount: result?.faceCount || 0 };
+    return { loaded: true, blob: meshData.blob, error: null, faceCount: parsed.faceCount };
 }
 
 /**
