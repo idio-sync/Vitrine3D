@@ -10,26 +10,27 @@ if ((window as any).__TAURI__) {
     // Helper: parse a deep-link URL and dispatch auth event if it's a token callback.
     // Custom URL schemes (vitrine3d://) are parsed as opaque by Chromium/WebView2:
     //   new URL("vitrine3d://auth/?token=x") → hostname="" pathname="//auth/"
-    // So we check pathname.includes('auth') instead of strict equality.
+    // Additionally, searchParams may be empty for opaque schemes — the query
+    // string gets folded into pathname. We extract the token manually.
     function handleDeepLinkUrl(raw: string): void {
         try {
             // Strip surrounding quotes that Windows CLI may add
             const clean = raw.replace(/^["']|["']$/g, '');
-            const url = new URL(clean);
-            const isAuth = url.hostname === 'auth' || url.pathname.includes('auth');
 
-            // DEBUG: visible confirmation that the handler fires and URL parsing works
-            alert('handleDeepLinkUrl called\nhostname: ' + url.hostname + '\npathname: ' + url.pathname + '\nisAuth: ' + isAuth + '\nhasToken: ' + !!url.searchParams.get('token'));
+            // Check if this is an auth deep link (loose match for opaque parsing)
+            if (!clean.includes('auth')) return;
 
-            if (isAuth) {
-                const token = url.searchParams.get('token');
-                if (token) {
-                    setCfToken(token);
-                    window.dispatchEvent(new CustomEvent('vitrine3d:auth', { detail: { token } }));
-                }
+            // Extract token manually — searchParams is unreliable for custom schemes.
+            // Look for token= in the raw URL string.
+            const tokenMatch = clean.match(/[?&]token=([^&]+)/);
+            const token = tokenMatch ? decodeURIComponent(tokenMatch[1]) : null;
+
+            if (token) {
+                setCfToken(token);
+                window.dispatchEvent(new CustomEvent('vitrine3d:auth', { detail: { token } }));
             }
         } catch (e) {
-            alert('Deep link parse ERROR: ' + (e as Error).message + '\nraw: ' + raw.substring(0, 100));
+            console.error('Deep link parse error:', e, 'raw:', raw.substring(0, 100));
         }
     }
 

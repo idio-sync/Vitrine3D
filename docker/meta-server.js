@@ -906,6 +906,16 @@ function handleAuthCallback(req, res) {
 
     const deepLink = 'vitrine3d://auth?token=' + encodeURIComponent(token);
 
+    // Detect Android/mobile — Chrome blocks window.location.href to custom schemes
+    // but honours intent:// URIs and user-initiated <a> clicks.
+    const ua = (req.headers['user-agent'] || '').toLowerCase();
+    const isMobile = /android|iphone|ipad|mobile/i.test(ua);
+
+    // Android intent:// URI — tells Chrome to launch the app by package scheme
+    // without ERR_UNKNOWN_URL_SCHEME. Falls back gracefully if app not installed.
+    const intentUri = 'intent://auth?token=' + encodeURIComponent(token) +
+        '#Intent;scheme=vitrine3d;end';
+
     const html = '<!DOCTYPE html>\n' +
         '<html><head><meta charset="utf-8"><title>Vitrine3D — Authenticated</title>\n' +
         '<style>\n' +
@@ -916,15 +926,26 @@ function handleAuthCallback(req, res) {
         'h1 { font-size: 1.2rem; margin-bottom: 12px; }\n' +
         'p { color: rgba(140,160,180,0.7); font-size: 0.9rem; line-height: 1.5; }\n' +
         'a { color: #FEC03A; text-decoration: none; }\n' +
+        '.btn { display: inline-block; margin-top: 20px; padding: 14px 32px;\n' +
+        '       background: #FEC03A; color: #08182a; border-radius: 8px;\n' +
+        '       font-weight: 600; font-size: 1rem; }\n' +
         '</style>\n' +
         '</head><body><div class="card">\n' +
         '<h1>Authentication Successful</h1>\n' +
-        '<p>Returning to Vitrine3D...</p>\n' +
-        '<p style="margin-top: 24px; font-size: 0.8rem;">\n' +
-        'If the app didn\'t open, <a href="' + deepLink.replace(/"/g, '&quot;') + '">click here</a>.</p>\n' +
-        '<p style="font-size: 0.75rem; color: rgba(140,160,180,0.4);">You can close this tab.</p>\n' +
+        (isMobile
+            // Mobile: show a prominent tap button (intent:// URI works on Android)
+            ? '<p>Tap below to return to the app.</p>\n' +
+              '<a class="btn" href="' + intentUri.replace(/"/g, '&quot;') + '">Open Vitrine3D</a>\n' +
+              '<p style="margin-top: 16px; font-size: 0.8rem;">\n' +
+              'Or try <a href="' + deepLink.replace(/"/g, '&quot;') + '">this link</a> if the button doesn\'t work.</p>\n'
+            // Desktop: auto-redirect via JS (works on Windows/macOS/Linux)
+            : '<p>Returning to Vitrine3D...</p>\n' +
+              '<p style="margin-top: 24px; font-size: 0.8rem;">\n' +
+              'If the app didn\'t open, <a href="' + deepLink.replace(/"/g, '&quot;') + '">click here</a>.</p>\n'
+        ) +
+        '<p style="font-size: 0.75rem; color: rgba(140,160,180,0.4);">You can close this tab after returning.</p>\n' +
         '</div>\n' +
-        '<script>window.location.href = ' + JSON.stringify(deepLink) + ';</script>\n' +
+        (isMobile ? '' : '<script>window.location.href = ' + JSON.stringify(deepLink) + ';</script>\n') +
         '</body></html>';
 
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
