@@ -110,10 +110,9 @@ export async function runGpuBenchmark(renderer: WebGLRenderer): Promise<number> 
 
     while (performance.now() - startTime < TARGET_DURATION_MS) {
         renderer.render(benchScene, benchCamera);
+        gl.finish(); // Sync per frame — without this, CPU just queues commands and FPS is artificially high
         frameCount++;
     }
-    // Force GPU to complete all queued work before measuring end time
-    gl.finish();
     const endTime = performance.now();
 
     const elapsedSec = (endTime - startTime) / 1000;
