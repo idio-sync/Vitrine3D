@@ -1234,10 +1234,10 @@ async function showClickGate(archiveUrl: string): Promise<void> {
             }
         }
 
-        // Show content types (mesh first)
+        // Show content types (model first)
         const typesEl = document.getElementById('kiosk-gate-types');
         const types: string[] = [];
-        if (contentInfo.hasMesh) types.push('Mesh');
+        if (contentInfo.hasMesh) types.push('Model');
         if (contentInfo.hasSplat) types.push('Gaussian Splat');
         if (contentInfo.hasPointcloud) types.push('Point Cloud');
 
@@ -3119,11 +3119,11 @@ function createViewSwitcher(): void {
     const contentInfo = state.archiveLoader ? state.archiveLoader.getContentInfo() : null;
     const types: { mode: string; label: string }[] = [];
     if (contentInfo) {
-        if (contentInfo.hasMesh) types.push({ mode: 'model', label: 'Mesh' });
+        if (contentInfo.hasMesh) types.push({ mode: 'model', label: 'Model' });
         if (contentInfo.hasSplat) types.push({ mode: 'splat', label: 'Scan' });
         if (contentInfo.hasPointcloud) types.push({ mode: 'pointcloud', label: 'Points' });
     } else {
-        if (state.modelLoaded) types.push({ mode: 'model', label: 'Mesh' });
+        if (state.modelLoaded) types.push({ mode: 'model', label: 'Model' });
         if (state.splatLoaded) types.push({ mode: 'splat', label: 'Scan' });
         if (state.pointcloudLoaded) types.push({ mode: 'pointcloud', label: 'Points' });
     }
@@ -4851,9 +4851,9 @@ async function showBrandedLoading(archiveLoader: ArchiveLoader): Promise<void> {
             }
         }
 
-        // Build content type labels (mesh first)
+        // Build content type labels (model first)
         const types: string[] = [];
-        if (contentInfo.hasMesh) types.push('Mesh');
+        if (contentInfo.hasMesh) types.push('Model');
         if (contentInfo.hasSplat) types.push('Gaussian Splat');
         if (contentInfo.hasPointcloud) types.push('Point Cloud');
         if (typesEl && types.length > 0) {
