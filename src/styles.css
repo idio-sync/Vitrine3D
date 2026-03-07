@@ -1412,13 +1412,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
 /* Background loading indicator — shown while HD mesh loads behind SD proxy */
 .bg-loading-indicator {
     position: absolute;
-    bottom: 12px;
+    bottom: 44px;
     left: 12px;
     z-index: 10;
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0.5;
+    opacity: 0.45;
     transition: opacity 0.3s ease;
     pointer-events: auto;
     cursor: default;
@@ -1433,9 +1433,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 .bg-loading-spinner {
-    width: 24px;
-    height: 24px;
-    border: 2.5px solid currentColor;
+    width: 16px;
+    height: 16px;
+    border: 2px solid currentColor;
     border-top-color: transparent;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
