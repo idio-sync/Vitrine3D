@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { detectDeviceTier, resolveQualityTier, hasAnyProxy } from '../quality-tier.js';
+import { detectDeviceTier, resolveQualityTier, hasAnyProxy, getBenchmarkScore, _setBenchmarkFpsForTest } from '../quality-tier.js';
 
 // Store original values for restoration
 let originalDeviceMemory: PropertyDescriptor | undefined;
@@ -33,6 +33,52 @@ describe('hasAnyProxy', () => {
 
     it('returns false for empty object', () => {
         expect(hasAnyProxy({})).toBe(false);
+    });
+});
+
+describe('getBenchmarkScore', () => {
+    afterEach(() => {
+        _setBenchmarkFpsForTest(null);
+    });
+
+    it('returns 0 when benchmark has not run', () => {
+        _setBenchmarkFpsForTest(null);
+        expect(getBenchmarkScore()).toBe(0);
+    });
+
+    it('returns 0 for FPS below 120', () => {
+        _setBenchmarkFpsForTest(80);
+        expect(getBenchmarkScore()).toBe(0);
+    });
+
+    it('returns 0 at FPS boundary of 119', () => {
+        _setBenchmarkFpsForTest(119);
+        expect(getBenchmarkScore()).toBe(0);
+    });
+
+    it('returns 1 at FPS boundary of 120', () => {
+        _setBenchmarkFpsForTest(120);
+        expect(getBenchmarkScore()).toBe(1);
+    });
+
+    it('returns 1 for mid-range FPS', () => {
+        _setBenchmarkFpsForTest(180);
+        expect(getBenchmarkScore()).toBe(1);
+    });
+
+    it('returns 1 at FPS boundary of 239', () => {
+        _setBenchmarkFpsForTest(239);
+        expect(getBenchmarkScore()).toBe(1);
+    });
+
+    it('returns 2 at FPS boundary of 240', () => {
+        _setBenchmarkFpsForTest(240);
+        expect(getBenchmarkScore()).toBe(2);
+    });
+
+    it('returns 2 for high FPS', () => {
+        _setBenchmarkFpsForTest(500);
+        expect(getBenchmarkScore()).toBe(2);
     });
 });
 
