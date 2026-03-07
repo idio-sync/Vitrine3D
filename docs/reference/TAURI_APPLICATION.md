@@ -1,4 +1,4 @@
-npm # Tauri Desktop Application
+# Tauri Desktop Application
 
 The 3D Archive Viewer can be built as a native desktop application using [Tauri v2](https://v2.tauri.app/). The desktop app defaults to **kiosk mode with the editorial theme**, providing a polished viewer experience. The web app (`npm start`) remains the full editor.
 
@@ -14,7 +14,7 @@ The 3D Archive Viewer can be built as a native desktop application using [Tauri 
 
 | Command | Description |
 |---------|-------------|
-| `npm start` | Web dev server (unchanged, full editor mode) |
+| `npm run dev` | Vite dev server (unchanged, full editor mode) |
 | `cargo tauri dev` | Launch native window loading from dev server |
 | `cargo tauri build` | Production build with bundled dependencies |
 | `npm run vendor` | Download CDN deps to `dist/` for offline use |
@@ -25,26 +25,25 @@ The 3D Archive Viewer can be built as a native desktop application using [Tauri 
 
 ### Dev Mode (`cargo tauri dev`)
 
-1. Starts `npx serve src -p 8080` (the `beforeDevCommand`)
+1. Runs `npm run dev` — Vite dev server on port 8080 (the `beforeDevCommand`)
 2. Compiles the Rust backend
 3. Opens a native window pointing to `http://localhost:8080/?kiosk=true&theme=editorial`
-4. Frontend loads dependencies from CDN (same as `npm start`)
+4. Frontend loads dependencies from `node_modules/` via Vite (same as `npm run dev`)
 5. File watcher auto-rebuilds on Rust/config changes
 
 ### Production Build (`cargo tauri build`)
 
-1. Runs `node scripts/vendor-deps.mjs` (the `beforeBuildCommand`)
-   - Copies `src/` to `dist/`
-   - Downloads all 12 CDN dependencies to `dist/vendor/`
-   - Rewrites the import map in `dist/index.html` to use local paths
-   - Patches esm.sh polyfill imports for offline compatibility
+1. Runs `npm run build` — Vite production build to `dist/` (the `beforeBuildCommand`)
+   - Bundles all dependencies from `node_modules/` via Vite/Rollup
+   - Compiles TypeScript, tree-shakes, and minifies
+   - Copies runtime assets (themes, WASM files, Draco decoders)
 2. Compiles the Rust backend in release mode
 3. Bundles `dist/` into the executable as the frontend
 4. Produces installers in `src-tauri/target/release/bundle/`
 
 ### Native File Dialogs
 
-When running inside Tauri, the app detects `window.__TAURI__` and replaces HTML file inputs with native OS dialogs. This is handled by `src/modules/tauri-bridge.js`, which is lazy-imported in `main.js` only when Tauri is detected. All 9 file inputs and 4 download points use native dialogs in the desktop app, with browser fallbacks for the web version.
+When running inside Tauri, the app detects `window.__TAURI__` and replaces HTML file inputs with native OS dialogs. This is handled by `src/modules/tauri-bridge.ts`, which is lazy-imported in `main.ts` only when Tauri is detected. All 9 file inputs and 4 download points use native dialogs in the desktop app, with browser fallbacks for the web version.
 
 ## Project Structure
 
@@ -64,7 +63,8 @@ scripts/
   vendor-deps.mjs          CDN dependency vendoring for offline builds
 
 src/modules/
-  tauri-bridge.js          Native dialog bridge (feature-detected)
+  tauri-bridge.ts          Native dialog bridge (feature-detected)
+  tauri-auth.ts            Cloudflare Access JWT storage for library API auth
 ```
 
 ## CI/CD
@@ -125,4 +125,4 @@ Output appears in `src-tauri/target/release/bundle/` (`.msi`/`.exe` on Windows).
 
 ### Android Support
 
-Tauri v2 supports Android targets. Deferred to a future phase — requires additional setup (Android SDK, NDK) and testing of touch interactions, file picker APIs, and WebView compatibility with Spark.js WASM.
+Tauri v2 Android builds are functional. The project includes `@tauri-apps/cli` with Android target support and a custom app icon. Requires Android SDK and NDK for building. Touch interactions and WebView compatibility with Spark.js WASM have been validated.

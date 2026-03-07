@@ -7,13 +7,11 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 ## Critical
 
 ### Format Specification & Independence
-- [x] **Done** — Write a standalone specification document for the `.a3d`/`.a3z` format, independent of the viewer implementation (see [SPECIFICATION.md](archive/SPECIFICATION.md))
 - [ ] Create a formal JSON Schema for `manifest.json` and include schema version in the manifest
 - [ ] Define forward/backward compatibility rules (readers MUST ignore unknown fields, major version bump for new required fields)
 - [ ] Decouple the format identity from the viewer — add `format` and `format_spec` fields alongside `packer`
 
 ### Data Hierarchy
-- [x] **Done** — Add `role` field (primary/derived) to each data entry
 - [ ] Support a derivation chain recording how each file was produced from its parent (software, parameters, version)
 - [ ] Align data hierarchy with PREMIS object relationships (`isDerivedFrom`, `hasSource`, `isPartOf`)
 
@@ -21,38 +19,20 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 
 ## High Priority
 
-## Mobile Support
-- [x] **Done** — Add mobile friendly layout and view for kiosk mode
-- [x] **Done** — Display proxy (LOD) support in archives — upload pre-simplified mesh and/or splat, kiosk viewer loads them automatically
-- [x] **Done** — Auto-detect mobile/low-end devices in kiosk viewer via `quality-tier.ts` and default to SD (proxy) assets; SD/HD toggle lets users switch manually
-
 ### Measurement & Analysis Tools
-- [x] **Done** — Point-to-point distance measurement (two-click flow, 3D line overlay, DOM markers, configurable units m/cm/mm/in/ft; works in main editor and kiosk viewer)
 - [ ] Coordinate readout on hover (XYZ in scene units)
 - [ ] Multi-point polyline measurement with cumulative distance
-- [x] **Done** — Cross-section tool (define a cutting plane, display intersection profile; arbitrary-orientation clipping plane)
 
 ### Metadata Improvements
-- [x] **Done** — Inline field validation (ORCID, coordinates, dates, PRONOM IDs)
 - [ ] Add tooltips/help text to every metadata field explaining purpose and format
 - [ ] Implement metadata templates for common scenarios (Heritage Survey, Research Capture, Quick Archive)
-- [x] **Done** — Auto-detect PRONOM format IDs from loaded assets; mesh face/vertex counts displayed as read-only statistics
-- [x] **Done** — SIP compliance validation at export time: required/recommended field checking, format validation (ORCID, dates, coordinates), compliance scoring, and manifest audit trail
-
-### Asset Types
-- [x] **Done** — DXF drawing files as an independent asset type (loaded via `three-dxf-loader`, displayed in a dedicated drawing layer)
-- [x] **Done** — STEP/IGES parametric CAD files as an independent asset type (loaded via `occt-import-js` OpenCASCADE WASM, tessellated and rendered in a dedicated CAD layer; stored as `cad_` entries in archives)
 
 ### Annotation Enhancements
-- [x] **Done** — Image attachments in annotations via `asset:` protocol
 - [ ] Annotation types with type-specific fields (condition observation, measurement, general note)
 - [ ] Polyline annotations — trace a path as a series of 3D points
 - [ ] Area annotations — define a surface polygon for marking regions
 - [ ] Measurement annotations — store two endpoints and computed distance
 - [ ] Add `author`, `created_date`, `modified_date` fields to each annotation
-
-### Walkthrough Engine
-- [x] **Done** — Guided walkthrough engine — author camera-stop sequences with configurable transitions (fly/fade/cut), dwell times, annotation links, auto-play and loop; playback in both editor and kiosk viewer
 
 ### Standards Compliance
 - [ ] Add `format_variant` / `format_note` alongside PRONOM IDs to distinguish splat PLY from standard PLY
@@ -60,7 +40,6 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [ ] Add optional `@context` field (JSON-LD) for machine-readable mappings to Dublin Core and Schema.org
 
 ### Archive Integrity
-- [x] **Done** — Display warning when SHA-256 hashing is unavailable on HTTP
 - [ ] Bundle a pure-JavaScript SHA-256 fallback for HTTP development environments
 - [ ] Add optional digital signatures (ECDSA via Web Crypto API) with signer identity and timestamp
 - [ ] Enforce HTTPS in production Docker deployments (nginx redirect)
@@ -70,12 +49,9 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 ## Medium Priority
 
 ### Infrastructure
-- [x] **Done** — Split Vite build into minimal public kiosk bundle (`/`) and full editor bundle (`/editor/`); established `kiosk-main.ts` as the shared viewer layer
 - [ ] Auth gate for `/editor/`: add Cloudflare Access protection to the nginx `/editor/` location block (mirrors existing admin route protection)
 
-### Code Quality (from Code Review)
-- [x] **Done** — Add ESLint 9 + Prettier linting (lenient baseline, 0 errors)
-- [x] **Done** — Refactor main.ts from ~3,900 to ~1,900 lines (module extractions across Phase 1-4)
+### Code Quality
 - [ ] Add file size limits for uploaded/downloaded files (e.g., 500 MB max)
 - [ ] Replace inline style manipulation with CSS classes and custom properties
 - [ ] Add WebGL context loss handler with user-friendly recovery message
@@ -83,39 +59,25 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [ ] Replace `setTimeout`-based async sequencing with proper promise chains or event-driven patterns
 
 ### Testing
-- [x] **Done** — Add a testing framework (Vitest) with 90 tests across 5 suites (url-validation, theme-loader, archive-loader, utilities, quality-tier)
-- [x] **Done** — Prioritize tests for: filename sanitization, URL validation, theme metadata parsing, utilities, quality-tier detection
 - [ ] Add tests for: archive parsing/creation, alignment algorithms
 - [ ] Add E2E smoke tests for archive round-trip (create, load, verify metadata)
 
 ### Type Safety
-- [x] **Done** — Add shared TypeScript types (`src/types.ts`): `AppState`, `SceneRefs`, deps interfaces with JSDoc `@returns` on factory functions
-- [x] **Done** — TypeScript migration Phases 1–3 complete: 26 of 29 modules converted to `.ts`, hybrid `allowJs: true` setup, `@types/three` installed
-- [x] **Done** — Phase 4: Convert `main.js` → `main.ts` (~1,900 lines), extract `source-files-manager.ts` and `file-input-handlers.ts`
 - [ ] Phase 5: Enable `strict: true` and fix resulting type errors
 - [ ] Add comprehensive JSDoc type annotations to any remaining `.js` exported functions
 
 ### Versioning & Collaboration
-- [x] **Done** — Version history array in manifest with UI for adding entries
 - [ ] Build a diff tool to compare two `.a3d` archives (file changes, metadata differences, annotation changes)
 - [ ] Add annotation status workflow: `draft` -> `submitted` -> `reviewed` -> `confirmed`
 - [ ] Support multiple annotation layers that can be toggled independently
 
 ### Rendering & Runtime
-- [x] Abstract the rendering backend to allow swapping Three.js WebGL for WebGPU when mature
 - [ ] Add file size warnings in the UI for large assets (>100 MB mesh, >500 MB E57)
 - [ ] Cache fetched CDN dependencies (Cache API or IndexedDB) so kiosk exports survive CDN outages
 - [ ] Bundle CDN dependencies as local assets for air-gapped/institutional deployments
 
-### ~~Kiosk Viewer Durability~~ (DEPRECATED — downloadable kiosk viewer is deprecated; kiosk is now served directly at `/` via the Vite build)
-- ~~Base64-encode the archive ZIP data within a `<script>` tag~~
-- ~~Include `viewer_version` and `viewer_created_date` in kiosk HTML metadata~~
-- ~~Add a visible message: "This viewer was created on [date] and may not work in future browsers"~~
-- [ ] Investigate pre-rendered turntable images/video as a preservation fallback
-
 ### Preservation Standards
 - [ ] Add OAIS reference model mapping to the specification document
-- [x] Include a plain-text `README.txt` in every archive explaining how to extract and read the contents
 - [ ] Generate standards-compliant metadata sidecar files on demand (Dublin Core XML, METS, PREMIS)
 
 ---
@@ -129,13 +91,9 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [ ] Change detection — compare two captures of the same subject over time
 
 ### Progressive Loading
-- [x] **Done** — Multi-resolution archives with LOD proxy variants in the manifest (`lod: "proxy"`, `derived_from`)
-- [x] **Done** — In-browser mesh decimation via meshoptimizer WASM with configurable presets, texture downscaling, and SD proxy GLB generation in the editor
 - [ ] Octree-based point cloud renderer that loads visible nodes on demand
-- [x] **Done** — Draco/meshopt geometry compression for smaller archive transfer size (Draco-compressed GLB files now supported via DRACOLoader; WASM decoder served from `public/draco/`)
 
 ### Alignment
-- [x] **Done** — N-point landmark alignment with live preview, RMSE quality metric, and undo (`LandmarkAlignment` class)
 - [ ] Add convergence criteria and maximum correspondence distance to ICP
 - [ ] Implement point-to-plane ICP for better convergence on planar surfaces
 - [ ] RANSAC-based initial alignment for distant starting positions
@@ -155,5 +113,59 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 
 ### Alternative Kiosk Formats
 - [ ] Web Bundle (`.wbn`) — W3C format for self-contained web content
-- [x] **Done** — Tauri v2 packaged viewer for institutional desktops (defaults to kiosk mode + editorial theme)
 - [ ] Service Worker-based ZIP viewer (`.zip` where `index.html` is the entry point)
+- [ ] Investigate pre-rendered turntable images/video as a preservation fallback
+
+---
+
+<details>
+<summary>Completed</summary>
+
+### Mobile & Progressive Loading
+- [x] **Done** — Add mobile friendly layout and view for kiosk mode
+- [x] **Done** — Display proxy (LOD) support in archives — upload pre-simplified mesh and/or splat, kiosk viewer loads them automatically
+- [x] **Done** — Auto-detect mobile/low-end devices in kiosk viewer via `quality-tier.ts` and default to SD (proxy) assets; SD/HD toggle lets users switch manually
+- [x] **Done** — Multi-resolution archives with LOD proxy variants in the manifest (`lod: "proxy"`, `derived_from`)
+- [x] **Done** — In-browser mesh decimation via meshoptimizer WASM with configurable presets, texture downscaling, and SD proxy GLB generation in the editor
+- [x] **Done** — Draco/meshopt geometry compression for smaller archive transfer size (Draco-compressed GLB files now supported via DRACOLoader; WASM decoder served from `public/draco/`)
+
+### Measurement & Analysis
+- [x] **Done** — Point-to-point distance measurement (two-click flow, 3D line overlay, DOM markers, configurable units m/cm/mm/in/ft; works in main editor and kiosk viewer)
+- [x] **Done** — Cross-section tool (define a cutting plane, display intersection profile; arbitrary-orientation clipping plane)
+
+### Metadata & Standards
+- [x] **Done** — Inline field validation (ORCID, coordinates, dates, PRONOM IDs)
+- [x] **Done** — Auto-detect PRONOM format IDs from loaded assets; mesh face/vertex counts displayed as read-only statistics
+- [x] **Done** — SIP compliance validation at export time: required/recommended field checking, format validation (ORCID, dates, coordinates), compliance scoring, and manifest audit trail
+- [x] **Done** — Display warning when SHA-256 hashing is unavailable on HTTP
+- [x] **Done** — Add `role` field (primary/derived) to each data entry
+- [x] **Done** — Write a standalone specification document for the `.a3d`/`.a3z` format, independent of the viewer implementation (see [SPECIFICATION.md](archive/SPECIFICATION.md))
+- [x] Include a plain-text `README.txt` in every archive explaining how to extract and read the contents
+
+### Asset Types
+- [x] **Done** — DXF drawing files as an independent asset type (loaded via `three-dxf-loader`, displayed in a dedicated drawing layer)
+- [x] **Done** — STEP/IGES parametric CAD files as an independent asset type (loaded via `occt-import-js` OpenCASCADE WASM, tessellated and rendered in a dedicated CAD layer; stored as `cad_` entries in archives)
+
+### Annotations & Walkthrough
+- [x] **Done** — Image attachments in annotations via `asset:` protocol
+- [x] **Done** — Guided walkthrough engine — author camera-stop sequences with configurable transitions (fly/fade/cut), dwell times, annotation links, auto-play and loop; playback in both editor and kiosk viewer
+
+### Infrastructure & Code Quality
+- [x] **Done** — Split Vite build into minimal public kiosk bundle (`/`) and full editor bundle (`/editor/`); established `kiosk-main.ts` as the shared viewer layer
+- [x] **Done** — Add ESLint 9 + Prettier linting (lenient baseline, 0 errors)
+- [x] **Done** — Refactor main.ts from ~3,900 to ~1,900 lines (module extractions across Phase 1-4)
+- [x] **Done** — Version history array in manifest with UI for adding entries
+- [x] **Done** — Tauri v2 packaged viewer for institutional desktops (defaults to kiosk mode + editorial theme)
+
+### Testing & Type Safety
+- [x] **Done** — Add a testing framework (Vitest) with 90 tests across 5 suites (url-validation, theme-loader, archive-loader, utilities, quality-tier)
+- [x] **Done** — Prioritize tests for: filename sanitization, URL validation, theme metadata parsing, utilities, quality-tier detection
+- [x] **Done** — Add shared TypeScript types (`src/types.ts`): `AppState`, `SceneRefs`, deps interfaces with JSDoc `@returns` on factory functions
+- [x] **Done** — TypeScript migration Phases 1–3 complete: 26 of 29 modules converted to `.ts`, hybrid `allowJs: true` setup, `@types/three` installed
+- [x] **Done** — Phase 4: Convert `main.js` → `main.ts` (~1,900 lines), extract `source-files-manager.ts` and `file-input-handlers.ts`
+
+### Rendering
+- [x] Abstract the rendering backend to allow swapping Three.js WebGL for WebGPU when mature
+- [x] **Done** — N-point landmark alignment with live preview, RMSE quality metric, and undo (`LandmarkAlignment` class)
+
+</details>

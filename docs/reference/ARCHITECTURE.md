@@ -29,11 +29,14 @@ src/
     alignment.ts          - KD-tree, ICP algorithm, auto-align, fit-to-view, LandmarkAlignment
     annotation-controller.ts - Annotation lifecycle orchestration (placement, selection, navigation)
     annotation-system.ts  - 3D annotation markers and raycasting
+    annotation-tour.ts    - Camera automation iterating through annotations with easeOutCubic easing
     archive-creator.ts    - Archive creation with SHA-256 hashing
     archive-loader.ts     - ZIP extraction and manifest parsing
     archive-pipeline.ts   - Archive loading/processing pipeline (extracted from main.ts)
     asset-store.ts        - ES module singleton for blob references
     cad-loader.ts         - STEP/IGES CAD loading via occt-import-js WASM
+    collection-manager.ts - Collection CRUD, sidebar rendering, archive membership in editor library
+    collection-page.ts    - Editorial-themed collection browser for kiosk; shared rendering helpers
     constants.ts          - Shared numeric/string constants
     cross-section.ts      - Movable/rotatable clipping plane tool using material-level clipping
     event-wiring.ts       - Central UI event binding — setupUIEvents()
@@ -41,20 +44,26 @@ src/
     file-handlers.ts      - Asset loading (splat, mesh, point cloud, STL, archive)
     file-input-handlers.ts- File input events, URL prompts, URL loaders, Tauri dialogs
     fly-controls.ts       - WASD + mouse-look first-person camera
+    home-screen.ts        - Stub; home screen now handled by kiosk-main.ts file picker
     kiosk-main.ts         - Shared kiosk viewer layer (used by both kiosk-web.ts and editor kiosk mode)
     kiosk-viewer.ts       - DEPRECATED: offline viewer generator (fetches CDN deps)
+    library-page.ts       - Full-page editorial archive browser with All Archives/Collections tabs
     logger.ts             - Standalone Logger class (extracted from utilities)
     map-picker.ts         - Leaflet + OSM interactive map modal for GPS coordinate selection
     measurement-system.ts - Point-to-point distance measurement using raycasting (session-only)
     metadata-manager.ts   - Metadata sidebar (view/edit), Dublin Core schema
     metadata-profile.ts   - Basic/Standard/Archival completeness tiers controlling field visibility
+    post-processing.ts    - EffectComposer pipeline: SSAO, Bloom, vignette/aberration/grain
     quality-tier.ts       - Device capability detection for SD/HD asset selection
+    recording-manager.ts  - WebGL canvas recording via MediaRecorder (turntable/walkthrough/tour/free)
+    recording-trim.ts     - Inline trim UI for recorded videos with start/end scrubber handles
     scene-manager.ts      - Three.js scene, camera, renderers, animation
     screenshot-manager.ts - Screenshot capture, viewfinder, screenshot list management
     share-dialog.ts       - Share-link builder with URL parameters
     sip-validator.ts      - SIP compliance validation at export time with scoring and audit trail
     source-files-manager.ts- Source file list UI management for archive exports
     spark-compat.ts       - Spark.js version abstraction (SPARK_VERSION env var)
+    tauri-auth.ts         - Cloudflare Access JWT storage and cfAuthFetch() wrapper
     tauri-bridge.ts       - Tauri v2 native OS integration with browser fallback
     theme-loader.ts       - Kiosk theme CSS/layout loading and metadata parsing
     transform-controller.ts- Transform gizmo orchestration, object sync, delta tracking
@@ -120,12 +129,22 @@ utilities.ts  (imports constants, logger, THREE)
      +---> archive-pipeline.ts    (file-handlers, cad-loader, archive-loader, quality-tier, utilities)
      +---> alignment.ts           (THREE, utilities)
      +---> annotation-system.ts   (THREE — no utility imports)
+     +---> annotation-controller.ts (utilities)
+     +---> annotation-tour.ts     (utilities)
+     +---> collection-manager.ts  (utilities, types)
+     +---> collection-page.ts     (utilities)
+     +---> home-screen.ts         (no imports — stub)
+     +---> library-page.ts        (utilities, tauri-auth, collection-page)
      +---> metadata-manager.ts    (utilities)
      +---> fly-controls.ts        (THREE, utilities)
      +---> share-dialog.ts        (utilities)
      +---> kiosk-viewer.ts        (utilities)
      +---> ui-controller.ts       (utilities)
+     +---> post-processing.ts     (logger, constants, types, THREE)
      +---> quality-tier.ts        (constants, utilities)
+     +---> recording-manager.ts   (utilities)
+     +---> recording-trim.ts      (utilities)
+     +---> tauri-auth.ts          (utilities)
      +---> theme-loader.ts        (utilities)
      +---> tauri-bridge.ts        (utilities)
      +---> url-validation.ts      (utilities)
@@ -227,6 +246,12 @@ Shared TypeScript interfaces:
 - `ExportDeps`, `ArchivePipelineDeps`, `EventWiringDeps`, `FileInputDeps` — deps pattern interfaces
 - `Walkthrough`, `WalkthroughStop`, `WalkthroughTransition` — guided walkthrough data shapes
 
+### `src/modules/collection-manager.ts`
+Manages collections in the editor library panel. Handles sidebar rendering of the collection list, collection CRUD operations via the admin API (create, rename, delete), archive membership assignment (add/remove archives from collections), and collection chip display in the archive detail pane. State is module-scoped; initialized via `initCollectionManager()`.
+
+### `src/modules/collection-page.ts`
+Renders an editorial-themed collection browser for kiosk mode. Design language matches the Editorial Gold theme: navy + gold palette, Source Sans 3 typography, gold accent rules, and staggered entry animations. Exports shared rendering helpers (`renderCard`, `escapeHtml`, `ASSET_LABELS`, `injectStyles`, `getLogoSrc`) that are reused by `library-page.ts`.
+
 ### `src/modules/constants.ts`
 Pure data — exported objects for camera FOV, orbit control limits, lighting colors/intensities, grid settings, timing delays, material defaults, and supported file extensions. No logic.
 
@@ -241,6 +266,12 @@ Shared infrastructure:
 - **`disposeObject()`** — recursively disposes Three.js objects to free GPU memory.
 - **`parseMarkdown()`** — minimal Markdown-to-HTML converter for metadata display.
 - **`fetchWithProgress()`** — wraps `fetch()` with a progress callback using `ReadableStream`.
+
+### `src/modules/recording-manager.ts`
+Orchestrates WebGL canvas recording via the MediaRecorder API. Supports four modes: `turntable` (automated 360° spin), `walkthrough` (guided camera tour playback), `annotation-tour` (fly through each annotation sequentially), and `free` (manual camera recording). Captures frames from the WebGL canvas stream, produces WebM blobs, and uploads them to the server-side FFmpeg transcode pipeline for conversion to MP4 and GIF. Exports `RecordingManager` with `start()`, `stop()`, and state tracking.
+
+### `src/modules/recording-trim.ts`
+Lightweight inline trim UI for recorded videos. Shows a video preview element with a timeline scrubber featuring draggable start/end handles. Produces a `TrimResult` containing `trimStart`, `trimEnd` (in seconds), and `title` — timestamps consumed by the server-side FFmpeg processing. `showTrimUI()` returns a promise that resolves with trim settings or `null` if the user discards the recording.
 
 ### `src/modules/scene-manager.ts`
 Encapsulates Three.js setup in a `SceneManager` class:
@@ -292,6 +323,12 @@ Spatial alignment tools:
 - **`centerModelOnGrid()`** — centers a standalone model at the grid origin.
 - **`LandmarkAlignment`** — interactive N-point landmark alignment class. Users place matching point pairs on two objects; the class computes an optimal rigid transform, shows a live preview, reports an RMSE quality metric, supports undo of individual point pairs, and applies the final transform on confirm.
 
+### `src/modules/annotation-controller.ts`
+Annotation lifecycle orchestration for the editor. Handles creation, editing, selection, and UI management of annotations in the main editor mode. Extracted from main.ts for modularity. Receives dependencies via `AnnotationControllerDeps` interface (annotationSystem, showAnnotationPopup, hideAnnotationPopup).
+
+### `src/modules/annotation-tour.ts`
+Camera automation that iterates through annotations, flying the camera to each with easeOutCubic easing, dwelling to show the popup, then advancing to the next. Provides `startAnnotationTour()` and `cancelAnnotationTour()`. Used by the recording manager for the annotation-tour recording mode. Receives camera, controls, and annotationSystem via `AnnotationTourDeps`.
+
 ### `src/modules/annotation-system.ts`
 `AnnotationSystem` class:
 - Lets users click on 3D surfaces to place annotation markers (small spheres in a `markerGroup`).
@@ -318,6 +355,9 @@ Manages the metadata sidebar:
 
 ### `src/modules/share-dialog.ts`
 Builds a modal dialog where users configure share-link options (display mode, controls visibility, toolbar, sidebar state, UI presets). Generates a URL with all current transforms serialized as query parameters. Supports three presets: `full`, `viewer`, `kiosk`.
+
+### `src/modules/library-page.ts`
+Full-page editorial-themed archive browser with two tabs: "All Archives" and "Collections". Activated when `window.APP_CONFIG.library === true` (set by server injection). Reuses shared rendering helpers from `collection-page.ts` (`escapeHtml`, `ASSET_LABELS`, `injectStyles`, `getLogoSrc`, `renderCard`). Uses `cfAuthFetch` from `tauri-auth.ts` for authenticated API requests to the admin backend.
 
 ### `src/modules/kiosk-viewer.ts` (DEPRECATED)
 ~~Generates a self-contained ~1 MB HTML file that can view any .a3d/.a3z archive offline.~~ The downloadable kiosk HTML generator is deprecated. The kiosk viewer is now served as a separate Vite bundle at `/`. This module is retained for backward compatibility but the download button is hidden (`display:none`).
@@ -367,6 +407,9 @@ Pure logic module — no DOM access, fully testable. Validates collected metadat
 ### `src/modules/transform-controller.ts`
 Transform gizmo orchestration, object sync, delta tracking extracted from main.ts.
 
+### `src/modules/home-screen.ts`
+Stub module. The home screen is now handled by the kiosk file picker in `kiosk-main.ts`. When `APP_CONFIG.home` is true and `VITE_APP_LIBRARY_URL` is set, the file picker shows a "Browse Library" button above the drop zone. Exports `initHomeScreen()` which always returns false. Exists to keep the `kiosk-web.ts` boot sequence working.
+
 ### `src/modules/kiosk-main.ts`
 Shared kiosk viewer layer used by both `kiosk-web.ts` (the Vite kiosk bundle at `/`) and the editor's kiosk preview mode. Imports from real application modules so that visual and functional changes propagate automatically. Viewer-only — no archive creation, metadata editing, or alignment tools. Handles archive loading, display mode switching, annotations, walkthrough playback, and theme application.
 
@@ -379,6 +422,9 @@ Props pane UI for the walkthrough authoring experience. Manages the stop list, i
 ### `src/modules/walkthrough-controller.ts`
 Thin orchestration layer that bridges `walkthrough-editor.ts` and `walkthrough-engine.ts` with `main.ts` via the deps pattern (`WalkthroughControllerDeps`). Initialises both sub-modules, wires camera-capture buttons to the editor, and drives a `WalkthroughEngine` instance for preview playback inside the editor. Keeps editor and engine concerns separate while providing a single integration point for `main.ts`.
 
+### `src/modules/post-processing.ts`
+Post-processing pipeline using Three.js `EffectComposer`. Includes SSAO (Screen Space Ambient Occlusion) via `SSAOPass`, Unreal Bloom via `UnrealBloomPass`, and a custom uber-shader (`ShaderPass`) combining vignette, chromatic aberration, and film grain effects. Configurable via `PostProcessingEffectConfig` from `types.ts`. The pipeline is opt-in — `isEnabled()` gates whether `render()` uses the composer or falls through to the standard renderer.
+
 ### `src/modules/quality-tier.ts`
 Device capability detection for SD/HD asset selection:
 - `detectDeviceTier()` scores 5 hardware heuristics (device memory, CPU cores, screen width, GPU info via WebGL) to classify as SD or HD.
@@ -390,6 +436,9 @@ Runtime theme loading for kiosk viewer:
 - Fetches `theme.css` (required), `layout.css` (optional), and `layout.js` (optional) from `themes/{name}/`.
 - `parseThemeMeta()` extracts `@theme`, `@layout`, and `@scene-bg` directives from CSS comment blocks.
 - Supports sidebar, editorial, gallery, and exhibit layout modes. Gallery and exhibit themes include click gates (click-to-load interstitials).
+
+### `src/modules/tauri-auth.ts`
+Stores the Cloudflare Access JWT obtained via Tauri's deep-link auth flow. Provides `setCfToken()`, `getCfToken()`, `hasCfToken()`, and `clearCfToken()` for token lifecycle management. The key export is `cfAuthFetch()`, which wraps `fetch()` to inject the JWT as an authorization header and prepend the library base URL (`VITE_APP_LIBRARY_URL`) for relative paths. Used by `library-page.ts` and `collection-manager.ts` for authenticated API requests to the admin backend from within the Tauri desktop app.
 
 ### `src/modules/tauri-bridge.ts`
 Native OS integration when running inside Tauri v2, with browser fallback:
