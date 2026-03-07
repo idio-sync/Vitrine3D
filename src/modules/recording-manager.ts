@@ -248,7 +248,7 @@ export async function uploadRecording(options: {
  */
 export function pollMediaStatus(
     mediaId: string,
-    onStatusChange: (status: string) => void,
+    onStatusChange: (status: string, data?: any) => void,
     serverUrl = ''
 ): void {
     const poll = async () => {
@@ -256,7 +256,7 @@ export function pollMediaStatus(
             const res = await fetch(`${serverUrl}/api/media/${mediaId}`);
             if (!res.ok) return;
             const data = await res.json();
-            onStatusChange(data.status);
+            onStatusChange(data.status, data);
             if (data.status === 'ready' || data.status === 'error') return;
             setTimeout(poll, 2000);
         } catch {

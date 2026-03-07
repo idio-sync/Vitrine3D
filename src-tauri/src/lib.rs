@@ -221,21 +221,20 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
-
-                // DEBUG: show what args the second instance sent
-                let debug_args: Vec<String> = args.iter().map(|a| {
-                    if a.len() > 80 { format!("{}...", &a[..80]) } else { a.clone() }
-                }).collect();
-                let debug_msg = format!("Single-instance callback fired.\\nArgs ({}):\\n{}", args.len(), debug_args.join("\\n"));
-                let _ = window.eval(&format!("alert(\"{}\")", debug_msg.replace('\"', "\\\"")));
-
-                // Forward deep link URLs via multiple strategies
+                // Forward deep link URLs — all logic in one eval call to avoid
+                // WebView2 dropping queued evals while a previous one is pending.
                 for arg in &args {
                     if arg.starts_with("vitrine3d://") {
                         let _ = app.emit("deep-link-received", arg.clone());
                         let escaped = arg.replace('\\', "\\\\").replace('\"', "\\\"");
                         let js = format!(
-                            "if(window.__vitrine3dDeepLink){{window.__vitrine3dDeepLink(\"{0}\")}}else{{window.dispatchEvent(new CustomEvent('vitrine3d:deep-link',{{detail:\"{0}\"}}))}}",
+                            concat!(
+                                "try{{",
+                                "var _dl=\"{0}\";",
+                                "if(window.__vitrine3dDeepLink){{window.__vitrine3dDeepLink(_dl)}}",
+                                "else{{window.dispatchEvent(new CustomEvent('vitrine3d:deep-link',{{detail:_dl}}))}}",
+                                "}}catch(_e){{console.error('deep-link eval:',_e)}}"
+                            ),
                             escaped
                         );
                         let _ = window.eval(&js);

@@ -1409,10 +1409,10 @@ async function handlePointcloudFile(event: Event) {
 }
 
 // Handle archive file input (delegated to archive-pipeline.ts)
-async function handleArchiveFile(event: Event) { return handleArchiveFileCtrl(event, createArchivePipelineDeps()); }
+async function handleArchiveFile(event: Event) { clearRecordingPreview(); return handleArchiveFileCtrl(event, createArchivePipelineDeps()); }
 
 // Load archive from URL (delegated to archive-pipeline.ts)
-async function loadArchiveFromUrl(url: string) { return loadArchiveFromUrlCtrl(url, createArchivePipelineDeps()); }
+async function loadArchiveFromUrl(url: string) { clearRecordingPreview(); return loadArchiveFromUrlCtrl(url, createArchivePipelineDeps()); }
 
 // Ensure archive asset loaded (delegated to archive-pipeline.ts)
 async function ensureAssetLoaded(assetType: string) { return ensureAssetLoadedCtrl(assetType, createArchivePipelineDeps()); }
@@ -1552,11 +1552,12 @@ function handleStartRecording(): void {
 
         if (uploadResult) {
             if (statusText) statusText.textContent = 'Processing...';
-            pollMediaStatus(uploadResult.id, (status) => {
+            pollMediaStatus(uploadResult.id, (status, data) => {
                 if (statusText) {
                     if (status === 'ready') {
                         statusText.textContent = 'Ready!';
                         setTimeout(() => { if (statusEl) statusEl.classList.add('hidden'); }, 3000);
+                        showRecordingPreview(data);
                     } else if (status === 'error') {
                         statusText.textContent = 'Transcode failed — try again';
                     }
@@ -1598,6 +1599,82 @@ function handleStopRecording(): void {
     stopRecordingHandler();
     controls.autoRotate = false;
     stopAnnotationTour();
+}
+
+function showRecordingPreview(media: any): void {
+    const container = document.getElementById('rec-result-preview');
+    if (!container || !media) return;
+    container.classList.remove('hidden');
+    container.innerHTML = '';
+
+    const card = document.createElement('div');
+    card.className = 'rec-preview-card';
+
+    // Thumbnail with click-to-play
+    if (media.thumb_path) {
+        const thumbWrap = document.createElement('div');
+        thumbWrap.className = 'rec-preview-thumb';
+        const img = document.createElement('img');
+        img.src = media.thumb_path;
+        img.alt = media.title || 'Recording';
+        if (media.gif_path) {
+            const thumbSrc = media.thumb_path;
+            img.addEventListener('mouseenter', () => { img.src = media.gif_path; });
+            img.addEventListener('mouseleave', () => { img.src = thumbSrc; });
+        }
+        if (media.mp4_path) {
+            img.style.cursor = 'pointer';
+            img.addEventListener('click', () => {
+                thumbWrap.innerHTML = '';
+                const video = document.createElement('video');
+                video.src = media.mp4_path;
+                video.controls = true;
+                video.autoplay = true;
+                video.style.cssText = 'width:100%; border-radius:4px; background:#000;';
+                thumbWrap.appendChild(video);
+            });
+        }
+        thumbWrap.appendChild(img);
+        card.appendChild(thumbWrap);
+    }
+
+    // Action buttons
+    const actions = document.createElement('div');
+    actions.className = 'rec-preview-actions';
+
+    if (media.share_url) {
+        const shareBtn = document.createElement('button');
+        shareBtn.className = 'prop-btn';
+        shareBtn.textContent = 'Copy Share Link';
+        shareBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(location.origin + media.share_url);
+                notify.success('Share link copied');
+            } catch { notify.error('Copy failed'); }
+        });
+        actions.appendChild(shareBtn);
+    }
+
+    if (media.gif_path) {
+        const gifBtn = document.createElement('button');
+        gifBtn.className = 'prop-btn';
+        gifBtn.textContent = 'Copy GIF URL';
+        gifBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(location.origin + media.gif_path);
+                notify.success('GIF URL copied');
+            } catch { notify.error('Copy failed'); }
+        });
+        actions.appendChild(gifBtn);
+    }
+
+    card.appendChild(actions);
+    container.appendChild(card);
+}
+
+function clearRecordingPreview(): void {
+    const container = document.getElementById('rec-result-preview');
+    if (container) { container.innerHTML = ''; container.classList.add('hidden'); }
 }
 
 // Download archive — delegated to export-controller.ts
