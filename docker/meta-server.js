@@ -1544,6 +1544,7 @@ function handleSharePage(req, res, mediaId) {
         .replace(/\{\{MP4_REL\}\}/g, escapeHtml(mp4RelUrl))
         .replace(/\{\{THUMB_REL\}\}/g, escapeHtml(thumbRelUrl))
         .replace(/\{\{CREATOR\}\}/g, creator)
+        .replace(/\{\{LOGO_URL\}\}/g, '/themes/' + (DEFAULT_KIOSK_THEME || 'editorial') + '/logo.png')
         .replace(/\{\{VIEW_3D_LINK\}\}/g, view3dLink)
         .replace(/\{\{GIF_LINK\}\}/g, gifLink);
 
@@ -1961,7 +1962,7 @@ function transcodeMedia(mediaId) {
         '-i', rawPath,
         '-c:v', 'libx264',
         '-preset', 'fast',
-        '-crf', '23',
+        '-crf', '18',
         '-movflags', '+faststart',
         '-an',
         '-y', mp4Path
