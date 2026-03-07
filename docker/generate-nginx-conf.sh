@@ -252,6 +252,13 @@ location ~ "^/collection/[a-z0-9][a-z0-9-]{0,79}$" {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
 }
+# Collection data API (public, bypasses /api/ CF Access gate)
+location ~ "^/collection/[a-z0-9][a-z0-9-]{0,79}/data$" {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
 COLLEOF
     echo "  Clean URLs: /view/{uuid}, /view/{hash}, and /collection/{slug} enabled"
 fi

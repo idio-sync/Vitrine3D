@@ -2467,6 +2467,12 @@ const server = http.createServer((req, res) => {
         return handleCollectionPage(req, res, collPageMatch[1]);
     }
 
+    // Collection data API (public, bypasses /api/ CF Access gate)
+    const collDataMatch = pathname.match(/^\/collection\/([a-z0-9][a-z0-9-]{0,79})\/data$/);
+    if (collDataMatch && req.method === 'GET') {
+        return handleGetCollection(req, res, collDataMatch[1]);
+    }
+
     // Share preview pages: /share/{16-char-hex-id}
     const shareMatch = pathname.match(/^\/share\/([a-f0-9]{16})$/);
     if (shareMatch) return handleSharePage(req, res, shareMatch[1]);

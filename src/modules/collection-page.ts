@@ -67,7 +67,7 @@ export const ASSET_LABELS: Record<string, string> = {
 // ── Fetch ──
 
 async function fetchCollection(slug: string): Promise<CollectionData> {
-    const res = await fetch('/api/collections/' + encodeURIComponent(slug));
+    const res = await fetch('/collection/' + encodeURIComponent(slug) + '/data');
     if (!res.ok) throw new Error('Collection not found');
     return res.json();
 }
