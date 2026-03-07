@@ -2161,6 +2161,7 @@ function transcodeMedia(mediaId) {
     const mp4Args = [
         ...trimArgs,
         '-i', rawPath,
+        '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
         '-c:v', 'libx264',
         '-preset', getSetting('video.preset'),
         '-crf', getSetting('video.crf'),
