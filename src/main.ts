@@ -1,6 +1,6 @@
 // ES Module imports (these are hoisted - execute first before any other code)
 import * as THREE from 'three';
-import { SplatMesh, createSparkRenderer, isSparkV2 } from './modules/spark-compat.js';
+import { SplatMesh, createSparkRenderer } from './modules/spark-compat.js';
 import { ArchiveLoader } from './modules/archive-loader.js';
 // hasAnyProxy moved to archive-pipeline.ts (Phase 2.2)
 import { AnnotationSystem } from './modules/annotation-system.js';
@@ -366,6 +366,7 @@ const sceneRefs: SceneRefs = {
     get flyControls() { return flyControls; },
     get annotationSystem() { return annotationSystem; },
     get archiveCreator() { return archiveCreator; },
+    get measurementSystem() { return measurementSystem; },
     get landmarkAlignment() { return landmarkAlignment; },
     get ambientLight() { return ambientLight; },
     get hemisphereLight() { return hemisphereLight; },

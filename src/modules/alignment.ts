@@ -830,7 +830,7 @@ export class LandmarkAlignment {
      * Manual raycasting for splat meshes (Spark.js doesn't implement Three.js raycast)
      * Samples splat points and finds the closest one to the ray.
      */
-    private _raycastSplatMesh(splatMeshObj: Object3D): { point: Vector3; distance: number } | null {
+    private _raycastSplatMesh(splatMeshObj: Object3D): { point: Vector3; distance: number; object: Object3D } | null {
         const splatMesh = splatMeshObj as SplatMesh;
         if (!splatMesh.packedSplats || typeof splatMesh.packedSplats.forEachSplat !== 'function') {
             log.warn('[_raycastSplatMesh] No packedSplats or forEachSplat method');
@@ -882,7 +882,8 @@ export class LandmarkAlignment {
             log.info(`[_raycastSplatMesh] Hit! Point: [${closestPoint.x.toFixed(3)}, ${closestPoint.y.toFixed(3)}, ${closestPoint.z.toFixed(3)}]`);
             return {
                 point: closestPoint,
-                distance: ray.origin.distanceTo(closestPoint)
+                distance: ray.origin.distanceTo(closestPoint),
+                object: splatMeshObj
             };
         }
 

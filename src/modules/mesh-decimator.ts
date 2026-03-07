@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { MeshoptSimplifier } from 'meshoptimizer';
+import { MeshoptSimplifier, type Flags } from 'meshoptimizer';
 import { Logger } from './utilities.js';
 import { DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET } from './constants.js';
 import type { DecimationOptions, DecimationResult } from '@/types.js';
@@ -160,7 +160,7 @@ export async function decimateGeometry(
 
     onProgress?.('Simplifying', 30);
 
-    const flags: string[] = [];
+    const flags: Flags[] = [];
     if (options.lockBorder) flags.push('LockBorder');
 
     const [simplifiedIndices, error] = MeshoptSimplifier.simplify(
@@ -232,11 +232,11 @@ function downscaleTexture(
     _format: 'jpeg' | 'png' | 'keep',
     _quality: number,
 ): THREE.Texture {
-    const image = texture.image;
+    const image = texture.image as HTMLImageElement | HTMLCanvasElement | undefined;
     if (!image) return texture;
 
-    const w = image.width || image.naturalWidth;
-    const h = image.height || image.naturalHeight;
+    const w = (image as HTMLImageElement).width || (image as HTMLImageElement).naturalWidth;
+    const h = (image as HTMLImageElement).height || (image as HTMLImageElement).naturalHeight;
     if (!w || !h) return texture;
 
     // Already within budget
@@ -252,7 +252,7 @@ function downscaleTexture(
     canvas.width = tw;
     canvas.height = th;
     const ctx = canvas.getContext('2d')!;
-    ctx.drawImage(image, 0, 0, tw, th);
+    ctx.drawImage(image as CanvasImageSource, 0, 0, tw, th);
 
     log.info(`Texture downscaled: ${w}x${h} → ${tw}x${th}`);
 

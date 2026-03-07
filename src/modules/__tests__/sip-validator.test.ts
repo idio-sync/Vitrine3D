@@ -157,13 +157,13 @@ function makeMetadata(overrides: Partial<{
         includeIntegrity: false,
         viewerSettings: {
             singleSided: false,
-            backgroundColor: null,
+            meshBackgroundColor: null,
             displayMode: 'combined',
             cameraPosition: null,
             cameraTarget: null,
             autoRotate: false,
             annotationsVisible: true,
-        },
+        } as any,
     };
 }
 

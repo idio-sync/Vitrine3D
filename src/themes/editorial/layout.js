@@ -1413,96 +1413,163 @@ export function setup(manifest, deps) {
     }
     viewerContainer.appendChild(ribbon);
 
-    // --- 4b. Mobile Bottom Nav (replaces ribbon at <700px) ---
-    const mobileNav = document.createElement('div');
-    mobileNav.className = 'editorial-mobile-nav';
+    // --- 4b. Floating Pill (replaces mobile nav at <700px) ---
+    const mobilePill = document.createElement('div');
+    mobilePill.className = 'editorial-mobile-pill';
 
-    // View mode cycle button
-    const navViewBtn = document.createElement('button');
-    navViewBtn.className = 'editorial-mobile-nav-btn';
-    navViewBtn.title = 'View mode';
-    navViewBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span class="editorial-mobile-nav-label">View</span>';
-    const navViewModes = types.length > 0 ? types.map(t => t.mode) : ['both'];
-    let navViewIndex = Math.max(0, navViewModes.indexOf(state.displayMode));
-    navViewBtn.addEventListener('click', () => {
-        navViewIndex = (navViewIndex + 1) % navViewModes.length;
-        const mode = navViewModes[navViewIndex];
-        state.displayMode = mode;
-        setDisplayMode(mode, createDisplayModeDeps());
-        triggerLazyLoad(mode);
-        // Sync ribbon view mode links if they exist
-        viewModes.querySelectorAll('.editorial-view-mode-link:not(.quality-toggle-btn)').forEach(l => {
-            l.classList.toggle('active', l.dataset.mode === mode);
-        });
-    });
-    mobileNav.appendChild(navViewBtn);
-
-    // Quality toggle button (SD/HD)
-    if (deps.hasAnyProxy || deps.hasSplat || deps.hasMesh) {
-        const navQualityBtn = document.createElement('button');
-        navQualityBtn.className = 'editorial-mobile-nav-btn';
-        navQualityBtn.title = 'Quality';
-        let navQuality = deps.qualityResolved || 'sd';
-        const updateQualityIcon = () => {
-            navQualityBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span class="editorial-mobile-nav-label">${navQuality.toUpperCase()}</span>`;
-            navQualityBtn.classList.toggle('active', navQuality === 'hd');
-        };
-        updateQualityIcon();
-        navQualityBtn.addEventListener('click', () => {
-            navQuality = navQuality === 'sd' ? 'hd' : 'sd';
-            if (deps.switchQualityTier) deps.switchQualityTier(navQuality);
-            updateQualityIcon();
-            // Sync ribbon quality buttons
-            ribbon.querySelectorAll('.quality-toggle-btn').forEach(b => {
-                b.classList.toggle('active', b.dataset.tier === navQuality);
-            });
-        });
-        mobileNav.appendChild(navQualityBtn);
+    // Annotation badge (shown when annotations exist)
+    const pillBadge = document.createElement('span');
+    pillBadge.className = 'editorial-pill-badge';
+    if (annotations.length > 0) {
+        pillBadge.textContent = annotations.length;
+    } else {
+        pillBadge.style.display = 'none';
     }
+    mobilePill.appendChild(pillBadge);
 
-    // Annotation toggle button
-    const navAnnoBtn = document.createElement('button');
-    navAnnoBtn.className = 'editorial-mobile-nav-btn';
-    navAnnoBtn.title = 'Annotations';
-    navAnnoBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="editorial-mobile-nav-label">Notes</span>';
-    if (annotations.length === 0) navAnnoBtn.style.display = 'none';
-    navAnnoBtn.addEventListener('click', () => {
-        setMarkersVisible(!markersVisible);
-        navAnnoBtn.classList.toggle('active', markersVisible);
-        if (!markersVisible && getCurrentPopupId()) {
-            hideAnnotationPopup();
-            hideAnnotationLine();
-            setCurrentPopupId(null);
-            annotationSystem.selectedAnnotation = null;
-            document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
-        }
-    });
-    navAnnoBtn.classList.toggle('active', markersVisible && annotations.length > 0);
-    mobileNav.appendChild(navAnnoBtn);
-
-    // Details button — opens sidebar bottom sheet on mobile
-    const navDetailsBtn = document.createElement('button');
-    navDetailsBtn.className = 'editorial-mobile-nav-btn';
-    navDetailsBtn.title = 'Details';
-    navDetailsBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="editorial-mobile-nav-label">Info</span>';
-    navDetailsBtn.addEventListener('click', () => {
+    // Title label — tappable to open info sheet
+    const pillLabel = document.createElement('button');
+    pillLabel.className = 'editorial-pill-label';
+    const pillTitle = manifest?.title || manifest?.project?.title || manifest?.archival_record?.title || 'View Details';
+    pillLabel.textContent = pillTitle;
+    pillLabel.addEventListener('click', () => {
         const sidebar = document.getElementById('metadata-sidebar');
         if (!sidebar) return;
         if (sidebar.classList.contains('sheet-half') || sidebar.classList.contains('sheet-full')) {
-            // Collapse to peek
             sidebar.classList.remove('sheet-half', 'sheet-full');
             sidebar.classList.add('sheet-peek');
-            navDetailsBtn.classList.remove('active');
         } else {
-            // Open to half
             sidebar.classList.remove('sheet-peek');
             sidebar.classList.add('sheet-half');
-            navDetailsBtn.classList.add('active');
         }
     });
-    mobileNav.appendChild(navDetailsBtn);
+    mobilePill.appendChild(pillLabel);
 
-    viewerContainer.appendChild(mobileNav);
+    // Kebab menu button (visual tools)
+    const hasMeshContent = contentInfo && contentInfo.hasMesh;
+    if (hasMeshContent) {
+        const kebabBtn = document.createElement('button');
+        kebabBtn.className = 'editorial-pill-kebab';
+        kebabBtn.title = 'Visual tools';
+        kebabBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
+
+        const kebabMenu = document.createElement('div');
+        kebabMenu.className = 'editorial-pill-menu';
+
+        // Shared state for material views
+        let pillActiveView = null;
+        const pillSetMaterialView = (view) => {
+            if (view === pillActiveView) view = null;
+            if (pillActiveView) {
+                if (pillActiveView === 'wireframe') updateModelWireframe(modelGroup, false);
+                else if (pillActiveView === 'normals') updateModelNormals(modelGroup, false);
+                else if (pillActiveView === 'roughness') updateModelRoughness(modelGroup, false);
+                else if (pillActiveView === 'metalness') updateModelMetalness(modelGroup, false);
+                else if (pillActiveView === 'specularF0') updateModelSpecularF0(modelGroup, false);
+                else if (pillActiveView.startsWith('matcap:')) updateModelMatcap(modelGroup, false);
+            }
+            pillActiveView = view;
+            if (pillActiveView) {
+                if (pillActiveView === 'wireframe') updateModelWireframe(modelGroup, true);
+                else if (pillActiveView === 'normals') updateModelNormals(modelGroup, true);
+                else if (pillActiveView === 'roughness') updateModelRoughness(modelGroup, true);
+                else if (pillActiveView === 'metalness') updateModelMetalness(modelGroup, true);
+                else if (pillActiveView === 'specularF0') updateModelSpecularF0(modelGroup, true);
+                else if (pillActiveView.startsWith('matcap:')) updateModelMatcap(modelGroup, true, pillActiveView.split(':')[1]);
+            }
+            kebabMenu.querySelectorAll('.editorial-pill-menu-item').forEach(el => {
+                el.classList.toggle('active', el.dataset.view === pillActiveView);
+            });
+            // Sync desktop ribbon material dropdown
+            materialDropdown.querySelectorAll('.editorial-matcap-item').forEach(el => {
+                el.classList.toggle('active', el.dataset.view === pillActiveView);
+            });
+            materialBtn.classList.toggle('active', !!pillActiveView);
+        };
+
+        // Texture toggle
+        let pillTexturesVisible = true;
+        const texItem = document.createElement('button');
+        texItem.className = 'editorial-pill-menu-item';
+        texItem.textContent = 'Hide Textures';
+        texItem.addEventListener('click', (e) => {
+            e.stopPropagation();
+            pillTexturesVisible = !pillTexturesVisible;
+            updateModelTextures(modelGroup, pillTexturesVisible);
+            texItem.textContent = pillTexturesVisible ? 'Hide Textures' : 'Show Textures';
+            texItem.classList.toggle('active', !pillTexturesVisible);
+            // Sync desktop texture toggle
+            textureToggle.classList.toggle('off', !pillTexturesVisible);
+        });
+        kebabMenu.appendChild(texItem);
+
+        // Divider
+        const div1 = document.createElement('div');
+        div1.className = 'editorial-pill-menu-divider';
+        kebabMenu.appendChild(div1);
+
+        // Material view items
+        const pillViews = [
+            ['Wireframe', 'wireframe'], ['Normals', 'normals'],
+            ['Roughness', 'roughness'], ['Metalness', 'metalness']
+        ];
+        pillViews.forEach(([label, key]) => {
+            const item = document.createElement('button');
+            item.className = 'editorial-pill-menu-item';
+            item.dataset.view = key;
+            item.textContent = label;
+            item.addEventListener('click', (e) => { e.stopPropagation(); pillSetMaterialView(key); });
+            kebabMenu.appendChild(item);
+        });
+
+        // Matcap divider + presets
+        const div2 = document.createElement('div');
+        div2.className = 'editorial-pill-menu-divider';
+        kebabMenu.appendChild(div2);
+
+        const pillMatcaps = [['Clay', 'clay'], ['Chrome', 'chrome'], ['Pearl', 'pearl'], ['Jade', 'jade'], ['Copper', 'copper'], ['Bronze', 'bronze']];
+        pillMatcaps.forEach(([label, style]) => {
+            const item = document.createElement('button');
+            item.className = 'editorial-pill-menu-item';
+            item.dataset.view = 'matcap:' + style;
+            item.textContent = label;
+            item.addEventListener('click', (e) => { e.stopPropagation(); pillSetMaterialView('matcap:' + style); });
+            kebabMenu.appendChild(item);
+        });
+
+        // Off item
+        const div3 = document.createElement('div');
+        div3.className = 'editorial-pill-menu-divider';
+        kebabMenu.appendChild(div3);
+        const offItem2 = document.createElement('button');
+        offItem2.className = 'editorial-pill-menu-item editorial-pill-menu-off';
+        offItem2.textContent = 'Reset View';
+        offItem2.addEventListener('click', (e) => {
+            e.stopPropagation();
+            pillSetMaterialView(null);
+            if (!pillTexturesVisible) {
+                pillTexturesVisible = true;
+                updateModelTextures(modelGroup, true);
+                texItem.textContent = 'Hide Textures';
+                texItem.classList.remove('active');
+                textureToggle.classList.remove('off');
+            }
+            kebabMenu.classList.remove('open');
+        });
+        kebabMenu.appendChild(offItem2);
+
+        kebabBtn.addEventListener('click', (e) => { e.stopPropagation(); kebabMenu.classList.toggle('open'); });
+        document.addEventListener('click', () => { kebabMenu.classList.remove('open'); });
+
+        mobilePill.appendChild(kebabBtn);
+        mobilePill.appendChild(kebabMenu);
+    }
+
+    viewerContainer.appendChild(mobilePill);
+
+    // Keep legacy reference for walkthrough swap (uses .editorial-mobile-nav)
+    // Walkthrough mode creates controls inside this element
+    const mobileNav = mobilePill;
 
     // --- 5. Info Panel (side panel) ---
     const overlay = createInfoOverlay(manifest, deps);
@@ -1761,12 +1828,12 @@ function onWalkthroughStart(walkthrough) {
         titleBlock.style.pointerEvents = 'auto';
     }
 
-    // --- Mobile nav: swap buttons with walkthrough controls ---
-    const mobileNav = document.querySelector('.editorial-mobile-nav');
+    // --- Mobile pill: swap content with walkthrough controls ---
+    const mobileNav = document.querySelector('.editorial-mobile-pill');
     if (mobileNav) {
-        // Hide normal buttons
-        mobileNav.querySelectorAll('.editorial-mobile-nav-btn').forEach(btn => {
-            btn.style.display = 'none';
+        // Hide pill children
+        Array.from(mobileNav.children).forEach(child => {
+            child.style.display = 'none';
         });
 
         // Create walkthrough controls container
@@ -1853,15 +1920,15 @@ function onWalkthroughEnd() {
         titleBlock.style.pointerEvents = '';
     }
 
-    // Restore mobile nav buttons
+    // Restore mobile pill children
     if (wtMobileControls) {
         wtMobileControls.remove();
         wtMobileControls = null;
     }
-    const mobileNav = document.querySelector('.editorial-mobile-nav');
-    if (mobileNav) {
-        mobileNav.querySelectorAll('.editorial-mobile-nav-btn').forEach(btn => {
-            btn.style.display = '';
+    const mobilePillEl = document.querySelector('.editorial-mobile-pill');
+    if (mobilePillEl) {
+        Array.from(mobilePillEl.children).forEach(child => {
+            child.style.display = '';
         });
     }
 

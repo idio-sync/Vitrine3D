@@ -322,7 +322,7 @@ export class SceneManager {
 
         // Choose renderer type: WebGPU if supported, else WebGL
         let useWebGPU = this.webgpuSupported;
-        let rendererTypeToCreate = useWebGPU ? 'webgpu' : 'webgl';
+        let rendererTypeToCreate: 'webgpu' | 'webgl' = useWebGPU ? 'webgpu' : 'webgl';
 
         // Main Renderer with WebGPU fallback to WebGL on init failure
         this.renderer = this._createRenderer(canvas, rendererTypeToCreate);

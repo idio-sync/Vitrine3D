@@ -36,6 +36,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2.10.0",
+    "@types/node": "^25.3.5",
     "@types/three": "^0.182.0",
     "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",

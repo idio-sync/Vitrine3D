@@ -585,6 +585,7 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
                             textureMaxRes: entry.decimation.textureMaxRes || 1024,
                             textureFormat: entry.decimation.textureFormat || 'jpeg',
                             textureQuality: 0.85,
+                            dracoCompress: false,
                         };
                         state.proxyMeshFaceCount = entry.decimation.resultFaces || null;
 

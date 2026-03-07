@@ -98,6 +98,7 @@ interface KioskState {
 
 interface AppConfig {
     home?: boolean;
+    kiosk?: boolean;
     theme?: string;
     layout?: string;
     defaultArchiveUrl?: string;
@@ -805,7 +806,7 @@ function setupFilePicker(): void {
         //   unnecessary overhead that delay the loading screen with metadata.
         if (window.__TAURI__) {
             const archiveUrl = config.defaultArchiveUrl;
-            const isFilesystemPath = /^[A-Za-z]:[\\\/]|^[\\\/]/.test(archiveUrl);
+            const isFilesystemPath = /^[A-Za-z]:[/\\]|^[/\\]/.test(archiveUrl);
             if (isFilesystemPath) {
                 log.info('Tauri: loading archive from filesystem path:', archiveUrl);
                 (async () => {

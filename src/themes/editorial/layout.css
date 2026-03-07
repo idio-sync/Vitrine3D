@@ -2426,68 +2426,182 @@ body.kiosk-mode.kiosk-editorial .editorial-slice-btn.active {
 }
 
 /* =================================================================
-   Mobile Bottom Nav — hidden by default, shown at Tier 3 (<700px)
+   Floating Pill — hidden by default, shown at Tier 3 (<700px)
+   Replaces the old mobile bottom nav with a minimal capsule.
    ================================================================= */
 
-body.kiosk-mode.kiosk-editorial .editorial-mobile-nav {
+body.kiosk-mode.kiosk-editorial .editorial-mobile-pill {
     display: none;
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 48px;
-    background: rgba(var(--kiosk-surface-rgb), 0.92);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border-top: 1.5px solid var(--kiosk-accent);
-    z-index: 100;
-    justify-content: space-evenly;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 40px;
     align-items: center;
-    padding: 0 8px;
+    gap: 0;
+    background: rgba(var(--kiosk-surface-rgb), 0.82);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(var(--kiosk-accent-rgb), 0.25);
+    border-top: 2px solid rgba(var(--kiosk-accent-rgb), 0.6);
+    border-radius: 24px;
+    z-index: 100;
+    padding: 0 4px 0 14px;
+    max-width: calc(100vw - 32px);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.15);
+    animation: editorialPillIn 0.5s cubic-bezier(0.33, 1, 0.68, 1) 0.4s both;
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-mobile-nav-btn {
-    display: flex;
-    flex-direction: column;
+body.kiosk-mode.kiosk-editorial .editorial-mobile-pill:not(:has(.editorial-pill-kebab)) {
+    padding: 0 14px;
+}
+
+@keyframes editorialPillIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Annotation count badge */
+body.kiosk-mode.kiosk-editorial .editorial-pill-badge {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 10px;
+    background: rgba(var(--kiosk-accent-rgb), 0.2);
+    color: var(--kiosk-accent);
+    font-family: var(--kiosk-font-body);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+/* Title label — main tap target */
+body.kiosk-mode.kiosk-editorial .editorial-pill-label {
     background: none;
     border: none;
-    color: var(--kiosk-text-secondary);
+    color: var(--kiosk-text-primary);
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
     cursor: pointer;
-    padding: 4px 12px;
-    min-width: 44px;
-    min-height: 44px;
-    border-radius: 6px;
-    transition: color 0.15s ease, background 0.15s ease;
+    padding: 0;
+    line-height: 40px;
     -webkit-tap-highlight-color: transparent;
+    transition: color 0.15s;
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-mobile-nav-btn:active {
-    background: rgba(var(--kiosk-accent-rgb), 0.12);
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-mobile-nav-btn.active {
+body.kiosk-mode.kiosk-editorial .editorial-pill-label:active {
     color: var(--kiosk-accent);
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-mobile-nav-label {
-    font-family: var(--kiosk-font-body);
-    font-size: 0.55rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    line-height: 1;
+/* Kebab menu button — right side of pill */
+body.kiosk-mode.kiosk-editorial .editorial-pill-kebab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: none;
+    border: none;
+    border-left: 1px solid rgba(var(--kiosk-accent-rgb), 0.15);
+    margin-left: 10px;
+    color: var(--kiosk-text-muted);
+    cursor: pointer;
+    border-radius: 0 20px 20px 0;
+    transition: color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    flex-shrink: 0;
 }
 
-/* Mobile walkthrough controls (inside mobile nav) */
+body.kiosk-mode.kiosk-editorial .editorial-pill-kebab:active {
+    color: var(--kiosk-accent);
+}
+
+/* Kebab popover menu */
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    background: rgba(var(--kiosk-surface-rgb), 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(var(--kiosk-accent-rgb), 0.2);
+    border-radius: 8px;
+    padding: 6px 0;
+    min-width: 160px;
+    z-index: 200;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu.open {
+    display: flex;
+    flex-direction: column;
+    animation: editorialPillMenuIn 0.15s ease-out;
+}
+
+@keyframes editorialPillMenuIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu-item {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.7rem;
+    font-weight: 400;
+    color: var(--kiosk-text-secondary);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    padding: 9px 16px;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+    transition: color 0.1s, background 0.1s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu-item:active {
+    background: rgba(var(--kiosk-accent-rgb), 0.1);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu-item.active {
+    color: var(--kiosk-accent);
+    font-weight: 600;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu-off {
+    color: var(--kiosk-text-muted);
+    font-size: 0.65rem;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu-divider {
+    height: 1px;
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+    margin: 4px 12px;
+}
+
+/* Mobile walkthrough controls (inside floating pill) */
 body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-controls {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 16px;
-    width: 100%;
+    gap: 12px;
     height: 100%;
+    padding: 0 4px;
 }
 
 body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-btn {
@@ -2799,14 +2913,14 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
         display: none;
     }
 
-    /* Hide ribbon and info panel — mobile nav replaces ribbon */
+    /* Hide ribbon and info panel — floating pill replaces ribbon */
     body.kiosk-mode.kiosk-editorial .editorial-bottom-ribbon,
     body.kiosk-mode.kiosk-editorial .editorial-info-overlay {
         display: none !important;
     }
 
-    /* Show mobile nav */
-    body.kiosk-mode.kiosk-editorial .editorial-mobile-nav {
+    /* Show floating pill */
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-pill {
         display: flex !important;
     }
 
@@ -2820,8 +2934,22 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
         flex: none;
     }
 
-    /* Show sidebar for metadata access; hide generic view switcher (mobile nav has view cycling) */
+    /* Show sidebar for metadata access; hide generic view switcher */
     body.kiosk-mode.kiosk-editorial #metadata-sidebar {
+        display: block !important;
+    }
+
+    /* Hide tab bar and settings tab on mobile — sheet is info-only */
+    body.kiosk-mode.kiosk-editorial .sidebar-mode-tabs {
+        display: none !important;
+    }
+
+    body.kiosk-mode.kiosk-editorial #sidebar-settings {
+        display: none !important;
+    }
+
+    /* Ensure Info view is always the visible content */
+    body.kiosk-mode.kiosk-editorial #sidebar-view {
         display: block !important;
     }
 
@@ -2831,9 +2959,9 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
 
     /* --- Editorial-styled bottom sheet --- */
 
-    /* Offset sheet above mobile nav (48px) */
+    /* Offset sheet above floating pill area */
     body.kiosk-mode.kiosk-editorial #metadata-sidebar {
-        bottom: 48px;
+        bottom: 0;
         border-top-color: rgba(var(--kiosk-accent-rgb), 0.3);
         background: rgba(var(--kiosk-surface-rgb), 0.96);
         backdrop-filter: blur(16px);
@@ -3163,9 +3291,10 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
 /* --- Phone landscape: tighter chrome, hide title --- */
 
 @media (max-width: 699px) and (orientation: landscape) {
-    /* Shrink mobile nav for limited vertical space */
-    body.kiosk-mode.kiosk-editorial .editorial-mobile-nav {
-        height: 40px;
+    /* Compact pill for landscape */
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-pill {
+        bottom: 8px;
+        height: 34px;
     }
 
     /* Hide title block — too little vertical room */
@@ -3177,7 +3306,7 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
     body.kiosk-mode.kiosk-editorial #metadata-sidebar {
         height: 60dvh;
         max-height: 60dvh;
-        bottom: 40px;
+        bottom: 0;
     }
 
     body.kiosk-mode.kiosk-editorial #metadata-sidebar.sheet-peek {

@@ -180,6 +180,15 @@ export interface DataEntry {
     source_category?: string;
     size_bytes?: number;
     _parameters?: DataEntryParameters;
+    decimation?: {
+        preset?: string;
+        targetRatio?: number;
+        errorThreshold?: number;
+        textureMaxRes?: number;
+        textureFormat?: string;
+        resultFaces?: number;
+        [key: string]: any;
+    };
 }
 
 export interface IntegrityData {
@@ -1840,7 +1849,7 @@ export class ArchiveCreator {
     async createArchive(options: CreateArchiveOptions = {}, onProgress: ((percent: number, stage: string) => void) | null = null): Promise<Blob> {
         log.debug('✓ createArchive called with options:', options);
         const {
-            format = 'a3d',
+            format: _format = 'a3d',
             includeHashes = true,
         } = options;
 

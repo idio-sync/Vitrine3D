@@ -220,7 +220,7 @@ async function generateCdnHashes(): Promise<Record<string, string>> {
         const dracoHash = await computeSha384(dracoSrc);
         hashes['draco_decoder'] = dracoHash;
         console.log(`'draco_decoder': '${dracoHash}',`);
-    } catch (e) {
+    } catch (_e) {
         console.warn('Could not fetch Draco decoder for hashing');
     }
     console.log('\nCopy the integrity values above into CDN_DEPS in kiosk-viewer.ts');

@@ -172,7 +172,7 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     log.info(' Metadata collected:', metadata);
 
     // Inject current measurement calibration into viewer settings
-    const ms = (deps as any).measurementSystem || deps.sceneRefs?.measurementSystem;
+    const ms = deps.sceneRefs?.measurementSystem;
     if (ms && ms.isCalibrated && ms.isCalibrated()) {
         metadata.viewerSettings.measurementScale = ms.getScale();
         metadata.viewerSettings.measurementUnit = ms.getUnit();
@@ -814,7 +814,7 @@ export async function exportMetadataManifest(deps: ExportDeps): Promise<void> {
     const metadata = metadataFns.collectMetadata();
 
     // Inject current measurement calibration into viewer settings
-    const ms = (deps as any).measurementSystem || deps.sceneRefs?.measurementSystem;
+    const ms = deps.sceneRefs?.measurementSystem;
     if (ms && ms.isCalibrated && ms.isCalibrated()) {
         metadata.viewerSettings.measurementScale = ms.getScale();
         metadata.viewerSettings.measurementUnit = ms.getUnit();

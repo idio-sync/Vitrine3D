@@ -663,7 +663,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (ppControls) ppControls.style.display = checked ? '' : 'none';
         if (checked && sceneManager.rendererType === 'webgpu') {
             // Force switch to WebGL — EffectComposer is WebGL-only
-            notify('Switching to WebGL for post-processing effects');
+            notify.info('Switching to WebGL for post-processing effects');
             await sceneManager.switchRenderer('webgl');
             // onRendererChanged callback in main.ts re-enables post-processing
         }

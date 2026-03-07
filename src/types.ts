@@ -105,6 +105,7 @@ export interface SceneRefs {
     readonly flyControls: any;        // FlyControls | null
     readonly annotationSystem: any;   // AnnotationSystem | null
     readonly archiveCreator: any;     // ArchiveCreator | null
+    readonly measurementSystem: any;  // MeasurementSystem | null
     readonly landmarkAlignment: any;  // LandmarkAlignment | null
     readonly ambientLight: any;       // THREE.AmbientLight
     readonly hemisphereLight: any;    // THREE.HemisphereLight
@@ -218,7 +219,7 @@ export interface CollectionArchive {
 // ===== Module Dependencies =====
 
 export interface ExportDeps {
-    sceneRefs: Pick<SceneRefs, 'renderer' | 'scene' | 'camera' | 'controls' | 'splatMesh' | 'modelGroup' | 'pointcloudGroup' | 'cadGroup' | 'annotationSystem' | 'archiveCreator'>;
+    sceneRefs: Pick<SceneRefs, 'renderer' | 'scene' | 'camera' | 'controls' | 'splatMesh' | 'modelGroup' | 'pointcloudGroup' | 'cadGroup' | 'annotationSystem' | 'archiveCreator' | 'measurementSystem'>;
     state: AppState;
     tauriBridge: any | null;
     ui: {
