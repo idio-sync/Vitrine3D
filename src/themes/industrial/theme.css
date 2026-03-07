@@ -2,43 +2,45 @@
  * @theme    Industrial
  * @layout   industrial
  * @scene-bg #535353
- * @description CAD workbench layout for mesh inspection. Toolbar top, status bar bottom.
+ * @description MeshLab-style CAD workbench. Light Qt gray chrome, raised toolbar buttons, trackball overlay.
  */
 
 body.kiosk-mode {
-    /* Accent — tool-blue */
-    --kiosk-accent: #4A9EFF;
-    --kiosk-accent-rgb: 74, 158, 255;
+    /* Accent — MeshLab selection blue */
+    --kiosk-accent: #3874CB;
+    --kiosk-accent-rgb: 56, 116, 203;
 
-    /* Surfaces — neutral dark grays */
-    --kiosk-surface-rgb: 38, 38, 42;
-    --kiosk-elevated-rgb: 52, 52, 58;
-    --kiosk-bg-deep-rgb: 24, 24, 28;
+    /* Surfaces — Qt light gray palette */
+    --kiosk-surface-rgb: 212, 212, 212;
+    --kiosk-elevated-rgb: 226, 226, 226;
+    --kiosk-bg-deep-rgb: 192, 192, 192;
 
-    /* Text */
-    --kiosk-text-bright-rgb: 220, 220, 225;
-    --kiosk-text-body-rgb: 175, 175, 182;
-    --kiosk-text-dim-rgb: 120, 120, 130;
-    --kiosk-text-heading-rgb: 235, 235, 240;
+    /* Text — dark on light */
+    --kiosk-text-bright-rgb: 28, 28, 28;
+    --kiosk-text-body-rgb: 48, 48, 48;
+    --kiosk-text-dim-rgb: 80, 80, 80;
+    --kiosk-text-heading-rgb: 16, 16, 16;
 
     /* Named text aliases */
     --kiosk-text-primary: rgba(var(--kiosk-text-bright-rgb), 0.95);
     --kiosk-text-secondary: rgba(var(--kiosk-text-body-rgb), 0.9);
-    --kiosk-text-muted: rgba(var(--kiosk-text-dim-rgb), 0.7);
-    --kiosk-text-faint: rgba(var(--kiosk-text-dim-rgb), 0.5);
+    --kiosk-text-muted: rgba(var(--kiosk-text-dim-rgb), 0.8);
+    --kiosk-text-faint: rgba(var(--kiosk-text-dim-rgb), 0.55);
 
-    /* Borders */
-    --kiosk-border-subtle: rgba(255, 255, 255, 0.06);
-    --kiosk-border-default: rgba(var(--kiosk-accent-rgb), 0.15);
+    /* Borders — classic Qt bevels */
+    --kiosk-border-subtle: #a0a0a0;
+    --kiosk-border-default: #909090;
+    --kiosk-border-light: #e8e8e8;
+    --kiosk-border-dark: #808080;
 
-    /* Typography — clean sans-serif throughout */
-    --kiosk-font-display: 'Inter', 'Segoe UI', system-ui, sans-serif;
-    --kiosk-font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
-    --kiosk-font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    /* Typography — system UI like Qt/MeshLab */
+    --kiosk-font-display: 'Segoe UI', 'Helvetica Neue', system-ui, sans-serif;
+    --kiosk-font-body: 'Segoe UI', 'Helvetica Neue', system-ui, sans-serif;
+    --kiosk-font-mono: 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
 
     /* Deep background */
     --kiosk-bg-deep: rgb(var(--kiosk-bg-deep-rgb));
 
-    /* Scene background */
+    /* Scene background — MeshLab default viewport gray */
     --kiosk-scene-bg: #535353;
 }

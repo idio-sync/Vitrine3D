@@ -1,76 +1,127 @@
 /* =============================================================================
-   Industrial Layout — CAD workbench with top toolbar + bottom status bar.
+   Industrial Layout — MeshLab-style CAD workbench.
+   Light Qt gray chrome, raised toolbar buttons, trackball overlay.
    All rules scoped under body.kiosk-mode.kiosk-industrial.
    ============================================================================= */
 
 /* =============================================================================
-   TOP TOOLBAR — 40px, icon-only tool buttons in groups
+   MENU BAR — classic File | View | Render | Help strip
    ============================================================================= */
 
-body.kiosk-mode.kiosk-industrial .ind-toolbar {
+body.kiosk-mode.kiosk-industrial .ind-menubar {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    height: 40px;
+    height: 24px;
+    z-index: 101;
+    display: flex;
+    align-items: center;
+    padding: 0 2px;
+    background: rgb(var(--kiosk-surface-rgb));
+    border-bottom: 1px solid var(--kiosk-border-dark);
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.95);
+    user-select: none;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-menu-item {
+    padding: 2px 8px;
+    cursor: default;
+    border-radius: 0;
+    white-space: nowrap;
+    line-height: 20px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-menu-item:hover {
+    background: var(--kiosk-accent);
+    color: #fff;
+}
+
+/* =============================================================================
+   TOP TOOLBAR — 34px, raised icon buttons in groups (below menu bar)
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-toolbar {
+    position: fixed;
+    top: 24px;
+    left: 0;
+    right: 0;
+    height: 34px;
     z-index: 100;
     display: flex;
     align-items: center;
-    padding: 0 8px;
-    background: rgba(var(--kiosk-surface-rgb), 0.95);
-    border-bottom: 1px solid var(--kiosk-border-subtle);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    padding: 2px 4px;
+    background: rgb(var(--kiosk-surface-rgb));
+    border-bottom: 1px solid var(--kiosk-border-dark);
 }
 
 body.kiosk-mode.kiosk-industrial .ind-toolbar-group {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 1px;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-toolbar-sep {
     width: 1px;
     height: 24px;
-    background: rgba(255, 255, 255, 0.08);
-    margin: 0 6px;
+    margin: 0 4px;
     flex-shrink: 0;
+    border-left: 1px solid var(--kiosk-border-dark);
+    border-right: 1px solid var(--kiosk-border-light);
 }
+
+/* --- Raised Qt-style tool buttons --- */
 
 body.kiosk-mode.kiosk-industrial .ind-tool-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
     padding: 0;
-    background: none;
-    border: none;
-    border-radius: 4px;
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid transparent;
+    border-radius: 0;
     cursor: pointer;
-    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
-    transition: color 0.12s, background 0.12s;
+    color: rgba(var(--kiosk-text-body-rgb), 0.85);
+    transition: none;
     position: relative;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-tool-btn:hover {
-    color: rgba(var(--kiosk-text-bright-rgb), 0.95);
-    background: rgba(255, 255, 255, 0.06);
+    border-top-color: var(--kiosk-border-light);
+    border-left-color: var(--kiosk-border-light);
+    border-bottom-color: var(--kiosk-border-dark);
+    border-right-color: var(--kiosk-border-dark);
+    color: rgba(var(--kiosk-text-bright-rgb), 1);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn:active {
+    border-top-color: var(--kiosk-border-dark);
+    border-left-color: var(--kiosk-border-dark);
+    border-bottom-color: var(--kiosk-border-light);
+    border-right-color: var(--kiosk-border-light);
 }
 
 body.kiosk-mode.kiosk-industrial .ind-tool-btn.active {
+    border-top-color: var(--kiosk-border-dark);
+    border-left-color: var(--kiosk-border-dark);
+    border-bottom-color: var(--kiosk-border-light);
+    border-right-color: var(--kiosk-border-light);
+    background: rgb(var(--kiosk-bg-deep-rgb));
     color: var(--kiosk-accent);
-    background: rgba(var(--kiosk-accent-rgb), 0.12);
 }
 
 body.kiosk-mode.kiosk-industrial .ind-tool-btn.disabled {
-    opacity: 0.3;
+    opacity: 0.35;
     pointer-events: none;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-tool-btn svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
 }
 
 /* Tooltip */
@@ -80,19 +131,18 @@ body.kiosk-mode.kiosk-industrial .ind-tool-btn::after {
     top: 100%;
     left: 50%;
     transform: translateX(-50%);
-    margin-top: 6px;
-    padding: 4px 8px;
-    background: rgba(var(--kiosk-elevated-rgb), 0.95);
-    border: 1px solid var(--kiosk-border-subtle);
-    border-radius: 3px;
+    margin-top: 4px;
+    padding: 2px 6px;
+    background: #ffffe1;
+    border: 1px solid #000;
     font-family: var(--kiosk-font-body);
-    font-size: 0.62rem;
-    font-weight: 500;
-    color: rgba(var(--kiosk-text-bright-rgb), 0.9);
+    font-size: 0.65rem;
+    font-weight: 400;
+    color: #000;
     white-space: nowrap;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.15s;
+    transition: opacity 0.1s;
     z-index: 110;
 }
 
@@ -101,7 +151,7 @@ body.kiosk-mode.kiosk-industrial .ind-tool-btn:hover::after {
 }
 
 /* =============================================================================
-   BOTTOM STATUS BAR — 28px, monospace metadata
+   BOTTOM STATUS BAR — 22px, system font metadata readout
    ============================================================================= */
 
 body.kiosk-mode.kiosk-industrial .ind-status-bar {
@@ -109,45 +159,83 @@ body.kiosk-mode.kiosk-industrial .ind-status-bar {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 28px;
+    height: 22px;
     z-index: 100;
     display: flex;
     align-items: center;
-    padding: 0 12px;
-    background: rgba(var(--kiosk-surface-rgb), 0.95);
-    border-top: 1px solid var(--kiosk-border-subtle);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    font-family: var(--kiosk-font-mono);
-    font-size: 0.68rem;
-    color: rgba(var(--kiosk-text-dim-rgb), 0.8);
+    padding: 0 8px;
+    background: rgb(var(--kiosk-surface-rgb));
+    border-top: 1px solid var(--kiosk-border-dark);
+    font-family: var(--kiosk-font-body);
+    font-size: 0.65rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.85);
 }
 
 body.kiosk-mode.kiosk-industrial .ind-status-field {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
     white-space: nowrap;
 }
 
+body.kiosk-mode.kiosk-industrial .ind-status-label {
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.9);
+}
+
 body.kiosk-mode.kiosk-industrial .ind-status-sep {
-    margin: 0 10px;
-    color: rgba(var(--kiosk-text-dim-rgb), 0.3);
+    margin: 0 8px;
+    color: var(--kiosk-border-dark);
 }
 
 body.kiosk-mode.kiosk-industrial .ind-status-right {
     margin-left: auto;
-    color: var(--kiosk-accent);
     font-weight: 500;
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
 }
 
 /* =============================================================================
-   VIEWPORT OFFSET — clear toolbar and status bar
+   VIEWPORT OFFSET — clear menu bar + toolbar + status bar
    ============================================================================= */
 
 body.kiosk-mode.kiosk-industrial #viewer-container {
-    top: 40px !important;
-    bottom: 28px !important;
+    top: 58px !important;   /* 24px menu + 34px toolbar */
+    bottom: 22px !important;
+    /* MeshLab inset viewport border */
+    border: 2px inset #a0a0a0;
+}
+
+/* =============================================================================
+   TRACKBALL OVERLAY — MeshLab's signature circle in viewport center
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-trackball-overlay {
+    position: fixed;
+    z-index: 90;
+    pointer-events: none;
+    /* Centered in viewport area */
+    top: 58px;
+    left: 0;
+    right: 0;
+    bottom: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-trackball-circle {
+    width: min(55%, 55vh);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 1.5px solid rgba(180, 180, 180, 0.35);
+    /* Subtle cross-hair lines */
+    background:
+        linear-gradient(to right, transparent calc(50% - 0.5px), rgba(180, 180, 180, 0.15) calc(50% - 0.5px), rgba(180, 180, 180, 0.15) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+        linear-gradient(to bottom, transparent calc(50% - 0.5px), rgba(180, 180, 180, 0.15) calc(50% - 0.5px), rgba(180, 180, 180, 0.15) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+}
+
+body.kiosk-mode.kiosk-industrial .ind-trackball-overlay.hidden {
+    display: none;
 }
 
 /* =============================================================================
@@ -156,13 +244,13 @@ body.kiosk-mode.kiosk-industrial #viewer-container {
 
 body.kiosk-mode.kiosk-industrial .ind-light-widget {
     position: fixed;
-    top: 52px;
+    top: 70px;
     right: 12px;
-    width: 80px;
-    height: 80px;
+    width: 72px;
+    height: 72px;
     z-index: 95;
-    background: rgba(var(--kiosk-surface-rgb), 0.9);
-    border: 1px solid var(--kiosk-border-subtle);
+    background: rgb(var(--kiosk-elevated-rgb));
+    border: 1px solid var(--kiosk-border-dark);
     border-radius: 50%;
     cursor: grab;
     display: none;
@@ -185,18 +273,15 @@ body.kiosk-mode.kiosk-industrial .ind-light-widget canvas {
 
 body.kiosk-mode.kiosk-industrial .ind-section-controls {
     position: fixed;
-    top: 52px;
-    left: 12px;
+    top: 70px;
+    left: 8px;
     z-index: 95;
     display: none;
     align-items: center;
-    gap: 2px;
-    padding: 4px;
-    background: rgba(var(--kiosk-surface-rgb), 0.92);
-    border: 1px solid var(--kiosk-border-subtle);
-    border-radius: 4px;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    gap: 1px;
+    padding: 3px;
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid var(--kiosk-border-dark);
 }
 
 body.kiosk-mode.kiosk-industrial .ind-section-controls.visible {
@@ -204,65 +289,73 @@ body.kiosk-mode.kiosk-industrial .ind-section-controls.visible {
 }
 
 body.kiosk-mode.kiosk-industrial .ind-section-axis-btn {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: none;
-    border: none;
-    border-radius: 3px;
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid transparent;
+    border-radius: 0;
     cursor: pointer;
-    font-family: var(--kiosk-font-mono);
-    font-size: 0.72rem;
+    font-family: var(--kiosk-font-body);
+    font-size: 0.68rem;
     font-weight: 700;
-    color: rgba(var(--kiosk-text-dim-rgb), 0.8);
-    transition: color 0.12s, background 0.12s;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
+    transition: none;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-section-axis-btn:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: rgba(var(--kiosk-text-bright-rgb), 0.95);
+    border-top-color: var(--kiosk-border-light);
+    border-left-color: var(--kiosk-border-light);
+    border-bottom-color: var(--kiosk-border-dark);
+    border-right-color: var(--kiosk-border-dark);
 }
 
 body.kiosk-mode.kiosk-industrial .ind-section-axis-btn.active {
+    border-top-color: var(--kiosk-border-dark);
+    border-left-color: var(--kiosk-border-dark);
+    border-bottom-color: var(--kiosk-border-light);
+    border-right-color: var(--kiosk-border-light);
+    background: rgb(var(--kiosk-bg-deep-rgb));
     color: var(--kiosk-accent);
-    background: rgba(var(--kiosk-accent-rgb), 0.12);
 }
 
 body.kiosk-mode.kiosk-industrial .ind-section-slider {
-    width: 120px;
+    width: 110px;
     height: 4px;
-    margin: 0 8px;
+    margin: 0 6px;
     accent-color: var(--kiosk-accent);
 }
 
 body.kiosk-mode.kiosk-industrial .ind-section-flip-btn {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: none;
-    border: none;
-    border-radius: 3px;
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid transparent;
+    border-radius: 0;
     cursor: pointer;
-    color: rgba(var(--kiosk-text-dim-rgb), 0.8);
-    transition: color 0.12s, background 0.12s;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
+    transition: none;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-section-flip-btn:hover {
-    color: rgba(var(--kiosk-text-bright-rgb), 0.95);
-    background: rgba(255, 255, 255, 0.06);
+    border-top-color: var(--kiosk-border-light);
+    border-left-color: var(--kiosk-border-light);
+    border-bottom-color: var(--kiosk-border-dark);
+    border-right-color: var(--kiosk-border-dark);
 }
 
 body.kiosk-mode.kiosk-industrial .ind-section-flip-btn svg {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
 }
 
 /* =============================================================================
-   LOADING OVERLAY — minimal progress bar, no spinner
+   LOADING OVERLAY — MeshLab-style minimal, centered text + thin progress
    ============================================================================= */
 
 body.kiosk-mode.kiosk-industrial #loading-overlay {
@@ -280,23 +373,23 @@ body.kiosk-mode.kiosk-industrial #loading-overlay #loading-text {
     font-family: var(--kiosk-font-body);
     font-size: 0.78rem;
     font-weight: 400;
-    color: rgba(var(--kiosk-text-dim-rgb), 0.6);
-    letter-spacing: 0.02em;
-    margin-top: 14px;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.75);
+    letter-spacing: 0.01em;
+    margin-top: 12px;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-loading-bottom {
     position: absolute;
-    bottom: 28px;
+    bottom: 22px;
     left: 0;
     right: 0;
     text-align: center;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-loading-bottom #loading-progress-container {
-    width: 240px;
+    width: 220px;
     height: 2px;
-    background: rgba(var(--kiosk-accent-rgb), 0.1);
+    background: var(--kiosk-border-dark);
     border-radius: 0;
     margin: 0 auto;
     overflow: hidden;
@@ -310,36 +403,38 @@ body.kiosk-mode.kiosk-industrial .ind-loading-bottom #loading-progress-bar {
 
 body.kiosk-mode.kiosk-industrial .ind-loading-bottom #loading-progress-text {
     font-family: var(--kiosk-font-mono);
-    font-size: 0.62rem;
-    font-weight: 500;
-    color: rgba(var(--kiosk-text-dim-rgb), 0.5);
-    letter-spacing: 0.04em;
-    margin-top: 8px;
+    font-size: 0.6rem;
+    font-weight: 400;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.6);
+    letter-spacing: 0.02em;
+    margin-top: 6px;
 }
 
 /* =============================================================================
-   ANNOTATION MARKER OVERRIDES — simple numbered circles
+   ANNOTATION MARKER OVERRIDES
    ============================================================================= */
 
 body.kiosk-mode.kiosk-industrial .annotation-marker {
-    width: 28px;
-    height: 28px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    background: rgba(var(--kiosk-accent-rgb), 0.7);
-    border: 2px solid rgba(255, 255, 255, 0.25);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    width: 24px;
+    height: 24px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: var(--kiosk-accent);
+    border: 1px solid #1a4a8a;
+    border-radius: 50%;
+    box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.4);
+    color: #fff;
 }
 
 body.kiosk-mode.kiosk-industrial .annotation-marker:hover {
-    background: rgba(var(--kiosk-accent-rgb), 0.9);
-    border-color: rgba(255, 255, 255, 0.5);
+    background: #4a8ae0;
+    border-color: #2a5a9a;
 }
 
 body.kiosk-mode.kiosk-industrial .annotation-marker.selected {
-    background: var(--kiosk-accent);
-    border-color: rgba(255, 255, 255, 0.8);
-    box-shadow: 0 0 0 3px rgba(var(--kiosk-accent-rgb), 0.25);
+    background: #5a9af0;
+    border-color: #fff;
+    box-shadow: 0 0 0 2px var(--kiosk-accent);
 }
 
 /* Hide default kiosk sidebar elements */

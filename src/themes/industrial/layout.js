@@ -1,13 +1,13 @@
 /**
- * Industrial Layout — CAD-workbench kiosk layout module for the industrial theme.
+ * Industrial Layout — MeshLab-style CAD workbench kiosk layout module.
  *
  * No ES imports — receives ALL dependencies via the `deps` object passed to
  * setup(). Self-registers on window.__KIOSK_LAYOUTS__ for kiosk bootstrap
  * discovery (same pattern as editorial / gallery / exhibit).
  *
- * Design: CAD workbench viewer. Top toolbar with grouped icon buttons
- * (inspection / display / utility). Bottom status bar with monospace metadata.
- * Orbit-only navigation (no pan). Keyboard shortcuts for all tools.
+ * Design: MeshLab workbench. Menu bar at top, toolbar below with raised
+ * Qt-style icon buttons, trackball overlay in viewport, bottom status bar
+ * with vertex/face counts. Orbit-only navigation.
  */
 
 // ---- Module-scope state ----
@@ -22,10 +22,12 @@ var _lightAzimuth = Math.PI / 4;
 var _lightElevation = Math.PI / 4;
 
 // DOM references
+var _menubar = null;
 var _toolbar = null;
 var _statusBar = null;
 var _sectionControls = null;
 var _lightWidget = null;
+var _trackballOverlay = null;
 
 // ---- SVG Icons ----
 
@@ -38,7 +40,8 @@ var ICONS = {
     wireframe: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 14l6-10 6 10H4z"/><line x1="10" y1="4" x2="10" y2="14"/><line x1="7" y1="9" x2="13" y2="9"/></svg>',
     light: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="10" y1="16" x2="10" y2="18"/><line x1="2" y1="10" x2="4" y2="10"/><line x1="16" y1="10" x2="18" y2="10"/><line x1="4.34" y1="4.34" x2="5.76" y2="5.76"/><line x1="14.24" y1="14.24" x2="15.66" y2="15.66"/><line x1="4.34" y1="15.66" x2="5.76" y2="14.24"/><line x1="14.24" y1="5.76" x2="15.66" y2="4.34"/></svg>',
     screenshot: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5" width="16" height="12" rx="1.5"/><circle cx="10" cy="11" r="3"/><path d="M7 5V4a1 1 0 011-1h4a1 1 0 011 1v1"/></svg>',
-    flip: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3v14M6 7l4-4 4 4M6 13l4 4 4-4"/></svg>'
+    flip: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3v14M6 7l4-4 4 4M6 13l4 4 4-4"/></svg>',
+    fitView: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="12" height="12" rx="1"/><path d="M2 7V3h4M14 2h4v4M18 13v4h-4M6 18H2v-4"/></svg>'
 };
 
 // ---- Helpers ----
@@ -68,6 +71,21 @@ function countVertices(group) {
     return total;
 }
 
+function countFaces(group) {
+    var total = 0;
+    if (!group) return total;
+    group.traverse(function (child) {
+        if (child.isMesh && child.geometry) {
+            if (child.geometry.index) {
+                total += child.geometry.index.count / 3;
+            } else if (child.geometry.attributes && child.geometry.attributes.position) {
+                total += child.geometry.attributes.position.count / 3;
+            }
+        }
+    });
+    return Math.floor(total);
+}
+
 function createEl(tag, className, innerHTML) {
     var el = document.createElement(tag);
     if (className) el.className = className;
@@ -91,11 +109,8 @@ function activateTool(name) {
 
     if (name === 'slice') {
         if (_deps.crossSection) {
-            // Compute center from model group position (avoids THREE import).
-            // crossSection.start() accepts any object with x/y/z.
             var center = { x: 0, y: 0, z: 0 };
             if (_deps.modelGroup && _deps.modelGroup.children.length > 0) {
-                // Use the first mesh's geometry bounding sphere if available
                 _deps.modelGroup.traverse(function (child) {
                     if (child.isMesh && child.geometry) {
                         child.geometry.computeBoundingBox();
@@ -214,7 +229,6 @@ function updateLightPosition() {
 function updateLightIndicator() {
     var indicator = _lightWidget ? _lightWidget.querySelector('.ind-light-indicator') : null;
     if (!indicator) return;
-    // Map azimuth/elevation to a 2D position within the widget (0-100%)
     var nx = (((_lightAzimuth / Math.PI) * 0.5 + 0.5) % 1) * 100;
     var ny = (_lightElevation / Math.PI) * 100;
     indicator.style.left = nx + '%';
@@ -258,7 +272,6 @@ function wireSliceControls() {
             var axis = btn.getAttribute('data-axis');
             if (_deps.crossSection) {
                 _deps.crossSection.setAxis(axis);
-                // Reset slider to middle
                 if (slider) slider.value = 50;
             }
         });
@@ -283,31 +296,45 @@ function wireSliceControls() {
 
 // ---- DOM creation ----
 
+function createMenuBar() {
+    var bar = createEl('div', 'ind-menubar');
+
+    var items = ['File', 'View', 'Render', 'Tools', 'Help'];
+    for (var i = 0; i < items.length; i++) {
+        var item = createEl('span', 'ind-menu-item', items[i]);
+        // Menu items are decorative — no dropdowns in kiosk mode
+        bar.appendChild(item);
+    }
+
+    return bar;
+}
+
 function createToolbar() {
     var toolbar = createEl('div', 'ind-toolbar');
 
     // Inspection tools group
     var inspGroup = createEl('div', 'ind-toolbar-group');
-    inspGroup.appendChild(createToolBtn('slice', 'Section Plane (1)', ICONS.slice));
-    inspGroup.appendChild(createToolBtn('measure', 'Measure (2)', ICONS.measure));
-    inspGroup.appendChild(createToolBtn('annotate', 'Annotate (3)', ICONS.annotate));
+    inspGroup.appendChild(createToolBtn('slice', 'Section Plane [1]', ICONS.slice));
+    inspGroup.appendChild(createToolBtn('measure', 'Measure [2]', ICONS.measure));
+    inspGroup.appendChild(createToolBtn('annotate', 'Annotate [3]', ICONS.annotate));
     toolbar.appendChild(inspGroup);
 
     toolbar.appendChild(createEl('div', 'ind-toolbar-sep'));
 
     // Display toggles group
     var dispGroup = createEl('div', 'ind-toolbar-group');
-    dispGroup.appendChild(createToggleBtn('matcap', 'Matcap (M)', ICONS.matcap));
-    dispGroup.appendChild(createToggleBtn('texture', 'Texture (T)', ICONS.texture));
-    dispGroup.appendChild(createToggleBtn('wireframe', 'Wireframe (W)', ICONS.wireframe));
+    dispGroup.appendChild(createToggleBtn('matcap', 'Matcap [M]', ICONS.matcap));
+    dispGroup.appendChild(createToggleBtn('texture', 'Texture [T]', ICONS.texture));
+    dispGroup.appendChild(createToggleBtn('wireframe', 'Wireframe [W]', ICONS.wireframe));
     toolbar.appendChild(dispGroup);
 
     toolbar.appendChild(createEl('div', 'ind-toolbar-sep'));
 
     // Utility group
     var utilGroup = createEl('div', 'ind-toolbar-group');
-    utilGroup.appendChild(createToolBtn('light', 'Light Direction (L)', ICONS.light));
-    utilGroup.appendChild(createActionBtn('screenshot', 'Screenshot (P)', ICONS.screenshot));
+    utilGroup.appendChild(createToolBtn('light', 'Light Direction [L]', ICONS.light));
+    utilGroup.appendChild(createActionBtn('screenshot', 'Screenshot [P]', ICONS.screenshot));
+    utilGroup.appendChild(createActionBtn('fitview', 'Fit to View [F]', ICONS.fitView));
     toolbar.appendChild(utilGroup);
 
     return toolbar;
@@ -325,7 +352,6 @@ function createToggleBtn(toggle, tooltip, icon) {
     var btn = createEl('button', 'ind-tool-btn', icon);
     btn.setAttribute('data-toggle', toggle);
     btn.setAttribute('data-tooltip', tooltip);
-    // Set initial active state
     if (_toggles[toggle]) btn.classList.add('active');
     btn.addEventListener('click', function () { toggleDisplay(toggle); });
     return btn;
@@ -337,6 +363,7 @@ function createActionBtn(action, tooltip, icon) {
     btn.setAttribute('data-tooltip', tooltip);
     btn.addEventListener('click', function () {
         if (action === 'screenshot') doScreenshot();
+        else if (action === 'fitview') fitCamera();
     });
     return btn;
 }
@@ -349,11 +376,31 @@ function createStatusBar(manifest) {
         (manifest && manifest.assets && manifest.assets[0] && manifest.assets[0].filename) ||
         null;
 
-    bar.appendChild(createStatusField('ind-status-filename', filename));
+    if (filename) {
+        bar.appendChild(createStatusField('ind-status-filename', filename));
+        bar.appendChild(createEl('span', 'ind-status-sep', '|'));
+    }
+
+    // Vertices (MeshLab style: "Vertices: 12.4K")
+    var vertLabel = createEl('span', 'ind-status-label', 'Vertices:');
+    var vertValue = createEl('span', 'ind-status-field');
+    vertValue.id = 'ind-status-vertices';
+    vertValue.textContent = '\u2014';
+    bar.appendChild(vertLabel);
+    bar.appendChild(document.createTextNode(' '));
+    bar.appendChild(vertValue);
+
     bar.appendChild(createEl('span', 'ind-status-sep', '|'));
 
-    // Vertices (computed after DOM insertion)
-    bar.appendChild(createStatusField('ind-status-vertices', null));
+    // Faces (MeshLab style: "Faces: 24.8K")
+    var faceLabel = createEl('span', 'ind-status-label', 'Faces:');
+    var faceValue = createEl('span', 'ind-status-field');
+    faceValue.id = 'ind-status-faces';
+    faceValue.textContent = '\u2014';
+    bar.appendChild(faceLabel);
+    bar.appendChild(document.createTextNode(' '));
+    bar.appendChild(faceValue);
+
     bar.appendChild(createEl('span', 'ind-status-sep', '|'));
 
     // File size
@@ -366,13 +413,6 @@ function createStatusBar(manifest) {
         if (totalBytes > 0) fileSize = formatFileSize(totalBytes);
     }
     bar.appendChild(createStatusField('ind-status-filesize', fileSize));
-    bar.appendChild(createEl('span', 'ind-status-sep', '|'));
-
-    // Date
-    var date = (manifest && manifest.date) ||
-        (manifest && manifest.metadata && manifest.metadata.date) ||
-        null;
-    bar.appendChild(createStatusField('ind-status-date', date));
 
     // Right-aligned measurement readout
     var measureField = createEl('span', 'ind-status-right');
@@ -427,6 +467,13 @@ function createLightWidget() {
     return widget;
 }
 
+function createTrackballOverlay() {
+    var overlay = createEl('div', 'ind-trackball-overlay');
+    var circle = createEl('div', 'ind-trackball-circle');
+    overlay.appendChild(circle);
+    return overlay;
+}
+
 // ---- setup ----
 
 function setup(manifest, deps) {
@@ -440,6 +487,10 @@ function setup(manifest, deps) {
             controls.mouseButtons.RIGHT = null;
         }
     }
+
+    // Create menu bar
+    _menubar = createMenuBar();
+    document.body.appendChild(_menubar);
 
     // Create toolbar
     _toolbar = createToolbar();
@@ -458,22 +509,42 @@ function setup(manifest, deps) {
     _lightWidget = createLightWidget();
     document.body.appendChild(_lightWidget);
 
+    // Create trackball overlay
+    _trackballOverlay = createTrackballOverlay();
+    document.body.appendChild(_trackballOverlay);
+
     // Update initial light indicator position
     updateLightIndicator();
 
-    // Populate vertex count (after models are loaded)
+    // Populate vertex and face counts
     var vertCount = countVertices(deps.modelGroup) + countVertices(deps.pointcloudGroup);
+    var faceCount = countFaces(deps.modelGroup) + countFaces(deps.pointcloudGroup);
+
     var vertEl = document.getElementById('ind-status-vertices');
     if (vertEl && vertCount > 0) {
-        vertEl.textContent = formatNumber(vertCount) + ' verts';
+        vertEl.textContent = formatNumber(vertCount);
+    }
+    var faceEl = document.getElementById('ind-status-faces');
+    if (faceEl && faceCount > 0) {
+        faceEl.textContent = formatNumber(faceCount);
     }
 
     // Set texture toggle button active by default (texture starts on)
     var texBtn = _toolbar.querySelector('[data-toggle="texture"]');
     if (texBtn) texBtn.classList.add('active');
 
-    // Register keyboard shortcuts in capture phase so they fire before
-    // kiosk-main's default handlers (which bind 1/2/3 to view-mode switching).
+    // Hide trackball during drag for cleaner viewport
+    var viewerContainer = document.getElementById('viewer-container');
+    if (viewerContainer) {
+        viewerContainer.addEventListener('mousedown', function () {
+            if (_trackballOverlay) _trackballOverlay.style.opacity = '0.3';
+        });
+        document.addEventListener('mouseup', function () {
+            if (_trackballOverlay) _trackballOverlay.style.opacity = '';
+        });
+    }
+
+    // Register keyboard shortcuts in capture phase
     window.addEventListener('keydown', function (e) {
         var activeEl = document.activeElement;
         if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) return;
@@ -511,7 +582,7 @@ function initLoadingScreen(container) {
 
     var text = document.createElement('div');
     text.id = 'loading-text';
-    text.textContent = 'Loading...';
+    text.textContent = 'Loading mesh\u2026';
     center.appendChild(text);
     inner.appendChild(center);
 
