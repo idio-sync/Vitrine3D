@@ -54,6 +54,198 @@ const ARCHIVES_DIR = path.join(HTML_ROOT, 'archives');
 const MEDIA_ROOT = path.join(HTML_ROOT, 'media');
 const DB_PATH = process.env.DB_PATH || '/data/vitrine.db';
 
+// --- Settings defaults registry ---
+// Resolution: SQLite row → env var → hardcoded default
+const SETTINGS_DEFAULTS = {
+    'video.crf':              { default: '18',      type: 'number', label: 'Video CRF',              group: 'Video Transcode',  description: 'H.264 quality (0=lossless, 51=worst)', min: 0, max: 51 },
+    'video.preset':           { default: 'fast',    type: 'select', label: 'Encoding Preset',         group: 'Video Transcode',  description: 'FFmpeg speed/quality tradeoff', options: ['ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'] },
+    'recording.bitrate':      { default: '5000000', type: 'number', label: 'Recording Bitrate (bps)', group: 'Video Recording',  description: 'WebM capture bitrate' },
+    'recording.framerate':    { default: '30',      type: 'number', label: 'Recording FPS',           group: 'Video Recording',  description: 'Capture frame rate', min: 15, max: 60 },
+    'recording.maxDuration':  { default: '60',      type: 'number', label: 'Max Recording Duration (s)', group: 'Video Recording', description: 'Maximum recording length', min: 10, max: 300 },
+    'gif.fps':                { default: '15',      type: 'number', label: 'GIF FPS',                 group: 'GIF Generation',   description: 'GIF animation frame rate', min: 5, max: 30 },
+    'gif.width':              { default: '480',     type: 'number', label: 'GIF Width (px)',           group: 'GIF Generation',   description: 'GIF output width (height auto)', min: 240, max: 1280 },
+    'thumbnail.size':         { default: '512',     type: 'number', label: 'Thumbnail Size (px)',      group: 'Media Output',     description: 'Video thumbnail dimensions', min: 128, max: 1024 },
+    'upload.maxSizeMb':       { default: '1024',    type: 'number', label: 'Max Upload Size (MB)',     group: 'Upload',           description: 'Maximum archive upload size', min: 1 },
+    'lod.budgetSd':           { default: '1000000', type: 'number', label: 'LOD Budget — SD',         group: 'Renderer',         description: 'Max splats per frame (SD tier)' },
+    'lod.budgetHd':           { default: '5000000', type: 'number', label: 'LOD Budget — HD',         group: 'Renderer',         description: 'Max splats per frame (HD tier)' },
+    'renderer.maxPixelRatio': { default: '2',       type: 'number', label: 'Max Pixel Ratio',         group: 'Renderer',         description: 'Cap for high-DPI displays', min: 1, max: 4 },
+};
+
+// Env var mapping for settings (key → env var name)
+const SETTINGS_ENV_MAP = {
+    'upload.maxSizeMb': 'MAX_UPLOAD_SIZE',
+    'video.crf':        'VIDEO_CRF',
+    'video.preset':     'VIDEO_PRESET',
+    'gif.fps':          'GIF_FPS',
+    'gif.width':        'GIF_WIDTH',
+    'thumbnail.size':   'THUMBNAIL_SIZE',
+};
+
+// In-memory cache: { key: { value, expiry } }
+const _settingsCache = {};
+const SETTINGS_CACHE_TTL = 5000; // 5 seconds
+
+/**
+ * Resolve a single setting value: SQLite → env var → hardcoded default.
+ * Cached for SETTINGS_CACHE_TTL ms.
+ */
+function getSetting(key) {
+    const def = SETTINGS_DEFAULTS[key];
+    if (!def) return undefined;
+
+    const cached = _settingsCache[key];
+    if (cached && Date.now() < cached.expiry) return cached.value;
+
+    // 1. SQLite
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    if (row) {
+        _settingsCache[key] = { value: row.value, expiry: Date.now() + SETTINGS_CACHE_TTL };
+        return row.value;
+    }
+
+    // 2. Environment variable
+    const envName = SETTINGS_ENV_MAP[key];
+    if (envName && process.env[envName]) {
+        const envVal = process.env[envName];
+        _settingsCache[key] = { value: envVal, expiry: Date.now() + SETTINGS_CACHE_TTL };
+        return envVal;
+    }
+
+    // 3. Hardcoded default
+    _settingsCache[key] = { value: def.default, expiry: Date.now() + SETTINGS_CACHE_TTL };
+    return def.default;
+}
+
+/**
+ * Build the full settings response object for the API.
+ * Returns all settings with resolved values, defaults, and metadata.
+ */
+function getAllSettings() {
+    const dbRows = {};
+    for (const row of db.prepare('SELECT key, value FROM settings').all()) {
+        dbRows[row.key] = row.value;
+    }
+
+    const result = {};
+    for (const [key, def] of Object.entries(SETTINGS_DEFAULTS)) {
+        const dbVal = dbRows[key];
+        const envName = SETTINGS_ENV_MAP[key];
+        const envVal = envName && process.env[envName] ? process.env[envName] : null;
+        const resolved = dbVal ?? envVal ?? def.default;
+
+        result[key] = {
+            value: resolved,
+            default: def.default,
+            isCustom: dbVal !== undefined,
+            label: def.label,
+            group: def.group,
+            type: def.type,
+        };
+        if (def.description) result[key].description = def.description;
+        if (def.min !== undefined) result[key].min = def.min;
+        if (def.max !== undefined) result[key].max = def.max;
+        if (def.options) result[key].options = def.options;
+    }
+    return result;
+}
+
+/**
+ * Validate a setting value against its definition.
+ * Returns null if valid, or an error string.
+ */
+function validateSetting(key, value) {
+    const def = SETTINGS_DEFAULTS[key];
+    if (!def) return 'Unknown setting: ' + key;
+
+    if (def.type === 'number') {
+        const num = Number(value);
+        if (isNaN(num)) return key + ': must be a number';
+        if (def.min !== undefined && num < def.min) return key + ': minimum is ' + def.min;
+        if (def.max !== undefined && num > def.max) return key + ': maximum is ' + def.max;
+    }
+    if (def.type === 'select') {
+        if (!def.options.includes(value)) return key + ': must be one of ' + def.options.join(', ');
+    }
+    return null;
+}
+
+// --- Settings API handlers ---
+
+function handleGetSettings(req, res) {
+    sendJson(res, 200, getAllSettings());
+}
+
+function handlePutSettings(req, res) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+        let updates;
+        try {
+            updates = JSON.parse(body);
+        } catch {
+            return sendJson(res, 400, { error: 'Invalid JSON' });
+        }
+
+        if (typeof updates !== 'object' || Array.isArray(updates)) {
+            return sendJson(res, 400, { error: 'Expected object of key-value pairs' });
+        }
+
+        const errors = [];
+        const valid = {};
+        for (const [key, value] of Object.entries(updates)) {
+            const err = validateSetting(key, String(value));
+            if (err) errors.push(err);
+            else valid[key] = String(value);
+        }
+
+        if (errors.length > 0) {
+            return sendJson(res, 400, { error: 'Validation failed', details: errors });
+        }
+
+        const upsert = db.prepare(
+            'INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime(\'now\')) ' +
+            'ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at'
+        );
+        const tx = db.transaction(() => {
+            for (const [key, value] of Object.entries(valid)) {
+                upsert.run(key, value);
+                delete _settingsCache[key];
+            }
+        });
+        tx();
+
+        db.prepare(
+            'INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)'
+        ).run(actor, 'update_settings', null, JSON.stringify(valid), req.headers['x-real-ip'] || req.socket.remoteAddress);
+
+        sendJson(res, 200, getAllSettings());
+    });
+}
+
+function handleDeleteSetting(req, res, key) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    if (!SETTINGS_DEFAULTS[key]) {
+        return sendJson(res, 400, { error: 'Unknown setting: ' + key });
+    }
+
+    db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+    delete _settingsCache[key];
+
+    db.prepare(
+        'INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)'
+    ).run(actor, 'reset_setting', key, null, req.headers['x-real-ip'] || req.socket.remoteAddress);
+
+    const settings = getAllSettings();
+    sendJson(res, 200, settings[key]);
+}
+
 // --- Cloudflare Access auth ---
 
 /**
@@ -211,6 +403,12 @@ function initDb() {
 
         CREATE INDEX IF NOT EXISTS idx_media_archive ON media(archive_id);
         CREATE INDEX IF NOT EXISTS idx_media_status ON media(status);
+
+        CREATE TABLE IF NOT EXISTS settings (
+            key        TEXT PRIMARY KEY,
+            value      TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
     `);
 }
 
@@ -615,7 +813,7 @@ function parseMultipartUpload(req) {
 
         let bb;
         try {
-            bb = busboy({ headers: req.headers, limits: { fileSize: MAX_UPLOAD_SIZE } });
+            bb = busboy({ headers: req.headers, limits: { fileSize: parseInt(getSetting('upload.maxSizeMb'), 10) * 1024 * 1024 } });
         } catch (err) {
             return reject(err);
         }
@@ -959,7 +1157,7 @@ async function handleUploadArchive(req, res) {
         sendJson(res, 201, buildArchiveObjectFromRow(uploadedRow));
     } catch (err) {
         if (err.message === 'LIMIT') {
-            sendJson(res, 413, { error: 'Upload exceeds maximum size (' + Math.round(MAX_UPLOAD_SIZE / 1024 / 1024) + ' MB)' });
+            sendJson(res, 413, { error: 'Upload exceeds maximum size (' + getSetting('upload.maxSizeMb') + ' MB)' });
         } else {
             console.error('[admin] Upload error:', err.message);
             sendJson(res, 500, { error: err.message });
@@ -1494,7 +1692,8 @@ function getSharePageHtml() {
 function handleSharePage(req, res, mediaId) {
     const row = db.prepare(`
         SELECT m.*, a.hash AS archive_hash, a.title AS archive_title,
-               a.description AS archive_description, a.filename AS archive_filename
+               a.description AS archive_description, a.filename AS archive_filename,
+               a.uuid AS archive_uuid
         FROM media m
         LEFT JOIN archives a ON a.id = m.archive_id
         WHERE m.id = ? AND m.status = 'ready'
@@ -1524,7 +1723,9 @@ function handleSharePage(req, res, mediaId) {
     const thumbRelUrl = row.thumb_path || '';
 
     let view3dLink = '';
-    if (row.archive_filename) {
+    if (row.archive_uuid) {
+        view3dLink = '<a class="btn-primary" href="/view/' + encodeURIComponent(row.archive_uuid) + '?autoload=true">View in 3D</a>';
+    } else if (row.archive_filename) {
         view3dLink = '<a class="btn-primary" href="/?archive=/archives/' + encodeURIComponent(row.archive_filename) + '">View in 3D</a>';
     }
 
@@ -1961,8 +2162,8 @@ function transcodeMedia(mediaId) {
         ...trimArgs,
         '-i', rawPath,
         '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '18',
+        '-preset', getSetting('video.preset'),
+        '-crf', getSetting('video.crf'),
         '-movflags', '+faststart',
         '-an',
         '-y', mp4Path
@@ -1979,7 +2180,7 @@ function transcodeMedia(mediaId) {
         const thumbArgs = [
             '-i', mp4Path,
             '-vframes', '1',
-            '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2',
+            '-vf', 'scale=' + getSetting('thumbnail.size') + ':' + getSetting('thumbnail.size') + ':force_original_aspect_ratio=decrease,pad=' + getSetting('thumbnail.size') + ':' + getSetting('thumbnail.size') + ':(ow-iw)/2:(oh-ih)/2',
             '-y', thumbPath_
         ];
 
@@ -1992,7 +2193,7 @@ function transcodeMedia(mediaId) {
             // Step 3: GIF palette generation — use transcoded MP4 (stable timestamps)
             const paletteArgs = [
                 '-i', mp4Path,
-                '-vf', 'fps=15,scale=480:-1:flags=lanczos,palettegen',
+                '-vf', 'fps=' + getSetting('gif.fps') + ',scale=' + getSetting('gif.width') + ':-1:flags=lanczos,palettegen',
                 '-y', palettePath
             ];
 
@@ -2008,7 +2209,7 @@ function transcodeMedia(mediaId) {
                 const gifArgs = [
                     '-i', mp4Path,
                     '-i', palettePath,
-                    '-lavfi', 'fps=15,scale=480:-1:flags=lanczos[x];[x][1:v]paletteuse',
+                    '-lavfi', 'fps=' + getSetting('gif.fps') + ',scale=' + getSetting('gif.width') + ':-1:flags=lanczos[x];[x][1:v]paletteuse',
                     '-y', gifPath
                 ];
 
@@ -2292,6 +2493,16 @@ const server = http.createServer((req, res) => {
         }
         if (pathname === '/api/storage' && req.method === 'GET') {
             return handleStorage(req, res);
+        }
+        if (pathname === '/api/settings' && req.method === 'GET') {
+            return handleGetSettings(req, res);
+        }
+        if (pathname === '/api/settings' && req.method === 'PUT') {
+            return handlePutSettings(req, res);
+        }
+        const settingKeyMatch = pathname.match(/^\/api\/settings\/(.+)$/);
+        if (settingKeyMatch && req.method === 'DELETE') {
+            return handleDeleteSetting(req, res, decodeURIComponent(settingKeyMatch[1]));
         }
         const orphanMatch = pathname.match(/^\/api\/storage\/orphans\/(.+)$/);
         if (orphanMatch && req.method === 'DELETE') {
