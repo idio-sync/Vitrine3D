@@ -24,7 +24,7 @@ import { CAMERA, ASSET_STATE, QUALITY_TIER, WALKTHROUGH, COLORS } from './consta
 import { WalkthroughEngine } from './walkthrough-engine.js';
 import type { WalkthroughPlaybackState } from './walkthrough-engine.js';
 import type { Walkthrough, WalkthroughStop } from '../types.js';
-import { resolveQualityTier, hasAnyProxy, getLodBudget } from './quality-tier.js';
+import { resolveQualityTier, hasAnyProxy, getLodBudget, runGpuBenchmark } from './quality-tier.js';
 import { Logger, notify, parseMarkdown, resolveAssetRefs, fetchWithProgress, downloadBlob } from './utilities.js';
 import {
     showLoading, hideLoading, updateProgress,
@@ -335,6 +335,10 @@ export async function init(): Promise<void> {
         return;
     }
     log.info('Renderer type:', sceneManager.rendererType);
+
+    // Run GPU benchmark (~500ms) — result is cached for detectDeviceTier scoring.
+    // Runs in the init phase while the loading screen is visible.
+    await runGpuBenchmark(renderer);
 
     // Extract scene objects for local use
     scene = sceneManager.scene;
