@@ -68,7 +68,7 @@
 
             <div class="rail-sep rail-library-sep" style="display:none"></div>
 
-            <!-- ── Authoring: Compose ─────────────────────── -->
+            <!-- ── Build: Compose the scene ──────────────── -->
 
             <!-- Assets — Load splats, meshes, point clouds -->
             <button class="tool-btn active" data-tool="assets" data-tooltip="Assets  A" title="Load and configure 3D assets">
@@ -102,7 +102,7 @@
 
             <div class="rail-sep"></div>
 
-            <!-- ── Authoring: Narrate ──────────────────────── -->
+            <!-- ── Narrate: Add context ────────────────────── -->
 
             <!-- Annotate — Place annotation markers -->
             <button class="tool-btn" data-tool="annotate" data-tooltip="Annotate  N" title="Place and edit annotation markers">
@@ -141,10 +141,9 @@
                 </svg>
             </button>
 
-            <div class="rail-spacer"></div>
             <div class="rail-sep"></div>
 
-            <!-- ── Viewing Tools ───────────────────────────── -->
+            <!-- ── Inspect: Analysis tools ─────────────────── -->
 
             <!-- Measure — Measure distances on model -->
             <button class="tool-btn" data-tool="measure" data-tooltip="Measure  M" title="Measure distances between points">
@@ -168,7 +167,7 @@
 
             <div class="rail-sep"></div>
 
-            <!-- ── Utility ─────────────────────────────────── -->
+            <!-- ── Output ──────────────────────────────────── -->
 
             <!-- Export — Package as archive -->
             <button class="tool-btn" data-tool="export" data-tooltip="Export  E" id="btn-export-archive" title="Export scene as .a3d/.a3z archive">
@@ -178,6 +177,10 @@
                     <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
             </button>
+
+            <div class="rail-spacer"></div>
+
+            <!-- ── Bottom: View + Links ────────────────────── -->
 
             <!-- Fullscreen -->
             <button class="tool-btn" data-tool="fullscreen" data-tooltip="Fullscreen  F11" id="btn-fullscreen" title="Toggle fullscreen mode">
@@ -243,7 +246,7 @@
             </div>
 
             <!-- Recording indicator -->
-            <div id="rec-indicator" style="display:none; position:absolute; top:12px; right:12px; z-index:100; align-items:center; gap:6px; background:rgba(0,0,0,0.6); padding:4px 10px; border-radius:4px;">
+            <div id="rec-indicator" style="display:none; position:absolute; top:12px; left:12px; z-index:100; align-items:center; gap:6px; background:rgba(0,0,0,0.6); padding:4px 10px; border-radius:4px;">
                 <span style="width:8px; height:8px; border-radius:50%; background:#e53935; animation:rec-pulse 1s infinite; display:inline-block;"></span>
                 <span style="font-size:11px; color:#fff; font-weight:600;">REC</span>
                 <span id="rec-timer" style="font-size:11px; color:#ccc; font-family:monospace;">0:00</span>
@@ -1760,6 +1763,9 @@
                         <div id="rec-upload-status" class="hidden" style="margin-top:8px;">
                             <span id="rec-upload-text" style="font-size:10px; color:var(--accent);"></span>
                         </div>
+
+                        <!-- Recording result preview (shown when transcode completes) -->
+                        <div id="rec-result-preview" class="hidden" style="margin-top:8px;"></div>
                     </div>
                 </div>
 
