@@ -2152,11 +2152,14 @@ function handleMediaUpload(req, res) {
         // Look up archive_id from hash or URL
         let archive_id = null;
         if (archiveHash_) {
-            // archiveHash_ may be a hash or an archive URL — try both
+            // archiveHash_ may be a hash, a relative path, or a full URL — try all
             let archiveRow = db.prepare('SELECT id FROM archives WHERE hash = ?').get(archiveHash_);
             if (!archiveRow) {
-                // Try treating it as a URL and computing the hash
-                const computed = archiveHash(archiveHash_);
+                // Try treating it as a URL/path and computing the hash
+                let pathForHash = archiveHash_;
+                // Strip origin from full URLs to get just the pathname
+                try { pathForHash = new URL(archiveHash_).pathname; } catch { /* already a path or hash */ }
+                const computed = archiveHash(pathForHash);
                 archiveRow = db.prepare('SELECT id FROM archives WHERE hash = ?').get(computed);
             }
             if (archiveRow) archive_id = archiveRow.id;

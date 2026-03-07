@@ -1538,7 +1538,9 @@ function handleStartRecording(): void {
 
         const uploadResult = await uploadRecording({
             title: trimResult.title,
-            archiveHash: state.currentArchiveUrl || undefined,
+            archiveHash: state.currentArchiveUrl
+                ? new URL(state.currentArchiveUrl, window.location.origin).pathname
+                : state.archiveFileName ? '/archives/' + state.archiveFileName : undefined,
             trimStart: trimResult.trimStart,
             trimEnd: trimResult.trimEnd,
         });

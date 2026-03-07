@@ -438,17 +438,14 @@ function selectArchive(hash: string): void {
     // Update collection chips in detail pane
     updateChipsForArchive(hash);
 
-    // Fetch and render recordings
+    // Fetch and render recordings (show cached immediately, then refresh)
     const cached = mediaCache.get(hash);
-    if (cached) {
-        renderRecordings(cached);
-    } else {
-        renderRecordings([]);
-        fetchMedia(hash).then(items => {
-            mediaCache.set(hash, items);
-            if (selectedHash === hash) renderRecordings(items);
-        });
-    }
+    if (cached) renderRecordings(cached);
+    else renderRecordings([]);
+    fetchMedia(hash).then(items => {
+        mediaCache.set(hash, items);
+        if (selectedHash === hash) renderRecordings(items);
+    });
 }
 
 function showDetailEmpty(): void {
