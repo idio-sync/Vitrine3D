@@ -1860,6 +1860,11 @@ body.kiosk-mode #metadata-sidebar.sheet-dragging {
     margin: 4px 0 0 0;
 }
 
+.kiosk-gate-plus {
+    font-size: 0.6rem;
+    color: rgba(255, 255, 255, 0.35);
+}
+
 .kiosk-gate-pill {
     font-size: 0.65rem;
     text-transform: uppercase;

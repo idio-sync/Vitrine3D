@@ -2562,11 +2562,11 @@ export function updatePronomRegistry(state: { meshFormat: string | null; pointcl
     // Collect detected formats (extension → asset type label)
     const detected: Array<{ ext: string; label: string }> = [];
 
-    if (state.splatFormat) {
-        detected.push({ ext: state.splatFormat, label: 'Splat' });
-    }
     if (state.meshFormat) {
         detected.push({ ext: state.meshFormat, label: 'Mesh' });
+    }
+    if (state.splatFormat) {
+        detected.push({ ext: state.splatFormat, label: 'Splat' });
     }
     if (state.pointcloudFormat) {
         detected.push({ ext: state.pointcloudFormat, label: 'Point Cloud' });

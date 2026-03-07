@@ -338,6 +338,12 @@ export function injectStyles(): void {
     color: #FEC03A;
 }
 
+.cp-type-plus {
+    font-size: 0.5rem;
+    color: rgba(190, 200, 215, 0.45);
+    margin: 0 2px;
+}
+
 /* Gold rule above info */
 .cp-card-rule {
     width: 24px;
@@ -419,11 +425,13 @@ export function renderCard(
     // Play button SVG (matches editorial click gate)
     const playSvg = '<svg viewBox="0 0 24 24" width="16" height="16"><polygon points="8,5 20,12 8,19"/></svg>';
 
-    // Asset type pills as inline labels
+    // Asset type pills as inline labels (mesh first)
     let typeMeta = '';
     if (archive.assets && archive.assets.length > 0) {
-        const types = [...new Set(archive.assets.map(a => a.type))];
-        typeMeta = types.map(t => '<span class="cp-type-pill">' + (ASSET_LABELS[t] || t) + '</span>').join('');
+        const TYPE_ORDER = ['mesh', 'splat', 'pointcloud', 'cad', 'drawing'];
+        const types = [...new Set(archive.assets.map(a => a.type))]
+            .sort((a, b) => (TYPE_ORDER.indexOf(a) === -1 ? 99 : TYPE_ORDER.indexOf(a)) - (TYPE_ORDER.indexOf(b) === -1 ? 99 : TYPE_ORDER.indexOf(b)));
+        typeMeta = types.map(t => '<span class="cp-type-pill">' + escapeHtml(ASSET_LABELS[t] || t) + '</span>').join('<span class="cp-type-plus">+</span>');
     }
 
     // Metadata parts: date, size, filename
