@@ -898,37 +898,37 @@ function setupFilePicker(): void {
                     picker!.classList.add('hidden');
 
                     if (isAndroid && result.filePath.startsWith('content://')) {
-                        // Android content:// URIs: read entire file via FS plugin or IPC,
-                        // then detect type from magic bytes (URI filename is unreliable).
+                        // Android content:// URIs: detect file type from magic bytes
+                        // via a small IPC read, then route accordingly.
+                        // ipc_open_file handles content:// URIs transparently
+                        // (copies to temp file via ContentResolver).
                         updateProgress(5, 'Reading file...');
-                        let bytes: Uint8Array;
-                        try {
-                            // Strategy 1: Tauri FS plugin (recent versions handle content URIs)
-                            log.info('Android: trying fs.readFile for content URI');
-                            const rawData = await window.__TAURI__!.fs.readFile(result.filePath);
-                            bytes = rawData instanceof Uint8Array ? rawData : new Uint8Array(rawData);
-                            log.info('Android: fs.readFile succeeded, got', bytes.length, 'bytes');
-                        } catch (fsErr) {
-                            // Strategy 2: IPC (Rust JNI ContentResolver copy to temp file)
-                            log.warn('Android: fs.readFile failed, trying IPC:', (fsErr as Error).message);
-                            const { handleId, size } = await ipcOpenFile(result.filePath);
-                            bytes = await ipcReadBytes(handleId, 0, size);
-                            await ipcCloseFile(handleId);
-                            log.info('Android: IPC read succeeded, got', bytes.length, 'bytes');
-                        }
 
-                        // Detect file type from magic bytes — content URI filenames are unreliable
-                        const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4B;
+                        // Read just the header to detect file type — avoids loading
+                        // the entire archive into memory (which causes OOM on large
+                        // multi-asset archives with display proxies).
+                        const { handleId: probeId, size: probeSize } = await ipcOpenFile(result.filePath);
+                        const header = await ipcReadBytes(probeId, 0, Math.min(4, probeSize));
+                        await ipcCloseFile(probeId);
+
+                        const isZip = header.length >= 4 && header[0] === 0x50 && header[1] === 0x4B;
                         const name = isZip && !result.name.match(/\.(a3d|a3z|zip)$/i)
                             ? result.name.replace(/\.[^.]*$/, '') + '.a3d'  // Assume archive
                             : result.name;
 
                         if (isZip) {
-                            log.info('Android: detected ZIP archive, loading as archive');
-                            const file = new File([bytes as BlobPart], name);
-                            await handleArchiveFile(file);
+                            // Use IPC byte-serving for archives — only the central
+                            // directory (~64KB) is read initially, and individual
+                            // files are extracted on-demand. This prevents OOM on
+                            // archives with proxies where releaseRawData() is skipped.
+                            log.info('Android: detected ZIP archive, using IPC byte-serving');
+                            await loadArchiveFromIpc(result.filePath, name);
                         } else {
-                            log.info('Android: non-archive file, loading directly');
+                            // Non-archive files (splats, models): read fully into memory
+                            log.info('Android: non-archive file, reading fully');
+                            const { handleId: readId, size: readSize } = await ipcOpenFile(result.filePath);
+                            const bytes = await ipcReadBytes(readId, 0, readSize);
+                            await ipcCloseFile(readId);
                             const file = new File([bytes as BlobPart], name);
                             handlePickedFiles([file], null);
                         }
