@@ -38,6 +38,7 @@ import {
     DoubleSide,
     Float32BufferAttribute,
     Vector3,
+    Box3,
 } from 'three';
 import type { WebGPURenderer } from 'three/webgpu';
 
@@ -1123,6 +1124,58 @@ export class SceneManager {
             this.shadowCatcherPlane = null;
             log.info('Shadow catcher plane removed');
         }
+    }
+
+    /**
+     * Fit the shadow camera frustum and ground plane to the current scene content.
+     * Call after loading models and enabling shadows so the shadow isn't clipped.
+     */
+    fitShadowToScene(): void {
+        if (!this.directionalLight1 || !this.scene) return;
+
+        const box = new Box3();
+        let hasContent = false;
+
+        if (this.modelGroup && this.modelGroup.children.length > 0) {
+            box.expandByObject(this.modelGroup);
+            hasContent = true;
+        }
+
+        if (!hasContent) return;
+
+        const size = box.getSize(new Vector3());
+        const center = box.getCenter(new Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+
+        // Shadow camera frustum should cover the whole model with padding
+        const halfSize = Math.max(maxDim * 0.75, SHADOWS.CAMERA_SIZE);
+        const cam = this.directionalLight1.shadow.camera;
+        cam.left = -halfSize;
+        cam.right = halfSize;
+        cam.top = halfSize;
+        cam.bottom = -halfSize;
+        cam.far = Math.max(halfSize * 4, SHADOWS.CAMERA_FAR);
+        cam.updateProjectionMatrix();
+
+        // Position light relative to scene center
+        const lightOffset = halfSize * 1.5;
+        this.directionalLight1.position.set(
+            center.x + lightOffset * 0.5,
+            center.y + lightOffset,
+            center.z + lightOffset * 0.5
+        );
+        this.directionalLight1.target.position.copy(center);
+        this.directionalLight1.target.updateMatrixWorld();
+
+        // Scale shadow catcher to match
+        if (this.shadowCatcherPlane) {
+            const planeSize = Math.max(halfSize * 3, SHADOWS.GROUND_PLANE_SIZE);
+            this.shadowCatcherPlane.geometry.dispose();
+            this.shadowCatcherPlane.geometry = new PlaneGeometry(planeSize, planeSize);
+        }
+
+        this.renderer!.shadowMap.needsUpdate = true;
+        this.rendererRight!.shadowMap.needsUpdate = true;
     }
 
     /**

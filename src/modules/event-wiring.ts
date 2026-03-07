@@ -866,7 +866,10 @@ export function setupUIEvents(deps: EventWiringDeps): void {
 
     // ─── Scene settings — Shadows ────────────────────────────
     addListener('toggle-shadows', 'change', (e: Event) => {
-        if (sceneManager) sceneManager.enableShadows((e.target as HTMLInputElement).checked);
+        if (sceneManager) {
+            sceneManager.enableShadows((e.target as HTMLInputElement).checked);
+            if ((e.target as HTMLInputElement).checked) sceneManager.fitShadowToScene();
+        }
         const opacityGroup = document.getElementById('shadow-opacity-group');
         if (opacityGroup) opacityGroup.style.display = (e.target as HTMLInputElement).checked ? '' : 'none';
     });

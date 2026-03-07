@@ -1154,6 +1154,7 @@ function onDirectFileLoaded(fileName: string | null): void {
     if (state.modelLoaded) {
         sceneManager.enableShadows(true);
         sceneManager.applyShadowProperties(modelGroup);
+        sceneManager.fitShadowToScene();
     }
 
     // Enable auto-rotate
@@ -1696,6 +1697,7 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         // Enable shadows in kiosk mode
         sceneManager.enableShadows(true);
         sceneManager.applyShadowProperties(modelGroup);
+        sceneManager.fitShadowToScene();
 
         // Enable auto-rotate by default in kiosk mode, unless manifest overrides it
         const savedAutoRotate = manifest?.viewer_settings?.auto_rotate;
