@@ -741,13 +741,22 @@ function injectLibraryButton(): void {
     btn.addEventListener('click', async () => {
         if (hasCfToken()) {
             await showLibraryInApp();
-        } else if ((window as any).__TAURI__) {
+            return;
+        }
+        const authUrl = libraryUrl + '/api/auth-callback';
+        if ((window as any).__TAURI__) {
             // Open browser for CF Access auth — after login, the server redirects
             // to vitrine3d://auth?token=JWT which the app intercepts via deep link
             // (desktop) or intent filter (Android, patched in CI).
-            log.info('Opening browser for CF Access auth');
-            const { open } = await import('@tauri-apps/plugin-shell');
-            await open(libraryUrl + '/api/auth-callback');
+            try {
+                log.info('Opening browser for CF Access auth:', authUrl);
+                const { open } = await import('@tauri-apps/plugin-shell');
+                await open(authUrl);
+            } catch (err) {
+                // Fallback: window.open if shell plugin fails (e.g. on Android)
+                log.warn('shell.open failed, using window.open fallback:', (err as Error).message);
+                window.open(authUrl, '_blank');
+            }
         } else {
             window.location.href = libraryUrl + '/library';
         }
