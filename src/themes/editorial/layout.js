@@ -1096,82 +1096,183 @@ export function setup(manifest, deps) {
     const toolsGroup = document.createElement('div');
     toolsGroup.className = 'editorial-ribbon-tools';
 
-    // Annotation sequence chain + marker toggle
+    // Annotation capsule — unified toggle + fraction counter + index popover
     const annotations = annotationSystem.getAnnotations();
     let markersVisible = true;
-    let markerToggle = null;
+    let activeAnnoIndex = -1; // -1 = none selected
+
+    const capsule = document.createElement('div');
+    capsule.className = 'editorial-anno-capsule';
+
+    // Speech bubble toggle (always visible)
+    const bubbleBtn = document.createElement('button');
+    bubbleBtn.className = 'editorial-anno-bubble';
+    bubbleBtn.title = 'Toggle annotations';
+    const bubbleSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    bubbleSvg.setAttribute('width', '14');
+    bubbleSvg.setAttribute('height', '14');
+    bubbleSvg.setAttribute('viewBox', '0 0 24 24');
+    bubbleSvg.setAttribute('fill', 'none');
+    bubbleSvg.setAttribute('stroke', 'currentColor');
+    bubbleSvg.setAttribute('stroke-width', '2');
+    const bubblePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    bubblePath.setAttribute('d', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z');
+    bubbleSvg.appendChild(bubblePath);
+    bubbleBtn.appendChild(bubbleSvg);
+
+    // Counter display (visible when markers on)
+    const counterWrap = document.createElement('div');
+    counterWrap.className = 'editorial-anno-counter';
+
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'editorial-anno-nav';
+    prevBtn.textContent = '\u2039';
+    prevBtn.title = 'Previous annotation';
+
+    const counterText = document.createElement('button');
+    counterText.className = 'editorial-anno-fraction';
+    counterText.title = 'Annotation index';
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'editorial-anno-nav';
+    nextBtn.textContent = '\u203A';
+    nextBtn.title = 'Next annotation';
+
+    counterWrap.appendChild(prevBtn);
+    counterWrap.appendChild(counterText);
+    counterWrap.appendChild(nextBtn);
+
+    // Index popover (full annotation list)
+    const indexPanel = document.createElement('div');
+    indexPanel.className = 'editorial-anno-index';
+
+    const updateCounter = () => {
+        const current = activeAnnoIndex >= 0 ? String(activeAnnoIndex + 1).padStart(2, '0') : '\u2014';
+        const total = String(annotations.length).padStart(2, '0');
+        counterText.textContent = current + ' / ' + total;
+        // Update bubble fill state
+        bubbleBtn.classList.toggle('has-selection', activeAnnoIndex >= 0);
+        // Update index panel active state
+        indexPanel.querySelectorAll('.editorial-anno-index-item').forEach((el, i) => {
+            el.classList.toggle('active', i === activeAnnoIndex);
+        });
+    };
+
+    const goToAnno = (index) => {
+        if (index < 0 || index >= annotations.length) return;
+        const anno = annotations[index];
+        activeAnnoIndex = index;
+
+        if (!markersVisible) setMarkersVisible(true);
+
+        annotationSystem.goToAnnotation(anno.id);
+        setCurrentPopupId(showAnnotationPopup(anno, state.imageAssets));
+        updateCounter();
+    };
+
+    const deselectAnno = () => {
+        hideAnnotationPopup();
+        hideAnnotationLine();
+        setCurrentPopupId(null);
+        annotationSystem.selectedAnnotation = null;
+        document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
+        activeAnnoIndex = -1;
+        updateCounter();
+    };
 
     const setMarkersVisible = (visible) => {
         markersVisible = visible;
         const container = document.getElementById('annotation-markers');
         if (container) container.style.display = markersVisible ? '' : 'none';
-        if (markerToggle) markerToggle.classList.toggle('off', !markersVisible);
+        capsule.classList.toggle('collapsed', !markersVisible);
+        bubbleBtn.classList.toggle('off', !markersVisible);
     };
 
     if (annotations.length > 0) {
-        const sequence = document.createElement('div');
-        sequence.className = 'editorial-anno-sequence';
-
+        // Build index panel items
         annotations.forEach((anno, i) => {
-            if (i > 0) {
-                const dash = document.createElement('span');
-                dash.className = 'editorial-anno-seq-dash';
-                sequence.appendChild(dash);
-            }
-
-            const num = document.createElement('button');
-            num.className = 'editorial-anno-seq-num';
-            num.dataset.annoId = anno.id;
-            num.textContent = String(i + 1).padStart(2, '0');
-            num.addEventListener('click', () => {
-                if (getCurrentPopupId() === anno.id) {
-                    hideAnnotationPopup();
-                    hideAnnotationLine();
-                    setCurrentPopupId(null);
-                    annotationSystem.selectedAnnotation = null;
-                    document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
-                    sequence.querySelectorAll('.editorial-anno-seq-num.active').forEach(n => n.classList.remove('active'));
-                    return;
+            const item = document.createElement('button');
+            item.className = 'editorial-anno-index-item';
+            const numSpan = document.createElement('span');
+            numSpan.className = 'editorial-anno-index-num';
+            numSpan.textContent = String(i + 1).padStart(2, '0');
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'editorial-anno-index-title';
+            titleSpan.textContent = anno.title || 'Annotation ' + (i + 1);
+            item.appendChild(numSpan);
+            item.appendChild(titleSpan);
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (activeAnnoIndex === i) {
+                    deselectAnno();
+                } else {
+                    goToAnno(i);
                 }
-
-                if (!markersVisible) setMarkersVisible(true);
-
-                sequence.querySelectorAll('.editorial-anno-seq-num.active').forEach(n => n.classList.remove('active'));
-                num.classList.add('active');
-
-                annotationSystem.goToAnnotation(anno.id);
-                setCurrentPopupId(showAnnotationPopup(anno, state.imageAssets));
+                indexPanel.classList.remove('open');
             });
-            sequence.appendChild(num);
+            indexPanel.appendChild(item);
         });
 
-        toolsGroup.appendChild(sequence);
-
-        // Marker visibility toggle
-        markerToggle = document.createElement('button');
-        markerToggle.className = 'editorial-marker-toggle';
-        markerToggle.title = 'Toggle annotation markers';
-        markerToggle.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
-        markerToggle.addEventListener('click', () => {
+        // Bubble click — toggle markers on/off
+        bubbleBtn.addEventListener('click', () => {
             setMarkersVisible(!markersVisible);
-            if (!markersVisible && getCurrentPopupId()) {
-                hideAnnotationPopup();
-                hideAnnotationLine();
-                setCurrentPopupId(null);
-                annotationSystem.selectedAnnotation = null;
-                document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
-                sequence.querySelectorAll('.editorial-anno-seq-num.active').forEach(n => n.classList.remove('active'));
-            }
+            if (!markersVisible) deselectAnno();
         });
+
+        // Counter text click — open/close index panel
+        counterText.addEventListener('click', (e) => {
+            e.stopPropagation();
+            indexPanel.classList.toggle('open');
+        });
+
+        // Close index on outside click
+        document.addEventListener('click', () => { indexPanel.classList.remove('open'); });
+        capsule.addEventListener('click', (e) => { e.stopPropagation(); });
+
+        // Prev/next navigation
+        prevBtn.addEventListener('click', () => {
+            if (annotations.length === 0) return;
+            const next = activeAnnoIndex <= 0 ? annotations.length - 1 : activeAnnoIndex - 1;
+            goToAnno(next);
+        });
+
+        nextBtn.addEventListener('click', () => {
+            if (annotations.length === 0) return;
+            const next = activeAnnoIndex >= annotations.length - 1 ? 0 : activeAnnoIndex + 1;
+            goToAnno(next);
+        });
+
+        capsule.appendChild(bubbleBtn);
+        capsule.appendChild(counterWrap);
+        capsule.appendChild(indexPanel);
+        updateCounter();
+
+        toolsGroup.appendChild(capsule);
+
         // Reset orbit center
         const orbitResetBtn = document.createElement('button');
         orbitResetBtn.className = 'editorial-marker-toggle';
         orbitResetBtn.title = 'Reset rotation center';
-        orbitResetBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>';
+        const orbitSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        orbitSvg.setAttribute('width', '14');
+        orbitSvg.setAttribute('height', '14');
+        orbitSvg.setAttribute('viewBox', '0 0 24 24');
+        orbitSvg.setAttribute('fill', 'none');
+        orbitSvg.setAttribute('stroke', 'currentColor');
+        orbitSvg.setAttribute('stroke-width', '2');
+        ['circle', 'line', 'line', 'line', 'line'].forEach((tag, idx) => {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            if (idx === 0) { el.setAttribute('cx','12'); el.setAttribute('cy','12'); el.setAttribute('r','10'); }
+            if (idx === 1) { el.setAttribute('x1','12'); el.setAttribute('y1','2'); el.setAttribute('x2','12'); el.setAttribute('y2','6'); }
+            if (idx === 2) { el.setAttribute('x1','12'); el.setAttribute('y1','18'); el.setAttribute('x2','12'); el.setAttribute('y2','22'); }
+            if (idx === 3) { el.setAttribute('x1','2'); el.setAttribute('y1','12'); el.setAttribute('x2','6'); el.setAttribute('y2','12'); }
+            if (idx === 4) { el.setAttribute('x1','18'); el.setAttribute('y1','12'); el.setAttribute('x2','22'); el.setAttribute('y2','12'); }
+            orbitSvg.appendChild(el);
+        });
+        orbitResetBtn.appendChild(orbitSvg);
         orbitResetBtn.addEventListener('click', () => { if (resetOrbitCenter) resetOrbitCenter(); });
         toolsGroup.appendChild(orbitResetBtn);
 
-        toolsGroup.appendChild(markerToggle);
         if (measureWrapper) toolsGroup.appendChild(measureWrapper);
         if (sliceWrapper) toolsGroup.appendChild(sliceWrapper);
     } else {
@@ -1179,7 +1280,23 @@ export function setup(manifest, deps) {
         const orbitResetBtn = document.createElement('button');
         orbitResetBtn.className = 'editorial-marker-toggle';
         orbitResetBtn.title = 'Reset rotation center';
-        orbitResetBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>';
+        const orbitSvg2 = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        orbitSvg2.setAttribute('width', '14');
+        orbitSvg2.setAttribute('height', '14');
+        orbitSvg2.setAttribute('viewBox', '0 0 24 24');
+        orbitSvg2.setAttribute('fill', 'none');
+        orbitSvg2.setAttribute('stroke', 'currentColor');
+        orbitSvg2.setAttribute('stroke-width', '2');
+        ['circle', 'line', 'line', 'line', 'line'].forEach((tag, idx) => {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            if (idx === 0) { el.setAttribute('cx','12'); el.setAttribute('cy','12'); el.setAttribute('r','10'); }
+            if (idx === 1) { el.setAttribute('x1','12'); el.setAttribute('y1','2'); el.setAttribute('x2','12'); el.setAttribute('y2','6'); }
+            if (idx === 2) { el.setAttribute('x1','12'); el.setAttribute('y1','18'); el.setAttribute('x2','12'); el.setAttribute('y2','22'); }
+            if (idx === 3) { el.setAttribute('x1','2'); el.setAttribute('y1','12'); el.setAttribute('x2','6'); el.setAttribute('y2','12'); }
+            if (idx === 4) { el.setAttribute('x1','18'); el.setAttribute('y1','12'); el.setAttribute('x2','22'); el.setAttribute('y2','12'); }
+            orbitSvg2.appendChild(el);
+        });
+        orbitResetBtn.appendChild(orbitSvg2);
         orbitResetBtn.addEventListener('click', () => { if (resetOrbitCenter) resetOrbitCenter(); });
         toolsGroup.appendChild(orbitResetBtn);
         if (measureWrapper) toolsGroup.appendChild(measureWrapper);
@@ -1736,13 +1853,42 @@ function initFilePicker(container, deps) {
 // ---- Layout module hooks (called by kiosk-main.ts) ----
 
 function onAnnotationSelect(annotationId) {
-    document.querySelectorAll('.editorial-anno-seq-num.active').forEach(n => n.classList.remove('active'));
-    const el = document.querySelector(`.editorial-anno-seq-num[data-anno-id="${annotationId}"]`);
-    if (el) el.classList.add('active');
+    // Update capsule counter when a 3D marker is clicked
+    const capsule = document.querySelector('.editorial-anno-capsule');
+    if (!capsule) return;
+    const items = capsule.querySelectorAll('.editorial-anno-index-item');
+    const fractionBtn = capsule.querySelector('.editorial-anno-fraction');
+    const bubbleBtn = capsule.querySelector('.editorial-anno-bubble');
+    let foundIndex = -1;
+    items.forEach((el, i) => {
+        const num = el.querySelector('.editorial-anno-index-num');
+        if (num && num.textContent === String(i + 1).padStart(2, '0')) {
+            // Match by checking annotation system order
+        }
+    });
+    // Find index by matching the annotation id in the system
+    const annos = document.querySelectorAll('.annotation-marker');
+    annos.forEach((marker, i) => {
+        if (marker.dataset.annotationId === annotationId) foundIndex = i;
+    });
+    if (foundIndex >= 0) {
+        const total = items.length;
+        if (fractionBtn) fractionBtn.textContent = String(foundIndex + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0');
+        if (bubbleBtn) bubbleBtn.classList.add('has-selection');
+        items.forEach((el, i) => el.classList.toggle('active', i === foundIndex));
+    }
 }
 
 function onAnnotationDeselect() {
-    document.querySelectorAll('.editorial-anno-seq-num.active').forEach(n => n.classList.remove('active'));
+    const capsule = document.querySelector('.editorial-anno-capsule');
+    if (!capsule) return;
+    const fractionBtn = capsule.querySelector('.editorial-anno-fraction');
+    const bubbleBtn = capsule.querySelector('.editorial-anno-bubble');
+    const items = capsule.querySelectorAll('.editorial-anno-index-item');
+    const total = items.length;
+    if (fractionBtn) fractionBtn.textContent = '\u2014 / ' + String(total).padStart(2, '0');
+    if (bubbleBtn) bubbleBtn.classList.remove('has-selection');
+    items.forEach(el => el.classList.remove('active'));
 }
 
 function onViewModeChange(mode) {
@@ -1786,9 +1932,9 @@ function onWalkthroughStart(walkthrough) {
     // Create walkthrough progress dots in the ribbon
     const ribbon = document.querySelector('.editorial-bottom-ribbon');
     if (ribbon) {
-        // Hide annotation sequence during walkthrough
-        const annoSeq = ribbon.querySelector('.editorial-anno-sequence');
-        if (annoSeq) annoSeq.style.display = 'none';
+        // Hide annotation capsule during walkthrough
+        const annoCapsule = ribbon.querySelector('.editorial-anno-capsule');
+        if (annoCapsule) annoCapsule.style.display = 'none';
 
         // Create walkthrough stop dots
         wtStopDots = document.createElement('div');
@@ -1909,9 +2055,9 @@ function onWalkthroughEnd() {
         wtTitleEl = null;
     }
 
-    // Re-show annotation sequence
-    const annoSeq = document.querySelector('.editorial-anno-sequence');
-    if (annoSeq) annoSeq.style.display = '';
+    // Re-show annotation capsule
+    const annoCapsule = document.querySelector('.editorial-anno-capsule');
+    if (annoCapsule) annoCapsule.style.display = '';
 
     // Let title block resume auto-fade
     const titleBlock = document.querySelector('.editorial-title-block');

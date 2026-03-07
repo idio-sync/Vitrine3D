@@ -225,52 +225,206 @@ body.kiosk-mode.kiosk-editorial .editorial-ribbon-rule {
     flex-shrink: 0;
 }
 
-/* Annotation sequence chain */
+/* Annotation capsule — unified toggle + counter + index */
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-sequence {
+body.kiosk-mode.kiosk-editorial .editorial-anno-capsule {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 0;
-    position: absolute;
-    left: 0;
-    right: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
+    position: relative;
+    border: 1px solid var(--kiosk-border-subtle);
+    border-radius: 14px;
+    padding: 0 2px;
+    height: 24px;
+    transition: width 0.3s cubic-bezier(0.33, 1, 0.68, 1), border-color 0.2s, padding 0.3s;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-capsule:hover {
+    border-color: var(--kiosk-border-default, var(--kiosk-border-subtle));
+}
+
+/* Collapsed state — markers hidden, only bubble visible */
+body.kiosk-mode.kiosk-editorial .editorial-anno-capsule.collapsed .editorial-anno-counter {
+    width: 0;
+    opacity: 0;
+    overflow: hidden;
+    padding: 0;
     pointer-events: none;
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-sequence > * {
-    pointer-events: auto;
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-sequence::-webkit-scrollbar {
-    display: none;
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-seq-num {
-    font-family: var(--kiosk-font-body);
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--kiosk-text-muted);
-    cursor: pointer;
-    padding: 2px 4px;
-    transition: color 0.15s;
-    letter-spacing: 0.02em;
+/* Speech bubble toggle button */
+body.kiosk-mode.kiosk-editorial .editorial-anno-bubble {
     background: none;
     border: none;
+    color: var(--kiosk-text-muted);
+    cursor: pointer;
+    padding: 3px 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, opacity 0.2s;
+    flex-shrink: 0;
+    border-radius: 50%;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-bubble:hover {
+    color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-bubble.off {
+    opacity: 0.4;
+    color: var(--kiosk-text-faint);
+}
+
+/* Gold fill when an annotation is selected */
+body.kiosk-mode.kiosk-editorial .editorial-anno-bubble.has-selection svg {
+    fill: var(--kiosk-accent);
+    stroke: var(--kiosk-accent);
+    fill-opacity: 0.35;
+}
+
+/* Counter wrapper — prev, fraction, next */
+body.kiosk-mode.kiosk-editorial .editorial-anno-counter {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    transition: width 0.3s cubic-bezier(0.33, 1, 0.68, 1), opacity 0.25s;
+    overflow: hidden;
     white-space: nowrap;
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-seq-num:hover {
+/* Fraction display (e.g. "02 / 06") */
+body.kiosk-mode.kiosk-editorial .editorial-anno-fraction {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--kiosk-text-muted);
+    letter-spacing: 0.04em;
+    padding: 2px 4px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    white-space: nowrap;
+    transition: color 0.15s;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-fraction:hover {
     color: var(--kiosk-text-secondary);
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-seq-num.active {
-    color: var(--kiosk-accent);
-    font-weight: 500;
+/* Prev / Next arrow buttons */
+body.kiosk-mode.kiosk-editorial .editorial-anno-nav {
+    background: none;
+    border: none;
+    color: var(--kiosk-text-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 3px;
+    transition: color 0.15s;
+    display: flex;
+    align-items: center;
 }
 
+body.kiosk-mode.kiosk-editorial .editorial-anno-nav:hover {
+    color: var(--kiosk-accent);
+}
+
+/* Index popover — annotation list */
+body.kiosk-mode.kiosk-editorial .editorial-anno-index {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    min-width: 200px;
+    max-width: 280px;
+    max-height: 260px;
+    overflow-y: auto;
+    background: rgba(var(--kiosk-surface-rgb), 0.94);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--kiosk-border-subtle);
+    border-radius: 6px;
+    padding: 4px 0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    z-index: 200;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--kiosk-accent-rgb), 0.3) transparent;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-index.open {
+    display: block;
+    animation: editorialIndexIn 0.2s ease-out;
+}
+
+@keyframes editorialIndexIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-index-item {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    width: 100%;
+    padding: 6px 14px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-index-item:hover {
+    background: rgba(var(--kiosk-accent-rgb), 0.08);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-index-item.active {
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-index-num {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--kiosk-text-muted);
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+    min-width: 18px;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-index-item.active .editorial-anno-index-num {
+    color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-index-title {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--kiosk-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-index-item.active .editorial-anno-index-title {
+    color: var(--kiosk-text-primary);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-index::-webkit-scrollbar {
+    width: 3px;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-index::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-index::-webkit-scrollbar-thumb {
+    background: rgba(var(--kiosk-accent-rgb), 0.3);
+    border-radius: 2px;
+}
+
+/* Walkthrough reuses dash class for stop sequences */
 body.kiosk-mode.kiosk-editorial .editorial-anno-seq-dash {
     width: 20px;
     height: 1px;
@@ -2733,9 +2887,18 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
         margin: 0 6px 0 8px;
     }
 
-    /* Hide annotation sequence chain — too wide for compact ribbon */
-    body.kiosk-mode.kiosk-editorial .editorial-anno-sequence {
-        display: none;
+    /* Compact the annotation capsule for narrow viewports */
+    body.kiosk-mode.kiosk-editorial .editorial-anno-capsule {
+        height: 22px;
+        border-radius: 12px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-fraction {
+        font-size: 0.62rem;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-nav {
+        font-size: 0.85rem;
     }
 
     /* Overflow menu — show button, tools become dropdown */
