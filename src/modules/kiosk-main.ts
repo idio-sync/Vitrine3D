@@ -345,11 +345,7 @@ export async function init(): Promise<void> {
     pointcloudGroup = sceneManager.pointcloudGroup;
     fpsElement = document.getElementById('fps-counter');
 
-    // Run GPU benchmark (~500ms) — result is cached for detectDeviceTier scoring.
-    // Runs in the init phase while the loading screen is visible.
-    await runGpuBenchmark(renderer);
-
-    // Resolve quality tier early so SparkRenderer gets the correct LOD budget at creation
+    // Resolve quality tier (without benchmark — benchmark runs when a model is loaded)
     const glCtxInit = renderer ? renderer.getContext() : null;
     state.qualityResolved = resolveQualityTier(state.qualityTier, glCtxInit);
     log.info('Quality tier resolved at init:', state.qualityResolved);
@@ -1237,16 +1233,22 @@ async function showClickGate(archiveUrl: string): Promise<void> {
             }
         }
 
-        // Show content types
+        // Show content types (mesh first)
         const typesEl = document.getElementById('kiosk-gate-types');
-        const types = [];
-        if (contentInfo.hasSplat) types.push('Gaussian Splat');
+        const types: string[] = [];
         if (contentInfo.hasMesh) types.push('Mesh');
+        if (contentInfo.hasSplat) types.push('Gaussian Splat');
         if (contentInfo.hasPointcloud) types.push('Point Cloud');
-        
+
         if (typesEl) {
-            typesEl.innerHTML = '';
-            types.forEach(t => {
+            typesEl.textContent = '';
+            types.forEach((t, i) => {
+                if (i > 0) {
+                    const plus = document.createElement('span');
+                    plus.className = 'kiosk-gate-plus';
+                    plus.textContent = '+';
+                    typesEl.appendChild(plus);
+                }
                 const span = document.createElement('span');
                 span.className = 'kiosk-gate-pill';
                 span.textContent = t;
@@ -1276,6 +1278,16 @@ async function showClickGate(archiveUrl: string): Promise<void> {
 }
 
 async function loadArchiveFromUrl(url: string): Promise<void> {
+    // Run GPU benchmark (~500ms) before loading — runs after click-gate dismissal
+    // so we only benchmark when someone actually intends to view a model.
+    // Result is cached, so subsequent loads skip the benchmark.
+    if (renderer) {
+        await runGpuBenchmark(renderer);
+        const gl = renderer.getContext();
+        state.qualityResolved = resolveQualityTier(state.qualityTier, gl);
+        log.info('Quality tier resolved after benchmark:', state.qualityResolved);
+    }
+
     const fileName = url.split('/').pop()?.split('?')[0] || 'archive.a3d';
 
     // Try Range-based loading first — only downloads ~64KB central directory,
@@ -4837,10 +4849,10 @@ async function showBrandedLoading(archiveLoader: ArchiveLoader): Promise<void> {
             }
         }
 
-        // Build content type labels
-        const types = [];
-        if (contentInfo.hasSplat) types.push('Gaussian Splat');
+        // Build content type labels (mesh first)
+        const types: string[] = [];
         if (contentInfo.hasMesh) types.push('Mesh');
+        if (contentInfo.hasSplat) types.push('Gaussian Splat');
         if (contentInfo.hasPointcloud) types.push('Point Cloud');
         if (typesEl && types.length > 0) {
             typesEl.textContent = types.join(' + ');
