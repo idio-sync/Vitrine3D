@@ -336,10 +336,6 @@ export async function init(): Promise<void> {
     }
     log.info('Renderer type:', sceneManager.rendererType);
 
-    // Run GPU benchmark (~500ms) — result is cached for detectDeviceTier scoring.
-    // Runs in the init phase while the loading screen is visible.
-    await runGpuBenchmark(renderer);
-
     // Extract scene objects for local use
     scene = sceneManager.scene;
     camera = sceneManager.camera;
@@ -348,6 +344,10 @@ export async function init(): Promise<void> {
     modelGroup = sceneManager.modelGroup;
     pointcloudGroup = sceneManager.pointcloudGroup;
     fpsElement = document.getElementById('fps-counter');
+
+    // Run GPU benchmark (~500ms) — result is cached for detectDeviceTier scoring.
+    // Runs in the init phase while the loading screen is visible.
+    await runGpuBenchmark(renderer);
 
     // Resolve quality tier early so SparkRenderer gets the correct LOD budget at creation
     const glCtxInit = renderer ? renderer.getContext() : null;
