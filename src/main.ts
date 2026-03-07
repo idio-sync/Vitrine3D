@@ -987,6 +987,8 @@ async function init() {
             // LOD (Spark 2.0) — budget-based rendering caps splats per frame
             lodSplatCount: getLodBudget(QUALITY_TIER.HD),
             behindFoveate: 0.1,         // Aggressive behind-camera culling
+            coneFov: 1.0,               // ~57° half-angle priority cone (matches ~60° camera FOV)
+            coneFoveate: 0.3,           // Deprioritize splats outside view cone → center-out LOD fill
         });
         scene.add(sparkRenderer);
         log.info(`SparkRenderer created with clipXY=2.0, minAlpha=3/255, lodSplatCount=${getLodBudget(QUALITY_TIER.HD)}`);
@@ -1029,6 +1031,8 @@ async function init() {
                 minAlpha: 3 / 255,
                 lodSplatCount: getLodBudget(QUALITY_TIER.HD),
                 behindFoveate: 0.1,
+                coneFov: 1.0,
+                coneFoveate: 0.3,
             });
             scene.add(sparkRenderer);
             log.info(`Renderer changed, SparkRenderer recreated for WebGL (lodSplatCount=${getLodBudget(QUALITY_TIER.HD)})`);

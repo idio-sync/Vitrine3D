@@ -358,6 +358,8 @@ export async function init(): Promise<void> {
             // LOD (Spark 2.0) — device-tier-aware splat budget
             lodSplatCount: lodBudget,
             behindFoveate: 0.1,    // Aggressive behind-camera culling
+            coneFov: 1.0,          // ~57° half-angle priority cone (matches ~60° camera FOV)
+            coneFoveate: 0.3,      // Deprioritize splats outside view cone → center-out LOD fill
         });
         scene.add(sparkRenderer);
         log.info(`SparkRenderer created with clipXY=2.0, minAlpha=3/255, lodSplatCount=${lodBudget}`);
@@ -397,6 +399,8 @@ export async function init(): Promise<void> {
             minAlpha: 3 / 255,
             lodSplatCount: lodBudget,
             behindFoveate: 0.1,
+            coneFov: 1.0,
+            coneFoveate: 0.3,
         });
         scene.add(sparkRenderer);
         log.info('Renderer changed to', sceneManager!.rendererType, `- SparkRenderer recreated (lodSplatCount=${lodBudget})`);
