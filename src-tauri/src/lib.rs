@@ -221,14 +221,18 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
-                // Forward deep link URLs via multiple strategies for reliability:
-                // 1. Tauri event system (app.emit → JS listen)
-                // 2. Direct JS eval (global function or CustomEvent)
+
+                // DEBUG: show what args the second instance sent
+                let debug_args: Vec<String> = args.iter().map(|a| {
+                    if a.len() > 80 { format!("{}...", &a[..80]) } else { a.clone() }
+                }).collect();
+                let debug_msg = format!("Single-instance callback fired.\\nArgs ({}):\\n{}", args.len(), debug_args.join("\\n"));
+                let _ = window.eval(&format!("alert(\"{}\")", debug_msg.replace('\"', "\\\"")));
+
+                // Forward deep link URLs via multiple strategies
                 for arg in &args {
                     if arg.starts_with("vitrine3d://") {
-                        // Strategy 1: Tauri event
                         let _ = app.emit("deep-link-received", arg.clone());
-                        // Strategy 2: eval into webview
                         let escaped = arg.replace('\\', "\\\\").replace('\"', "\\\"");
                         let js = format!(
                             "if(window.__vitrine3dDeepLink){{window.__vitrine3dDeepLink(\"{0}\")}}else{{window.dispatchEvent(new CustomEvent('vitrine3d:deep-link',{{detail:\"{0}\"}}))}}",
