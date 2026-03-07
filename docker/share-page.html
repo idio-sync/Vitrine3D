@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{TITLE}} — {{SITE_NAME}}</title>
 
-    <!-- OpenGraph -->
+    <!-- OpenGraph (absolute URLs for crawlers) -->
     <meta property="og:type" content="video.other">
     <meta property="og:site_name" content="{{SITE_NAME}}">
     <meta property="og:url" content="{{SITE_URL}}/share/{{MEDIA_ID}}">
@@ -30,119 +30,164 @@
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            background: #111;
-            color: #eee;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 16px;
-            line-height: 1.5;
+            background: #0a1929;
+            color: #e8e0d4;
+            font-family: 'Georgia', 'Times New Roman', serif;
             min-height: 100vh;
-            padding: 24px 16px 48px;
+            display: flex;
+            flex-direction: column;
         }
 
-        .container {
-            max-width: 960px;
-            margin: 0 auto;
-        }
-
-        .site-name {
-            font-size: 13px;
-            color: #777;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            margin-bottom: 24px;
-        }
-
-        .video-wrap {
+        /* Full-viewport video with info overlay at bottom */
+        .video-stage {
+            position: relative;
             width: 100%;
-            border-radius: 8px;
-            overflow: hidden;
+            flex: 1;
+            min-height: 0;
             background: #000;
-            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         video {
             display: block;
             width: 100%;
-            height: auto;
+            height: 100vh;
+            object-fit: contain;
+            background: #000;
         }
 
-        .meta {
-            margin-bottom: 24px;
+        /* Bottom bar — sits over the video */
+        .info-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 10;
+            background: linear-gradient(transparent, rgba(10, 25, 41, 0.85) 30%, rgba(10, 25, 41, 0.95));
+            padding: 48px 24px 24px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+            pointer-events: none;
         }
 
-        .meta h1 {
-            font-size: 1.5rem;
+        .info-bar > * { pointer-events: auto; }
+
+        .info-left {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .site-name {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 10px;
+            color: #fec03a;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            margin-bottom: 6px;
+            opacity: 0.8;
+        }
+
+        .title {
+            font-size: 1.25rem;
             font-weight: 600;
-            margin-bottom: 8px;
+            line-height: 1.3;
+            color: #f5f0e8;
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        .meta .description {
-            color: #aaa;
-            font-size: 0.95rem;
-            margin-bottom: 8px;
-        }
-
-        .meta .creator {
-            font-size: 0.85rem;
-            color: #666;
+        .description {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 0.8rem;
+            color: #8a9bb5;
+            line-height: 1.4;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .actions {
             display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
+            gap: 8px;
+            flex-shrink: 0;
         }
 
         .btn-primary,
         .btn-secondary {
-            display: inline-block;
-            padding: 10px 22px;
-            border-radius: 999px;
-            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 18px;
+            border-radius: 4px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 0.8rem;
             font-weight: 500;
             text-decoration: none;
-            transition: opacity 0.15s;
+            transition: all 0.2s;
             white-space: nowrap;
-        }
-
-        .btn-primary:hover,
-        .btn-secondary:hover {
-            opacity: 0.82;
+            border: 1px solid transparent;
         }
 
         .btn-primary {
-            background: #5a9e97;
-            color: #fff;
+            background: #fec03a;
+            color: #0a1929;
+            border-color: #fec03a;
+        }
+
+        .btn-primary:hover {
+            background: #ffe082;
+            border-color: #ffe082;
         }
 
         .btn-secondary {
-            background: #333;
-            color: #eee;
+            background: rgba(255, 255, 255, 0.08);
+            color: #e8e0d4;
+            border-color: rgba(254, 192, 58, 0.25);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(254, 192, 58, 0.15);
+            border-color: rgba(254, 192, 58, 0.4);
+        }
+
+        /* Mobile */
+        @media (max-width: 600px) {
+            .info-bar {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 32px 16px 16px;
+            }
+            .title { font-size: 1rem; }
+            .actions { justify-content: stretch; }
+            .actions a { flex: 1; justify-content: center; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="site-name">{{SITE_NAME}}</div>
+    <div class="video-stage">
+        <video
+            src="{{MP4_REL}}"
+            poster="{{THUMB_REL}}"
+            controls
+            autoplay
+            muted
+            loop
+            playsinline
+        ></video>
+    </div>
 
-        <div class="video-wrap">
-            <video
-                src="{{MP4_URL}}"
-                poster="{{THUMB_URL}}"
-                controls
-                autoplay
-                muted
-                loop
-                playsinline
-            ></video>
+    <div class="info-bar">
+        <div class="info-left">
+            <div class="site-name">{{SITE_NAME}}</div>
+            <div class="title">{{TITLE}}</div>
+            <div class="description">{{DESCRIPTION}}</div>
         </div>
-
-        <div class="meta">
-            <h1>{{TITLE}}</h1>
-            <p class="description">{{DESCRIPTION}}</p>
-            <p class="creator">{{CREATOR}}</p>
-        </div>
-
         <div class="actions">
             {{VIEW_3D_LINK}}
             {{GIF_LINK}}

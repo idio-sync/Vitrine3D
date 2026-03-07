@@ -1516,8 +1516,12 @@ function handleSharePage(req, res, mediaId) {
     const title = escapeHtml(row.title || row.archive_title || SITE_NAME);
     const description = escapeHtml(row.archive_description || SITE_DESCRIPTION);
     const creator = escapeHtml('');
-    const mp4Url = row.mp4_path ? SITE_URL + row.mp4_path : '';
-    const thumbUrl = row.thumb_path ? SITE_URL + row.thumb_path : '';
+    // Absolute URLs for OG meta tags (crawlers need full URLs)
+    const mp4AbsUrl = row.mp4_path ? SITE_URL + row.mp4_path : '';
+    const thumbAbsUrl = row.thumb_path ? SITE_URL + row.thumb_path : '';
+    // Relative paths for in-page elements — nginx sub_filter rewrites src="/ to include SITE_URL
+    const mp4RelUrl = row.mp4_path || '';
+    const thumbRelUrl = row.thumb_path || '';
 
     let view3dLink = '';
     if (row.archive_filename) {
@@ -1535,8 +1539,10 @@ function handleSharePage(req, res, mediaId) {
         .replace(/\{\{SITE_NAME\}\}/g, escapeHtml(SITE_NAME))
         .replace(/\{\{SITE_URL\}\}/g, escapeHtml(SITE_URL))
         .replace(/\{\{MEDIA_ID\}\}/g, escapeHtml(mediaId))
-        .replace(/\{\{MP4_URL\}\}/g, escapeHtml(mp4Url))
-        .replace(/\{\{THUMB_URL\}\}/g, escapeHtml(thumbUrl))
+        .replace(/\{\{MP4_URL\}\}/g, escapeHtml(mp4AbsUrl))
+        .replace(/\{\{THUMB_URL\}\}/g, escapeHtml(thumbAbsUrl))
+        .replace(/\{\{MP4_REL\}\}/g, escapeHtml(mp4RelUrl))
+        .replace(/\{\{THUMB_REL\}\}/g, escapeHtml(thumbRelUrl))
         .replace(/\{\{CREATOR\}\}/g, creator)
         .replace(/\{\{VIEW_3D_LINK\}\}/g, view3dLink)
         .replace(/\{\{GIF_LINK\}\}/g, gifLink);
@@ -1982,10 +1988,9 @@ function transcodeMedia(mediaId) {
                 // Non-fatal — continue with GIF
             }
 
-            // Step 3: GIF palette generation
+            // Step 3: GIF palette generation — use transcoded MP4 (stable timestamps)
             const paletteArgs = [
-                ...trimArgs,
-                '-i', rawPath,
+                '-i', mp4Path,
                 '-vf', 'fps=15,scale=480:-1:flags=lanczos,palettegen',
                 '-y', palettePath
             ];
@@ -1998,10 +2003,9 @@ function transcodeMedia(mediaId) {
                     return;
                 }
 
-                // Step 4: GIF encode
+                // Step 4: GIF encode — from MP4 (already trimmed, stable frame timing)
                 const gifArgs = [
-                    ...trimArgs,
-                    '-i', rawPath,
+                    '-i', mp4Path,
                     '-i', palettePath,
                     '-lavfi', 'fps=15,scale=480:-1:flags=lanczos[x];[x][1:v]paletteuse',
                     '-y', gifPath
