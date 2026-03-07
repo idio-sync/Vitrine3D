@@ -160,6 +160,7 @@ export function getBenchmarkFps(): number | null {
  * Returns QUALITY_TIER.SD for low-end devices, QUALITY_TIER.HD for capable ones.
  *
  * Scoring: 5 static heuristics (1 pt each) + GPU benchmark (0-2 pts) = 7 max. Score >= 4 = HD.
+ * Hard gate: if benchmark FPS < GPU_BENCHMARK_MIN, force SD regardless of score.
  * iOS/iPadOS devices are forced to SD — Safari has strict process memory limits
  * (~1.5 GB) and will kill the tab when GPU memory is exhausted.
  *
@@ -224,6 +225,14 @@ export function detectDeviceTier(gl?: WebGLRenderingContext | WebGL2RenderingCon
 
     // 6. GPU benchmark (0, 1, or 2 points)
     score += getBenchmarkScore();
+
+    // Hard gate: if benchmark ran and GPU is below minimum FPS, force SD
+    // regardless of static score. Catches integrated GPUs on desktops that
+    // pass all static checks but can't handle HD assets.
+    if (_benchmarkFps !== null && _benchmarkFps < DEVICE_THRESHOLDS.GPU_BENCHMARK_MIN) {
+        log.info(`Device tier detected: ${QUALITY_TIER.SD} (benchmark ${_benchmarkFps.toFixed(1)} FPS < ${DEVICE_THRESHOLDS.GPU_BENCHMARK_MIN} min — forced SD)`);
+        return QUALITY_TIER.SD;
+    }
 
     const tier = score >= 4 ? QUALITY_TIER.HD : QUALITY_TIER.SD;
     log.info(`Device tier detected: ${tier} (score ${score}/7, benchmark ${getBenchmarkFps()?.toFixed(1) ?? 'N/A'} FPS)`);

@@ -46,38 +46,38 @@ describe('getBenchmarkScore', () => {
         expect(getBenchmarkScore()).toBe(0);
     });
 
-    it('returns 0 for FPS below 120', () => {
-        _setBenchmarkFpsForTest(80);
+    it('returns 0 for FPS below 500', () => {
+        _setBenchmarkFpsForTest(400);
         expect(getBenchmarkScore()).toBe(0);
     });
 
-    it('returns 0 at FPS boundary of 119', () => {
-        _setBenchmarkFpsForTest(119);
+    it('returns 0 at FPS boundary of 499', () => {
+        _setBenchmarkFpsForTest(499);
         expect(getBenchmarkScore()).toBe(0);
     });
 
-    it('returns 1 at FPS boundary of 120', () => {
-        _setBenchmarkFpsForTest(120);
+    it('returns 1 at FPS boundary of 500', () => {
+        _setBenchmarkFpsForTest(500);
         expect(getBenchmarkScore()).toBe(1);
     });
 
     it('returns 1 for mid-range FPS', () => {
-        _setBenchmarkFpsForTest(180);
+        _setBenchmarkFpsForTest(750);
         expect(getBenchmarkScore()).toBe(1);
     });
 
-    it('returns 1 at FPS boundary of 239', () => {
-        _setBenchmarkFpsForTest(239);
+    it('returns 1 at FPS boundary of 999', () => {
+        _setBenchmarkFpsForTest(999);
         expect(getBenchmarkScore()).toBe(1);
     });
 
-    it('returns 2 at FPS boundary of 240', () => {
-        _setBenchmarkFpsForTest(240);
+    it('returns 2 at FPS boundary of 1000', () => {
+        _setBenchmarkFpsForTest(1000);
         expect(getBenchmarkScore()).toBe(2);
     });
 
     it('returns 2 for high FPS', () => {
-        _setBenchmarkFpsForTest(500);
+        _setBenchmarkFpsForTest(2000);
         expect(getBenchmarkScore()).toBe(2);
     });
 });
@@ -113,7 +113,7 @@ describe('detectDeviceTier', () => {
 
         // Default to high benchmark score for existing tests so they
         // continue testing the static heuristics in isolation
-        _setBenchmarkFpsForTest(500); // 2 points
+        _setBenchmarkFpsForTest(1500); // 2 points (above GPU_BENCHMARK_HD=1000)
     });
 
     afterEach(() => {
@@ -441,7 +441,7 @@ describe('detectDeviceTier', () => {
 
     it('returns hd when benchmark compensates for missing deviceMemory', () => {
         // Firefox/Safari desktop: deviceMemory undefined, good benchmark
-        _setBenchmarkFpsForTest(300); // 2 benchmark points
+        _setBenchmarkFpsForTest(1200); // 2 benchmark points (above GPU_BENCHMARK_HD=1000)
 
         Object.defineProperty(Navigator.prototype, 'deviceMemory', {
             configurable: true,

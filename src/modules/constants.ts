@@ -154,9 +154,10 @@ export const DEVICE_THRESHOLDS = {
     LOW_CORES: 4,             // navigator.hardwareConcurrency threshold
     MOBILE_WIDTH_PX: 768,     // screen.width threshold
     LOW_MAX_TEXTURE: 8192,    // gl.MAX_TEXTURE_SIZE threshold
-    GPU_BENCHMARK_HD: 240,    // FPS at 500k tris for 2 points (full HD capable)
-    GPU_BENCHMARK_MID: 120,   // FPS at 500k tris for 1 point (mid-range)
-    // TODO: Make GPU_BENCHMARK_HD and GPU_BENCHMARK_MID overridable via
+    GPU_BENCHMARK_HD: 1000,   // FPS at 410k tris for 2 points (discrete GPU territory)
+    GPU_BENCHMARK_MID: 500,   // FPS at 410k tris for 1 point (mid-range)
+    GPU_BENCHMARK_MIN: 500,   // Hard gate: below this FPS → force SD regardless of static score
+    // TODO: Make GPU_BENCHMARK thresholds overridable via
     // APP_CONFIG env vars (same pattern as LOD_BUDGET_SD/LOD_BUDGET_HD)
 } as const;
 
