@@ -1147,8 +1147,10 @@ export class SceneManager {
         const center = box.getCenter(new Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
 
-        // Shadow camera frustum should cover the whole model with padding
-        const halfSize = Math.max(maxDim * 0.75, SHADOWS.CAMERA_SIZE);
+        // Only adjust if the model exceeds the default shadow frustum
+        if (maxDim <= SHADOWS.CAMERA_SIZE * 2) return;
+
+        const halfSize = maxDim * 0.75;
         const cam = this.directionalLight1.shadow.camera;
         cam.left = -halfSize;
         cam.right = halfSize;
@@ -1157,19 +1159,15 @@ export class SceneManager {
         cam.far = Math.max(halfSize * 4, SHADOWS.CAMERA_FAR);
         cam.updateProjectionMatrix();
 
-        // Position light relative to scene center
-        const lightOffset = halfSize * 1.5;
-        this.directionalLight1.position.set(
-            center.x + lightOffset * 0.5,
-            center.y + lightOffset,
-            center.z + lightOffset * 0.5
-        );
+        // Offset light position to keep same direction but cover the model
         this.directionalLight1.target.position.copy(center);
         this.directionalLight1.target.updateMatrixWorld();
+        const lightDir = this.directionalLight1.position.clone().normalize();
+        this.directionalLight1.position.copy(center).addScaledVector(lightDir, halfSize * 2);
 
         // Scale shadow catcher to match
         if (this.shadowCatcherPlane) {
-            const planeSize = Math.max(halfSize * 3, SHADOWS.GROUND_PLANE_SIZE);
+            const planeSize = halfSize * 3;
             this.shadowCatcherPlane.geometry.dispose();
             this.shadowCatcherPlane.geometry = new PlaneGeometry(planeSize, planeSize);
         }
