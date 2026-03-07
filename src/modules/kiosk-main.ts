@@ -312,6 +312,10 @@ function returnToLibrary(): void {
     if (app) app.style.display = 'none';
     const libContainer = document.getElementById('library-container');
     if (libContainer) libContainer.style.display = '';
+
+    // Hide quality toggle — not relevant in library view
+    const qualityToggle = document.getElementById('quality-toggle-container');
+    if (qualityToggle) qualityToggle.classList.add('hidden');
 }
 
 // =============================================================================
