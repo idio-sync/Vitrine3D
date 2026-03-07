@@ -108,9 +108,15 @@ export async function runGpuBenchmark(renderer: WebGLRenderer): Promise<number> 
     let frameCount = 0;
     const TARGET_DURATION_MS = 500;
 
+    // readPixels buffer — forces GPU to fully complete each frame.
+    // gl.finish() alone is insufficient on some drivers (Intel HD 530 reported
+    // 8000+ FPS because the driver deferred offscreen work). readPixels is the
+    // hardest sync point: the CPU blocks until pixel data is available.
+    const pixelBuf = new Uint8Array(4);
+
     while (performance.now() - startTime < TARGET_DURATION_MS) {
         renderer.render(benchScene, benchCamera);
-        gl.finish(); // Sync per frame — without this, CPU just queues commands and FPS is artificially high
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixelBuf);
         frameCount++;
     }
     const endTime = performance.now();
