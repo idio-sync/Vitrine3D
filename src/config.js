@@ -231,4 +231,20 @@
         // Spark.js renderer version: '2.0' (default, with LOD) or '0.1' (legacy OldSparkRenderer)
         sparkVersion: '2.0'
     };
+
+    // Fetch server-managed settings (non-blocking — modules await settingsReady if needed)
+    window.APP_CONFIG.settingsReady = fetch('/api/settings')
+        .then(function(res) { return res.ok ? res.json() : Promise.reject(res.statusText); })
+        .then(function(settings) {
+            var s = settings;
+            if (s['lod.budgetSd'])           window.APP_CONFIG.lodBudgetSd = Number(s['lod.budgetSd'].value);
+            if (s['lod.budgetHd'])           window.APP_CONFIG.lodBudgetHd = Number(s['lod.budgetHd'].value);
+            if (s['renderer.maxPixelRatio']) window.APP_CONFIG.maxPixelRatio = Number(s['renderer.maxPixelRatio'].value);
+            if (s['recording.bitrate'])      window.APP_CONFIG.recordingBitrate = Number(s['recording.bitrate'].value);
+            if (s['recording.framerate'])    window.APP_CONFIG.recordingFramerate = Number(s['recording.framerate'].value);
+            if (s['recording.maxDuration'])  window.APP_CONFIG.recordingMaxDuration = Number(s['recording.maxDuration'].value);
+        })
+        .catch(function() {
+            // Silently fail — local dev / Tauri won't have this endpoint
+        });
 })();

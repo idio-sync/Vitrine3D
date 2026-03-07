@@ -17,6 +17,10 @@ if ((window as any).__TAURI__) {
             const clean = raw.replace(/^["']|["']$/g, '');
             const url = new URL(clean);
             const isAuth = url.hostname === 'auth' || url.pathname.includes('auth');
+
+            // DEBUG: visible confirmation that the handler fires and URL parsing works
+            alert('handleDeepLinkUrl called\nhostname: ' + url.hostname + '\npathname: ' + url.pathname + '\nisAuth: ' + isAuth + '\nhasToken: ' + !!url.searchParams.get('token'));
+
             if (isAuth) {
                 const token = url.searchParams.get('token');
                 if (token) {
@@ -25,7 +29,7 @@ if ((window as any).__TAURI__) {
                 }
             }
         } catch (e) {
-            console.error('Deep link parse error:', e, raw);
+            alert('Deep link parse ERROR: ' + (e as Error).message + '\nraw: ' + raw.substring(0, 100));
         }
     }
 

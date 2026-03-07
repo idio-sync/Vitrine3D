@@ -399,6 +399,88 @@ tr:last-child td { border-bottom: none; }
     .stat-card { padding: 8px 16px; }
     .filter-bar { gap: 6px; }
 }
+/* Settings tab */
+.settings-group { margin-bottom: 24px; }
+.settings-group-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.setting-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+}
+.setting-label-col { flex: 1; min-width: 0; }
+.setting-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+.setting-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+.setting-default {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    font-family: var(--font-mono);
+}
+.setting-input-col {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.setting-input-col input[type="number"],
+.setting-input-col select {
+    width: 120px;
+    padding: 4px 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-family: var(--font-mono);
+}
+.setting-input-col input:focus,
+.setting-input-col select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.setting-input-col input.modified,
+.setting-input-col select.modified {
+    border-color: var(--accent);
+    background: var(--accent-muted);
+}
+.btn-reset-setting {
+    background: none;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    visibility: hidden;
+}
+.btn-reset-setting.visible { visibility: visible; }
+.btn-reset-setting:hover { color: var(--text-primary); border-color: var(--border-default); }
+.settings-actions {
+    padding: 16px 0;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.settings-status { font-size: 11px; color: var(--accent-text); }
 </style>
 </head>
 <body>
@@ -436,7 +518,7 @@ tr:last-child td { border-bottom: none; }
     <button class="tab-btn active" data-tab="activity">Activity</button>
     <button class="tab-btn" data-tab="storage">Storage</button>
     <button class="tab-btn" disabled data-tooltip="Coming soon">System</button>
-    <button class="tab-btn" disabled data-tooltip="Coming soon">Settings</button>
+    <button class="tab-btn" data-tab="settings">Settings</button>
 </nav>
 
 <!-- Activity Tab -->
@@ -528,6 +610,17 @@ tr:last-child td { border-bottom: none; }
     </div>
 </div>
 
+<!-- Settings Tab -->
+<div id="tab-settings" class="tab-content">
+    <div id="settings-container">
+        <div class="state-row" style="padding:20px;color:var(--text-secondary)">Loading settings&hellip;</div>
+    </div>
+    <div class="settings-actions" id="settings-actions" style="display:none">
+        <button class="btn-primary" id="btn-save-settings">Save Changes</button>
+        <span class="settings-status" id="settings-status"></span>
+    </div>
+</div>
+
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
 const PAGE_SIZE = 50;
@@ -536,6 +629,8 @@ let activityTotal = 0;
 let csrfToken = '';
 let autoRefreshTimer = null;
 let storageLoaded = false;
+let settingsLoaded = false;
+let settingsData = {};
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function formatBytes(bytes) {
@@ -882,6 +977,7 @@ function activateTab(name) {
     });
 
     if (name === 'storage' && !storageLoaded) loadStorageTab();
+    if (name === 'settings' && !settingsLoaded) loadSettingsTab();
 
     // Restart auto-refresh timer based on active tab
     clearInterval(autoRefreshTimer);
@@ -918,11 +1014,151 @@ document.getElementById('page-next').addEventListener('click', () => {
     }
 });
 
+// ── Settings tab ──────────────────────────────────────────────────────────
+
+async function loadSettingsTab() {
+    settingsLoaded = true;
+    try {
+        const res = await fetch('/api/settings');
+        if (!res.ok) throw new Error(res.statusText);
+        settingsData = await res.json();
+        renderSettings();
+    } catch (err) {
+        document.getElementById('settings-container').innerHTML =
+            '<div class="state-row" style="padding:20px;color:var(--danger)">Failed to load settings: ' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+function renderSettings() {
+    const container = document.getElementById('settings-container');
+    const groups = {};
+
+    for (const [key, def] of Object.entries(settingsData)) {
+        const g = def.group || 'Other';
+        if (!groups[g]) groups[g] = [];
+        groups[g].push({ key, ...def });
+    }
+
+    let html = '';
+    for (const [groupName, settings] of Object.entries(groups)) {
+        html += '<div class="settings-group">';
+        html += '<div class="settings-group-title">' + escapeHtml(groupName) + '</div>';
+        for (const s of settings) {
+            html += renderSettingRow(s);
+        }
+        html += '</div>';
+    }
+    container.innerHTML = html;
+    document.getElementById('settings-actions').style.display = 'flex';
+
+    container.querySelectorAll('.btn-reset-setting').forEach(btn => {
+        btn.addEventListener('click', () => resetSetting(btn.dataset.key));
+    });
+
+    container.querySelectorAll('input, select').forEach(el => {
+        el.addEventListener('input', () => {
+            const key = el.dataset.key;
+            const def = settingsData[key];
+            const isModified = el.value !== def.value;
+            el.classList.toggle('modified', isModified);
+        });
+    });
+}
+
+function renderSettingRow(s) {
+    let inputHtml = '';
+    if (s.type === 'select') {
+        inputHtml = '<select data-key="' + s.key + '">';
+        for (const opt of (s.options || [])) {
+            const sel = opt === s.value ? ' selected' : '';
+            inputHtml += '<option value="' + escapeHtml(opt) + '"' + sel + '>' + escapeHtml(opt) + '</option>';
+        }
+        inputHtml += '</select>';
+    } else {
+        let attrs = 'type="number" value="' + escapeHtml(s.value) + '"';
+        if (s.min !== undefined) attrs += ' min="' + s.min + '"';
+        if (s.max !== undefined) attrs += ' max="' + s.max + '"';
+        inputHtml = '<input data-key="' + s.key + '" ' + attrs + '>';
+    }
+
+    const resetVisible = s.isCustom ? ' visible' : '';
+    const desc = s.description ? '<div class="setting-desc">' + escapeHtml(s.description) + '</div>' : '';
+
+    return '<div class="setting-row">' +
+        '<div class="setting-label-col">' +
+            '<div class="setting-label">' + escapeHtml(s.label) + '</div>' +
+            desc +
+            '<div class="setting-default">Default: ' + escapeHtml(String(s.default)) + '</div>' +
+        '</div>' +
+        '<div class="setting-input-col">' +
+            inputHtml +
+            '<button class="btn-reset-setting' + resetVisible + '" data-key="' + s.key + '" title="Reset to default">&#8635;</button>' +
+        '</div>' +
+    '</div>';
+}
+
+async function resetSetting(key) {
+    try {
+        const res = await fetch('/api/settings/' + encodeURIComponent(key), {
+            method: 'DELETE',
+            headers: { 'x-csrf-token': csrfToken }
+        });
+        if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+        settingsLoaded = false;
+        loadSettingsTab();
+        showSettingsStatus('Reset to default');
+    } catch (err) {
+        showSettingsStatus('Error: ' + err.message, true);
+    }
+}
+
+document.getElementById('btn-save-settings').addEventListener('click', async () => {
+    const updates = {};
+    document.querySelectorAll('#settings-container input, #settings-container select').forEach(el => {
+        const key = el.dataset.key;
+        if (el.value !== settingsData[key].value) {
+            updates[key] = el.value;
+        }
+    });
+
+    if (Object.keys(updates).length === 0) {
+        showSettingsStatus('No changes to save');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/settings', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-csrf-token': csrfToken
+            },
+            body: JSON.stringify(updates)
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.details ? err.details.join(', ') : err.error);
+        }
+        settingsData = await res.json();
+        renderSettings();
+        showSettingsStatus('Settings saved');
+    } catch (err) {
+        showSettingsStatus('Error: ' + err.message, true);
+    }
+});
+
+function showSettingsStatus(msg, isError) {
+    const el = document.getElementById('settings-status');
+    el.textContent = msg;
+    el.style.color = isError ? 'var(--danger)' : 'var(--accent-text)';
+    setTimeout(() => { el.textContent = ''; }, 3000);
+}
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 // Restore tab from hash
 (function restoreTab() {
     const hash = location.hash.replace('#', '');
-    const valid = ['activity', 'storage'];
+    const valid = ['activity', 'storage', 'settings'];
     if (valid.includes(hash)) activateTab(hash);
 })();
 

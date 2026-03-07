@@ -253,7 +253,7 @@ export class SceneManager {
         // combined with splat rendering and post-processing easily exceed that.
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
             || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        const maxRatio = isIOS ? 1.0 : RENDERER.MAX_PIXEL_RATIO;
+        const maxRatio = isIOS ? 1.0 : ((window as any).APP_CONFIG?.maxPixelRatio || RENDERER.MAX_PIXEL_RATIO);
         newRenderer.setPixelRatio(Math.min(window.devicePixelRatio, maxRatio));
         newRenderer.outputColorSpace = THREE.SRGBColorSpace;
         newRenderer.toneMapping = THREE.NoToneMapping;

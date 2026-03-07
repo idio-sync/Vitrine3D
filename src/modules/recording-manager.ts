@@ -43,7 +43,7 @@ let _overlayCanvas: HTMLCanvasElement | null = null;
 let _timerInterval = 0;
 let _maxDurationTimeout = 0;
 
-const MAX_DURATION = 60_000; // 60 seconds
+const MAX_DURATION = ((window as any).APP_CONFIG?.recordingMaxDuration || 60) * 1000;
 
 export function initRecordingManager(deps: RecordingDeps): void {
     _deps = deps;
@@ -97,7 +97,8 @@ export function startRecording(
     _compositeRafId = requestAnimationFrame(compositeFrame);
 
     // Capture stream from composite canvas
-    _compositeStream = _compositeCanvas.captureStream(30);
+    const fps = (window as any).APP_CONFIG?.recordingFramerate || 30;
+    _compositeStream = _compositeCanvas.captureStream(fps);
 
     // Select best supported MIME type
     const mimeTypes = [
@@ -115,7 +116,7 @@ export function startRecording(
     _chunks = [];
     _recorder = new MediaRecorder(_compositeStream, {
         mimeType,
-        videoBitsPerSecond: 5_000_000, // 5 Mbps
+        videoBitsPerSecond: (window as any).APP_CONFIG?.recordingBitrate || 5_000_000,
     });
 
     _recorder.ondataavailable = (e) => {
