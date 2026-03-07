@@ -7,8 +7,16 @@
 
 import { QUALITY_TIER, DEVICE_THRESHOLDS } from './constants.js';
 import { Logger } from './utilities.js';
+import {
+    Scene, PerspectiveCamera, IcosahedronGeometry,
+    MeshStandardMaterial, Mesh, DirectionalLight, AmbientLight, Color,
+    WebGLRenderer
+} from 'three';
 
 const log = Logger.getLogger('quality-tier');
+
+/** Cached GPU benchmark FPS — null means benchmark hasn't run yet. */
+let _benchmarkFps: number | null = null;
 
 // Extend Navigator interface for Chrome-only deviceMemory API
 declare global {
@@ -32,6 +40,115 @@ function isIOSDevice(): boolean {
  */
 function isAndroidDevice(): boolean {
     return /Android/i.test(navigator.userAgent);
+}
+
+/**
+ * Run a GPU benchmark by rendering ~500k triangles at actual viewport
+ * resolution over ~500ms. Measures average FPS (discarding 2 warm-up frames).
+ * Result is cached — subsequent calls return immediately.
+ *
+ * Always runs regardless of forced quality tier, so the result
+ * is available for diagnostics/logging.
+ *
+ * @param renderer - The active WebGLRenderer
+ * @returns Average FPS from the benchmark
+ */
+export async function runGpuBenchmark(renderer: WebGLRenderer): Promise<number> {
+    if (_benchmarkFps !== null) {
+        log.info(`GPU benchmark already cached: ${_benchmarkFps.toFixed(1)} FPS`);
+        return _benchmarkFps;
+    }
+
+    log.info('Starting GPU benchmark (~500ms)...');
+
+    // Create temporary scene with ~410k triangles (5 icospheres @ detail 6)
+    const benchScene = new Scene();
+    benchScene.background = new Color(0x000000);
+    const benchCamera = new PerspectiveCamera(60, renderer.domElement.clientWidth / renderer.domElement.clientHeight, 0.1, 100);
+    benchCamera.position.set(0, 0, 8);
+
+    // Lighting (matches real scene complexity)
+    benchScene.add(new AmbientLight(0xffffff, 0.5));
+    const dirLight = new DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(5, 5, 5);
+    benchScene.add(dirLight);
+
+    // 5 icospheres spread across viewport — detail 6 = ~81,920 faces each = ~409,600 total
+    const geometry = new IcosahedronGeometry(1, 6);
+    const material = new MeshStandardMaterial({ metalness: 0.5, roughness: 0.5 });
+    const positions = [
+        [0, 0, 0], [-3, 2, -1], [3, 2, -1], [-3, -2, -1], [3, -2, -1]
+    ];
+    const meshes: Mesh[] = [];
+    for (const [x, y, z] of positions) {
+        const mesh = new Mesh(geometry, material);
+        mesh.position.set(x, y, z);
+        benchScene.add(mesh);
+        meshes.push(mesh);
+    }
+
+    // Render 30 frames via requestAnimationFrame, discard first 2 as warm-up
+    const TOTAL_FRAMES = 30;
+    const WARMUP_FRAMES = 2;
+
+    const fps = await new Promise<number>((resolve) => {
+        let frameCount = 0;
+        let warmupEndTime = 0;
+
+        function renderFrame(): void {
+            renderer.render(benchScene, benchCamera);
+            frameCount++;
+
+            if (frameCount === WARMUP_FRAMES) {
+                warmupEndTime = performance.now();
+            }
+
+            if (frameCount < TOTAL_FRAMES) {
+                requestAnimationFrame(renderFrame);
+            } else {
+                const endTime = performance.now();
+                const measuredFrames = TOTAL_FRAMES - WARMUP_FRAMES;
+                const elapsedSec = (endTime - warmupEndTime) / 1000;
+                const avgFps = measuredFrames / elapsedSec;
+                resolve(avgFps);
+            }
+        }
+
+        requestAnimationFrame(renderFrame);
+    });
+
+    // Cleanup: dispose geometry + material
+    geometry.dispose();
+    material.dispose();
+    meshes.length = 0;
+
+    // Clear canvas — render one empty frame to flush benchmark visuals
+    const clearScene = new Scene();
+    clearScene.background = new Color(0x000000);
+    renderer.render(clearScene, benchCamera);
+
+    _benchmarkFps = fps;
+    log.info(`GPU benchmark complete: ${fps.toFixed(1)} FPS`);
+    return fps;
+}
+
+/**
+ * Get the benchmark score (0, 1, or 2) from the cached FPS result.
+ * Returns 0 if benchmark hasn't run yet.
+ */
+export function getBenchmarkScore(): number {
+    if (_benchmarkFps === null) return 0;
+    if (_benchmarkFps >= DEVICE_THRESHOLDS.GPU_BENCHMARK_HD) return 2;
+    if (_benchmarkFps >= DEVICE_THRESHOLDS.GPU_BENCHMARK_MID) return 1;
+    return 0;
+}
+
+/**
+ * Get the cached benchmark FPS value (or null if not yet run).
+ * Useful for diagnostics/logging.
+ */
+export function getBenchmarkFps(): number | null {
+    return _benchmarkFps;
 }
 
 /**
@@ -157,4 +274,9 @@ function resolveLodBudgets(): Record<string, number> {
 export function getLodBudget(tier: string): number {
     const budgets = resolveLodBudgets();
     return budgets[tier] ?? budgets[QUALITY_TIER.HD];
+}
+
+/** @internal — test-only: override cached benchmark FPS for unit tests. */
+export function _setBenchmarkFpsForTest(fps: number | null): void {
+    _benchmarkFps = fps;
 }
