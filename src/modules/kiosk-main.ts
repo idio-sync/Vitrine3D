@@ -753,10 +753,15 @@ function injectLibraryButton(): void {
         }
     });
 
-    // Listen for auth callback from deep link
-    window.addEventListener('vitrine3d:auth', () => {
+    // If token was already received (e.g. deep link fired before this module loaded),
+    // show library immediately. Otherwise listen for the auth callback.
+    if (hasCfToken()) {
         showLibraryInApp();
-    }, { once: true });
+    } else {
+        window.addEventListener('vitrine3d:auth', () => {
+            showLibraryInApp();
+        }, { once: true });
+    }
 
     log.info('Library button injected');
 }

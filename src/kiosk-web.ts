@@ -7,18 +7,26 @@ import { setCfToken } from './modules/tauri-auth.js';
 
 // Listen for deep-link auth callbacks (Tauri only)
 if ((window as any).__TAURI__) {
-    // Helper: parse a deep-link URL and dispatch auth event if it's a token callback
+    // Helper: parse a deep-link URL and dispatch auth event if it's a token callback.
+    // Custom URL schemes (vitrine3d://) are parsed as opaque by Chromium/WebView2:
+    //   new URL("vitrine3d://auth/?token=x") → hostname="" pathname="//auth/"
+    // So we check pathname.includes('auth') instead of strict equality.
     function handleDeepLinkUrl(raw: string): void {
         try {
-            const url = new URL(raw);
-            if (url.hostname === 'auth' || url.pathname === '/auth') {
+            // Strip surrounding quotes that Windows CLI may add
+            const clean = raw.replace(/^["']|["']$/g, '');
+            const url = new URL(clean);
+            const isAuth = url.hostname === 'auth' || url.pathname.includes('auth');
+            if (isAuth) {
                 const token = url.searchParams.get('token');
                 if (token) {
                     setCfToken(token);
                     window.dispatchEvent(new CustomEvent('vitrine3d:auth', { detail: { token } }));
                 }
             }
-        } catch { /* ignore malformed URLs */ }
+        } catch (e) {
+            console.error('Deep link parse error:', e, raw);
+        }
     }
 
     // Strategy 1: deep-link plugin's onOpenUrl (works for first-instance launches)
