@@ -1474,7 +1474,7 @@ function handleCreateCollection(req, res) {
             `).run(slug, name, description, thumbnail, theme);
 
             db.prepare(`INSERT INTO audit_log (actor, action, target, ip) VALUES (?, ?, ?, ?)`)
-                .run(actor, 'create_collection', slug, req.socket.remoteAddress);
+                .run(actor, 'create_collection', slug, req.headers['x-real-ip'] || req.socket.remoteAddress);
 
             const row = db.prepare('SELECT c.*, 0 AS archive_count FROM collections c WHERE slug = ?').get(slug);
             sendJson(res, 201, buildCollectionObject(row));
@@ -1533,7 +1533,7 @@ function handleUpdateCollection(req, res, slug) {
             db.prepare('UPDATE collections SET ' + setClauses.join(', ') + ' WHERE id = ?').run(...values);
 
             db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
-                .run(actor, 'update_collection', updates.slug || slug, JSON.stringify(updates), req.socket.remoteAddress);
+                .run(actor, 'update_collection', updates.slug || slug, JSON.stringify(updates), req.headers['x-real-ip'] || req.socket.remoteAddress);
 
             const updatedRow = db.prepare(`
                 SELECT c.*, COUNT(ca.archive_id) AS archive_count
@@ -1570,7 +1570,7 @@ function handleDeleteCollection(req, res, slug) {
         db.prepare('DELETE FROM collections WHERE id = ?').run(row.id);
 
         db.prepare('INSERT INTO audit_log (actor, action, target, ip) VALUES (?, ?, ?, ?)')
-            .run(actor, 'delete_collection', slug, req.socket.remoteAddress);
+            .run(actor, 'delete_collection', slug, req.headers['x-real-ip'] || req.socket.remoteAddress);
 
         sendJson(res, 200, { ok: true });
     } catch (err) {
@@ -1619,7 +1619,7 @@ function handleAddCollectionArchives(req, res, slug) {
             db.prepare("UPDATE collections SET updated_at = datetime('now') WHERE id = ?").run(coll.id);
 
             db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
-                .run(actor, 'add_to_collection', slug, JSON.stringify({ hashes, added }), req.socket.remoteAddress);
+                .run(actor, 'add_to_collection', slug, JSON.stringify({ hashes, added }), req.headers['x-real-ip'] || req.socket.remoteAddress);
 
             sendJson(res, 200, { ok: true, added });
         } catch (err) {
@@ -1649,7 +1649,7 @@ function handleRemoveCollectionArchive(req, res, slug, archiveHash) {
         db.prepare("UPDATE collections SET updated_at = datetime('now') WHERE id = ?").run(coll.id);
 
         db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
-            .run(actor, 'remove_from_collection', slug, archiveHash, req.socket.remoteAddress);
+            .run(actor, 'remove_from_collection', slug, archiveHash, req.headers['x-real-ip'] || req.socket.remoteAddress);
 
         sendJson(res, 200, { ok: true });
     } catch (err) {
