@@ -76,25 +76,11 @@ async function createSplatMesh(url: string, fileType?: string): Promise<any> {
         const fileBytes = new Uint8Array(await response.arrayBuffer());
         const decoded = await unpackSplats({ input: fileBytes, fileType: 'pcsogszip' }) as any;
         const packedSplats = new PackedSplats(decoded);
-        // .sog decode doesn't set splatEncoding — provide defaults so LOD WASM worker doesn't crash
-        if (!packedSplats.splatEncoding) {
-            packedSplats.splatEncoding = {
-                rgbMin: 0, rgbMax: 1,
-                lnScaleMin: -12, lnScaleMax: 9,
-                sh1Max: 1, sh2Max: 1, sh3Max: 1,
-                lodOpacity: false,
-            };
-        }
-        // Build LOD tree so lodSplatCount does intelligent selection instead of truncation
-        try {
-            await packedSplats.createLodSplats({ quality: false });
-            log.info(`LOD tree built for ${packedSplats.numSplats} splats (sog)`);
-        } catch (lodErr) {
-            log.warn('LOD tree computation failed, falling back to no-LOD:', lodErr);
-        }
         return new SplatMesh({ packedSplats });
     }
-    return new SplatMesh({ url, lod: true, ...(fileType && { fileType }) });
+    // For other formats (.ply, .spz, .splat), Spark decodes internally.
+    // LOD is generated at archive export time via transcodeSpz(), not at load time.
+    return new SplatMesh({ url, ...(fileType && { fileType }) });
 }
 
 // Lazy-loaded E57 support

@@ -65,25 +65,9 @@ async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
         const fileBytes = new Uint8Array(await response.arrayBuffer());
         const decoded = await unpackSplats({ input: fileBytes, fileType: 'pcsogszip' });
         const packedSplats = new PackedSplats(decoded);
-        // .sog decode doesn't set splatEncoding — provide defaults so LOD WASM worker doesn't crash
-        if (!packedSplats.splatEncoding) {
-            packedSplats.splatEncoding = {
-                rgbMin: 0, rgbMax: 1,
-                lnScaleMin: -12, lnScaleMax: 9,
-                sh1Max: 1, sh2Max: 1, sh3Max: 1,
-                lodOpacity: false,
-            };
-        }
-        // Build LOD tree so lodSplatCount does intelligent selection instead of truncation
-        try {
-            await packedSplats.createLodSplats({ quality: false });
-            log.info(`LOD tree built for ${(decoded as any).numSplats} splats (sog, archive)`);
-        } catch (lodErr) {
-            log.warn('LOD tree computation failed, falling back to no-LOD:', lodErr);
-        }
         newSplatMesh = new SplatMesh({ packedSplats });
     } else {
-        newSplatMesh = new SplatMesh({ url: blobUrl, lod: true, ...(fileType && { fileType }) });
+        newSplatMesh = new SplatMesh({ url: blobUrl, ...(fileType && { fileType }) });
     }
     setSplatMesh(newSplatMesh);
 
