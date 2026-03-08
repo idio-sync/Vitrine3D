@@ -1134,6 +1134,13 @@
                         </div>
                         <input type="file" id="drawing-input" accept=".dxf" style="display:none" />
                         <span id="drawing-filename" class="prop-hint">.dxf</span>
+
+                        <span class="prop-label mt4">Flight Path</span>
+                        <div class="prop-btn-row">
+                            <label for="flightpath-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#4FC3F7;">+</span> File</label>
+                        </div>
+                        <input type="file" id="flightpath-input" accept=".csv,.kml,.kmz,.srt" style="display:none" />
+                        <span id="flightpath-filename" class="prop-hint">.csv, .kml, .kmz, .srt</span>
                     </div>
                 </div>
 
@@ -2829,6 +2836,9 @@
                 </div>
             </div>
         </div>
+
+    <!-- Flight path telemetry tooltip -->
+    <div id="flight-tooltip" style="display:none; position:fixed; pointer-events:none; background:rgba(0,0,0,0.85); color:#fff; padding:6px 10px; border-radius:4px; font-size:11px; line-height:1.5; z-index:10000; font-family:monospace;"></div>
 
     <script src="../pre-module.js"></script>
     <script type="module" src="../main.ts"></script>
