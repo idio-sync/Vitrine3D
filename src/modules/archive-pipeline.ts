@@ -65,9 +65,16 @@ async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
         const fileBytes = new Uint8Array(await response.arrayBuffer());
         const decoded = await unpackSplats({ input: fileBytes, fileType: 'pcsogszip' });
         const packedSplats = new PackedSplats(decoded);
+        // Build LOD tree so lodSplatCount does intelligent selection instead of truncation
+        try {
+            await packedSplats.createLodSplats({ quality: false });
+            log.info(`LOD tree built for ${(decoded as any).numSplats} splats (sog, archive)`);
+        } catch (lodErr) {
+            log.warn('LOD tree computation failed, falling back to no-LOD:', lodErr);
+        }
         newSplatMesh = new SplatMesh({ packedSplats });
     } else {
-        newSplatMesh = new SplatMesh({ url: blobUrl, ...(fileType && { fileType }) });
+        newSplatMesh = new SplatMesh({ url: blobUrl, lod: true, ...(fileType && { fileType }) });
     }
     setSplatMesh(newSplatMesh);
 
