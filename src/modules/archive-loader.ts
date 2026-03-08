@@ -72,6 +72,8 @@ interface ContentInfo {
     hasThumbnail: boolean;
     hasSourceFiles: boolean;
     sourceFileCount: number;
+    hasFlightPath: boolean;
+    flightPathCount: number;
 }
 
 interface ArchiveMetadata {
@@ -905,6 +907,10 @@ export class ArchiveLoader {
         return cads.length > 0 ? cads[0].entry : null;
     }
 
+    getFlightPathEntries(): Array<{ key: string; entry: ManifestDataEntry }> {
+        return this.findEntriesByPrefix('flightpath_');
+    }
+
     getContentInfo(): ContentInfo {
         const scene = this.getSceneEntry();
         const mesh = this.getMeshEntry();
@@ -916,6 +922,7 @@ export class ArchiveLoader {
         const thumbnail = this.getThumbnailEntry();
 
         const sourceFiles = this.getSourceFileEntries();
+        const flightPaths = this.getFlightPathEntries();
 
         return {
             hasSplat: scene !== null && isFormatSupported(scene.file_name, 'splat'),
@@ -927,7 +934,9 @@ export class ArchiveLoader {
             hasCAD: cad !== null && isFormatSupported(cad.file_name, 'cad'),
             hasThumbnail: thumbnail !== null && isFormatSupported(thumbnail.file_name, 'thumbnail'),
             hasSourceFiles: sourceFiles.length > 0,
-            sourceFileCount: sourceFiles.length
+            sourceFileCount: sourceFiles.length,
+            hasFlightPath: flightPaths.length > 0,
+            flightPathCount: flightPaths.length
         };
     }
 
