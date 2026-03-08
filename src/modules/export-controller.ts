@@ -290,6 +290,8 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
             } catch (lodError: any) {
                 log.warn('Splat LOD generation failed, using original file:', lodError.message);
                 notify.warning('Splat LOD generation failed — exporting original file.');
+            } finally {
+                deps.ui.hideLoading();
             }
         } else if (state.splatLodEnabled && !lodCompatible) {
             log.info(`Splat LOD skipped: .${splatExt} not supported (use .spz or .ply)`);
@@ -586,7 +588,15 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
  * Create and download an archive (.ddim/.zip) with all selected assets.
  */
 export async function downloadArchive(deps: ExportDeps): Promise<void> {
-    const prepared = await prepareArchive(deps);
+    let prepared: PreparedArchive | null;
+    try {
+        prepared = await prepareArchive(deps);
+    } catch (e: any) {
+        log.error('Archive preparation failed:', e);
+        notify.error('Archive preparation failed: ' + e.message);
+        deps.ui.hideLoading();
+        return;
+    }
     if (!prepared) return;
 
     const { archiveCreator } = deps.sceneRefs;
@@ -619,7 +629,15 @@ export async function downloadArchive(deps: ExportDeps): Promise<void> {
  * Create an archive and save it directly to the server library via /api/archives.
  */
 export async function saveToLibrary(deps: ExportDeps): Promise<void> {
-    const prepared = await prepareArchive(deps);
+    let prepared: PreparedArchive | null;
+    try {
+        prepared = await prepareArchive(deps);
+    } catch (e: any) {
+        log.error('Archive preparation failed:', e);
+        notify.error('Archive preparation failed: ' + e.message);
+        deps.ui.hideLoading();
+        return;
+    }
     if (!prepared) return;
 
     const { archiveCreator } = deps.sceneRefs;
