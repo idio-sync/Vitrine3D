@@ -400,15 +400,15 @@ export function updateTransformInputs(
         else if (selection === 'both') src = splatMesh || modelGroup || pointcloudGroup || stlGroup || cadGroup || drawingGroup;
 
         if (src) {
-            setInputValue('transform-pos-x', src.position.x.toFixed(2));
-            setInputValue('transform-pos-y', src.position.y.toFixed(2));
-            setInputValue('transform-pos-z', src.position.z.toFixed(2));
-            setInputValue('transform-rot-x', THREE.MathUtils.radToDeg(src.rotation.x).toFixed(1));
-            setInputValue('transform-rot-y', THREE.MathUtils.radToDeg(src.rotation.y).toFixed(1));
-            setInputValue('transform-rot-z', THREE.MathUtils.radToDeg(src.rotation.z).toFixed(1));
-            setInputValue('transform-scale-x', src.scale.x.toFixed(2));
-            setInputValue('transform-scale-y', src.scale.y.toFixed(2));
-            setInputValue('transform-scale-z', src.scale.z.toFixed(2));
+            setInputValue('transform-pos-x', src.position.x.toFixed(3));
+            setInputValue('transform-pos-y', src.position.y.toFixed(3));
+            setInputValue('transform-pos-z', src.position.z.toFixed(3));
+            setInputValue('transform-rot-x', THREE.MathUtils.radToDeg(src.rotation.x).toFixed(3));
+            setInputValue('transform-rot-y', THREE.MathUtils.radToDeg(src.rotation.y).toFixed(3));
+            setInputValue('transform-rot-z', THREE.MathUtils.radToDeg(src.rotation.z).toFixed(3));
+            setInputValue('transform-scale-x', src.scale.x.toFixed(3));
+            setInputValue('transform-scale-y', src.scale.y.toFixed(3));
+            setInputValue('transform-scale-z', src.scale.z.toFixed(3));
         }
     }
 }
@@ -466,12 +466,12 @@ export function updateTransformPaneSelection(
                 const el = document.getElementById(id) as HTMLInputElement | null;
                 if (el) el.value = String(value);
             };
-            setVal('transform-pos-x', src.position.x.toFixed(2));
-            setVal('transform-pos-y', src.position.y.toFixed(2));
-            setVal('transform-pos-z', src.position.z.toFixed(2));
-            setVal('transform-rot-x', THREE.MathUtils.radToDeg(src.rotation.x).toFixed(1));
-            setVal('transform-rot-y', THREE.MathUtils.radToDeg(src.rotation.y).toFixed(1));
-            setVal('transform-rot-z', THREE.MathUtils.radToDeg(src.rotation.z).toFixed(1));
+            setVal('transform-pos-x', src.position.x.toFixed(3));
+            setVal('transform-pos-y', src.position.y.toFixed(3));
+            setVal('transform-pos-z', src.position.z.toFixed(3));
+            setVal('transform-rot-x', THREE.MathUtils.radToDeg(src.rotation.x).toFixed(3));
+            setVal('transform-rot-y', THREE.MathUtils.radToDeg(src.rotation.y).toFixed(3));
+            setVal('transform-rot-z', THREE.MathUtils.radToDeg(src.rotation.z).toFixed(3));
         }
     }
 }

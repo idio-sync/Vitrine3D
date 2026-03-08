@@ -1093,14 +1093,6 @@
                         <span id="splat-filename" class="prop-hint">.ply, .splat, .ksplat, .spz</span>
                         <div class="prop-row" id="splat-vertices-row" style="display:none"><span class="prop-row-label">Status</span><span class="font-mono" id="splat-vertices" style="font-size:10px; color:var(--text-secondary);">-</span></div>
 
-                        <span class="prop-label mt4">Point Cloud</span>
-                        <div class="prop-btn-row">
-                            <label for="pointcloud-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#c4863a;">+</span> File</label>
-                            <button class="prop-btn" id="btn-load-pointcloud-url" style="margin-bottom:0;">From URL...</button>
-                        </div>
-                        <input type="file" id="pointcloud-input" accept=".e57" style="display:none" />
-                        <span id="pointcloud-filename" class="prop-hint">.e57</span>
-                        <div class="prop-row" id="pointcloud-points-row" style="display:none"><span class="prop-row-label">Points</span><span class="font-mono" id="pointcloud-points" style="font-size:10px; color:var(--text-secondary);">-</span></div>
                     </div>
                 </div>
 
@@ -1111,7 +1103,16 @@
                         <span class="prop-section-chevron">&#9654;</span>
                     </div>
                     <div class="prop-section-body">
-                        <span class="prop-label">STL Model</span>
+                        <span class="prop-label">Point Cloud</span>
+                        <div class="prop-btn-row">
+                            <label for="pointcloud-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#c4863a;">+</span> File</label>
+                            <button class="prop-btn" id="btn-load-pointcloud-url" style="margin-bottom:0;">From URL...</button>
+                        </div>
+                        <input type="file" id="pointcloud-input" accept=".e57" style="display:none" />
+                        <span id="pointcloud-filename" class="prop-hint">.e57</span>
+                        <div class="prop-row" id="pointcloud-points-row" style="display:none"><span class="prop-row-label">Points</span><span class="font-mono" id="pointcloud-points" style="font-size:10px; color:var(--text-secondary);">-</span></div>
+
+                        <span class="prop-label mt4">STL Model</span>
                         <div class="prop-btn-row">
                             <label for="stl-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#9a7bce;">+</span> File</label>
                             <button class="prop-btn" id="btn-load-stl-url" style="margin-bottom:0;">From URL...</button>
@@ -1387,25 +1388,25 @@
                                 <div class="xyz-block">
                                     <span class="prop-label">Position</span>
                                     <div class="xyz-inputs">
-                                        <div class="xyz-field"><span class="xyz-axis-label x">X</span><input class="xyz-input" type="number" id="transform-pos-x" value="0" step="0.1"></div>
-                                        <div class="xyz-field"><span class="xyz-axis-label y">Y</span><input class="xyz-input" type="number" id="transform-pos-y" value="0" step="0.1"></div>
-                                        <div class="xyz-field"><span class="xyz-axis-label z">Z</span><input class="xyz-input" type="number" id="transform-pos-z" value="0" step="0.1"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label x">X</span><input class="xyz-input" type="number" id="transform-pos-x" value="0" step="0.001"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label y">Y</span><input class="xyz-input" type="number" id="transform-pos-y" value="0" step="0.001"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label z">Z</span><input class="xyz-input" type="number" id="transform-pos-z" value="0" step="0.001"></div>
                                     </div>
                                 </div>
                                 <div class="xyz-block">
                                     <span class="prop-label">Rotation (deg)</span>
                                     <div class="xyz-inputs">
-                                        <div class="xyz-field"><span class="xyz-axis-label x">X</span><input class="xyz-input" type="number" id="transform-rot-x" value="0" step="1"></div>
-                                        <div class="xyz-field"><span class="xyz-axis-label y">Y</span><input class="xyz-input" type="number" id="transform-rot-y" value="0" step="1"></div>
-                                        <div class="xyz-field"><span class="xyz-axis-label z">Z</span><input class="xyz-input" type="number" id="transform-rot-z" value="0" step="1"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label x">X</span><input class="xyz-input" type="number" id="transform-rot-x" value="0" step="0.1"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label y">Y</span><input class="xyz-input" type="number" id="transform-rot-y" value="0" step="0.1"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label z">Z</span><input class="xyz-input" type="number" id="transform-rot-z" value="0" step="0.1"></div>
                                     </div>
                                 </div>
                                 <div class="xyz-block">
                                     <span class="prop-label">Scale</span>
                                     <div class="xyz-inputs">
-                                        <div class="xyz-field"><span class="xyz-axis-label x">X</span><input class="xyz-input" type="number" id="transform-scale-x" value="1" step="0.01" min="0.01"></div>
-                                        <div class="xyz-field"><span class="xyz-axis-label y">Y</span><input class="xyz-input" type="number" id="transform-scale-y" value="1" step="0.01" min="0.01"></div>
-                                        <div class="xyz-field"><span class="xyz-axis-label z">Z</span><input class="xyz-input" type="number" id="transform-scale-z" value="1" step="0.01" min="0.01"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label x">X</span><input class="xyz-input" type="number" id="transform-scale-x" value="1" step="0.001" min="0.01"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label y">Y</span><input class="xyz-input" type="number" id="transform-scale-y" value="1" step="0.001" min="0.01"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label z">Z</span><input class="xyz-input" type="number" id="transform-scale-z" value="1" step="0.001" min="0.01"></div>
                                     </div>
                                 </div>
                             </div>
@@ -1700,7 +1701,8 @@
                         <span class="prop-section-chevron">&#9654;</span>
                     </div>
                     <div class="prop-section-body">
-                        <button class="prop-btn accent" id="btn-capture-screenshot">Capture Screenshot</button>
+                        <button class="prop-btn accent" id="btn-download-screenshot">Download Screenshot</button>
+                        <button class="prop-btn mt4" id="btn-capture-screenshot">Capture Screenshot for Archive</button>
                         <button class="prop-btn mt4" id="btn-set-preview">Set Archive Preview Image</button>
                         <p class="prop-hint mt4">A preview is captured automatically during export. Taking a manual preview overrides that.</p>
                         <div id="manual-preview-status" style="display:none; margin-top:6px;">
@@ -1802,12 +1804,12 @@
                     </div>
                     <!-- Main mode tabs -->
                     <div class="sidebar-mode-tabs">
-                        <button class="sidebar-mode-tab active" data-mode="view">View</button>
-                        <button class="sidebar-mode-tab" data-mode="edit">Edit</button>
+                        <button class="sidebar-mode-tab" data-mode="view">View</button>
+                        <button class="sidebar-mode-tab active" data-mode="edit">Edit</button>
                     </div>
 
                     <!-- View Mode Content -->
-                    <div class="sidebar-mode-content active" id="sidebar-view">
+                    <div class="sidebar-mode-content" id="sidebar-view">
                         <div class="display-content">
                             <h1 class="display-title" id="display-title">Untitled</h1>
                             <p class="display-description" id="display-description"></p>
@@ -1862,7 +1864,7 @@
 
                     <!-- KIOSK-STRIP-START: metadata edit tab -->
                     <!-- Edit Mode Content -->
-                    <div class="sidebar-mode-content" id="sidebar-edit">
+                    <div class="sidebar-mode-content active" id="sidebar-edit">
                         <div class="metadata-profile-bar">
                             <div class="metadata-profile-selector" id="metadata-profile-selector">
                                 <button class="profile-btn" data-profile="basic">Basic</button>
@@ -2560,18 +2562,6 @@
                         </div>
                     </div>
 
-                    <!-- Share -->
-                    <div class="prop-section open">
-                        <div class="prop-section-hd">
-                            <span class="prop-section-title">Share</span>
-                            <span class="prop-section-chevron">&#9654;</span>
-                        </div>
-                        <div class="prop-section-body">
-                            <button class="prop-btn" id="btn-share">Copy Share Link</button>
-                            <p class="prop-hint mt4">Only works for files loaded via URL.</p>
-                            <button class="prop-btn mt4" id="btn-preview-kiosk">Preview Kiosk Mode</button>
-                        </div>
-                    </div>
 
                     <!-- Archive Info -->
                     <div class="prop-section" id="archive-metadata-section" style="display:none;">
@@ -2641,17 +2631,19 @@
                             <span class="prop-section-chevron">&#9654;</span>
                         </div>
                         <div class="prop-section-body">
-                            <button class="prop-btn accent" id="library-action-open" style="width:100%; margin-bottom:4px;">Open in Editor</button>
-                            <button class="prop-btn" id="library-action-view" style="width:100%; margin-bottom:4px;">Open in New Tab</button>
                             <div style="display:flex; gap:4px;">
+                                <button class="prop-btn accent" id="library-action-open" style="flex:1; width:auto; margin-bottom:0;">Open in Editor</button>
+                                <button class="prop-btn" id="library-action-view" style="flex:1; width:auto; margin-bottom:0;">Open in Kiosk View</button>
+                            </div>
+                            <div style="display:flex; gap:4px; margin-top:4px;">
                                 <button class="prop-btn" id="library-action-share" style="flex:1; width:auto; margin-bottom:0;">Share</button>
-                                <button class="prop-btn" id="library-action-copy" style="flex:1; width:auto; margin-bottom:0;">Copy URL</button>
+                                <button class="prop-btn" id="library-action-download" style="flex:1; width:auto; margin-bottom:0;">Download Archive</button>
                             </div>
                             <div style="display:flex; gap:4px; margin-top:4px;">
                                 <button class="prop-btn" id="library-action-rename" style="flex:1; width:auto; margin-bottom:0;">Rename</button>
                                 <button class="prop-btn danger" id="library-action-delete" style="flex:1; width:auto; margin-bottom:0;">Delete</button>
                             </div>
-                            <button class="prop-btn" id="library-action-regenerate" style="width:100%; margin-top:4px;">Regenerate Metadata &amp; Preview</button>
+                            <button class="prop-btn" id="library-action-regenerate" style="width:100%; margin-top:4px;">Regenerate Metadata &amp; Preview (Debug)</button>
                         </div>
                     </div>
                     <div class="prop-section open" id="library-recordings-section" style="display:none">

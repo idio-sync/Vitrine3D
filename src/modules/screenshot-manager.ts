@@ -39,6 +39,44 @@ interface ScreenshotDeps {
 }
 
 /**
+ * Capture a screenshot and download it immediately as a PNG file.
+ */
+export async function downloadScreenshot(deps: ScreenshotDeps): Promise<void> {
+    const { renderer, scene, camera, postProcessing } = deps;
+    if (!renderer) {
+        notify.error('Renderer not ready');
+        return;
+    }
+    const hiddenGrids = hideGridHelpers(scene);
+    try {
+        if (postProcessing?.isEnabled()) {
+            postProcessing.render();
+        } else {
+            renderer.render(scene, camera);
+        }
+        const blob = await captureScreenshot(renderer.domElement, { width: 1920, height: 1080 });
+        if (!blob) {
+            notify.error('Screenshot capture failed');
+            return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `screenshot_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        notify.success('Screenshot downloaded');
+    } catch (e) {
+        log.error('Screenshot download error:', e);
+        notify.error('Failed to download screenshot');
+    } finally {
+        restoreGridHelpers(hiddenGrids);
+    }
+}
+
+/**
  * Capture a screenshot and add it to the screenshots list.
  */
 export async function captureScreenshotToList(deps: ScreenshotDeps): Promise<void> {

@@ -109,6 +109,7 @@ import {
     loadPointcloudFromUrl as loadPointcloudFromUrlCtrl
 } from './modules/file-input-handlers.js';
 import {
+    downloadScreenshot as downloadScreenshotHandler,
     captureScreenshotToList as captureScreenshotToListHandler,
     showViewfinder as showViewfinderHandler,
     hideViewfinder as hideViewfinderHandler,
@@ -716,7 +717,7 @@ function createEventWiringDeps(): EventWiringDeps {
             dismissPopup: () => dismissPopupHandler(createAnnotationControllerDeps())
         },
         export: { showExportPanel, downloadArchive, downloadGenericViewer, saveToLibrary },
-        screenshots: { captureScreenshotToList, showViewfinder, captureManualPreview, hideViewfinder },
+        screenshots: { downloadScreenshot, captureScreenshotToList, showViewfinder, captureManualPreview, hideViewfinder },
         recording: { startRecording: handleStartRecording, stopRecording: handleStopRecording },
         metadata: { hideMetadataPanel, toggleMetadataDisplay, setupMetadataSidebar, populateMetadataDisplay },
         share: { copyShareLink },
@@ -1552,6 +1553,10 @@ async function showExportPanel() {
 // =============================================================================
 // SCREENSHOT FUNCTIONS (delegated to screenshot-manager.js)
 // =============================================================================
+
+function downloadScreenshot() {
+    return downloadScreenshotHandler({ renderer, scene, camera, state, postProcessing });
+}
 
 function captureScreenshotToList() {
     return captureScreenshotToListHandler({ renderer, scene, camera, state, postProcessing });

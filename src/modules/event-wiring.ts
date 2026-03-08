@@ -515,6 +515,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-download-viewer', 'click', deps.export.downloadGenericViewer);
 
     // ─── Screenshot controls ─────────────────────────────────
+    addListener('btn-download-screenshot', 'click', deps.screenshots.downloadScreenshot);
     addListener('btn-capture-screenshot', 'click', deps.screenshots.captureScreenshotToList);
     addListener('btn-set-preview', 'click', deps.screenshots.showViewfinder);
     addListener('btn-capture-preview', 'click', deps.screenshots.captureManualPreview);

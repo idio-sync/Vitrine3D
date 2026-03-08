@@ -790,7 +790,20 @@ function openInEditor(archive: Archive): void {
 }
 
 function openInNewTab(archive: Archive): void {
-    window.open(archive.viewerUrl, '_blank');
+    if (archive.uuid) {
+        window.open('/view/' + archive.uuid, '_blank');
+    } else {
+        window.open(archive.viewerUrl, '_blank');
+    }
+}
+
+function handleDownloadArchive(archive: Archive): void {
+    const a = document.createElement('a');
+    a.href = archive.path;
+    a.download = archive.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 }
 
 async function handleRename(archive: Archive): Promise<void> {
@@ -1069,9 +1082,9 @@ function setupDetailActions(): void {
         }
     });
 
-    document.getElementById('library-action-copy')?.addEventListener('click', () => {
+    document.getElementById('library-action-download')?.addEventListener('click', () => {
         const a = getSelected();
-        if (a) handleCopyUrl(a);
+        if (a) handleDownloadArchive(a);
     });
 
     document.getElementById('library-action-rename')?.addEventListener('click', () => {
