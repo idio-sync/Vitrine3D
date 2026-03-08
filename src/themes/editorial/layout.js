@@ -1096,67 +1096,12 @@ export function setup(manifest, deps) {
     const toolsGroup = document.createElement('div');
     toolsGroup.className = 'editorial-ribbon-tools';
 
-    // Annotation capsule — unified toggle + fraction counter + index popover
+    // Annotation dropdown — matches matcap dropdown pattern
     const annotations = annotationSystem.getAnnotations();
     let markersVisible = true;
     let activeAnnoIndex = -1; // -1 = none selected
 
-    const capsule = document.createElement('div');
-    capsule.className = 'editorial-anno-capsule';
-
-    // Speech bubble toggle (always visible)
-    const bubbleBtn = document.createElement('button');
-    bubbleBtn.className = 'editorial-anno-bubble';
-    bubbleBtn.title = 'Toggle annotations';
-    const bubbleSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    bubbleSvg.setAttribute('width', '14');
-    bubbleSvg.setAttribute('height', '14');
-    bubbleSvg.setAttribute('viewBox', '0 0 24 24');
-    bubbleSvg.setAttribute('fill', 'none');
-    bubbleSvg.setAttribute('stroke', 'currentColor');
-    bubbleSvg.setAttribute('stroke-width', '2');
-    const bubblePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    bubblePath.setAttribute('d', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z');
-    bubbleSvg.appendChild(bubblePath);
-    bubbleBtn.appendChild(bubbleSvg);
-
-    // Counter display (visible when markers on)
-    const counterWrap = document.createElement('div');
-    counterWrap.className = 'editorial-anno-counter';
-
-    const prevBtn = document.createElement('button');
-    prevBtn.className = 'editorial-anno-nav';
-    prevBtn.textContent = '\u2039';
-    prevBtn.title = 'Previous annotation';
-
-    const counterText = document.createElement('button');
-    counterText.className = 'editorial-anno-fraction';
-    counterText.title = 'Annotation index';
-
-    const nextBtn = document.createElement('button');
-    nextBtn.className = 'editorial-anno-nav';
-    nextBtn.textContent = '\u203A';
-    nextBtn.title = 'Next annotation';
-
-    counterWrap.appendChild(prevBtn);
-    counterWrap.appendChild(counterText);
-    counterWrap.appendChild(nextBtn);
-
-    // Index popover (full annotation list)
-    const indexPanel = document.createElement('div');
-    indexPanel.className = 'editorial-anno-index';
-
-    const updateCounter = () => {
-        const current = activeAnnoIndex >= 0 ? String(activeAnnoIndex + 1).padStart(2, '0') : '\u2014';
-        const total = String(annotations.length).padStart(2, '0');
-        counterText.textContent = current + ' / ' + total;
-        // Update bubble fill state
-        bubbleBtn.classList.toggle('has-selection', activeAnnoIndex >= 0);
-        // Update index panel active state
-        indexPanel.querySelectorAll('.editorial-anno-index-item').forEach((el, i) => {
-            el.classList.toggle('active', i === activeAnnoIndex);
-        });
-    };
+    let annoWrapper, annoBtn, annoDropdown, annoBadge;
 
     const goToAnno = (index) => {
         if (index < 0 || index >= annotations.length) return;
@@ -1167,7 +1112,7 @@ export function setup(manifest, deps) {
 
         annotationSystem.goToAnnotation(anno.id);
         setCurrentPopupId(showAnnotationPopup(anno, state.imageAssets));
-        updateCounter();
+        updateAnnoUI();
     };
 
     const deselectAnno = () => {
@@ -1177,30 +1122,59 @@ export function setup(manifest, deps) {
         annotationSystem.selectedAnnotation = null;
         document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
         activeAnnoIndex = -1;
-        updateCounter();
+        updateAnnoUI();
     };
 
     const setMarkersVisible = (visible) => {
         markersVisible = visible;
         const container = document.getElementById('annotation-markers');
         if (container) container.style.display = markersVisible ? '' : 'none';
-        capsule.classList.toggle('collapsed', !markersVisible);
-        bubbleBtn.classList.toggle('off', !markersVisible);
+        if (annoBtn) annoBtn.classList.toggle('off', !markersVisible);
+        if (annoDropdown) {
+            const toggleItem = annoDropdown.querySelector('[data-anno-action="toggle"]');
+            if (toggleItem) toggleItem.textContent = markersVisible ? 'Hide Markers' : 'Show Markers';
+        }
+    };
+
+    const updateAnnoUI = () => {
+        if (!annoBtn) return;
+        annoBtn.classList.toggle('active', activeAnnoIndex >= 0);
+        annoBtn.title = activeAnnoIndex >= 0
+            ? 'Annotation ' + (activeAnnoIndex + 1) + ' / ' + annotations.length
+            : 'Annotations';
+        if (annoDropdown) {
+            annoDropdown.querySelectorAll('.editorial-matcap-item[data-anno-idx]').forEach(el => {
+                el.classList.toggle('active', parseInt(el.dataset.annoIdx) === activeAnnoIndex);
+            });
+        }
     };
 
     if (annotations.length > 0) {
-        // Build index panel items
+        annoWrapper = document.createElement('div');
+        annoWrapper.className = 'editorial-anno-wrapper';
+
+        annoBtn = document.createElement('button');
+        annoBtn.className = 'editorial-marker-toggle';
+        annoBtn.title = 'Annotations';
+        annoBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+
+        annoBadge = document.createElement('span');
+        annoBadge.className = 'editorial-anno-badge';
+        annoBadge.textContent = String(annotations.length);
+
+        annoDropdown = document.createElement('div');
+        annoDropdown.className = 'editorial-matcap-dropdown';
+
+        // Annotation items
         annotations.forEach((anno, i) => {
             const item = document.createElement('button');
-            item.className = 'editorial-anno-index-item';
+            item.className = 'editorial-matcap-item';
+            item.dataset.annoIdx = String(i);
             const numSpan = document.createElement('span');
-            numSpan.className = 'editorial-anno-index-num';
+            numSpan.className = 'editorial-anno-item-num';
             numSpan.textContent = String(i + 1).padStart(2, '0');
-            const titleSpan = document.createElement('span');
-            titleSpan.className = 'editorial-anno-index-title';
-            titleSpan.textContent = anno.title || 'Annotation ' + (i + 1);
             item.appendChild(numSpan);
-            item.appendChild(titleSpan);
+            item.appendChild(document.createTextNode(anno.title || 'Annotation ' + (i + 1)));
             item.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (activeAnnoIndex === i) {
@@ -1208,46 +1182,75 @@ export function setup(manifest, deps) {
                 } else {
                     goToAnno(i);
                 }
-                indexPanel.classList.remove('open');
+                annoDropdown.classList.remove('open');
             });
-            indexPanel.appendChild(item);
+            annoDropdown.appendChild(item);
         });
 
-        // Bubble click — toggle markers on/off
-        bubbleBtn.addEventListener('click', () => {
-            setMarkersVisible(!markersVisible);
-            if (!markersVisible) deselectAnno();
-        });
+        // Divider + prev/next row
+        const navDiv = document.createElement('div');
+        navDiv.className = 'editorial-material-divider';
+        annoDropdown.appendChild(navDiv);
 
-        // Counter text click — open/close index panel
-        counterText.addEventListener('click', (e) => {
+        const navRow = document.createElement('div');
+        navRow.className = 'editorial-anno-nav-row';
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'editorial-anno-nav-btn';
+        prevBtn.textContent = '\u2039 Prev';
+        prevBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            indexPanel.classList.toggle('open');
-        });
-
-        // Close index on outside click
-        document.addEventListener('click', () => { indexPanel.classList.remove('open'); });
-        capsule.addEventListener('click', (e) => { e.stopPropagation(); });
-
-        // Prev/next navigation
-        prevBtn.addEventListener('click', () => {
             if (annotations.length === 0) return;
             const next = activeAnnoIndex <= 0 ? annotations.length - 1 : activeAnnoIndex - 1;
             goToAnno(next);
         });
-
-        nextBtn.addEventListener('click', () => {
+        const navSep = document.createElement('div');
+        navSep.className = 'editorial-anno-nav-sep';
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'editorial-anno-nav-btn';
+        nextBtn.textContent = 'Next \u203A';
+        nextBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             if (annotations.length === 0) return;
             const next = activeAnnoIndex >= annotations.length - 1 ? 0 : activeAnnoIndex + 1;
             goToAnno(next);
         });
+        navRow.appendChild(prevBtn);
+        navRow.appendChild(navSep);
+        navRow.appendChild(nextBtn);
+        annoDropdown.appendChild(navRow);
 
-        capsule.appendChild(bubbleBtn);
-        capsule.appendChild(counterWrap);
-        capsule.appendChild(indexPanel);
-        updateCounter();
+        // Divider + hide/show toggle
+        const toggleDiv = document.createElement('div');
+        toggleDiv.className = 'editorial-material-divider';
+        annoDropdown.appendChild(toggleDiv);
 
-        toolsGroup.appendChild(capsule);
+        const toggleItem = document.createElement('button');
+        toggleItem.className = 'editorial-matcap-item editorial-matcap-off';
+        toggleItem.dataset.annoAction = 'toggle';
+        toggleItem.textContent = 'Hide Markers';
+        toggleItem.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setMarkersVisible(!markersVisible);
+            if (!markersVisible) deselectAnno();
+            annoDropdown.classList.remove('open');
+        });
+        annoDropdown.appendChild(toggleItem);
+
+        // Open/close dropdown
+        annoBtn.addEventListener('click', (e) => { e.stopPropagation(); annoDropdown.classList.toggle('open'); });
+        document.addEventListener('click', () => { annoDropdown.classList.remove('open'); });
+
+        annoWrapper.appendChild(annoBtn);
+        annoWrapper.appendChild(annoBadge);
+        annoWrapper.appendChild(annoDropdown);
+        updateAnnoUI();
+
+        toolsGroup.appendChild(annoWrapper);
+
+        // Separator after annotations
+        const annoRule = document.createElement('div');
+        annoRule.className = 'editorial-ribbon-rule';
+        toolsGroup.appendChild(annoRule);
 
         // Reset orbit center
         const orbitResetBtn = document.createElement('button');
