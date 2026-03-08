@@ -14,6 +14,7 @@ import { getStore } from './asset-store.js';
 import { captureWalkthroughForArchive } from './walkthrough-controller.js';
 import { getAuthCredentials, getCsrfToken, fetchCsrfToken, refreshLibrary } from './library-panel.js';
 import type { ExportDeps } from '@/types.js';
+import { transcodeSpz } from '@sparkjsdev/spark';
 
 const log = Logger.getLogger('export-controller');
 
@@ -266,8 +267,36 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         const rotation = splatMesh ? [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z] : [0, 0, 0];
         const scale: [number, number, number] = splatMesh ? [splatMesh.scale.x, splatMesh.scale.y, splatMesh.scale.z] : [1, 1, 1];
 
-        log.info(' Adding scene:', { fileName, position, rotation, scale });
-        archiveCreator.addScene(assets.splatBlob, fileName, {
+        // Export-time LOD: transcode to LOD-ordered SPZ if enabled and format supports it
+        const splatExt = fileName.split('.').pop()?.toLowerCase() || '';
+        const lodCompatible = ['spz', 'ply', 'splat', 'ksplat'].includes(splatExt);
+        let splatBlobToArchive = assets.splatBlob;
+        let archiveFileName = fileName;
+
+        if (state.splatLodEnabled && lodCompatible) {
+            try {
+                log.info('Generating splat LOD for archive export...');
+                deps.ui.showLoading('Generating splat LOD...', true);
+
+                const fileBytes = new Uint8Array(await assets.splatBlob.arrayBuffer());
+                const { fileBytes: spzBytes } = await transcodeSpz({
+                    inputs: [{ fileBytes, fileType: splatExt }],
+                });
+
+                splatBlobToArchive = new Blob([spzBytes], { type: 'application/octet-stream' });
+                // Change extension to .spz for the archive
+                archiveFileName = fileName.replace(/\.[^.]+$/, '.spz');
+                log.info(`Splat LOD generated: ${fileBytes.length} -> ${spzBytes.length} bytes (${archiveFileName})`);
+            } catch (lodError: any) {
+                log.warn('Splat LOD generation failed, using original file:', lodError.message);
+                notify.warning('Splat LOD generation failed — exporting original file.');
+            }
+        } else if (state.splatLodEnabled && !lodCompatible) {
+            log.info(`Splat LOD skipped: .${splatExt} not supported (use .spz or .ply)`);
+        }
+
+        log.info(' Adding scene:', { fileName: archiveFileName, position, rotation, scale });
+        archiveCreator.addScene(splatBlobToArchive, archiveFileName, {
             position, rotation, scale,
             created_by: metadata.splatMetadata.createdBy || 'unknown',
             created_by_version: metadata.splatMetadata.version || '',
