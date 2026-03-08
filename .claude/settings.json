@@ -5,7 +5,9 @@
       "Bash(gh api repos/blender/blender/git/trees/main --jq '.tree[] | select\\(.path | startswith\\(\"\"scripts/addons\"\"\\)\\) | .path')",
       "mcp__plugin_oh-my-claudecode_g__wait_for_job",
       "Bash(gh run list --limit 5)",
-      "Bash(npm ls meshoptimizer)"
+      "Bash(npm ls meshoptimizer)",
+      "WebSearch",
+      "Read(//c/Users/Jake/.claude/projects/c--Users-Jake-Git-Vitrine3D/bffd321c-77de-4cf9-9ef1-213e8cfad1d9/tool-results/**)"
     ],
     "additionalDirectories": [
       "\\tmp"

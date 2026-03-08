@@ -231,16 +231,13 @@ body.kiosk-mode.kiosk-editorial .editorial-anno-capsule {
     display: flex;
     align-items: center;
     position: relative;
-    border: 1px solid var(--kiosk-border-subtle);
-    border-radius: 3px;
-    padding: 0 2px;
+    border: none;
+    border-radius: 0;
+    padding: 0;
     height: 24px;
-    transition: width 0.3s cubic-bezier(0.33, 1, 0.68, 1), border-color 0.2s, padding 0.3s;
+    transition: width 0.3s cubic-bezier(0.33, 1, 0.68, 1), padding 0.3s;
     flex-shrink: 0;
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-capsule:hover {
-    border-color: var(--kiosk-border-default, var(--kiosk-border-subtle));
+    gap: 0;
 }
 
 /* Collapsed state — markers hidden, only bubble visible */
@@ -309,7 +306,7 @@ body.kiosk-mode.kiosk-editorial .editorial-anno-fraction {
 }
 
 body.kiosk-mode.kiosk-editorial .editorial-anno-fraction:hover {
-    color: var(--kiosk-text-secondary);
+    color: var(--kiosk-text-primary);
 }
 
 /* Prev / Next arrow buttons */
@@ -374,7 +371,7 @@ body.kiosk-mode.kiosk-editorial .editorial-anno-index-item {
     border: none;
     cursor: pointer;
     text-align: left;
-    transition: background 0.12s;
+    transition: background 0.15s;
 }
 
 body.kiosk-mode.kiosk-editorial .editorial-anno-index-item:hover {
@@ -393,6 +390,11 @@ body.kiosk-mode.kiosk-editorial .editorial-anno-index-num {
     letter-spacing: 0.04em;
     flex-shrink: 0;
     min-width: 18px;
+    transition: color 0.15s;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-index-item:hover .editorial-anno-index-num {
+    color: var(--kiosk-text-secondary);
 }
 
 body.kiosk-mode.kiosk-editorial .editorial-anno-index-item.active .editorial-anno-index-num {
@@ -403,10 +405,15 @@ body.kiosk-mode.kiosk-editorial .editorial-anno-index-title {
     font-family: var(--kiosk-font-body);
     font-size: 0.72rem;
     font-weight: 500;
-    color: var(--kiosk-text-secondary);
+    color: var(--kiosk-text-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    transition: color 0.15s;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-index-item:hover .editorial-anno-index-title {
+    color: var(--kiosk-text-primary);
 }
 
 body.kiosk-mode.kiosk-editorial .editorial-anno-index-item.active .editorial-anno-index-title {

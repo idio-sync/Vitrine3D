@@ -28,15 +28,13 @@ The application is built as two separate bundles: a **kiosk viewer** (`/`) for c
 - **Walkthrough engine** — author guided camera tours with fly/fade/cut transitions, dwell times, annotation links, auto-play and loop; playback in editor and kiosk viewer
 - **Kiosk themes** — Editorial (golden ratio layout), Gallery (cinematic full-bleed), Exhibit (institutional with attract mode), and Minimal; self-contained theme packages with layout CSS/JS and click gates
 - **Lazy archive loading** — only the manifest is decompressed on open; individual assets load on demand
-- **SIP compliance validation** — required/recommended field checking, compliance scoring, and manifest audit trail at export time
 - **Library panel** — built-in archive browser in the viewer when admin is enabled: gallery view, detail pane, upload, rename, delete, and direct-to-editor loading
 - **Admin panel** (`/admin`) — standalone archive management page with the same upload/rename/delete capabilities
 - **Share dialog** — generate customized share links, embed codes, and QR codes with preset modes (kiosk, minimal, editor) and theme selection
-- **Clean archive URLs** — shareable `/view/{hash}` URLs that load archives in kiosk mode without query parameters
 - **Social link previews** — Open Graph, Twitter Card, and oEmbed support for rich previews when sharing viewer URLs on Slack, Discord, Twitter, WordPress, etc.
 - **Flight path import** — import DJI drone flight logs (CSV, KML/KMZ, SRT) as 3D path overlays with telemetry tooltips; multiple logs per archive; manual alignment via transform gizmo; displayed in both editor and kiosk viewer
 - **Collections** — organize archives into named collections; editorial-themed collection browser in kiosk mode; collection management in the library panel
-- **Library browser** — full-page editorial-themed archive and collection browser at `/library`
+- **Library browser** — full-page themed archive and collection browser at `/library`
 - **Camera constraints** — lock orbit, pan, zoom, and height limits per-archive; applied automatically in kiosk mode
 - **Docker deployment** with s6-overlay process supervision (nginx + Node API), SQLite metadata storage, Cloudflare Access authentication, and environment-variable configuration
 - **Digital preservation metadata** aligned with Dublin Core, PRONOM, and Smithsonian EDAN standards
@@ -93,17 +91,17 @@ docker run -p 8080:80 \
 - `.spz` — Spark compressed format
 - `.sog` — SOG format
 
-### Drawings
+### Drawings (WIP)
 - `.dxf` — AutoCAD DXF (via [three-dxf-loader](https://www.npmjs.com/package/three-dxf-loader), displayed as an independent drawing layer)
 
 ### Point Clouds
 - `.e57` — ASTM E57 format (via [three-e57-loader](https://www.npmjs.com/package/three-e57-loader), which uses the [web-e57](https://www.npmjs.com/package/web-e57) WASM parser)
 
-### Parametric CAD
+### Parametric CAD (WIP)
 - `.step` / `.stp` — ISO 10303 STEP (via [occt-import-js](https://github.com/kovacsv/occt-import-js) OpenCASCADE WASM)
 - `.iges` / `.igs` — Initial Graphics Exchange Specification (via [occt-import-js](https://github.com/kovacsv/occt-import-js) OpenCASCADE WASM)
 
-### Flight Logs
+### Flight Logs (WIP)
 - `.csv` — DJI flight log CSV (auto-detected column aliases for firmware variations)
 - `.kml` / `.kmz` — KML/KMZ flight tracks
 - `.srt` — DJI SRT subtitle telemetry
