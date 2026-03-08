@@ -508,7 +508,7 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
             }
 
             const fpStore = getStore();
-            for (const { key, entry } of flightEntries) {
+            for (const { entry } of flightEntries) {
                 const fileData = await archiveLoader.extractFile(entry.file_name);
                 if (!fileData) continue;
                 fpStore.flightPathBlobs.push({
