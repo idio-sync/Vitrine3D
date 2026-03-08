@@ -4,7 +4,7 @@ Kiosk view mode is a read-only mode used for presentation of 3D data. It can be 
 
 ## Capabilities
 
-- Full 3D rendering (splats, meshes, point clouds) with display mode switching
+- Full 3D rendering (splats, meshes, point clouds, flight paths) with display mode switching
 - Orbit and fly camera controls
 - Auto-rotate turntable (enabled by default, auto-disables on manual interaction)
 - Shadow casting with shadow catcher ground plane

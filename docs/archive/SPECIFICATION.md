@@ -418,6 +418,7 @@ Entry keys MUST follow the pattern `<type>_<index>` where:
 | `pointcloud_` | Point cloud (E57) |
 | `drawing_` | 2D/3D line drawing (DXF) |
 | `cad_` | Parametric CAD model (STEP, IGES) |
+| `flightpath_` | Drone flight path (CSV, KML/KMZ, SRT) |
 | `thumbnail_` | Preview image |
 | `screenshot_` | User-captured viewport screenshot |
 | `image_` | Embedded image attachment (referenced by annotations or descriptions via the `asset:` protocol) |
@@ -458,6 +459,23 @@ Readers MUST support entries with unrecognized type prefixes by treating them as
 | `original_name` | string | RECOMMENDED | Original filename before sanitization. |
 | `source_category` | string | OPTIONAL | Category tag (e.g., `"photography"`, `"calibration"`, `"report"`, `"processing"`). |
 | `size_bytes` | number | OPTIONAL | File size in bytes. |
+
+**Flight path fields** (applicable to `flightpath_` entries):
+
+| Field | Type | Status | Description |
+|-------|------|--------|-------------|
+| `_source_format` | string | RECOMMENDED | Source file format identifier. Values: `"dji-csv"`, `"kml"`, `"srt"`. |
+| `_flight_meta` | object | OPTIONAL | Summary statistics derived from the telemetry data. |
+
+The `_flight_meta` object MAY contain:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `point_count` | number | Number of telemetry samples in the flight log. |
+| `duration_s` | number | Total flight duration in seconds. |
+| `origin_gps` | array of 2 numbers | GPS coordinates `[latitude, longitude]` of the first telemetry point, used as the local origin for coordinate conversion. |
+| `max_alt_m` | number | Maximum altitude recorded in the flight log, in metres. |
+| `source_format` | string | Redundant copy of `_source_format` stored inside the metadata object for self-contained readability. |
 
 #### 5.9.3 _parameters
 
@@ -503,7 +521,7 @@ Per-axis scale example:
 
 #### 5.9.4 Minimum Asset Requirement
 
-A valid archive MUST contain at least one data entry with a type prefix of `scene_`, `mesh_`, `pointcloud_`, or `cad_`. Archives containing only `thumbnail_`, `screenshot_`, `image_`, or `source_` entries are not valid.
+A valid archive MUST contain at least one data entry with a type prefix of `scene_`, `mesh_`, `pointcloud_`, `cad_`, `drawing_`, or `flightpath_`. Archives containing only `thumbnail_`, `screenshot_`, `image_`, or `source_` entries are not valid.
 
 ### 5.10 annotations
 
@@ -763,7 +781,23 @@ CAD assets SHOULD use the `cad_` entry key prefix (e.g., `cad_0`). Readers SHOUL
 
 CAD assets are tessellated via the OpenCASCADE Technology WASM library (`occt-import-js`) in the reference implementation.
 
-### 6.6 Thumbnail Formats
+### 6.6 Flight Path Formats
+
+| Extension | Format | Description |
+|-----------|--------|-------------|
+| `.csv` | DJI CSV telemetry log | Comma-separated log produced by DJI flight controller firmware; columns include GPS latitude, longitude, altitude, timestamp, and additional sensor fields. |
+| `.kml` / `.kmz` | Keyhole Markup Language | OGC/Google standard for geographic data; flight tracks are encoded as `<LineString>` or `<gx:Track>` elements. `.kmz` is a ZIP-compressed KML archive. |
+| `.srt` | DJI SRT subtitle log | SubRip-format file where each frame's metadata (GPS, altitude, speed) is embedded in subtitle cue text alongside the timecode. |
+
+Flight path assets store GPS telemetry as a 3D polyline in local scene coordinates. The GPS origin (first telemetry point) is used as the local coordinate origin; subsequent points are converted to metre offsets using equirectangular projection. Altitude is mapped to the Y axis.
+
+Flight path assets SHOULD be assigned the `role` value `"primary"` when they represent the original drone flight log. They SHOULD use the `flightpath_` entry key prefix (e.g., `flightpath_0`). Readers SHOULD render the path as a 3D line with interactive markers at each telemetry sample, exposing hover tooltips with speed, altitude, and timestamp data.
+
+Flight path assets SHOULD store the `_source_format` field to indicate the original file format (`"dji-csv"`, `"kml"`, or `"srt"`). The `_flight_meta` object SHOULD be populated with summary statistics (point count, duration, origin GPS, maximum altitude) derived at import time.
+
+Flight path assets are parsed by `flight-parsers.ts` and rendered by `flight-path.ts` in the reference implementation.
+
+### 6.7 Thumbnail Formats
 
 | Extension | Format |
 |-----------|--------|

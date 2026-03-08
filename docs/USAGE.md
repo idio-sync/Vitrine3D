@@ -15,6 +15,7 @@ This guide covers the **editor** at `/editor/`. For the kiosk viewer at `/`, see
 - **Model** — 3D mesh (`.glb`, `.obj`)
 - **Point Cloud** — E57 point cloud (`.e57`)
 - **Drawing** — 2D/3D CAD drawing (`.dxf`); load from file or URL like any other asset type
+- **Flight Path** — Drone flight log (`.csv`, `.kml`, `.kmz`, `.srt`); renders GPS telemetry as a 3D line with hover data points
 
 ## Display Modes
 

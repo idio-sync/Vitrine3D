@@ -24,6 +24,7 @@ Think of it as **a publishing platform for 3D captures**: load your assets, alig
 - **Point Clouds** (E57) — WASM-accelerated parsing
 - **Parametric CAD** (STEP, IGES) — OpenCASCADE WASM tessellation
 - **Drawings** (DXF) — displayed as an independent layer
+- **Flight Paths** (CSV, KML/KMZ, SRT) — DJI drone telemetry rendered as 3D flight lines with hover tooltips
 - All formats can be loaded **simultaneously** and overlaid in the same 3D space
 
 ### Scene Composition & Alignment
@@ -85,7 +86,7 @@ Both are built as **separate Vite bundles** from the same codebase, sharing core
 | CAD | occt-import-js (OpenCASCADE WASM) |
 | Compression | fflate (ZIP), Draco / meshoptimizer (geometry) |
 | Build | Vite + TypeScript |
-| Testing | Vitest (200+ tests on security-critical paths) |
+| Testing | Vitest (~380 tests across security, parsing, and quality paths) |
 | Apps | Tauri v2 (Windows, macOS, Linux, Android) |
 | Server | Docker (nginx + Node API), SQLite, s6-overlay |
 | Auth | Cloudflare Access |
@@ -104,6 +105,7 @@ Walkthrough Engine ---> Camera tour state machine (pure logic, no DOM)
 Metadata Manager -----> 8-tab editor, Dublin Core schema, SIP validation
 Theme Loader ---------> Runtime CSS/JS theme injection for kiosk
 Quality Tier ---------> Device capability detection, SD/HD asset selection
+Flight Path ----------> DJI telemetry parsing, 3D path rendering, hover tooltips
 ```
 
 ### Deployment Options
@@ -143,7 +145,7 @@ Quality Tier ---------> Device capability detection, SD/HD asset selection
 ## Current Status
 
 - **v1.0** — Production-ready editor and kiosk viewer
-- **200+ automated tests** on security-critical code paths
+- **~380 automated tests** on security-critical code paths
 - **Full TypeScript migration** (26/29 modules converted, hybrid `allowJs` for remainder)
 - **Docker deployment** in production with SQLite metadata, Cloudflare Access auth
 - **Tauri v2 desktop builds** for Windows, macOS, Linux, and Android

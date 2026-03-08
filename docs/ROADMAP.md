@@ -145,6 +145,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 ### Asset Types
 - [x] **Done** — DXF drawing files as an independent asset type (loaded via `three-dxf-loader`, displayed in a dedicated drawing layer)
 - [x] **Done** — STEP/IGES parametric CAD files as an independent asset type (loaded via `occt-import-js` OpenCASCADE WASM, tessellated and rendered in a dedicated CAD layer; stored as `cad_` entries in archives)
+- [x] **Done** — DJI flight path import (CSV, KML/KMZ, SRT) as an independent asset type (`flightpath_` entries in archives); GPS→local coordinate conversion, 3D line rendering with instanced markers, hover telemetry tooltips, manual alignment via transform gizmo
 
 ### Annotations & Walkthrough
 - [x] **Done** — Image attachments in annotations via `asset:` protocol
@@ -158,7 +159,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [x] **Done** — Tauri v2 packaged viewer for institutional desktops (defaults to kiosk mode + editorial theme)
 
 ### Testing & Type Safety
-- [x] **Done** — Add a testing framework (Vitest) with 90 tests across 5 suites (url-validation, theme-loader, archive-loader, utilities, quality-tier)
+- [x] **Done** — Add a testing framework (Vitest) with ~380 tests across 15 suites (url-validation, theme-loader, archive-loader, utilities, quality-tier)
 - [x] **Done** — Prioritize tests for: filename sanitization, URL validation, theme metadata parsing, utilities, quality-tier detection
 - [x] **Done** — Add shared TypeScript types (`src/types.ts`): `AppState`, `SceneRefs`, deps interfaces with JSDoc `@returns` on factory functions
 - [x] **Done** — TypeScript migration Phases 1–3 complete: 26 of 29 modules converted to `.ts`, hybrid `allowJs: true` setup, `@types/three` installed

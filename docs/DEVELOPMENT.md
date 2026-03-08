@@ -41,7 +41,7 @@ src/
   types.ts                 Shared TypeScript interfaces
   styles.css               All styling
   kiosk.css                Kiosk-specific styles
-  modules/                 ~48 TypeScript modules
+  modules/                 ~50 TypeScript modules
   themes/                  Kiosk theme packages
   vendor/                  Vendored dependencies (Spark.js 2.0 preview)
 
@@ -155,6 +155,7 @@ Current test suites:
 - `archive-creator.test.ts` — Archive creation and SHA-256 hashing
 - `share-dialog.test.ts` — Share link URL generation
 - `alignment.test.ts` — Alignment algorithms
+- `flight-parsers.test.ts` — DJI CSV, KML/KMZ, and SRT telemetry parsing
 
 ## Docker Build
 
