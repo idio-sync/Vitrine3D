@@ -1455,6 +1455,34 @@ export class ArchiveCreator {
         return entryKey;
     }
 
+    addFlightPath(blob: Blob, fileName: string, options: AddAssetOptions & { flightMeta?: any } = {}): string {
+        const index = this._countEntriesOfType('flightpath_');
+        const entryKey = `flightpath_${index}`;
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
+        const archivePath = `assets/flightpath_${index}.${ext}`;
+
+        this.files.set(archivePath, { blob, originalName: fileName });
+
+        this.manifest.data_entries[entryKey] = {
+            file_name: archivePath,
+            created_by: options.created_by || "unknown",
+            _created_by_version: options.created_by_version || "",
+            _source_notes: options.source_notes || "",
+            role: 'flightpath',
+            _source_format: ext === 'csv' ? 'dji-csv' : ext,
+            original_name: fileName,
+            _parameters: {
+                position: options.position || [0, 0, 0],
+                rotation: options.rotation || [0, 0, 0],
+                scale: options.scale !== undefined ? options.scale : 1,
+                ...(options.parameters || {})
+            },
+            _flight_meta: options.flightMeta || {},
+        };
+
+        return entryKey;
+    }
+
     addSourceFile(blob: Blob, fileName: string, options: AddSourceFileOptions = {}): string {
         const index = this._countEntriesOfType('source_');
         const entryKey = `source_${index}`;
