@@ -399,68 +399,197 @@ tr:last-child td { border-bottom: none; }
     .stat-card { padding: 8px 16px; }
     .filter-bar { gap: 6px; }
 }
-/* Settings tab */
-.settings-group { margin-bottom: 24px; }
-.settings-group-title {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-secondary);
-    padding-bottom: 8px;
-    margin-bottom: 12px;
-    border-bottom: 1px solid var(--border-subtle);
+/* Settings tab — layout */
+.settings-layout {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 0;
+    min-height: 400px;
 }
-.setting-row {
+
+.settings-nav {
+    position: sticky;
+    top: 42px;
+    align-self: start;
+    padding: 8px 0;
+    border-right: 1px solid var(--border-subtle);
+}
+
+.settings-nav-item {
     display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 10px 0;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 14px 7px 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-left: 2px solid transparent;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    user-select: none;
 }
-.setting-label-col { flex: 1; min-width: 0; }
+
+.settings-nav-item:hover {
+    color: var(--text-secondary);
+    background: var(--bg-hover);
+}
+
+.settings-nav-item.active {
+    color: var(--accent-text);
+    border-left-color: var(--accent);
+    background: var(--accent-muted);
+}
+
+.settings-nav-badge {
+    font-size: 9px;
+    font-weight: 600;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--bg-deep);
+    display: none;
+}
+
+.settings-nav-badge.visible { display: inline-block; }
+
+.settings-main {
+    padding: 4px 0 0 24px;
+    overflow-y: auto;
+}
+
+/* Settings tab — group cards */
+.settings-group {
+    margin-bottom: 28px;
+    scroll-margin-top: 56px;
+}
+
+.settings-group-header {
+    margin-bottom: 16px;
+}
+
+.settings-group-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    margin-bottom: 3px;
+}
+
+.settings-group-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+
+.settings-group-body {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+/* Settings tab — rows */
+.setting-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 16px;
+    padding: 11px 14px;
+}
+
+.setting-row + .setting-row {
+    border-top: 1px solid var(--border-subtle);
+}
+
+.setting-label-col { min-width: 0; }
+
 .setting-label {
     font-size: 12px;
     font-weight: 500;
     color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
+
+.setting-modified-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+    display: none;
+}
+
+.setting-modified-dot.visible { display: inline-block; }
+
 .setting-desc {
     font-size: 11px;
     color: var(--text-muted);
+    margin-top: 1px;
+}
+
+.setting-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-top: 2px;
 }
+
 .setting-default {
     font-size: 10px;
     color: var(--text-muted);
-    margin-top: 2px;
     font-family: var(--font-mono);
 }
+
+.setting-range {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+/* Settings tab — inputs */
 .setting-input-col {
     display: flex;
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
 }
+
 .setting-input-col input[type="number"],
 .setting-input-col select {
-    width: 120px;
-    padding: 4px 8px;
+    width: 130px;
+    padding: 5px 8px;
     background: var(--bg-input);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
     font-size: 12px;
     font-family: var(--font-mono);
+    transition: border-color 0.15s, background 0.15s;
 }
+
 .setting-input-col input:focus,
 .setting-input-col select:focus {
     outline: none;
     border-color: var(--accent);
 }
+
 .setting-input-col input.modified,
 .setting-input-col select.modified {
     border-color: var(--accent);
     background: var(--accent-muted);
 }
+
+.setting-unit {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    min-width: 20px;
+}
+
 .btn-reset-setting {
     background: none;
     border: 1px solid var(--border-subtle);
@@ -469,18 +598,76 @@ tr:last-child td { border-bottom: none; }
     padding: 3px 6px;
     border-radius: var(--radius-sm);
     font-size: 11px;
-    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+    pointer-events: none;
 }
-.btn-reset-setting.visible { visibility: visible; }
-.btn-reset-setting:hover { color: var(--text-primary); border-color: var(--border-default); }
+
+.btn-reset-setting.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.btn-reset-setting:hover {
+    color: var(--text-primary);
+    border-color: var(--border-default);
+}
+
+/* Settings tab — sticky save bar */
 .settings-actions {
-    padding: 16px 0;
+    position: sticky;
+    bottom: 0;
+    padding: 12px 0 12px 24px;
+    background: var(--bg-deep);
     border-top: 1px solid var(--border-subtle);
     display: flex;
     align-items: center;
     gap: 12px;
+    z-index: 10;
 }
+
+.btn-save-settings {
+    padding: 6px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    background: var(--accent);
+    color: var(--bg-deep);
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+}
+
+.btn-save-settings:hover { background: var(--accent-hover); }
+
 .settings-status { font-size: 11px; color: var(--accent-text); }
+
+/* Settings — responsive */
+@media (max-width: 640px) {
+    .settings-layout {
+        grid-template-columns: 1fr;
+    }
+    .settings-nav {
+        position: static;
+        display: flex;
+        overflow-x: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border-subtle);
+        padding: 0;
+        gap: 0;
+    }
+    .settings-nav-item {
+        border-left: none;
+        border-bottom: 2px solid transparent;
+        white-space: nowrap;
+        padding: 8px 12px;
+    }
+    .settings-nav-item.active {
+        border-left-color: transparent;
+        border-bottom-color: var(--accent);
+    }
+    .settings-main { padding: 16px 0 0 0; }
+    .settings-actions { padding-left: 0; }
+}
 </style>
 </head>
 <body>
@@ -612,11 +799,16 @@ tr:last-child td { border-bottom: none; }
 
 <!-- Settings Tab -->
 <div id="tab-settings" class="tab-content">
-    <div id="settings-container">
-        <div class="state-row" style="padding:20px;color:var(--text-secondary)">Loading settings&hellip;</div>
+    <div class="settings-layout">
+        <nav class="settings-nav" id="settings-nav"></nav>
+        <div class="settings-main">
+            <div id="settings-container">
+                <div class="state-row" style="padding:20px;color:var(--text-secondary)">Loading settings&hellip;</div>
+            </div>
+        </div>
     </div>
     <div class="settings-actions" id="settings-actions" style="display:none">
-        <button class="btn-primary" id="btn-save-settings">Save Changes</button>
+        <button class="btn-save-settings" id="btn-save-settings">Save Changes</button>
         <span class="settings-status" id="settings-status"></span>
     </div>
 </div>
@@ -1029,8 +1221,32 @@ async function loadSettingsTab() {
     }
 }
 
+// Group descriptions for better UX context
+const GROUP_DESCRIPTIONS = {
+    'Video Transcode': 'Controls FFmpeg encoding when converting recordings to MP4.',
+    'Video Recording': 'WebM capture settings for in-browser screen recording.',
+    'GIF Generation': 'Output parameters for animated GIF exports.',
+    'Media Output': 'Dimensions and quality for generated thumbnails and previews.',
+    'Upload': 'Server-side limits for archive file uploads.',
+    'Renderer': 'GPU rendering budgets and display scaling caps.',
+};
+
+// Group ordering
+const GROUP_ORDER = ['Renderer', 'Upload', 'Video Recording', 'Video Transcode', 'GIF Generation', 'Media Output'];
+
+// Unit suffixes extracted from setting keys/labels
+function getSettingUnit(s) {
+    if (s.key.includes('bitrate') || s.label.includes('bps')) return 'bps';
+    if (s.label.includes('(px)')) return 'px';
+    if (s.label.includes('(MB)')) return 'MB';
+    if (s.label.includes('(s)')) return 's';
+    if (s.label.includes('FPS') || s.key.includes('fps') || s.key.includes('framerate')) return 'fps';
+    return '';
+}
+
 function renderSettings() {
     const container = document.getElementById('settings-container');
+    const nav = document.getElementById('settings-nav');
     const groups = {};
 
     for (const [key, def] of Object.entries(settingsData)) {
@@ -1039,33 +1255,99 @@ function renderSettings() {
         groups[g].push({ key, ...def });
     }
 
+    // Sort groups by defined order
+    const sortedGroupNames = Object.keys(groups).sort((a, b) => {
+        const ia = GROUP_ORDER.indexOf(a);
+        const ib = GROUP_ORDER.indexOf(b);
+        return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    });
+
+    // Build sidebar nav
+    let navHtml = '';
+    for (const groupName of sortedGroupNames) {
+        const groupId = groupName.toLowerCase().replace(/\s+/g, '-');
+        const customCount = groups[groupName].filter(s => s.isCustom).length;
+        navHtml += '<button class="settings-nav-item" data-group="' + groupId + '">' +
+            escapeHtml(groupName) +
+            '<span class="settings-nav-badge' + (customCount > 0 ? ' visible' : '') + '" data-group-badge="' + groupId + '">' + customCount + '</span>' +
+        '</button>';
+    }
+    nav.innerHTML = navHtml;
+
+    // Build settings content
     let html = '';
-    for (const [groupName, settings] of Object.entries(groups)) {
-        html += '<div class="settings-group">';
+    for (const groupName of sortedGroupNames) {
+        const settings = groups[groupName];
+        const groupId = groupName.toLowerCase().replace(/\s+/g, '-');
+        const desc = GROUP_DESCRIPTIONS[groupName] || '';
+
+        html += '<div class="settings-group" id="sg-' + groupId + '">';
+        html += '<div class="settings-group-header">';
         html += '<div class="settings-group-title">' + escapeHtml(groupName) + '</div>';
+        if (desc) html += '<div class="settings-group-desc">' + escapeHtml(desc) + '</div>';
+        html += '</div>';
+        html += '<div class="settings-group-body">';
         for (const s of settings) {
             html += renderSettingRow(s);
         }
-        html += '</div>';
+        html += '</div></div>';
     }
     container.innerHTML = html;
     document.getElementById('settings-actions').style.display = 'flex';
 
+    // Wire reset buttons
     container.querySelectorAll('.btn-reset-setting').forEach(btn => {
         btn.addEventListener('click', () => resetSetting(btn.dataset.key));
     });
 
+    // Wire input change tracking
     container.querySelectorAll('input, select').forEach(el => {
         el.addEventListener('input', () => {
             const key = el.dataset.key;
             const def = settingsData[key];
             const isModified = el.value !== def.value;
             el.classList.toggle('modified', isModified);
+            // Update the modified dot
+            const dot = el.closest('.setting-row').querySelector('.setting-modified-dot');
+            if (dot) dot.classList.toggle('visible', isModified || def.isCustom);
         });
     });
+
+    // Wire sidebar nav — scroll to group
+    nav.querySelectorAll('.settings-nav-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = document.getElementById('sg-' + btn.dataset.group);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+
+    // Activate first nav item
+    const firstNav = nav.querySelector('.settings-nav-item');
+    if (firstNav) firstNav.classList.add('active');
+
+    // Scroll-spy: highlight nav item for visible group
+    setupSettingsScrollSpy();
+}
+
+function setupSettingsScrollSpy() {
+    const groups = document.querySelectorAll('.settings-group');
+    const navItems = document.querySelectorAll('.settings-nav-item');
+    if (!groups.length) return;
+
+    const observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            if (entry.isIntersecting) {
+                const id = entry.target.id.replace('sg-', '');
+                navItems.forEach(n => n.classList.toggle('active', n.dataset.group === id));
+            }
+        }
+    }, { rootMargin: '-60px 0px -60% 0px', threshold: 0 });
+
+    groups.forEach(g => observer.observe(g));
 }
 
 function renderSettingRow(s) {
+    const unit = getSettingUnit(s);
     let inputHtml = '';
     if (s.type === 'select') {
         inputHtml = '<select data-key="' + s.key + '">';
@@ -1081,14 +1363,33 @@ function renderSettingRow(s) {
         inputHtml = '<input data-key="' + s.key + '" ' + attrs + '>';
     }
 
+    if (unit) inputHtml += '<span class="setting-unit">' + escapeHtml(unit) + '</span>';
+
     const resetVisible = s.isCustom ? ' visible' : '';
+    const dotVisible = s.isCustom ? ' visible' : '';
     const desc = s.description ? '<div class="setting-desc">' + escapeHtml(s.description) + '</div>' : '';
+
+    // Build meta line: default + range
+    let metaHtml = '<div class="setting-meta">';
+    metaHtml += '<span class="setting-default">default: ' + escapeHtml(String(s.default)) + '</span>';
+    if (s.min !== undefined && s.max !== undefined) {
+        metaHtml += '<span class="setting-range">' + s.min + '–' + s.max + '</span>';
+    } else if (s.min !== undefined) {
+        metaHtml += '<span class="setting-range">min ' + s.min + '</span>';
+    }
+    metaHtml += '</div>';
+
+    // Clean label: remove unit suffixes already shown as unit badges
+    let cleanLabel = s.label.replace(/\s*\([^)]*\)\s*$/, '');
 
     return '<div class="setting-row">' +
         '<div class="setting-label-col">' +
-            '<div class="setting-label">' + escapeHtml(s.label) + '</div>' +
+            '<div class="setting-label">' +
+                '<span class="setting-modified-dot' + dotVisible + '"></span>' +
+                escapeHtml(cleanLabel) +
+            '</div>' +
             desc +
-            '<div class="setting-default">Default: ' + escapeHtml(String(s.default)) + '</div>' +
+            metaHtml +
         '</div>' +
         '<div class="setting-input-col">' +
             inputHtml +
