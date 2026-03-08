@@ -6,6 +6,7 @@ import { ArchiveLoader } from './modules/archive-loader.js';
 import { AnnotationSystem } from './modules/annotation-system.js';
 import { CrossSectionTool } from './modules/cross-section.js';
 import { MeasurementSystem } from './modules/measurement-system.js';
+import { FlightPathManager } from './modules/flight-path.js';
 import { ArchiveCreator, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
 import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS, DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET } from './modules/constants.js';
 import { getLodBudget } from './modules/quality-tier.js';
@@ -269,6 +270,7 @@ const state: AppState = {
     cadLoaded: false,
     currentCadUrl: null,
     drawingLoaded: false,
+    flightPathLoaded: false,
     currentDrawingUrl: null,
     modelOpacity: 1,
     modelWireframe: false,
@@ -344,6 +346,7 @@ let measurementSystem: any = null;
 let landmarkAlignment: any = null;
 let archiveCreator: any = null;
 let crossSection: CrossSectionTool | null = null;
+let flightPathManager: FlightPathManager | null = null;
 
 // Asset blob store (ES module singleton — shared with archive-pipeline, export-controller, etc.)
 const assets = getStore();
@@ -363,6 +366,7 @@ const sceneRefs: SceneRefs = {
     get stlGroup() { return stlGroup; },
     get cadGroup() { return cadGroup; },
     get drawingGroup() { return drawingGroup; },
+    get flightPathGroup() { return flightPathManager ? sceneManager?.flightPathGroup : null; },
     get flyControls() { return flyControls; },
     get annotationSystem() { return annotationSystem; },
     get archiveCreator() { return archiveCreator; },
@@ -641,7 +645,19 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
         sourceFiles: {
             updateSourceFilesUI
         },
-        measurementSystem
+        measurementSystem,
+        renderFlightPaths: async () => {
+            if (!flightPathManager) return;
+            const fpStore = getStore();
+            for (const fp of fpStore.flightPathBlobs) {
+                try {
+                    const text = await fp.blob.text();
+                    flightPathManager.importFromText(text, fp.fileName);
+                } catch (err) {
+                    console.warn('[main] Failed to parse flight path:', fp.fileName, err);
+                }
+            }
+        }
     };
 }
 
@@ -1097,6 +1113,42 @@ async function init() {
     measurementSystem = new MeasurementSystem(scene, camera, renderer, controls);
     _wireMeasurementControls();
     log.info(' Measurement system initialized:', !!measurementSystem);
+
+    // Initialize flight path manager
+    if (sceneManager.flightPathGroup) {
+        flightPathManager = new FlightPathManager(
+            sceneManager.flightPathGroup,
+            scene,
+            camera,
+            renderer
+        );
+        const flightTooltip = document.getElementById('flight-tooltip');
+        if (flightTooltip) flightPathManager.setupTooltip(flightTooltip);
+        log.info(' FlightPathManager initialized');
+
+        // Wire flight path file input
+        const flightInput = document.getElementById('flightpath-input') as HTMLInputElement | null;
+        if (flightInput) {
+            flightInput.addEventListener('change', async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file || !flightPathManager) return;
+                const filenameEl = document.getElementById('flightpath-filename');
+                if (filenameEl) filenameEl.textContent = file.name;
+                showLoading('Importing flight log...');
+                try {
+                    const data = await flightPathManager.importFile(file);
+                    const fpStore = getStore();
+                    fpStore.flightPathBlobs.push({ blob: file, fileName: file.name });
+                    state.flightPathLoaded = true;
+                    hideLoading();
+                    notify.success('Flight path loaded: ' + data.points.length + ' points');
+                } catch (err: any) {
+                    hideLoading();
+                    notify.error('Error loading flight log: ' + err.message);
+                }
+            });
+        }
+    }
 
     // Initialize landmark alignment system
     landmarkAlignment = new LandmarkAlignment({

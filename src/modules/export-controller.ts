@@ -148,7 +148,7 @@ interface PreparedArchive {
  */
 async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null> {
     const { sceneRefs, state, ui, metadata: metadataFns } = deps;
-    const { archiveCreator, renderer, scene, camera, controls, splatMesh, modelGroup, pointcloudGroup, cadGroup, annotationSystem } = sceneRefs;
+    const { archiveCreator, renderer, scene, camera, controls, splatMesh, modelGroup, pointcloudGroup, cadGroup, flightPathGroup, annotationSystem } = sceneRefs;
     const assets = getStore();
 
     log.info(' prepareArchive called');
@@ -385,6 +385,18 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
 
         log.info(' Adding CAD:', { cadFileName, position, rotation, scale });
         archiveCreator.addCAD(assets.cadBlob, cadFileName, { position, rotation, scale });
+    }
+
+    // Add flight paths if loaded
+    if (state.flightPathLoaded && assets.flightPathBlobs.length > 0) {
+        log.info(` Adding ${assets.flightPathBlobs.length} flight path(s)`);
+        for (let i = 0; i < assets.flightPathBlobs.length; i++) {
+            const fp = assets.flightPathBlobs[i];
+            const position = flightPathGroup ? [flightPathGroup.position.x, flightPathGroup.position.y, flightPathGroup.position.z] : [0, 0, 0];
+            const rotation = flightPathGroup ? [flightPathGroup.rotation.x, flightPathGroup.rotation.y, flightPathGroup.rotation.z] : [0, 0, 0];
+            const scale = flightPathGroup ? flightPathGroup.scale.x : 1;
+            archiveCreator.addFlightPath(fp.blob, fp.fileName, { position, rotation, scale });
+        }
     }
 
     // Save global alignment — definitive scene state for re-import

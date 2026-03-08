@@ -250,7 +250,7 @@ export interface CollectionArchive {
 // ===== Module Dependencies =====
 
 export interface ExportDeps {
-    sceneRefs: Pick<SceneRefs, 'renderer' | 'scene' | 'camera' | 'controls' | 'splatMesh' | 'modelGroup' | 'pointcloudGroup' | 'cadGroup' | 'annotationSystem' | 'archiveCreator' | 'measurementSystem'>;
+    sceneRefs: Pick<SceneRefs, 'renderer' | 'scene' | 'camera' | 'controls' | 'splatMesh' | 'modelGroup' | 'pointcloudGroup' | 'cadGroup' | 'flightPathGroup' | 'annotationSystem' | 'archiveCreator' | 'measurementSystem'>;
     state: AppState;
     tauriBridge: any | null;
     ui: {
@@ -301,6 +301,7 @@ export interface ArchivePipelineDeps {
         updateSourceFilesUI: () => void;
     };
     measurementSystem?: any;
+    renderFlightPaths?: () => Promise<void>;
 }
 
 export interface EventWiringDeps {

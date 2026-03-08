@@ -696,6 +696,11 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
             deps.annotations.loadAnnotationsFromArchive(annotations);
         }
 
+        // Render flight paths loaded from archive
+        if (deps.renderFlightPaths) {
+            await deps.renderFlightPaths();
+        }
+
         // Load walkthrough
         const walkthroughData = archiveLoader.getWalkthrough();
         if (walkthroughData) {
