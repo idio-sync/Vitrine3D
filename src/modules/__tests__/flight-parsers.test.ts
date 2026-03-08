@@ -176,4 +176,19 @@ describe('parseSrt', () => {
         const points = parseSrt(djiSrt);
         expect(points).toHaveLength(1);
     });
+    it('extracts altitude from rel_alt field', () => {
+        const srt = '1\n00:00:00,000 --> 00:00:01,000\n[latitude: 38.8893] [longitude: -77.0502] [rel_alt: 30.5]\n';
+        const points = parseSrt(srt);
+        expect(points[0].alt).toBeCloseTo(30.5, 1);
+    });
+    it('extracts altitude from abs_alt field', () => {
+        const srt = '1\n00:00:00,000 --> 00:00:01,000\n[latitude: 38.8893] [longitude: -77.0502] [abs_alt: 45.8]\n';
+        const points = parseSrt(srt);
+        expect(points[0].alt).toBeCloseTo(45.8, 1);
+    });
+    it('prefers rel_alt over abs_alt', () => {
+        const srt = '1\n00:00:00,000 --> 00:00:01,000\n[latitude: 38.8893] [longitude: -77.0502] [abs_alt: 100.0] [rel_alt: 30.0]\n';
+        const points = parseSrt(srt);
+        expect(points[0].alt).toBeCloseTo(30.0, 1);
+    });
 });
