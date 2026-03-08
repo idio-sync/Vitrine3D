@@ -19,8 +19,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { SplatMesh, PackedSplats, unpackSplats } from '@sparkjsdev/spark';
 import { ArchiveLoader } from './archive-loader.js';
-import { TIMING, ASSET_STATE, QUALITY_TIER } from './constants.js';
-import { getLodBudget, resolveQualityTier } from './quality-tier.js';
+import { TIMING, ASSET_STATE } from './constants.js';
 import { Logger, processMeshMaterials, computeMeshFaceCount, computeMeshVertexCount, computeTextureInfo, disposeObject, fetchWithProgress } from './utilities.js';
 import DxfParser from 'dxf-parser';
 import type { AppState, QualityTier } from '@/types.js';
@@ -61,18 +60,6 @@ export function getSplatFileType(fileNameOrUrl: string): string | undefined {
 }
 
 /**
- * Get the max splat count for the current quality tier.
- * Returns undefined (no cap) for HD, or the LOD budget for SD.
- */
-function getMaxSplatCount(): number | undefined {
-    const tier = resolveQualityTier(QUALITY_TIER.AUTO);
-    if (tier === QUALITY_TIER.SD) {
-        return getLodBudget(tier);
-    }
-    return undefined;
-}
-
-/**
  * Create a SplatMesh from a URL (blob: or http:) with file type detection.
  *
  * .sog (pcsogszip) files require a workaround: Spark 2.0's new PackedSplats worker
@@ -80,21 +67,14 @@ function getMaxSplatCount(): number | undefined {
  * We pre-decode via the exported unpackSplats() (old worker) then hand the
  * decoded PackedSplats to SplatMesh directly.
  *
- * On SD-tier devices, the decoded splat count is capped to the LOD budget
- * to prevent GPU memory exhaustion (Safari kills tabs at ~1.5 GB).
+ * Quality-tier differentiation is handled by the LOD tree (lodSplatCount budget),
+ * not by raw splat count truncation.
  */
 async function createSplatMesh(url: string, fileType?: string): Promise<any> {
     if (fileType === 'pcsogszip') {
-        const maxSplats = getMaxSplatCount();
         const response = await fetch(url);
         const fileBytes = new Uint8Array(await response.arrayBuffer());
         const decoded = await unpackSplats({ input: fileBytes, fileType: 'pcsogszip' }) as any;
-        // Cap splat count on low-end devices to prevent GPU OOM
-        if (maxSplats && decoded.numSplats > maxSplats) {
-            log.info(`Capping splat count from ${decoded.numSplats} to ${maxSplats} (SD tier)`);
-            decoded.numSplats = maxSplats;
-            decoded.packedArray = decoded.packedArray.slice(0, maxSplats * 4);
-        }
         const packedSplats = new PackedSplats(decoded);
         // Build LOD tree so lodSplatCount does intelligent selection instead of truncation
         try {
@@ -105,8 +85,6 @@ async function createSplatMesh(url: string, fileType?: string): Promise<any> {
         }
         return new SplatMesh({ packedSplats });
     }
-    // maxSplats cap only works for pre-decoded formats (pcsogszip above).
-    // For other formats (.ply, .spz, .splat), Spark decodes internally.
     return new SplatMesh({ url, lod: true, ...(fileType && { fileType }) });
 }
 
