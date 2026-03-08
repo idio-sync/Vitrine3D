@@ -96,11 +96,18 @@ async function createSplatMesh(url: string, fileType?: string): Promise<any> {
             decoded.packedArray = decoded.packedArray.slice(0, maxSplats * 4);
         }
         const packedSplats = new PackedSplats(decoded);
+        // Build LOD tree so lodSplatCount does intelligent selection instead of truncation
+        try {
+            await packedSplats.createLodSplats({ quality: false });
+            log.info(`LOD tree built for ${packedSplats.numSplats} splats (sog)`);
+        } catch (lodErr) {
+            log.warn('LOD tree computation failed, falling back to no-LOD:', lodErr);
+        }
         return new SplatMesh({ packedSplats });
     }
     // maxSplats cap only works for pre-decoded formats (pcsogszip above).
     // For other formats (.ply, .spz, .splat), Spark decodes internally.
-    return new SplatMesh({ url, ...(fileType && { fileType }) });
+    return new SplatMesh({ url, lod: true, ...(fileType && { fileType }) });
 }
 
 // Lazy-loaded E57 support
