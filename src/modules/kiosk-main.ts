@@ -1598,6 +1598,61 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             }
         }
 
+        // Load flight paths from archive
+        if (contentInfo.hasFlightPath && sceneManager.flightPathGroup) {
+            const fpEntries = archiveLoader.getFlightPathEntries();
+            if (fpEntries.length > 0) {
+                const { FlightPathManager } = await import('./flight-path.js');
+                const fpManager = new FlightPathManager(
+                    sceneManager.flightPathGroup,
+                    sceneManager.scene,
+                    sceneManager.camera,
+                    sceneManager.renderer
+                );
+                const fpTooltip = document.getElementById('flight-tooltip');
+                if (fpTooltip) fpManager.setupTooltip(fpTooltip);
+
+                for (const { key, entry } of fpEntries) {
+                    const fileData = await archiveLoader.extractFile(entry.file_name);
+                    if (!fileData) continue;
+                    const text = await fileData.blob.text();
+                    try {
+                        fpManager.importFromText(text, entry.original_name || entry.file_name);
+                    } catch (err) {
+                        log.warn(`Failed to load flight path ${key}:`, err);
+                    }
+                }
+
+                // Apply saved transform from manifest
+                if (fpManager.hasData) {
+                    const transform = archiveLoader.getEntryTransform(fpEntries[0].entry);
+                    const group = sceneManager.flightPathGroup;
+                    const fs = normalizeScale(transform.scale);
+                    if (transform.position.some((v: number) => v !== 0) ||
+                        transform.rotation.some((v: number) => v !== 0) ||
+                        fs.some((v: number) => v !== 1)) {
+                        group.position.fromArray(transform.position);
+                        group.rotation.set(...transform.rotation as [number, number, number]);
+                        group.scale.set(...fs as [number, number, number]);
+                    }
+                }
+
+                // Show toggle button if paths loaded
+                if (fpManager.hasData) {
+                    const toggleBtn = document.getElementById('btn-toggle-flightpath');
+                    if (toggleBtn) {
+                        toggleBtn.style.display = '';
+                        let fpVisible = true;
+                        toggleBtn.addEventListener('click', () => {
+                            fpVisible = !fpVisible;
+                            fpManager.setVisible(fpVisible);
+                            toggleBtn.classList.toggle('active', fpVisible);
+                        });
+                    }
+                }
+            }
+        }
+
         // Apply global alignment if present
         const globalAlignment = archiveLoader.getGlobalAlignment();
         if (globalAlignment) {
