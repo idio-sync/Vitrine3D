@@ -34,6 +34,7 @@ The application is built as two separate bundles: a **kiosk viewer** (`/`) for c
 - **Share dialog** — generate customized share links, embed codes, and QR codes with preset modes (kiosk, minimal, editor) and theme selection
 - **Clean archive URLs** — shareable `/view/{hash}` URLs that load archives in kiosk mode without query parameters
 - **Social link previews** — Open Graph, Twitter Card, and oEmbed support for rich previews when sharing viewer URLs on Slack, Discord, Twitter, WordPress, etc.
+- **Flight path import** — import DJI drone flight logs (CSV, KML/KMZ, SRT) as 3D path overlays with telemetry tooltips; multiple logs per archive; manual alignment via transform gizmo; displayed in both editor and kiosk viewer
 - **Collections** — organize archives into named collections; editorial-themed collection browser in kiosk mode; collection management in the library panel
 - **Library browser** — full-page editorial-themed archive and collection browser at `/library`
 - **Camera constraints** — lock orbit, pan, zoom, and height limits per-archive; applied automatically in kiosk mode
@@ -101,6 +102,11 @@ docker run -p 8080:80 \
 ### Parametric CAD
 - `.step` / `.stp` — ISO 10303 STEP (via [occt-import-js](https://github.com/kovacsv/occt-import-js) OpenCASCADE WASM)
 - `.iges` / `.igs` — Initial Graphics Exchange Specification (via [occt-import-js](https://github.com/kovacsv/occt-import-js) OpenCASCADE WASM)
+
+### Flight Logs
+- `.csv` — DJI flight log CSV (auto-detected column aliases for firmware variations)
+- `.kml` / `.kmz` — KML/KMZ flight tracks
+- `.srt` — DJI SRT subtitle telemetry
 
 ## Documentation
 
