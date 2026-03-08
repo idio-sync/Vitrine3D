@@ -499,6 +499,27 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
             cadStore.cadBlob = cadData.blob;
             state.assetStates[assetType] = ASSET_STATE.LOADED;
             return true;
+
+        } else if (assetType === 'flightpath') {
+            const flightEntries = archiveLoader.getFlightPathEntries();
+            if (flightEntries.length === 0) {
+                state.assetStates[assetType] = ASSET_STATE.UNLOADED;
+                return false;
+            }
+
+            const fpStore = getStore();
+            for (const { key, entry } of flightEntries) {
+                const fileData = await archiveLoader.extractFile(entry.file_name);
+                if (!fileData) continue;
+                fpStore.flightPathBlobs.push({
+                    blob: fileData.blob,
+                    fileName: entry.original_name || entry.file_name.split('/').pop() || entry.file_name
+                });
+            }
+
+            state.flightPathLoaded = true;
+            state.assetStates[assetType] = ASSET_STATE.LOADED;
+            return true;
         }
 
         return false;
@@ -530,7 +551,7 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
         state.archiveFileName = archiveName;
         state.archiveLoaded = true;
         // Reset asset states for new archive
-        state.assetStates = { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED, cad: ASSET_STATE.UNLOADED };
+        state.assetStates = { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED, cad: ASSET_STATE.UNLOADED, flightpath: ASSET_STATE.UNLOADED };
 
         // Prefill metadata panel from loaded archive
         deps.metadata.prefillMetadataFromArchive(manifest);
@@ -645,7 +666,7 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
 
         if (!primaryLoaded) {
             // Try loading any available asset
-            const fallbackTypes = ['splat', 'mesh', 'pointcloud', 'drawing', 'cad'].filter(t => t !== primaryType);
+            const fallbackTypes = ['splat', 'mesh', 'pointcloud', 'drawing', 'cad', 'flightpath'].filter(t => t !== primaryType);
             let anyLoaded = false;
             for (const type of fallbackTypes) {
                 deps.ui.showLoading(`Loading ${type} from archive...`);
@@ -714,7 +735,7 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
         }
 
         // === Phase 3: Background-load remaining assets (in parallel) ===
-        const remainingTypes = ['splat', 'mesh', 'pointcloud', 'drawing', 'cad'].filter(
+        const remainingTypes = ['splat', 'mesh', 'pointcloud', 'drawing', 'cad', 'flightpath'].filter(
             t => t !== primaryType && state.assetStates[t] === ASSET_STATE.UNLOADED
         );
         if (remainingTypes.length > 0) {
@@ -724,7 +745,8 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
                     (type === 'mesh' && contentInfo.hasMesh) ||
                     (type === 'pointcloud' && contentInfo.hasPointcloud) ||
                     (type === 'drawing' && contentInfo.hasDrawing) ||
-                    (type === 'cad' && contentInfo.hasCAD)
+                    (type === 'cad' && contentInfo.hasCAD) ||
+                    (type === 'flightpath' && contentInfo.hasFlightPath)
                 );
                 await Promise.all(typesToLoad.map(async (type) => {
                     log.info(`Background loading: ${type}`);
