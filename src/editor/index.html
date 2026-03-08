@@ -1256,6 +1256,14 @@
                             <label for="proxy-splat-input" class="prop-btn mt4" style="font-size:10px; cursor:pointer;">Splat Proxy (.ply, .spz)</label>
                             <input type="file" id="proxy-splat-input" accept=".ply,.spz,.ksplat,.sog,.splat" style="display:none" />
                             <span id="proxy-splat-filename" class="prop-hint">No proxy loaded</span>
+
+                        <div class="mt4" style="padding: 4px 0;">
+                            <label style="font-size: 10px; display: flex; align-items: flex-start; gap: 4px; cursor: pointer;">
+                                <input type="checkbox" id="chk-splat-lod" checked style="margin-top: 2px;" />
+                                <span>Generate Splat LOD at archive export</span>
+                            </label>
+                            <span class="prop-hint" style="font-size: 9px; margin-left: 18px; display: block;">Requires .spz or .ply input. .sog files use runtime LOD instead.</span>
+                        </div>
                         </div>
                     </div>
                 </div>

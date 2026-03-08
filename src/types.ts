@@ -83,6 +83,7 @@ export interface AppState {
     meshFormat: string | null;
     pointcloudFormat: string | null;
     splatFormat: string | null;
+    splatLodEnabled: boolean;             // "Generate Splat LOD at archive export" checkbox
     meshVertexCount?: number;              // Dynamically set by file-handlers.js after mesh load
     meshTextureInfo?: import('./modules/utilities.js').TextureInfo;  // Dynamically set after mesh load
     // Allow additional dynamic properties set by JS modules

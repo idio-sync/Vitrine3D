@@ -315,7 +315,8 @@ const state: AppState = {
     // Detected asset format extensions (set during file load)
     meshFormat: null,
     pointcloudFormat: null,
-    splatFormat: null
+    splatFormat: null,
+    splatLodEnabled: true,
 };
 
 // Scene manager instance (handles scene, camera, renderer, controls, lighting)
@@ -846,6 +847,15 @@ function setupDecimationPanel(): void {
     texQualityInput?.addEventListener('input', () => {
         if (texQualityLabel) texQualityLabel.textContent = `${Math.round(parseFloat(texQualityInput.value) * 100)}%`;
     });
+
+    // Splat LOD checkbox
+    const splatLodCheckbox = document.getElementById('chk-splat-lod') as HTMLInputElement | null;
+    if (splatLodCheckbox) {
+        splatLodCheckbox.checked = state.splatLodEnabled;
+        splatLodCheckbox.addEventListener('change', () => {
+            state.splatLodEnabled = splatLodCheckbox.checked;
+        });
+    }
 
     // Generate SD Proxy
     addListener('btn-generate-proxy', 'click', async () => {
