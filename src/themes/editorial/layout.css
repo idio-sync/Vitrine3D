@@ -225,215 +225,98 @@ body.kiosk-mode.kiosk-editorial .editorial-ribbon-rule {
     flex-shrink: 0;
 }
 
-/* Annotation capsule — unified toggle + counter + index */
+/* Annotation dropdown — matches matcap dropdown pattern */
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-capsule {
-    display: flex;
-    align-items: center;
+body.kiosk-mode.kiosk-editorial .editorial-anno-wrapper {
     position: relative;
-    border: none;
-    border-radius: 0;
-    padding: 0;
-    height: 24px;
-    transition: width 0.3s cubic-bezier(0.33, 1, 0.68, 1), padding 0.3s;
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
-    gap: 0;
 }
 
-/* Collapsed state — markers hidden, only bubble visible */
-body.kiosk-mode.kiosk-editorial .editorial-anno-capsule.collapsed .editorial-anno-counter {
-    width: 0;
-    opacity: 0;
-    overflow: hidden;
-    padding: 0;
-    pointer-events: none;
-}
-
-/* Speech bubble toggle button */
-body.kiosk-mode.kiosk-editorial .editorial-anno-bubble {
-    background: none;
-    border: none;
-    color: var(--kiosk-text-muted);
-    cursor: pointer;
-    padding: 3px 5px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: color 0.2s, opacity 0.2s;
-    flex-shrink: 0;
-    border-radius: 50%;
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-bubble:hover {
-    color: var(--kiosk-accent);
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-bubble.off {
-    opacity: 0.4;
-    color: var(--kiosk-text-faint);
-}
-
-/* Gold fill when an annotation is selected */
-body.kiosk-mode.kiosk-editorial .editorial-anno-bubble.has-selection svg {
-    fill: var(--kiosk-accent);
-    stroke: var(--kiosk-accent);
-    fill-opacity: 0.35;
-}
-
-/* Counter wrapper — prev, fraction, next */
-body.kiosk-mode.kiosk-editorial .editorial-anno-counter {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    transition: width 0.3s cubic-bezier(0.33, 1, 0.68, 1), opacity 0.25s;
-    overflow: hidden;
-    white-space: nowrap;
-}
-
-/* Fraction display (e.g. "02 / 06") */
-body.kiosk-mode.kiosk-editorial .editorial-anno-fraction {
-    font-family: var(--kiosk-font-body);
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--kiosk-text-muted);
-    letter-spacing: 0.04em;
-    padding: 2px 4px;
-    cursor: pointer;
-    background: none;
-    border: none;
-    white-space: nowrap;
-    transition: color 0.15s;
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-fraction:hover {
-    color: var(--kiosk-text-primary);
-}
-
-/* Prev / Next arrow buttons */
-body.kiosk-mode.kiosk-editorial .editorial-anno-nav {
-    background: none;
-    border: none;
-    color: var(--kiosk-text-muted);
-    cursor: pointer;
-    font-size: 0.85rem;
-    line-height: 24px;
-    height: 24px;
-    padding: 0 4px;
-    transition: color 0.15s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-nav:hover {
-    color: var(--kiosk-accent);
-}
-
-/* Index popover — annotation list */
-body.kiosk-mode.kiosk-editorial .editorial-anno-index {
-    display: none;
+/* Count badge on the icon button */
+body.kiosk-mode.kiosk-editorial .editorial-anno-badge {
     position: absolute;
-    bottom: calc(100% + 8px);
-    right: 0;
-    min-width: 200px;
-    max-width: 280px;
-    max-height: 260px;
-    overflow-y: auto;
-    background: rgba(var(--kiosk-surface-rgb), 0.94);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border: 1px solid var(--kiosk-border-subtle);
-    border-radius: 6px;
-    padding: 4px 0;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    z-index: 200;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(var(--kiosk-accent-rgb), 0.3) transparent;
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-index.open {
-    display: block;
-    animation: editorialIndexIn 0.2s ease-out;
-}
-
-@keyframes editorialIndexIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-index-item {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    width: 100%;
-    padding: 6px 14px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    text-align: left;
+    top: 0;
+    right: 2px;
+    min-width: 13px;
+    height: 13px;
+    font-family: var(--kiosk-font-body);
+    font-size: 0.48rem;
+    font-weight: 700;
+    line-height: 13px;
+    text-align: center;
+    color: var(--kiosk-bg);
+    background: var(--kiosk-text-muted);
+    border-radius: 7px;
+    padding: 0 3px;
+    pointer-events: none;
     transition: background 0.15s;
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-index-item:hover {
-    background: rgba(var(--kiosk-accent-rgb), 0.08);
+body.kiosk-mode.kiosk-editorial .editorial-marker-toggle.active ~ .editorial-anno-badge,
+body.kiosk-mode.kiosk-editorial .editorial-anno-wrapper:hover .editorial-anno-badge {
+    background: var(--kiosk-accent);
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-index-item.active {
-    background: rgba(var(--kiosk-accent-rgb), 0.12);
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-index-num {
-    font-family: var(--kiosk-font-body);
-    font-size: 0.68rem;
+/* Number prefix inside annotation items */
+body.kiosk-mode.kiosk-editorial .editorial-anno-item-num {
     font-weight: 700;
-    color: var(--kiosk-text-muted);
+    color: var(--kiosk-text-faint);
+    margin-right: 8px;
+    font-size: 0.58rem;
     letter-spacing: 0.04em;
     flex-shrink: 0;
-    min-width: 18px;
-    transition: color 0.15s;
+    min-width: 14px;
+    transition: color 0.1s;
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-index-item:hover .editorial-anno-index-num {
+body.kiosk-mode.kiosk-editorial .editorial-matcap-item:hover .editorial-anno-item-num {
     color: var(--kiosk-text-secondary);
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-index-item.active .editorial-anno-index-num {
+body.kiosk-mode.kiosk-editorial .editorial-matcap-item.active .editorial-anno-item-num {
     color: var(--kiosk-accent);
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-index-title {
-    font-family: var(--kiosk-font-body);
-    font-size: 0.72rem;
-    font-weight: 500;
+/* Prev/next navigation row inside dropdown */
+body.kiosk-mode.kiosk-editorial .editorial-anno-nav-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 2px 10px;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-anno-nav-btn {
+    background: none;
+    border: none;
     color: var(--kiosk-text-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
+    cursor: pointer;
+    font-size: 0.65rem;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 4px 10px;
+    transition: color 0.1s, background 0.1s;
+    flex: 1;
+    text-align: center;
     white-space: nowrap;
-    transition: color 0.15s;
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-index-item:hover .editorial-anno-index-title {
+body.kiosk-mode.kiosk-editorial .editorial-anno-nav-btn:hover {
     color: var(--kiosk-text-primary);
+    background: rgba(255, 255, 255, 0.06);
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-index-item.active .editorial-anno-index-title {
-    color: var(--kiosk-text-primary);
+body.kiosk-mode.kiosk-editorial .editorial-anno-nav-sep {
+    width: 1px;
+    height: 10px;
+    background: var(--kiosk-border-subtle);
+    flex-shrink: 0;
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-index::-webkit-scrollbar {
-    width: 3px;
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-index::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-index::-webkit-scrollbar-thumb {
-    background: rgba(var(--kiosk-accent-rgb), 0.3);
-    border-radius: 2px;
-}
-
-/* Walkthrough reuses dash class for stop sequences */
+/* Walkthrough sequence dash */
 body.kiosk-mode.kiosk-editorial .editorial-anno-seq-dash {
     width: 20px;
     height: 1px;
@@ -2896,18 +2779,12 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
         margin: 0 6px 0 8px;
     }
 
-    /* Compact the annotation capsule for narrow viewports */
-    body.kiosk-mode.kiosk-editorial .editorial-anno-capsule {
-        height: 22px;
-        border-radius: 2px;
-    }
-
-    body.kiosk-mode.kiosk-editorial .editorial-anno-fraction {
-        font-size: 0.62rem;
-    }
-
-    body.kiosk-mode.kiosk-editorial .editorial-anno-nav {
-        font-size: 0.85rem;
+    /* Compact the annotation badge for narrow viewports */
+    body.kiosk-mode.kiosk-editorial .editorial-anno-badge {
+        font-size: 0.44rem;
+        min-width: 11px;
+        height: 11px;
+        line-height: 11px;
     }
 
     /* Overflow menu — show button, tools become dropdown */
