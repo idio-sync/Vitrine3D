@@ -10,7 +10,7 @@ There is no open, standards-aligned container that keeps scan data spatially reg
 
 ## What Vitrine3D Is
 
-Vitrine3D is a **browser-based 3D viewer and authoring tool** for assembling and delivering scan data. It combines a full-featured **Editor** for composing scenes with a client-facing **Kiosk Viewer** for polished presentation — all built around an open, ZIP-based archive format (`.a3d` / `.a3z`) designed for long-term preservation.
+Vitrine3D is a **browser-based 3D viewer and authoring tool** for assembling and delivering scan data. It combines a full-featured **Editor** for composing scenes with a client-facing **Kiosk Viewer** for polished presentation — all built around an open, ZIP-based archive format (`.ddim`) designed for long-term preservation.
 
 Think of it as **a publishing platform for 3D captures**: load your assets, align them in shared space, annotate surfaces, fill in preservation-grade metadata, export a single archive, and share a link your client can open in any modern browser.
 
@@ -37,7 +37,7 @@ Think of it as **a publishing platform for 3D captures**: load your assets, alig
 - **Point-to-point measurement** — two-click distance tool with configurable units (m/cm/mm/in/ft)
 - **Guided walkthroughs** — author camera tours with fly/fade/cut transitions, dwell times, and annotation links
 
-### Archive Format (.a3d / .a3z)
+### Archive Format (.ddim)
 - **Open, ZIP-based container** — bundle all assets, metadata, alignment, annotations, and screenshots into a single file
 - **SHA-256 integrity hashing** — streaming verification for files over 10 MB
 - **LOD proxy support** — include pre-simplified assets for mobile/low-bandwidth clients
@@ -72,7 +72,7 @@ Think of it as **a publishing platform for 3D captures**: load your assets, alig
        
 ```
 
-- **Editor** (`/editor/`) — Full authoring environment: load assets, align spatially, annotate, edit metadata, author walkthroughs, capture screenshots, and export `.a3d` archives.
+- **Editor** (`/editor/`) — Full authoring environment: load assets, align spatially, annotate, edit metadata, author walkthroughs, capture screenshots, and export `.ddim` archives.
 - **Kiosk Viewer** (`/`) — Lightweight, read-only presentation layer. Loads archives via URL, applies themes, enforces camera constraints. No editor code in this bundle, but viewer tools are included on a per-theme basis.
 
 Both are built as **separate Vite bundles** from the same codebase, sharing core modules (scene management, file handlers, annotations, walkthrough engine) without duplication.
@@ -122,7 +122,7 @@ Flight Path ----------> DJI telemetry parsing, 3D path rendering, hover tooltips
 | | Sketchfab | Potree | Custom Portals | **Vitrine3D** |
 |---|---|---|---|---|
 | Multi-format overlay | Limited | Point clouds only | Varies | Splats + Meshes + Point Clouds + CAD |
-| Open archive format | No | No | No | .a3d/.a3z (ZIP-based, documented spec) |
+| Open archive format | No | No | No | .ddim (ZIP-based, documented spec) |
 | Preservation metadata | None | None | Minimal | Dublin Core, PRONOM, SIP compliance |
 | Spatial alignment tools | None | None | Rare | ICP, landmark, auto-align |
 | Self-hosted | No | Yes | Yes | Yes (Docker or static) |
@@ -157,7 +157,7 @@ Flight Path ----------> DJI telemetry parsing, 3D path rendering, hover tooltips
 - Digital signatures (ECDSA) for archive integrity
 - Advanced measurement (polyline, area, volume)
 - Institutional integration (BagIt, OCFL, Archivematica export)
-- PRONOM format registration for `.a3d`
+- PRONOM format registration for `.ddim`
 
 ---
 

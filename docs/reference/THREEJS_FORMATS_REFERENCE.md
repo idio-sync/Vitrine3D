@@ -298,7 +298,7 @@ Ranked by combined relevance across DDI's scanning, archival, client delivery, a
 | 14 | **8** | **USDZ** (USDZExporter) | "View in AR" on iPhone for museum clients |
 | 15 | **8** | **Meshoptimizer / Basis** | Compression pipeline for optimized web delivery |
 
-> **Also supported but not listed above:** E57 point clouds via `three-e57-loader` (1.2.0) + `web-e57` WASM. STEP/IGES CAD via `occt-import-js` (OpenCASCADE WASM). HDR environment maps via `RGBELoader`. Custom `.a3d`/`.a3z` archive format (ZIP-based, proprietary).
+> **Also supported but not listed above:** E57 point clouds via `three-e57-loader` (1.2.0) + `web-e57` WASM. STEP/IGES CAD via `occt-import-js` (OpenCASCADE WASM). HDR environment maps via `RGBELoader`. Custom `.ddim` archive format (ZIP-based; formerly `.a3d`/`.a3z`, still accepted on import).
 
 ---
 

@@ -448,7 +448,7 @@ export interface MetadataSummary {
 }
 
 export interface CreateArchiveOptions {
-    format?: 'a3d' | 'a3z';
+    format?: 'ddim' | 'zip';
     includeHashes?: boolean;
 }
 
@@ -1977,7 +1977,7 @@ export class ArchiveCreator {
         log.debug('✓ downloadArchive called with options:', options);
         const {
             filename = 'archive',
-            format = 'a3d',
+            format = 'ddim',
             ...createOptions
         } = options;
 
@@ -1995,7 +1995,7 @@ export class ArchiveCreator {
                 const path = await save({
                     title: 'Save Archive',
                     defaultPath: downloadName,
-                    filters: [{ name: '3D Archive', extensions: [format] }],
+                    filters: [{ name: 'Direct Dimensions Archive', extensions: [format] }],
                 });
                 if (path) {
                     const buffer = new Uint8Array(await blob.arrayBuffer());

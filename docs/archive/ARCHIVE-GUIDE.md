@@ -1,6 +1,6 @@
 # Archive Format Guide
 
-The archive container format (`.a3d` / `.a3z`) bundles 3D assets, metadata, alignment data, annotations, and preservation information into a single distributable file. It is designed for long-term archival and interoperability, integrating with the [archive-3d](https://github.com/idio-sync/archive-3d) specification.
+The archive container format (`.ddim`) bundles 3D assets, metadata, alignment data, annotations, and preservation information into a single distributable file. It is designed for long-term archival and interoperability, integrating with the [archive-3d](https://github.com/idio-sync/archive-3d) specification. Legacy `.a3d` and `.a3z` archives are still accepted on import.
 
 For the formal specification, see [SPECIFICATION.md](SPECIFICATION.md).
 
@@ -9,7 +9,7 @@ For the formal specification, see [SPECIFICATION.md](SPECIFICATION.md).
 Archives are ZIP files containing:
 
 ```
-scene.a3d/
+scene.ddim/
   manifest.json              # Metadata, file listings, transforms, annotations
   README.txt                 # Plain-text guide to archive contents (auto-generated)
   preview.jpg                # Thumbnail preview (optional, auto-captured or manual)
@@ -52,16 +52,16 @@ For field-by-field documentation, types, and requirement levels, see [SPECIFICAT
 
 ## Loading Archives
 
-**From the UI**: Click "From File" in the Load Archive section and select a `.a3d` or `.a3z` file.
+**From the UI**: Click "From File" in the Load Archive section and select a `.ddim` file (or legacy `.a3d` / `.a3z`).
 
 **From a URL parameter**:
 ```
-https://viewer.example.com?archive=/path/to/scene.a3d
+https://viewer.example.com?archive=/path/to/scene.ddim
 ```
 
 **Via Docker**:
 ```bash
-docker run -p 8080:80 -e DEFAULT_ARCHIVE_URL="/assets/scene.a3d" vitrine3d
+docker run -p 8080:80 -e DEFAULT_ARCHIVE_URL="/assets/scene.ddim" vitrine3d
 ```
 
 When an archive is loaded:
@@ -76,7 +76,7 @@ When an archive is loaded:
 
 Click the **Export Archive** toolbar button to save the current scene:
 
-1. Choose format: `.a3d` (standard) or `.a3z` (compressed)
+1. Choose format: `.ddim` (standard)
 2. The export bundles all loaded assets, current transforms, annotations, metadata, and image attachments
 3. SHA-256 integrity hashes are computed for each asset file (requires HTTPS; a warning is shown on HTTP)
 4. A preview thumbnail is auto-captured from the current viewport (or uses a manual preview if one was set via the viewfinder)
@@ -86,7 +86,7 @@ Click the **Export Archive** toolbar button to save the current scene:
 
 ## Designing for Long-Term Preservation
 
-The `.a3d` / `.a3z` archive container is designed with digital preservation as a first-class concern. For institutions capturing real-world objects — buildings, artifacts, archaeological sites, heritage assets — the format addresses key challenges in long-term 3D data archival.
+The `.ddim` archive container is designed with digital preservation as a first-class concern. For institutions capturing real-world objects — buildings, artifacts, archaeological sites, heritage assets — the format addresses key challenges in long-term 3D data archival.
 
 ### Self-Describing and Self-Contained
 

@@ -262,7 +262,7 @@ export async function loadArchiveFromUrl(url: string, deps: ArchivePipelineDeps)
         }
 
         const archiveLoader = new ArchiveLoader();
-        const fileName = url.split('/').pop() || 'archive.a3d';
+        const fileName = url.split('/').pop() || 'archive.ddim';
 
         // Try Range-based streaming first — only downloads the ZIP central
         // directory (~64KB). Each subsequent extractFile() call fetches just

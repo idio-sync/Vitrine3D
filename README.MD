@@ -8,7 +8,7 @@ The application is built as two separate bundles: a **kiosk viewer** (`/`) for c
 
 ## Features
 
-- **Archive container support** (.a3d, .a3z) — bundle all assets, metadata, and multi-data alignment into a single file
+- **Archive container support** (.ddim) — bundle all assets, metadata, and multi-data alignment into a single file
 - Load and display **3D models** (.glb, .gltf, .obj)
 - Load and display **Gaussian splat** files (.ply, .splat, .ksplat, .spz, .sog)
 - Load and display **E57 point clouds** (.e57) via [three-e57-loader](https://www.npmjs.com/package/three-e57-loader)
@@ -61,7 +61,7 @@ npm run docker:run      # http://localhost:8080
 
 # Or with pre-loaded archive
 docker run -p 8080:80 \
-  -e DEFAULT_ARCHIVE_URL="https://example.com/scene.a3d" \
+  -e DEFAULT_ARCHIVE_URL="https://example.com/scene.ddim" \
   vitrine3d
 
 # Or with pre-loaded files
@@ -75,8 +75,7 @@ docker run -p 8080:80 \
 ## Supported Formats
 
 ### Archive Containers
-- `.a3d` — Archive 3D container with metadata (ZIP-based, uncompressed)
-- `.a3z` — Archive 3D container with metadata (ZIP-based, compressed) - experimental
+- `.ddim` — Direct Dimensions archive container with metadata (ZIP-based)
 
 ### 3D Models (via Three.js)
 - `.glb` — Binary glTF (Draco-compressed GLBs supported via DRACOLoader)

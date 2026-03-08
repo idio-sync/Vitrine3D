@@ -13,7 +13,7 @@ import { Logger } from './utilities.js';
 const log = Logger.getLogger('ArchiveLoader');
 
 // Supported archive extensions
-const _ARCHIVE_EXTENSIONS = ['a3d', 'a3z'];
+const _ARCHIVE_EXTENSIONS = ['ddim', 'a3d', 'a3z'];
 
 // Supported file formats within archives
 const SUPPORTED_FORMATS: Record<string, string[]> = {

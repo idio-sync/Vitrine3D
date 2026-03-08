@@ -170,7 +170,7 @@
             <!-- ── Output ──────────────────────────────────── -->
 
             <!-- Export — Package as archive -->
-            <button class="tool-btn" data-tool="export" data-tooltip="Export  E" id="btn-export-archive" title="Export scene as .a3d/.a3z archive">
+            <button class="tool-btn" data-tool="export" data-tooltip="Export  E" id="btn-export-archive" title="Export scene as .ddim archive">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="7 10 12 15 17 10"/>
@@ -324,20 +324,20 @@
                 <div class="library-upload" id="library-upload">
                     <div class="library-upload-content">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12V3"/><path d="M4 6l4-4 4 4"/><path d="M2 14h12"/></svg>
-                        <span>Drop .a3d or .a3z files here, or <button class="library-upload-browse" id="library-upload-browse">browse</button></span>
+                        <span>Drop .ddim files here, or <button class="library-upload-browse" id="library-upload-browse">browse</button></span>
                     </div>
                     <div class="library-upload-progress">
                         <span class="library-progress-name" id="library-progress-name"></span>
                         <div class="library-progress-track"><div class="library-progress-fill" id="library-progress-fill"></div></div>
                         <span class="library-progress-pct" id="library-progress-pct">0%</span>
                     </div>
-                    <input type="file" id="library-file-input" accept=".a3d,.a3z" multiple hidden>
+                    <input type="file" id="library-file-input" accept=".ddim,.a3d,.a3z" multiple hidden>
                 </div>
                 <div class="library-gallery" id="library-gallery"></div>
                 <div class="library-empty" id="library-empty" style="display:none">
                     <svg width="40" height="40" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1" opacity="0.2"><path d="M16 6l10 5.5v9L16 26 6 20.5v-9L16 6z"/><path d="M16 15.5V26"/><path d="M6 11.5L16 17l10-5.5"/></svg>
                     <p>No archives yet</p>
-                    <p class="library-empty-hint">Upload .a3d or .a3z files to build your library</p>
+                    <p class="library-empty-hint">Upload .ddim files to build your library</p>
                 </div>
                 <div class="library-auth" id="library-auth" style="display:none">
                     <p>Authentication required</p>
@@ -1059,10 +1059,10 @@
                     </div>
                     <div class="prop-section-body">
                         <div class="prop-btn-row">
-                            <label for="archive-input" class="prop-btn accent" style="cursor:pointer; margin-bottom:0;">Open .a3d / .a3z</label>
+                            <label for="archive-input" class="prop-btn accent" style="cursor:pointer; margin-bottom:0;">Open .ddim</label>
                             <button class="prop-btn" id="btn-load-archive-url" style="font-size:10px; color:var(--text-muted); margin-bottom:0;">From URL...</button>
                         </div>
-                        <input type="file" id="archive-input" accept=".a3d,.a3z" style="display:none" />
+                        <input type="file" id="archive-input" accept=".ddim,.a3d,.a3z" style="display:none" />
                         <span id="archive-filename" class="prop-hint">Loads a complete scene with all assets and metadata</span>
                     </div>
                 </div>
@@ -2505,12 +2505,12 @@
                         </div>
                         <div class="prop-section-body">
                             <div class="radio-row">
-                                <input type="radio" name="export-format" value="a3d" id="fmt-a3d" checked>
-                                <label for="fmt-a3d">.a3d (Standard)</label>
+                                <input type="radio" name="export-format" value="ddim" id="fmt-ddim" checked>
+                                <label for="fmt-ddim">.ddim (Direct Dimensions Archive)</label>
                             </div>
                             <div class="radio-row">
-                                <input type="radio" name="export-format" value="a3z" id="fmt-a3z">
-                                <label for="fmt-a3z">.a3z (Compressed)</label>
+                                <input type="radio" name="export-format" value="zip" id="fmt-zip">
+                                <label for="fmt-zip">.zip (Standard ZIP)</label>
                             </div>
                         </div>
                     </div>

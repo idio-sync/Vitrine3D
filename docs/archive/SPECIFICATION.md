@@ -5,6 +5,8 @@
 **Status:** Draft
 **Authors:** archive-3d contributors
 
+> **Extension Note:** As of 2026, this format uses the `.ddim` file extension (Direct Dimensions archive). The legacy extensions `.a3d` (uncompressed) and `.a3z` (compressed) are still accepted on import for backward compatibility. All new archives should use `.ddim`. References to `.a3d`/`.a3z` throughout this document describe the legacy naming; the format structure and manifest schema are unchanged.
+
 ---
 
 ## Abstract
@@ -54,7 +56,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 | Term | Definition |
 |------|-----------|
-| **Archive** | A single `.a3d` or `.a3z` file conforming to this specification |
+| **Archive** | A single `.ddim` file (or legacy `.a3d` / `.a3z`) conforming to this specification |
 | **Manifest** | The `manifest.json` file within the archive describing its contents and metadata |
 | **Asset** | A 3D data file (mesh, point cloud, Gaussian splat) or supporting file (thumbnail) within the archive |
 | **Data entry** | A record in the manifest's `data_entries` object describing one asset |
@@ -76,10 +78,11 @@ The format comes in two variants:
 
 | Extension | Compression | MIME Type | Use Case |
 |-----------|-------------|-----------|----------|
-| `.a3d` | STORE (uncompressed) | `application/zip` | Default. Fast extraction, predictable size. Best when assets are already compressed (GLB, SPZ). |
-| `.a3z` | DEFLATE (compressed) | `application/zip` | Reduced file size. Best when assets contain uncompressed data (PLY, OBJ). |
+| `.ddim` | STORE (uncompressed) | `application/zip` | Current standard. Fast extraction, predictable size. Best when assets are already compressed (GLB, SPZ). |
+| `.a3d` | STORE (uncompressed) | `application/zip` | Legacy. Still accepted on import. |
+| `.a3z` | DEFLATE (compressed) | `application/zip` | Legacy (compressed variant). Still accepted on import. |
 
-Both variants are valid ZIP files. The extension signals the expected compression strategy but does not change the physical format.
+All variants are valid ZIP files. The extension signals the expected compression strategy but does not change the physical format. New archives SHOULD use `.ddim`.
 
 ---
 
@@ -93,9 +96,9 @@ Readers MUST validate the ZIP magic bytes (`0x50 0x4B`) at offset 0 before proce
 
 ### 3.2 Compression
 
-For `.a3d` archives, packers SHOULD use STORE (method 0) for asset files and MAY use DEFLATE (method 8) for `manifest.json`.
+For `.ddim` and `.a3d` archives, packers SHOULD use STORE (method 0) for asset files and MAY use DEFLATE (method 8) for `manifest.json`.
 
-For `.a3z` archives, packers SHOULD use DEFLATE (method 8) with compression level 6 as the default. Packers SHOULD use STORE (method 0) for assets in already-compressed formats (GLB, SPZ, SOG, JPEG, PNG, WebP, E57).
+For `.a3z` archives (legacy compressed variant), packers SHOULD use DEFLATE (method 8) with compression level 6 as the default. Packers SHOULD use STORE (method 0) for assets in already-compressed formats (GLB, SPZ, SOG, JPEG, PNG, WebP, E57).
 
 Readers MUST support both STORE and DEFLATE compression methods regardless of file extension.
 
@@ -112,7 +115,7 @@ All text content within the archive (manifest, filenames) MUST be encoded as UTF
 An archive MUST contain the following at minimum:
 
 ```
-archive.a3d
+archive.ddim
 ├── manifest.json                    # REQUIRED
 └── <at least one 3D asset file>     # REQUIRED
 ```
@@ -122,7 +125,7 @@ archive.a3d
 Archives SHOULD follow this directory structure:
 
 ```
-archive.a3d
+archive.ddim
 ├── manifest.json
 ├── README.txt                       # RECOMMENDED. Plain-text guide to archive contents
 ├── assets/
@@ -896,8 +899,9 @@ Proposed future registration: `application/vnd.archive-3d+zip`.
 
 | Extension | Usage |
 |-----------|-------|
-| `.a3d` | Archive-3D container (uncompressed assets) |
-| `.a3z` | Archive-3D container (compressed assets) |
+| `.ddim` | Direct Dimensions archive container (current standard) |
+| `.a3d` | Legacy archive container (uncompressed assets; still accepted on import) |
+| `.a3z` | Legacy archive container (compressed assets; still accepted on import) |
 
 ---
 

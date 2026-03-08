@@ -7,7 +7,7 @@
 //   FRAME_ANCESTORS=origins   CSP frame-ancestors for iframe embedding
 //
 // Supports URL parameters for embedding:
-//   ?archive=URL     - Archive container file (.a3d, .a3z) - takes priority over splat/model
+//   ?archive=URL     - Archive container file (.ddim) - takes priority over splat/model
 //   ?splat=URL       - Default splat file to load
 //   ?model=URL       - Default model file to load
 //   ?pointcloud=URL  - Default E57 point cloud file to load
@@ -36,12 +36,12 @@
 //   add them to the ALLOWED_EXTERNAL_DOMAINS array below.
 //
 // Examples:
-//   viewer.website.com?archive=/assets/scene.a3d&controls=minimal
+//   viewer.website.com?archive=/assets/scene.ddim&controls=minimal
 //   viewer.website.com?splat=/assets/scene.ply&model=/assets/model.glb&controls=minimal
 //   viewer.website.com?splat=https://example.com/file.ply&controls=none&mode=split
 //   viewer.website.com?splat=/scene.ply&model=/model.glb&alignment=/alignment.json
 //   viewer.website.com?splat=/scene.ply&sp=0,1,0&sr=0,3.14,0&ss=1.5
-//   viewer.website.com?archive=/scene.a3d&toolbar=hide&sidebar=view (viewer mode)
+//   viewer.website.com?archive=/scene.ddim&toolbar=hide&sidebar=view (viewer mode)
 
 (function() {
     // Parse URL parameters

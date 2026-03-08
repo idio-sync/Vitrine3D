@@ -239,7 +239,7 @@ const state: KioskState = {
 // =============================================================================
 
 const FILE_CATEGORIES = {
-    archive:    ['.a3d', '.a3z'],
+    archive:    ['.ddim', '.a3d', '.a3z'],
     model:      ['.glb', '.gltf', '.obj', '.stl'],
     splat:      ['.ply', '.splat', '.ksplat', '.spz', '.sog'],
     pointcloud: ['.e57']
@@ -693,13 +693,13 @@ function createFilePicker(): HTMLElement {
                 <button id="kiosk-picker-btn" type="button">Select File</button>
                 <p class="kiosk-picker-hint">or drag and drop it here</p>
                 <p class="kiosk-picker-formats">
-                    Archives: .a3d, .a3z<br>
+                    Archives: .ddim<br>
                     Models: .glb, .gltf, .obj, .stl<br>
                     Splats: .ply, .splat, .ksplat, .spz, .sog<br>
                     Point Clouds: .e57
                 </p>
             </div>
-            <input type="file" id="kiosk-picker-input" accept=".a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57,*/*" multiple style="display:none">
+            <input type="file" id="kiosk-picker-input" accept=".ddim,.a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57,*/*" multiple style="display:none">
         </div>
     `;
 
@@ -829,7 +829,7 @@ function setupFilePicker(): void {
                 log.info('Tauri: loading archive from filesystem path:', archiveUrl);
                 (async () => {
                     try {
-                        await loadArchiveFromIpc(archiveUrl, archiveUrl.split(/[\\/]/).pop() || 'archive.a3d');
+                        await loadArchiveFromIpc(archiveUrl, archiveUrl.split(/[\\/]/).pop() || 'archive.ddim');
                     } catch {
                         loadArchiveFromTauri(archiveUrl);
                     }
@@ -839,7 +839,7 @@ function setupFilePicker(): void {
                 // to an asset protocol URL (https://asset.localhost/...) which supports
                 // HTTP Range requests. The frontend dist server (tauri://localhost/) does
                 // NOT support Range — it returns 200 with the full file every time.
-                const name = archiveUrl.split('/').pop()?.split('?')[0] || 'archive.a3d';
+                const name = archiveUrl.split('/').pop()?.split('?')[0] || 'archive.ddim';
                 (async () => {
                     try {
                         const absPath = await window.__TAURI__!.path.resolveResource(archiveUrl);
@@ -884,7 +884,7 @@ function setupFilePicker(): void {
         // content:// URIs — the Rust ipc_open_file command transparently copies
         // these to a temp file via ContentResolver, so the IPC path works on
         // all platforms. Skip extension filters on Android (custom extensions
-        // like .a3d/.a3z have no MIME mapping and become unselectable).
+        // like .ddim/.a3d/.a3z have no MIME mapping and become unselectable).
         if (window.__TAURI__) {
             const isAndroid = /android/i.test(navigator.userAgent);
             btn.addEventListener('click', async () => {
@@ -912,8 +912,8 @@ function setupFilePicker(): void {
                         await ipcCloseFile(probeId);
 
                         const isZip = header.length >= 4 && header[0] === 0x50 && header[1] === 0x4B;
-                        const name = isZip && !result.name.match(/\.(a3d|a3z|zip)$/i)
-                            ? result.name.replace(/\.[^.]*$/, '') + '.a3d'  // Assume archive
+                        const name = isZip && !result.name.match(/\.(ddim|a3d|a3z|zip)$/i)
+                            ? result.name.replace(/\.[^.]*$/, '') + '.ddim'  // Assume archive
                             : result.name;
 
                         if (isZip) {
@@ -1289,7 +1289,7 @@ async function loadArchiveFromUrl(url: string): Promise<void> {
         log.info('Quality tier resolved after benchmark:', state.qualityResolved);
     }
 
-    const fileName = url.split('/').pop()?.split('?')[0] || 'archive.a3d';
+    const fileName = url.split('/').pop()?.split('?')[0] || 'archive.ddim';
 
     // Try Range-based loading first — only downloads ~64KB central directory,
     // then extracts files on demand via targeted HTTP Range requests.
@@ -1343,7 +1343,7 @@ async function loadArchiveFromTauri(filePath: string): Promise<void> {
         const { readFile } = window.__TAURI__.fs;
         updateProgress(5, 'Reading file...');
         const contents = await readFile(filePath);
-        const fileName = filePath.split(/[\\/]/).pop() || 'archive.a3d';
+        const fileName = filePath.split(/[\\/]/).pop() || 'archive.ddim';
         const file = new File([contents], fileName);
         state.archiveSourceUrl = null;
         handleArchiveFile(file);
@@ -1370,7 +1370,7 @@ async function loadBundledArchiveFromFetch(url: string): Promise<void> {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
         const buffer = await response.arrayBuffer();
-        const fileName = url.split('/').pop()?.split('?')[0] || 'archive.a3d';
+        const fileName = url.split('/').pop()?.split('?')[0] || 'archive.ddim';
         const file = new File([buffer], fileName);
         state.archiveSourceUrl = null;
         handleArchiveFile(file);
@@ -4126,7 +4126,7 @@ function populateSourceFilesList(archiveLoader: ArchiveLoader): void {
     // Guidance note
     const note = document.createElement('div');
     note.style.cssText = 'font-size:0.75em;opacity:0.5;margin-top:8px;font-style:italic;';
-    note.textContent = 'Source files are included in the .a3d archive. Unpack to access.';
+    note.textContent = 'Source files are included in the .ddim archive. Unpack to access.';
     content.appendChild(note);
 
     viewContent.appendChild(section);
@@ -4418,12 +4418,12 @@ function createExportSection(): void {
     // --- Full archive download (only when loaded from URL) ---
     if (state.archiveSourceUrl) {
         const archiveBtn = createExportButton(
-            'Download Full Archive (.a3d)',
-            `${baseName}.a3d`,
+            'Download Full Archive (.ddim)',
+            `${baseName}.ddim`,
             async (_btn) => {
                 const a = document.createElement('a');
                 a.href = state.archiveSourceUrl;
-                a.download = `${baseName}.a3d`;
+                a.download = `${baseName}.ddim`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);

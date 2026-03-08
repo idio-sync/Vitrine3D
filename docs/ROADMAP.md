@@ -67,7 +67,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [ ] Add comprehensive JSDoc type annotations to any remaining `.js` exported functions
 
 ### Versioning & Collaboration
-- [ ] Build a diff tool to compare two `.a3d` archives (file changes, metadata differences, annotation changes)
+- [ ] Build a diff tool to compare two `.ddim` archives (file changes, metadata differences, annotation changes)
 - [ ] Add annotation status workflow: `draft` -> `submitted` -> `reviewed` -> `confirmed`
 - [ ] Support multiple annotation layers that can be toggled independently
 
@@ -100,12 +100,12 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [ ] Display alignment quality metrics (RMSE, overlap percentage) in the UI
 
 ### Format Registration
-- [ ] Register `.a3d` format with PRONOM for a format ID
-- [ ] Register an IANA media type (`application/vnd.archive-3d+zip`)
+- [ ] Register `.ddim` format with PRONOM for a format ID
+- [ ] Register an IANA media type (`application/vnd.ddim+zip`)
 - [ ] Seek review from digital preservation communities (DPC, NDSA, Library of Congress)
 
 ### Institutional Integration
-- [ ] Python reference implementation for reading/writing `.a3d` archives
+- [ ] Python reference implementation for reading/writing `.ddim` archives
 - [ ] Export to BagIt (Library of Congress) and OCFL (Oxford Common File Layout)
 - [ ] SIP generator for institutional repositories (Archivematica, Preservica, DSpace)
 - [ ] ORCID lookup (autocomplete from ORCID API) and PRONOM lookup (search registry)
@@ -139,7 +139,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [x] **Done** — SIP compliance validation at export time: required/recommended field checking, format validation (ORCID, dates, coordinates), compliance scoring, and manifest audit trail
 - [x] **Done** — Display warning when SHA-256 hashing is unavailable on HTTP
 - [x] **Done** — Add `role` field (primary/derived) to each data entry
-- [x] **Done** — Write a standalone specification document for the `.a3d`/`.a3z` format, independent of the viewer implementation (see [SPECIFICATION.md](archive/SPECIFICATION.md))
+- [x] **Done** — Write a standalone specification document for the `.ddim` format (formerly `.a3d`/`.a3z`), independent of the viewer implementation (see [SPECIFICATION.md](archive/SPECIFICATION.md))
 - [x] Include a plain-text `README.txt` in every archive explaining how to extract and read the contents
 
 ### Asset Types

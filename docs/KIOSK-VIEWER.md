@@ -60,7 +60,7 @@ Total initial transfer: **~100-120KB** instead of the full archive.
 ### Example embed
 
 ```html
-<iframe src="https://viewer.example.com?archive=/archives/uuid/scan.a3d&autoload=false"></iframe>
+<iframe src="https://viewer.example.com?archive=/archives/uuid/scan.ddim&autoload=false"></iframe>
 ```
 
 ### Fallback behavior

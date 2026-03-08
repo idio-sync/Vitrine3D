@@ -8,7 +8,7 @@ This guide covers the **editor** at `/editor/`. For the kiosk viewer at `/`, see
 
 **From URL parameters**: Pass file URLs directly in the address bar (see [Configuration](CONFIGURATION.md#url-parameters)).
 
-**From an archive**: Loading a `.a3d` or `.a3z` file automatically extracts and displays all bundled assets with their saved transforms, metadata, and annotations.
+**From an archive**: Loading a `.ddim` file (or legacy `.a3d` / `.a3z`) automatically extracts and displays all bundled assets with their saved transforms, metadata, and annotations.
 
 **Asset types**:
 - **Splat** — Gaussian splat (`.splat`, `.ply`, `.sog`, `.sogz`)
@@ -202,7 +202,7 @@ The left-side toolbar provides quick access to:
 | Fly Camera | Switch to first-person fly camera |
 | Auto-Rotate | Toggle turntable auto-rotation (disabled by default in main app) |
 | Load Full Resolution | Swap LOD proxy mesh for the full-resolution version (appears only when a proxy mesh is loaded) |
-| Export Archive | Export the current scene as an .a3d or .a3z archive |
+| Export Archive | Export the current scene as a .ddim archive |
 | Fullscreen | Toggle browser fullscreen mode |
 | Reset Orbit Center | Reset the orbit pivot point to the bounding box center of loaded meshes/point clouds |
 | Cross-Section | Toggle cross-section clipping plane tool |

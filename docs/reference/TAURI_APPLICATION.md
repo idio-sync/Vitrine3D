@@ -94,10 +94,10 @@ In Tauri v2, plugin permissions are managed through **capabilities** (`src-tauri
 
 ### File Association
 
-Register `.a3d` and `.a3z` file extensions with the desktop app so users can:
+Register the `.ddim` file extension with the desktop app so users can:
 - **Double-click** an archive file to open it directly in the viewer
 - **Drag & drop** an archive onto the executable
-- **Open from command line**: `3d-archive-viewer.exe scene.a3z`
+- **Open from command line**: `3d-archive-viewer.exe scene.ddim`
 
 This would use Tauri's `bundle.fileAssociations` config and a Rust-side handler to pass the file path to the frontend. A single executable handles any archive — no per-file rebuilds needed.
 
@@ -110,7 +110,7 @@ npm run branded
 ```
 
 This opens native file/text dialogs to collect:
-1. **Archive** — the `.a3d`/`.a3z` file to bundle
+1. **Archive** — the `.ddim` file to bundle
 2. **Product name** — used as the window title and installer name
 3. **Icon** (optional) — a `.png` to replace the default app icon
 
@@ -118,7 +118,7 @@ The script then automates the full pipeline: patches `tauri.conf.json`, vendors 
 
 CLI mode (skips GUI dialogs):
 ```bash
-npm run branded -- --archive path/to/scene.a3z --name "Acme Site Tour" --icon icon.png
+npm run branded -- --archive path/to/scene.ddim --name "Acme Site Tour" --icon icon.png
 ```
 
 Output appears in `src-tauri/target/release/bundle/` (`.msi`/`.exe` on Windows).

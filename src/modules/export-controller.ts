@@ -180,7 +180,7 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
 
     // Get export options
     const formatRadio = document.querySelector('input[name="export-format"]:checked') as HTMLInputElement | null;
-    const format = formatRadio?.value || 'a3d';
+    const format = formatRadio?.value || 'ddim';
     // Preview image and integrity hashes are always included
     const includePreview = true;
     const includeHashes = true;
@@ -554,7 +554,7 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
 }
 
 /**
- * Create and download an archive (.a3d/.a3z) with all selected assets.
+ * Create and download an archive (.ddim/.zip) with all selected assets.
  */
 export async function downloadArchive(deps: ExportDeps): Promise<void> {
     const prepared = await prepareArchive(deps);
@@ -760,7 +760,7 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
 }
 
 /**
- * Download a generic offline viewer (standalone HTML that opens any .a3d/.a3z).
+ * Download a generic offline viewer (standalone HTML that opens any .ddim archive).
  * @deprecated Downloadable offline viewer has been removed from the product.
  */
 export async function downloadGenericViewer(deps: ExportDeps): Promise<void> {
@@ -805,6 +805,29 @@ export async function downloadGenericViewer(deps: ExportDeps): Promise<void> {
         log.error(' Error creating generic viewer:', e);
         notify.error('Error creating viewer: ' + e.message);
     }
+}
+
+/**
+ * Toggle "Save to Library" button visibility based on selected export format.
+ * .ddim shows it (if library is configured), .zip hides it (local download only).
+ */
+export function setupExportFormatToggle(): void {
+    const radios = document.querySelectorAll('input[name="export-format"]');
+    const saveBtn = document.getElementById('btn-save-to-library');
+    if (!saveBtn) return;
+
+    radios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            const selected = (document.querySelector('input[name="export-format"]:checked') as HTMLInputElement)?.value;
+            if (selected === 'zip') {
+                saveBtn.dataset.hiddenByFormat = saveBtn.style.display !== 'none' ? 'true' : '';
+                saveBtn.style.display = 'none';
+            } else if (saveBtn.dataset.hiddenByFormat === 'true') {
+                saveBtn.style.display = '';
+                delete saveBtn.dataset.hiddenByFormat;
+            }
+        });
+    });
 }
 
 /**

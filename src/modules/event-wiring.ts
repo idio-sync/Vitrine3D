@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { Logger, notify } from './utilities.js';
 import { ENVIRONMENT } from './constants.js';
+import { setupExportFormatToggle } from './export-controller.js';
 import {
     addListener,
     setupCollapsibles,
@@ -508,6 +509,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-export-cancel', 'click', hideExportPanel);
     addListener('btn-export-download', 'click', deps.export.downloadArchive);
     addListener('btn-save-to-library', 'click', deps.export.saveToLibrary);
+    setupExportFormatToggle();
 
     // Generic viewer download button
     addListener('btn-download-viewer', 'click', deps.export.downloadGenericViewer);

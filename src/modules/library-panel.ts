@@ -1010,7 +1010,7 @@ function setupUpload(): void {
         if (!files) return;
         for (let i = 0; i < files.length; i++) {
             const f = files[i];
-            if (f.name.endsWith('.a3d') || f.name.endsWith('.a3z')) {
+            if (f.name.endsWith('.ddim') || f.name.endsWith('.a3d') || f.name.endsWith('.a3z')) {
                 uploadQueue.push(f);
             }
         }

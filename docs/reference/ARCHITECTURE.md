@@ -2,7 +2,7 @@
 
 ## What This Project Is
 
-Vitrine3D is a browser-based tool for viewing and comparing three kinds of 3D data side-by-side: Gaussian splats (a photogrammetry format), traditional 3D meshes (GLB/OBJ/STL), and E57 point clouds. It targets cultural-heritage, surveying, and digital-preservation workflows. The app also defines a custom ZIP-based archive format (.a3d/.a3z) for bundling assets with metadata.
+Vitrine3D is a browser-based tool for viewing and comparing three kinds of 3D data side-by-side: Gaussian splats (a photogrammetry format), traditional 3D meshes (GLB/OBJ/STL), and E57 point clouds. It targets cultural-heritage, surveying, and digital-preservation workflows. The app also defines a custom ZIP-based archive format (.ddim) for bundling assets with metadata.
 
 **Two entry points** built as separate Vite bundles:
 - **Kiosk viewer** (`/`) — public-facing read-only viewer with pluggable themes (editorial, gallery, exhibit, minimal). Entry: `src/index.html` → `src/kiosk-web.ts` → `kiosk-main.ts`.
@@ -181,7 +181,7 @@ Vite resolves bare specifiers (`'three'`, `'fflate'`, etc.) from `node_modules/`
 ```
 User picks file / provides URL
   → file-handlers.ts validates URL, reads bytes
-  → If archive (.a3d/.a3z): archive-loader.ts unzips, parses manifest.json,
+  → If archive (.ddim, or legacy .a3d/.a3z): archive-loader.ts unzips, parses manifest.json,
     sanitizes filenames, returns individual asset blobs
   → Splat bytes → Spark.js SplatMesh.load() → added to scene
   → Mesh bytes  → GLTFLoader / OBJLoader → wrapped in modelGroup → added to scene
@@ -360,7 +360,7 @@ Builds a modal dialog where users configure share-link options (display mode, co
 Full-page editorial-themed archive browser with two tabs: "All Archives" and "Collections". Activated when `window.APP_CONFIG.library === true` (set by server injection). Reuses shared rendering helpers from `collection-page.ts` (`escapeHtml`, `ASSET_LABELS`, `injectStyles`, `getLogoSrc`, `renderCard`). Uses `cfAuthFetch` from `tauri-auth.ts` for authenticated API requests to the admin backend.
 
 ### `src/modules/kiosk-viewer.ts` (DEPRECATED)
-~~Generates a self-contained ~1 MB HTML file that can view any .a3d/.a3z archive offline.~~ The downloadable kiosk HTML generator is deprecated. The kiosk viewer is now served as a separate Vite bundle at `/`. This module is retained for backward compatibility but the download button is hidden (`display:none`).
+~~Generates a self-contained ~1 MB HTML file that can view any .ddim archive offline.~~ The downloadable kiosk HTML generator is deprecated. The kiosk viewer is now served as a separate Vite bundle at `/`. This module is retained for backward compatibility but the download button is hidden (`display:none`).
 
 ### `src/modules/ui-controller.ts`
 Utility functions for UI state:

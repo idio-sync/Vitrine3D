@@ -1,7 +1,7 @@
 # Shortcomings & Solutions Roadmap
 
 **Date:** 2026-02-06
-**Scope:** Viewer application and .a3d/.a3z container format
+**Scope:** Viewer application and .ddim container format
 **Status:** Proof of concept — this document tracks known gaps and proposed solutions for moving toward a production-quality tool and a genuinely preservable archive format.
 
 ---
@@ -118,7 +118,7 @@
 
 ### 3.1 No Formal Specification Document
 
-**Problem:** The `.a3d` format is defined implicitly by the code in `archive-loader.ts` and `archive-creator.ts`. There is no standalone specification document. Anyone writing an independent reader must reverse-engineer the behavior from JavaScript source code. For a preservation format, the specification should be a document, not an implementation.
+**Problem:** The `.ddim` format is defined implicitly by the code in `archive-loader.ts` and `archive-creator.ts`. There is no standalone specification document. Anyone writing an independent reader must reverse-engineer the behavior from JavaScript source code. For a preservation format, the specification should be a document, not an implementation.
 
 **Solutions:**
 - **Short-term:** Write a standalone specification document (`SPECIFICATION.md` or a versioned PDF) that defines the archive structure, manifest schema, required and optional fields, data types, and processing rules independent of any implementation. Publish it in the `archive-3d` repository.
@@ -404,7 +404,7 @@
   - Each entry contains: version, date, description
   - Preserved on archive re-import (round-trip support)
 
-- **Medium-term:** Implement a diff tool that can compare two `.a3d` archives and report changes: new/modified/removed files, metadata differences, annotation changes, transform differences.
+- **Medium-term:** Implement a diff tool that can compare two `.ddim` archives and report changes: new/modified/removed files, metadata differences, annotation changes, transform differences.
 - **Long-term:** Support incremental archives that reference a base archive and contain only the changed files. This reduces storage for large datasets with frequent updates. Implement a PREMIS-style event log that records every significant action (creation, annotation, re-alignment, export).
 
 ### 9.2 No Collaboration Model
@@ -469,7 +469,7 @@
 
 ### 11.1 The Archive Format Is Coupled to the Viewer
 
-**Problem:** `packer: "vitrine3d"` in the manifest, and the absence of an independent specification, means the format is defined by this specific tool. If the project is abandoned, the format specification effectively dies with it. Contrast with IIIF (independent spec, consortium governance, multiple implementations) or E57 (ASTM standard).
+**Problem:** `packer: "vitrine3d"` in the manifest, and the absence of an independent specification, means the `.ddim` format is defined by this specific tool. If the project is abandoned, the format specification effectively dies with it. Contrast with IIIF (independent spec, consortium governance, multiple implementations) or E57 (ASTM standard).
 
 **Solutions:**
 - **Short-term:** Give the format its own identity separate from the viewer. The `archive-3d` repository is a start — flesh it out with a standalone specification, examples, and a validator. Change `packer` to reference the tool, but add a `format` field that references the spec:
@@ -487,17 +487,17 @@
 
 ### 11.2 Tension Between Self-Contained and Open
 
-**Problem:** The `.a3d` archive requires this viewer to display. ~~The kiosk export is self-contained but depends on a frozen JavaScript stack.~~ The kiosk is now served as a standard Vite bundle at `/`, updated with each deployment. The Tauri desktop app bundles a specific version for offline use. Neither is truly self-contained in the archival sense — one needs software, the other needs a compatible browser or the desktop app.
+**Problem:** The `.ddim` archive requires this viewer to display. ~~The kiosk export is self-contained but depends on a frozen JavaScript stack.~~ The kiosk is now served as a standard Vite bundle at `/`, updated with each deployment. The Tauri desktop app bundles a specific version for offline use. Neither is truly self-contained in the archival sense — one needs software, the other needs a compatible browser or the desktop app.
 
 **Solutions:**
 - **Short-term:** Accept and document the two-tier model explicitly:
-  - **Tier 1 (Archive, .a3d):** Long-term preservation. Standard ZIP + JSON + standard file formats. Any ZIP library + JSON parser can extract and read the contents. The data survives without any specific viewer.
+  - **Tier 1 (Archive, .ddim):** Long-term preservation. Standard ZIP + JSON + standard file formats. Any ZIP library + JSON parser can extract and read the contents. The data survives without any specific viewer.
   - **Tier 2 (Kiosk, web-served or Tauri desktop):** Convenient access. The web-served kiosk at `/` stays current with each deployment. The Tauri desktop app bundles a specific version for offline use. The viewer is a convenience, not a preservation guarantee.
 - **Medium-term:** Ensure the archive's data files are fully self-describing without the viewer. Include a `README.txt` in every archive explaining the structure in plain text:
   ```
-  This is an archive-3d container (version 1.0).
+  This is a Direct Dimensions archive container (version 1.0).
   It is a standard ZIP file. To extract:
-    unzip archive.a3d
+    unzip archive.ddim
   Contents:
     manifest.json - Metadata (JSON format)
     assets/       - 3D data files (GLB, PLY, E57)
@@ -590,7 +590,7 @@
 
 The three most impactful areas of work were:
 
-1. **~~Write a standalone format specification~~ (3.1, 3.2, 11.1) — Done.** The [SPECIFICATION.md](../archive/SPECIFICATION.md) covers archive structure, manifest schema, versioning rules, and standards crosswalks. The format is now independently documented. Remaining work: JSON Schema for machine validation, PRONOM/IANA registration, and further decoupling the format identity from the viewer (11.1).
+1. **~~Write a standalone format specification~~ (3.1, 3.2, 11.1) — Done.** The [SPECIFICATION.md](../archive/SPECIFICATION.md) covers archive structure, manifest schema, versioning rules, and standards crosswalks. The `.ddim` format is now independently documented. Remaining work: JSON Schema for machine validation, PRONOM/IANA registration, and further decoupling the format identity from the viewer (11.1).
 
 2. **~~Add data hierarchy and role classification~~ (12.1, 4.2, 1.1) — Partially done.** Data entries now support `role` (primary/derived) classification. PRONOM variant annotations (4.2) and splat format stability documentation (1.1) remain open.
 

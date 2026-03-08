@@ -185,7 +185,7 @@ export function handleLoadPointcloudFromUrlPrompt(deps: FileInputDeps) {
 
 export function handleLoadArchiveFromUrlPrompt(deps: FileInputDeps) {
     log.info(' handleLoadArchiveFromUrlPrompt called');
-    const url = prompt('Enter Archive URL (.a3d, .a3z):');
+    const url = prompt('Enter Archive URL (.ddim):');
     log.info(' User entered:', url);
     if (!url) return;
 

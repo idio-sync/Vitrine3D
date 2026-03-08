@@ -172,7 +172,7 @@ export async function openFileDialogPathOnly(options: {
     const filter = FILE_FILTERS[filterKey];
 
     // 'none' or unknown key → no filters (needed on Android where custom
-    // extensions like .a3d have no MIME mapping and get blocked)
+    // extensions like .ddim have no MIME mapping and get blocked)
     const filters = filter
         ? [filter, { name: 'All Files', extensions: ['*'] }]
         : [];

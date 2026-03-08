@@ -52,7 +52,7 @@ These features exist in our viewer but **not in Sketchfab**:
 | Gaussian splat rendering (.ply, .spz, .ksplat, .sog, .splat) | Sketchfab has zero splat support |
 | E57 point cloud native loading (WASM) | Sketchfab only supports PLY point clouds |
 | DXF drawing files as independent asset type | Floor plans / technical drawings alongside 3D data |
-| Custom archive format (.a3d/.a3z) with manifest | Bundled deliverables with metadata |
+| Custom archive format (.ddim) with manifest | Bundled deliverables with metadata |
 | Kiosk/editor bundle split | Kiosk at `/` has no editor code; editor at `/editor/` |
 | N-point landmark alignment (Kabsch algorithm) with live preview & RMSE | Spatial registration of multi-asset scenes |
 | ICP auto-alignment | Iterative closest point alignment |
