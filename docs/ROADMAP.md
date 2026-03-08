@@ -128,6 +128,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [x] **Done** — Multi-resolution archives with LOD proxy variants in the manifest (`lod: "proxy"`, `derived_from`)
 - [x] **Done** — In-browser mesh decimation via meshoptimizer WASM with configurable presets, texture downscaling, and SD proxy GLB generation in the editor
 - [x] **Done** — Draco/meshopt geometry compression for smaller archive transfer size (Draco-compressed GLB files now supported via DRACOLoader; WASM decoder served from `public/draco/`)
+- [x] **Done** — Splat LOD via Spark 2.0 LOD tree — runtime LOD on all splat loads (`lod: true`), export-time LOD-ordered SPZ transcoding for fast kiosk loads; SD/HD quality toggle now works for splats
 
 ### Measurement & Analysis
 - [x] **Done** — Point-to-point distance measurement (two-click flow, 3D line overlay, DOM markers, configurable units m/cm/mm/in/ft; works in main editor and kiosk viewer)
