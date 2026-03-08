@@ -298,3 +298,17 @@ export const DECIMATION_PRESETS: Record<string, DecimationPreset> = {
 } as const;
 
 export const DEFAULT_DECIMATION_PRESET = 'medium';
+
+// =============================================================================
+// FLIGHT LOG (drone telemetry import)
+// =============================================================================
+
+export const FLIGHT_LOG = {
+    EXTENSIONS: ['.csv', '.kml', '.kmz', '.srt'],
+    /** Default line color — light blue, distinct from annotation/measurement orange */
+    LINE_COLOR: 0x4FC3F7,
+    /** Max rendered segments before subsampling kicks in */
+    MAX_RENDER_POINTS: 2000,
+    /** Marker sphere radius (scene units) */
+    MARKER_RADIUS: 0.02,
+} as const;

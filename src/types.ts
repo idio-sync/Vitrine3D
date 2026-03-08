@@ -43,6 +43,7 @@ export interface AppState {
     stlLoaded: boolean;
     cadLoaded: boolean;
     drawingLoaded: boolean;
+    flightPathLoaded: boolean;
     currentDrawingUrl: string | null;
     currentCadUrl: string | null;
     modelOpacity: number;
@@ -102,6 +103,7 @@ export interface SceneRefs {
     readonly stlGroup: any;           // THREE.Group
     readonly cadGroup: any;           // THREE.Group
     readonly drawingGroup: any;       // THREE.Group
+    readonly flightPathGroup: any;    // THREE.Group
     readonly flyControls: any;        // FlyControls | null
     readonly annotationSystem: any;   // AnnotationSystem | null
     readonly archiveCreator: any;     // ArchiveCreator | null
@@ -181,6 +183,34 @@ export interface Walkthrough {
     loop?: boolean;
 }
 
+// ===== Flight Path =====
+
+/** A single telemetry point from a drone flight log. */
+export interface FlightPoint {
+    x: number;        // local coords (converted from GPS)
+    y: number;        // altitude mapped to Y-up
+    z: number;        // local coords
+    lat: number;      // original GPS latitude
+    lon: number;      // original GPS longitude
+    alt: number;      // altitude in meters
+    timestamp: number; // ms since flight start
+    speed?: number;    // m/s ground speed
+    gimbalPitch?: number;
+    gimbalYaw?: number;
+    heading?: number;  // drone heading degrees
+}
+
+/** Parsed flight path data with metadata, ready for rendering. */
+export interface FlightPathData {
+    id: string;              // e.g. 'flightpath_0'
+    points: FlightPoint[];   // full parsed data
+    sourceFormat: string;    // 'dji-csv' | 'kml' | 'srt'
+    fileName: string;        // original filename
+    originGps: [number, number]; // [lat, lon] of first point
+    durationS: number;       // total flight duration in seconds
+    maxAltM: number;         // max altitude in meters
+}
+
 // ===== Asset Store =====
 
 export interface AssetStore {
@@ -191,6 +221,7 @@ export interface AssetStore {
     pointcloudBlob: Blob | null;
     cadBlob: Blob | null;
     cadFileName: string | null;
+    flightPathBlobs: Array<{ blob: Blob; fileName: string }>;
     sourceFiles: Array<{ name: string; blob: Blob }>;
 }
 
