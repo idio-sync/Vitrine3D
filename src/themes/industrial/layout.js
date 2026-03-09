@@ -677,7 +677,7 @@ function createMenuBar() {
         if (def.id === 'tools')  buildToolsMenu(dropdown);
         if (def.id === 'help')   buildHelpMenu(dropdown);
 
-        item.addEventListener('mousedown', function(e) {
+        item.addEventListener('click', function(e) {
             e.stopPropagation();
             var isOpen = item.classList.contains('open');
             closeAllMenus();
@@ -694,7 +694,7 @@ function createMenuBar() {
     _menuCloseListener = function(e) {
         if (!e.target.closest('.ind-menu-item')) closeAllMenus();
     };
-    document.addEventListener('mousedown', _menuCloseListener);
+    document.addEventListener('click', _menuCloseListener);
 
     // Close on Escape
     document.addEventListener('keydown', function(e) {
