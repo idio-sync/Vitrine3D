@@ -192,6 +192,7 @@ let walkthroughPlayerEl: HTMLElement | null = null;
 let walkthroughFadeEl: HTMLElement | null = null;
 let crossSection: CrossSectionTool | null = null;
 let measurementSystem: MeasurementSystem | null = null;
+let flightPathManager: any = null; // FlightPathManager instance (shared with layout themes)
 let sparkRenderer: any = null; // SparkRenderer instance
 let splatMesh: any = null; // TODO: SplatMesh type
 let fpsElement: HTMLElement | null = null;
@@ -205,6 +206,7 @@ const _prevCamPos = new THREE.Vector3();
 const _prevCamQuat = new THREE.Quaternion();
 let _markersDirty = true;
 let _sidebarTransitioning = false;
+let _initPromise: Promise<void> = Promise.resolve(); // resolved once init() completes
 
 /** Get the resolved layout module, if any. */
 function getLayoutModule(): LayoutModule | null {
@@ -323,6 +325,12 @@ function returnToLibrary(): void {
 // =============================================================================
 
 export async function init(): Promise<void> {
+    const p = _doInit();
+    _initPromise = p;
+    return p;
+}
+
+async function _doInit(): Promise<void> {
     log.info('Kiosk viewer initializing...');
     document.body.classList.add('kiosk-mode');
 
@@ -1425,6 +1433,32 @@ async function loadArchiveFromIpc(filePath: string, name: string): Promise<void>
     await handleArchiveFile(new File([], name), archiveLoader);
 }
 
+/**
+ * Public entry point for loading a file from a filesystem path.
+ * Used by file association handling (OS double-click on .ddim, .glb, .ply, etc.).
+ * Detects the file type and routes to the appropriate loader.
+ */
+export async function loadArchiveFromFilePath(filePath: string, fileName: string): Promise<void> {
+    await _initPromise;
+
+    const category = classifyFile(fileName);
+
+    if (category === 'archive') {
+        await loadArchiveFromIpc(filePath, fileName);
+    } else if (category) {
+        // Non-archive file: read fully via IPC, then route to direct file loader
+        showLoading('Loading file...', true);
+        const { ipcOpenFile, ipcReadBytes, ipcCloseFile } = await import('./tauri-bridge.js');
+        const { handleId, size } = await ipcOpenFile(filePath);
+        const contents = await ipcReadBytes(handleId, 0, size);
+        await ipcCloseFile(handleId);
+        const file = new File([contents as BlobPart], fileName);
+        handlePickedFiles([file], null);
+    } else {
+        notify.warning(`Unsupported file format: ${fileName.split('.').pop()}`);
+    }
+}
+
 // =============================================================================
 // ARCHIVE PROCESSING
 // =============================================================================
@@ -1603,28 +1637,28 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             const fpEntries = archiveLoader.getFlightPathEntries();
             if (fpEntries.length > 0) {
                 const { FlightPathManager } = await import('./flight-path.js');
-                const fpManager = new FlightPathManager(
+                flightPathManager = new FlightPathManager(
                     sceneManager.flightPathGroup,
                     sceneManager.scene,
                     sceneManager.camera,
                     sceneManager.renderer
                 );
                 const fpTooltip = document.getElementById('flight-tooltip');
-                if (fpTooltip) fpManager.setupTooltip(fpTooltip);
+                if (fpTooltip) flightPathManager.setupTooltip(fpTooltip);
 
                 for (const { key, entry } of fpEntries) {
                     const fileData = await archiveLoader.extractFile(entry.file_name);
                     if (!fileData) continue;
                     const text = await fileData.blob.text();
                     try {
-                        fpManager.importFromText(text, entry.original_name || entry.file_name);
+                        flightPathManager.importFromText(text, entry.original_name || entry.file_name);
                     } catch (err) {
                         log.warn(`Failed to load flight path ${key}:`, err);
                     }
                 }
 
                 // Apply saved transform from manifest
-                if (fpManager.hasData) {
+                if (flightPathManager.hasData) {
                     const transform = archiveLoader.getEntryTransform(fpEntries[0].entry);
                     const group = sceneManager.flightPathGroup;
                     const fs = normalizeScale(transform.scale);
@@ -1638,14 +1672,14 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 }
 
                 // Show toggle button if paths loaded
-                if (fpManager.hasData) {
+                if (flightPathManager.hasData) {
                     const toggleBtn = document.getElementById('btn-toggle-flightpath');
                     if (toggleBtn) {
                         toggleBtn.style.display = '';
                         let fpVisible = true;
                         toggleBtn.addEventListener('click', () => {
                             fpVisible = !fpVisible;
-                            fpManager.setVisible(fpVisible);
+                            flightPathManager.setVisible(fpVisible);
                             toggleBtn.classList.toggle('active', fpVisible);
                         });
                     }
@@ -2429,6 +2463,7 @@ function createLayoutDeps(): any {
         pointcloudGroup,
         setLocalClippingEnabled: (enabled: boolean) => sceneManager?.setLocalClippingEnabled(enabled),
         applyBackgroundForMode,
+        flightPathManager,
     };
 }
 

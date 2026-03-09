@@ -713,7 +713,8 @@ export function setup(manifest, deps) {
         setDisplayMode, createDisplayModeDeps, triggerLazyLoad,
         showAnnotationPopup, hideAnnotationPopup, hideAnnotationLine,
         getCurrentPopupId, setCurrentPopupId,
-        resetOrbitCenter
+        resetOrbitCenter,
+        flightPathManager
     } = deps;
 
     const log = Logger.getLogger('editorial-layout');
@@ -1304,6 +1305,26 @@ export function setup(manifest, deps) {
         toolsGroup.appendChild(orbitResetBtn);
         if (measureWrapper) toolsGroup.appendChild(measureWrapper);
         if (sliceWrapper) toolsGroup.appendChild(sliceWrapper);
+    }
+
+    // Flight path toggle — shown only when flight data is loaded
+    if (flightPathManager && flightPathManager.hasData) {
+        const fpRule = document.createElement('div');
+        fpRule.className = 'editorial-ribbon-rule';
+        toolsGroup.appendChild(fpRule);
+
+        const fpBtn = document.createElement('button');
+        fpBtn.className = 'editorial-marker-toggle active';
+        fpBtn.title = 'Toggle Flight Path';
+        fpBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 2.8L21 6l-3.2 3.2"/><path d="M21 6H7.5a4.5 4.5 0 0 0 0 9H12"/><circle cx="17" cy="17" r="3"/><path d="M14 17h-4"/></svg>';
+        let fpVisible = true;
+        fpBtn.addEventListener('click', () => {
+            fpVisible = !fpVisible;
+            flightPathManager.setVisible(fpVisible);
+            fpBtn.classList.toggle('active', fpVisible);
+            fpBtn.classList.toggle('off', !fpVisible);
+        });
+        toolsGroup.appendChild(fpBtn);
     }
 
     // Rule separator between annotation and visualization groups
