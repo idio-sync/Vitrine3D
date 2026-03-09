@@ -309,6 +309,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-select-stl', 'click', () => deps.transform.setSelectedObject('stl' as any));
     addListener('btn-select-cad', 'click', () => deps.transform.setSelectedObject('cad' as any));
     addListener('btn-select-drawing', 'click', () => deps.transform.setSelectedObject('drawing' as any));
+    addListener('btn-select-flightpath', 'click', () => deps.transform.setSelectedObject('flightpath' as any));
     addListener('btn-select-both', 'click', () => deps.transform.setSelectedObject('both' as any));
     const pivotSection = document.getElementById('rotation-pivot-section');
     const scaleLockSection = document.getElementById('scale-lock-section');
