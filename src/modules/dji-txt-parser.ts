@@ -69,24 +69,26 @@ export async function parseDjiTxt(buffer: ArrayBuffer): Promise<FlightPoint[]> {
     }
 
     // Convert frames to FlightPoints
+    // Use osd.height (AGL — above ground/takeoff) instead of osd.altitude (ASL — sea level)
+    // so the flight path starts near ground level and shows relative flight height.
     const points: FlightPoint[] = [];
-    let originLat = 0, originLon = 0, originAlt = 0;
+    let originLat = 0, originLon = 0;
 
     for (const frame of frames) {
         const osd = frame.osd;
         const lat = osd.latitude;
         const lon = osd.longitude;
-        const alt = osd.altitude;
+        const alt = osd.height; // AGL: 0 at takeoff, positive = up
 
         if (lat === 0 && lon === 0) continue;
 
         if (points.length === 0) {
             originLat = lat;
             originLon = lon;
-            originAlt = alt;
         }
 
-        const local = gpsToLocal(lat, lon, alt, originLat, originLon, originAlt);
+        // Pass height as both alt and originAlt=0 so gpsToLocal uses it directly as Y
+        const local = gpsToLocal(lat, lon, alt, originLat, originLon, 0);
         const speed = Math.sqrt(osd.xSpeed * osd.xSpeed + osd.ySpeed * osd.ySpeed) || undefined;
 
         points.push({
