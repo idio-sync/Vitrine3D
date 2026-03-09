@@ -25,6 +25,30 @@ function subsample<T>(arr: T[], maxPoints: number): T[] {
     return result;
 }
 
+/** Speed color ramp: blue (slow) → cyan → green → yellow → red (fast) */
+const SPEED_RAMP: [number, number, number][] = [
+    [59, 130, 246],   // blue
+    [34, 211, 238],   // cyan
+    [34, 197, 94],    // green
+    [250, 204, 21],   // yellow
+    [239, 68, 68],    // red
+];
+
+/** Interpolate a color from the speed ramp. t is clamped to [0, 1]. */
+function speedColor(t: number): [number, number, number] {
+    const c = Math.max(0, Math.min(1, t));
+    const maxIdx = SPEED_RAMP.length - 1;
+    const scaled = c * maxIdx;
+    const lo = Math.floor(scaled);
+    const hi = Math.min(lo + 1, maxIdx);
+    const f = scaled - lo;
+    return [
+        (SPEED_RAMP[lo][0] + (SPEED_RAMP[hi][0] - SPEED_RAMP[lo][0]) * f) / 255,
+        (SPEED_RAMP[lo][1] + (SPEED_RAMP[hi][1] - SPEED_RAMP[lo][1]) * f) / 255,
+        (SPEED_RAMP[lo][2] + (SPEED_RAMP[hi][2] - SPEED_RAMP[lo][2]) * f) / 255,
+    ];
+}
+
 /** Format milliseconds as MM:SS */
 function formatTime(ms: number): string {
     const totalSec = Math.floor(ms / 1000);
@@ -134,21 +158,38 @@ export class FlightPathManager {
         return data;
     }
 
-    /** Render a flight path as line + markers. */
+    /** Render a flight path as line + markers with speed-based vertex coloring. */
     private renderPath(data: FlightPathData): void {
         const renderPoints = subsample(data.points, FLIGHT_LOG.MAX_RENDER_POINTS);
 
-        // Line
+        // Compute speed range for color mapping
+        let minSpeed = Infinity, maxSpeed = 0;
+        for (const p of renderPoints) {
+            const s = p.speed ?? 0;
+            if (s < minSpeed) minSpeed = s;
+            if (s > maxSpeed) maxSpeed = s;
+        }
+        const speedRange = maxSpeed - minSpeed || 1; // avoid division by zero
+
+        // Line with per-vertex colors
         const positions = new Float32Array(renderPoints.length * 3);
+        const colors = new Float32Array(renderPoints.length * 3);
         for (let i = 0; i < renderPoints.length; i++) {
             positions[i * 3] = renderPoints[i].x;
             positions[i * 3 + 1] = renderPoints[i].y;
             positions[i * 3 + 2] = renderPoints[i].z;
+
+            const t = ((renderPoints[i].speed ?? 0) - minSpeed) / speedRange;
+            const [r, g, b] = speedColor(t);
+            colors[i * 3] = r;
+            colors[i * 3 + 1] = g;
+            colors[i * 3 + 2] = b;
         }
         const lineGeom = new THREE.BufferGeometry();
         lineGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        lineGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
         const lineMat = new THREE.LineBasicMaterial({
-            color: FLIGHT_LOG.LINE_COLOR,
+            vertexColors: true,
             depthTest: true,
             depthWrite: false,
             transparent: true,
@@ -158,10 +199,9 @@ export class FlightPathManager {
         line.name = `${data.id}_line`;
         line.renderOrder = 998;
 
-        // Instanced markers
+        // Instanced markers with per-instance colors
         const sphereGeom = new THREE.SphereGeometry(FLIGHT_LOG.MARKER_RADIUS, 8, 6);
         const markerMat = new THREE.MeshBasicMaterial({
-            color: FLIGHT_LOG.LINE_COLOR,
             depthTest: true,
             depthWrite: false,
             transparent: true,
@@ -171,12 +211,19 @@ export class FlightPathManager {
         markers.name = `${data.id}_markers`;
         markers.renderOrder = 999;
         const dummy = new THREE.Object3D();
+        const color = new THREE.Color();
         for (let i = 0; i < renderPoints.length; i++) {
             dummy.position.set(renderPoints[i].x, renderPoints[i].y, renderPoints[i].z);
             dummy.updateMatrix();
             markers.setMatrixAt(i, dummy.matrix);
+
+            const t = ((renderPoints[i].speed ?? 0) - minSpeed) / speedRange;
+            const [r, g, b] = speedColor(t);
+            color.setRGB(r, g, b);
+            markers.setColorAt(i, color);
         }
         markers.instanceMatrix.needsUpdate = true;
+        if (markers.instanceColor) markers.instanceColor.needsUpdate = true;
 
         this.group.add(line);
         this.group.add(markers);
