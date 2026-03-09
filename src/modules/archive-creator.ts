@@ -2087,16 +2087,28 @@ export async function captureScreenshot(canvas: HTMLCanvasElement, options: Capt
         throw new Error('Failed to get 2D context from temporary canvas');
     }
 
-    // Draw the source canvas, cropping to square from center
+    // Draw the source canvas, cropping from center to match the output aspect ratio
     const srcWidth = canvas.width;
     const srcHeight = canvas.height;
-    const minDim = Math.min(srcWidth, srcHeight);
-    const srcX = (srcWidth - minDim) / 2;
-    const srcY = (srcHeight - minDim) / 2;
+    const targetAspect = width / height;
+    const srcAspect = srcWidth / srcHeight;
+
+    let cropW: number, cropH: number;
+    if (srcAspect > targetAspect) {
+        // Source is wider than target — crop sides
+        cropH = srcHeight;
+        cropW = srcHeight * targetAspect;
+    } else {
+        // Source is taller than target — crop top/bottom
+        cropW = srcWidth;
+        cropH = srcWidth / targetAspect;
+    }
+    const srcX = (srcWidth - cropW) / 2;
+    const srcY = (srcHeight - cropH) / 2;
 
     ctx.drawImage(
         canvas,
-        srcX, srcY, minDim, minDim,
+        srcX, srcY, cropW, cropH,
         0, 0, width, height
     );
 

@@ -54,7 +54,8 @@ export async function downloadScreenshot(deps: ScreenshotDeps): Promise<void> {
         } else {
             renderer.render(scene, camera);
         }
-        const blob = await captureScreenshot(renderer.domElement, { width: 1920, height: 1080 });
+        const canvas = renderer.domElement;
+        const blob = await captureScreenshot(canvas, { width: canvas.width, height: canvas.height });
         if (!blob) {
             notify.error('Screenshot capture failed');
             return;
