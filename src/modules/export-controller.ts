@@ -324,6 +324,9 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         });
     }
 
+    // Track the final mesh blob (post-compression if applied) for accurate quality stats
+    let finalMeshBlob: Blob | null = null;
+
     // Add mesh if loaded and selected
     log.info(' Checking mesh:', { meshBlob: !!assets.meshBlob, modelLoaded: state.modelLoaded });
     // If viewing a proxy and full-res blob hasn't been extracted yet, extract now
@@ -342,10 +345,11 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
 
         let meshBlob = assets.meshBlob;
         const dracoHdEl = document.getElementById('export-draco-hd') as HTMLInputElement | null;
-        const shouldDracoHD = dracoHdEl?.checked ?? true;
+        const shouldDracoHD = dracoHdEl?.checked ?? false;
         if (shouldDracoHD && fileName.toLowerCase().endsWith('.glb')) {
             meshBlob = await dracoCompressGLB(meshBlob);
         }
+        finalMeshBlob = meshBlob;
 
         log.info(' Adding mesh:', { fileName, position, rotation, scale });
         archiveCreator.addMesh(meshBlob, fileName, {
@@ -539,7 +543,7 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         mesh_polygons: (includeModel && state.modelLoaded) ? parseInt(document.getElementById('model-faces')?.textContent || '0') || 0 : 0,
         mesh_vertices: (includeModel && state.modelLoaded) ? (state.meshVertexCount || 0) : 0,
         splat_file_size: (includeSplat && assets.splatBlob) ? assets.splatBlob.size : 0,
-        mesh_file_size: (includeModel && assets.meshBlob) ? assets.meshBlob.size : 0,
+        mesh_file_size: (includeModel && finalMeshBlob) ? finalMeshBlob.size : 0,
         pointcloud_points: (includePointcloud && state.pointcloudLoaded) ? parseInt(document.getElementById('pointcloud-points')?.textContent?.replace(/,/g, '') || '0') || 0 : 0,
         pointcloud_file_size: (includePointcloud && assets.pointcloudBlob) ? assets.pointcloudBlob.size : 0,
         texture_count: (includeModel && state.modelLoaded && state.meshTextureInfo) ? state.meshTextureInfo.count : 0,
