@@ -16,9 +16,6 @@
     ]
   },
   "build": {
-    "beforeDevCommand": "npx vite --port 8080",
-    "devUrl": "http://localhost:8080/?home=true&kiosk=true&theme=industrial",
-    "beforeBuildCommand": "npx vite build",
-    "frontendDist": "../dist"
+    "devUrl": "http://localhost:8080/?home=true&kiosk=true&theme=industrial"
   }
 }
