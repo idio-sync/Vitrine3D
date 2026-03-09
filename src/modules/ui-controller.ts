@@ -210,6 +210,7 @@ const TOOL_PANE_MAP: Record<string, { pane: string; title: string }> = {
     metadata:     { pane: 'pane-metadata',     title: 'Metadata' },
     export:       { pane: 'pane-export',       title: 'Export' },
     library:      { pane: 'pane-library',      title: 'Library' },
+    flightpath:   { pane: 'pane-flightpath',   title: 'Flight Path' },
 };
 
 /**

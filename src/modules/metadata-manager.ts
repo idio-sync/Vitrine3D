@@ -219,6 +219,9 @@ export interface ViewerSettings {
     measurementScale: number | null;
     measurementUnit: string | null;
     postProcessing?: PostProcessingEffectConfig | null;
+    flightColorMode?: string;
+    flightShowEndpoints?: boolean;
+    flightShowDirection?: boolean;
 }
 
 export interface VersionHistoryEntry {
@@ -1520,6 +1523,10 @@ export function collectMetadata(): CollectedMetadata {
             measurementUnit: null,
             // Post-processing (only when enabled)
             postProcessing: postProcessing.isEnabled() ? postProcessing.getConfig() : null,
+            // Drone flight settings
+            flightColorMode: (document.getElementById('flight-color-mode') as HTMLSelectElement)?.value || 'speed',
+            flightShowEndpoints: (document.getElementById('flight-show-endpoints') as HTMLInputElement)?.checked ?? true,
+            flightShowDirection: (document.getElementById('flight-show-direction') as HTMLInputElement)?.checked ?? true,
         }
     };
 
@@ -2130,6 +2137,14 @@ export function prefillMetadataFromArchive(manifest: any): void {
             const envBgEl = document.getElementById('meta-viewer-env-as-background') as HTMLInputElement | null;
             if (envBgEl && manifest.viewer_settings.environment_as_background != null) envBgEl.checked = manifest.viewer_settings.environment_as_background;
         }
+
+        // Drone flight settings
+        const colorModeEl = document.getElementById('flight-color-mode') as HTMLSelectElement | null;
+        if (colorModeEl && manifest.viewer_settings.flight_color_mode) colorModeEl.value = manifest.viewer_settings.flight_color_mode;
+        const endpointsEl = document.getElementById('flight-show-endpoints') as HTMLInputElement | null;
+        if (endpointsEl && manifest.viewer_settings.flight_show_endpoints != null) endpointsEl.checked = manifest.viewer_settings.flight_show_endpoints;
+        const directionEl = document.getElementById('flight-show-direction') as HTMLInputElement | null;
+        if (directionEl && manifest.viewer_settings.flight_show_direction != null) directionEl.checked = manifest.viewer_settings.flight_show_direction;
     }
 
     // Custom fields from _meta

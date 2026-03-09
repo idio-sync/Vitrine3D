@@ -123,6 +123,14 @@
                 </svg>
             </button>
 
+            <!-- Flight Path — Drone flight analysis -->
+            <button class="tool-btn" data-tool="flightpath" data-tooltip="Flight Path  P" id="btn-tool-flightpath" title="Flight path stats, playback, and management" style="display:none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 20 C6 16, 8 8, 12 6 S18 8, 21 4"/>
+                    <path d="M17 4h4v4"/>
+                </svg>
+            </button>
+
             <!-- Capture — Take screenshots -->
             <button class="tool-btn" data-tool="capture" data-tooltip="Capture  C" title="Capture screenshots of the viewport">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -690,6 +698,34 @@
                                 <input type="checkbox" id="meta-viewer-env-as-background">
                                 <label for="meta-viewer-env-as-background">Show as Background</label>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Drone Flight -->
+                <div class="prop-section archived" id="drone-flight-section" style="display:none;">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Drone Flight</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <label class="prop-label">Path Color</label>
+                        <select class="prop-select mb4" id="flight-color-mode">
+                            <option value="speed">Speed</option>
+                            <option value="altitude">Altitude</option>
+                            <option value="climbrate">Climb Rate</option>
+                        </select>
+                        <span class="prop-hint">Color the flight path by the selected metric.</span>
+
+                        <div class="cb-row mt6">
+                            <input type="checkbox" id="flight-show-endpoints" checked>
+                            <label for="flight-show-endpoints">Show Takeoff / Landing Markers</label>
+                        </div>
+
+                        <div class="cb-row">
+                            <input type="checkbox" id="flight-show-direction" checked>
+                            <label for="flight-show-direction">Show Direction Indicators</label>
                         </div>
                     </div>
                 </div>
@@ -1582,6 +1618,81 @@
 
             </div>
             <!-- KIOSK-STRIP-END -->
+
+
+            <!-- ========================================================
+                 FLIGHT PATH PANE
+                 ======================================================== -->
+            <div class="props-pane" id="pane-flightpath">
+
+                <!-- Flight Stats -->
+                <div class="prop-section open">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Flight Stats</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div id="flight-stats-empty" class="prop-hint">No flight paths loaded.</div>
+                        <div id="flight-stats-content" style="display:none;">
+                            <div class="prop-row"><span class="prop-row-label">Duration</span><span class="font-mono" id="fp-stat-duration" style="font-size:10px; color:var(--text-secondary);">—</span></div>
+                            <div class="prop-row"><span class="prop-row-label">Distance</span><span class="font-mono" id="fp-stat-distance" style="font-size:10px; color:var(--text-secondary);">—</span></div>
+                            <div class="prop-row"><span class="prop-row-label">Max Altitude</span><span class="font-mono" id="fp-stat-max-alt" style="font-size:10px; color:var(--text-secondary);">—</span></div>
+                            <div class="prop-row"><span class="prop-row-label">Max Speed</span><span class="font-mono" id="fp-stat-max-speed" style="font-size:10px; color:var(--text-secondary);">—</span></div>
+                            <div class="prop-row"><span class="prop-row-label">Avg Speed</span><span class="font-mono" id="fp-stat-avg-speed" style="font-size:10px; color:var(--text-secondary);">—</span></div>
+                            <div class="prop-row"><span class="prop-row-label">Points</span><span class="font-mono" id="fp-stat-points" style="font-size:10px; color:var(--text-secondary);">—</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Path List -->
+                <div class="prop-section open">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Paths</span>
+                        <span id="fp-path-count" style="font-size:10px; color:var(--text-muted); margin-left:auto; margin-right:6px;"></span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div id="fp-path-list"></div>
+                        <div class="prop-btn-row mt6">
+                            <label for="flightpath-input-pane" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#4FC3F7;">+</span> Import</label>
+                        </div>
+                        <input type="file" id="flightpath-input-pane" accept=".csv,.kml,.kmz,.srt,.txt" style="display:none" />
+                    </div>
+                </div>
+
+                <!-- Playback -->
+                <div class="prop-section open">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Playback</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <button class="prop-btn small" id="fp-play-btn" title="Play / Pause">&#9654;</button>
+                            <button class="prop-btn small" id="fp-stop-btn" title="Stop">&#9632;</button>
+                            <select class="prop-select" id="fp-speed" style="flex:1; min-width:0;">
+                                <option value="0.5">0.5x</option>
+                                <option value="1" selected>1x</option>
+                                <option value="2">2x</option>
+                                <option value="5">5x</option>
+                                <option value="10">10x</option>
+                            </select>
+                        </div>
+                        <div style="margin-top:8px;">
+                            <input type="range" id="fp-scrubber" min="0" max="1000" value="0" style="width:100%;">
+                            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted);">
+                                <span id="fp-time-current">00:00</span>
+                                <span id="fp-time-total">00:00</span>
+                            </div>
+                        </div>
+                        <div class="cb-row mt4">
+                            <input type="checkbox" id="fp-follow-camera">
+                            <label for="fp-follow-camera">Follow Camera</label>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
 
 
             <!-- ========================================================

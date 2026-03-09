@@ -670,6 +670,20 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
                     console.warn('[main] Failed to parse flight path:', fp.fileName, err);
                 }
             }
+            if (flightPathManager.hasData) {
+                // Apply settings from prefilled UI (set by prefillMetadataFromArchive)
+                const colorModeEl = document.getElementById('flight-color-mode') as HTMLSelectElement | null;
+                const endpointsEl = document.getElementById('flight-show-endpoints') as HTMLInputElement | null;
+                const directionEl = document.getElementById('flight-show-direction') as HTMLInputElement | null;
+                flightPathManager.applySettings({
+                    colorMode: colorModeEl?.value || 'speed',
+                    showEndpoints: endpointsEl?.checked ?? true,
+                    showDirection: directionEl?.checked ?? true,
+                });
+                state.flightPathLoaded = true;
+                updateObjectSelectButtons();
+                updateFlightPathUI();
+            }
         }
     };
 }
@@ -1198,14 +1212,116 @@ async function init() {
                     fpStore.flightPathBlobs.push({ blob: file, fileName: file.name });
                     state.flightPathLoaded = true;
                     updateObjectSelectButtons();
+                    updateFlightPathUI();
                     hideLoading();
                     notify.success('Flight path loaded: ' + data.points.length + ' points');
                 } catch (err: any) {
                     hideLoading();
                     notify.error('Error loading flight log: ' + err.message);
                 }
+                flightInput.value = '';
             });
         }
+
+        // Wire flight path pane file input (duplicate input in the Flight Path pane)
+        const flightInputPane = document.getElementById('flightpath-input-pane') as HTMLInputElement | null;
+        if (flightInputPane) {
+            flightInputPane.addEventListener('change', async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file || !flightPathManager) return;
+                showLoading('Importing flight log...');
+                try {
+                    const data = await flightPathManager.importFile(file);
+                    const fpStore = getStore();
+                    fpStore.flightPathBlobs.push({ blob: file, fileName: file.name });
+                    state.flightPathLoaded = true;
+                    updateObjectSelectButtons();
+                    updateFlightPathUI();
+                    hideLoading();
+                    notify.success('Flight path loaded: ' + data.points.length + ' points');
+                } catch (err: any) {
+                    hideLoading();
+                    notify.error('Error loading flight log: ' + err.message);
+                }
+                flightInputPane.value = '';
+            });
+        }
+
+        // Wire color mode dropdown
+        addListener('flight-color-mode', 'change', (e: Event) => {
+            if (!flightPathManager) return;
+            const mode = (e.target as HTMLSelectElement).value;
+            flightPathManager.setColorMode(mode as any);
+        });
+
+        // Wire endpoint toggle
+        addListener('flight-show-endpoints', 'change', (e: Event) => {
+            if (!flightPathManager) return;
+            flightPathManager.setShowEndpoints((e.target as HTMLInputElement).checked);
+        });
+
+        // Wire direction toggle
+        addListener('flight-show-direction', 'change', (e: Event) => {
+            if (!flightPathManager) return;
+            flightPathManager.setShowDirection((e.target as HTMLInputElement).checked);
+        });
+
+        // Wire playback controls
+        addListener('fp-play-btn', 'click', () => {
+            if (!flightPathManager) return;
+            if (flightPathManager.isPlaying) {
+                flightPathManager.pausePlayback();
+                const btn = document.getElementById('fp-play-btn');
+                if (btn) btn.textContent = '\u25B6';
+            } else {
+                flightPathManager.startPlayback();
+                const btn = document.getElementById('fp-play-btn');
+                if (btn) btn.textContent = '\u23F8';
+            }
+        });
+
+        addListener('fp-stop-btn', 'click', () => {
+            if (!flightPathManager) return;
+            flightPathManager.stopPlayback();
+            const btn = document.getElementById('fp-play-btn');
+            if (btn) btn.textContent = '\u25B6';
+            const scrubber = document.getElementById('fp-scrubber') as HTMLInputElement | null;
+            if (scrubber) scrubber.value = '0';
+            const timeCur = document.getElementById('fp-time-current');
+            if (timeCur) timeCur.textContent = '00:00';
+        });
+
+        addListener('fp-speed', 'change', (e: Event) => {
+            if (!flightPathManager) return;
+            flightPathManager.setPlaybackSpeed(parseFloat((e.target as HTMLSelectElement).value));
+        });
+
+        addListener('fp-scrubber', 'input', (e: Event) => {
+            if (!flightPathManager) return;
+            const val = parseInt((e.target as HTMLInputElement).value, 10);
+            flightPathManager.seekTo(val / 1000);
+        });
+
+        addListener('fp-follow-camera', 'change', (e: Event) => {
+            if (!flightPathManager) return;
+            flightPathManager.setFollowCamera((e.target as HTMLInputElement).checked);
+        });
+
+        // Playback callbacks
+        flightPathManager.onPlaybackUpdate((currentMs, totalMs) => {
+            const scrubber = document.getElementById('fp-scrubber') as HTMLInputElement | null;
+            if (scrubber) scrubber.value = String(Math.round((currentMs / totalMs) * 1000));
+            const timeCur = document.getElementById('fp-time-current');
+            if (timeCur) {
+                const s = Math.floor(currentMs / 1000);
+                timeCur.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+            }
+        });
+
+        flightPathManager.onPlaybackEnd(() => {
+            const btn = document.getElementById('fp-play-btn');
+            if (btn) btn.textContent = '\u25B6';
+        });
     }
 
     // Initialize landmark alignment system
@@ -1559,6 +1675,94 @@ function updateObjectSelectButtons() {
     // "All" only when 2+ types are loaded
     const loadedCount = [state.splatLoaded, state.modelLoaded, state.pointcloudLoaded, state.stlLoaded, state.cadLoaded, state.drawingLoaded, state.flightPathLoaded].filter(Boolean).length;
     show('btn-select-both', loadedCount >= 2);
+
+    // Show/hide flight path tool button and drone flight settings section
+    const fpToolBtn = document.getElementById('btn-tool-flightpath');
+    if (fpToolBtn) fpToolBtn.style.display = state.flightPathLoaded ? '' : 'none';
+    const droneSection = document.getElementById('drone-flight-section');
+    if (droneSection) droneSection.style.display = state.flightPathLoaded ? '' : 'none';
+}
+
+/** Update the flight path pane UI: stats, path list. */
+function updateFlightPathUI(): void {
+    if (!flightPathManager) return;
+
+    const paths = flightPathManager.getPaths();
+    const stats = flightPathManager.getStats();
+
+    // Stats
+    const emptyEl = document.getElementById('flight-stats-empty');
+    const contentEl = document.getElementById('flight-stats-content');
+    if (emptyEl) emptyEl.style.display = stats ? 'none' : '';
+    if (contentEl) contentEl.style.display = stats ? '' : 'none';
+    if (stats) {
+        const set = (id: string, val: string) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        set('fp-stat-duration', stats.duration);
+        set('fp-stat-distance', stats.distance);
+        set('fp-stat-max-alt', stats.maxAlt);
+        set('fp-stat-max-speed', stats.maxSpeed);
+        set('fp-stat-avg-speed', stats.avgSpeed);
+        set('fp-stat-points', stats.points);
+    }
+
+    // Path count
+    const countEl = document.getElementById('fp-path-count');
+    if (countEl) countEl.textContent = paths.length > 0 ? `${paths.length}` : '';
+
+    // Path list
+    const listEl = document.getElementById('fp-path-list');
+    if (listEl) {
+        listEl.innerHTML = '';
+        for (const p of paths) {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:center; gap:6px; padding:3px 0; font-size:11px;';
+
+            const vis = document.createElement('input');
+            vis.type = 'checkbox';
+            vis.checked = flightPathManager.isPathVisible(p.id);
+            vis.title = 'Toggle visibility';
+            vis.style.cssText = 'margin:0; flex-shrink:0;';
+            vis.addEventListener('change', () => {
+                flightPathManager!.setPathVisible(p.id, vis.checked);
+            });
+
+            const name = document.createElement('span');
+            name.textContent = p.fileName;
+            name.style.cssText = 'flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary);';
+            name.title = `${p.fileName} — ${p.points.length} pts, ${p.durationS}s`;
+
+            const del = document.createElement('button');
+            del.textContent = '\u00D7';
+            del.className = 'prop-btn danger small';
+            del.style.cssText = 'padding:0 5px; min-width:0; line-height:1.4; font-size:13px;';
+            del.title = 'Remove path';
+            del.addEventListener('click', () => {
+                flightPathManager!.deletePath(p.id);
+                // Remove from blob store
+                const fpStore = getStore();
+                const idx = fpStore.flightPathBlobs.findIndex((b: any) => b.fileName === p.fileName);
+                if (idx >= 0) fpStore.flightPathBlobs.splice(idx, 1);
+                // Update state
+                state.flightPathLoaded = flightPathManager!.hasData;
+                updateObjectSelectButtons();
+                updateFlightPathUI();
+            });
+
+            row.appendChild(vis);
+            row.appendChild(name);
+            row.appendChild(del);
+            listEl.appendChild(row);
+        }
+    }
+
+    // Total time label
+    const timeTotal = document.getElementById('fp-time-total');
+    if (timeTotal && paths.length > 0) {
+        const totalS = paths.reduce((sum, p) => sum + p.durationS, 0);
+        const m = Math.floor(totalS / 60);
+        const s = totalS % 60;
+        timeTotal.textContent = `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    }
 }
 
 // Handle loading splat from URL via prompt
@@ -2562,6 +2766,11 @@ function animate() {
 
         // Update cross-section plane (syncs THREE.Plane with gizmo anchor each frame)
         if (crossSection) crossSection.updatePlane();
+
+        // Update flight path playback
+        if (flightPathManager?.isPlaying) {
+            flightPathManager.updatePlayback(1 / 60);
+        }
 
         // Check if camera moved since last frame (skip marker DOM updates when idle)
         const camMoved = _markersDirty

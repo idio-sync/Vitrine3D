@@ -137,6 +137,9 @@ export interface ViewerSettings {
     measurementScale?: number | null;
     measurementUnit?: string | null;
     postProcessing?: PostProcessingEffectConfig | null;
+    flightColorMode?: string;
+    flightShowEndpoints?: boolean;
+    flightShowDirection?: boolean;
 }
 
 export interface MaterialStandard {
@@ -1185,6 +1188,9 @@ export class ArchiveCreator {
         if (settings.measurementScale !== undefined) this.manifest.viewer_settings.measurement_scale = settings.measurementScale;
         if (settings.measurementUnit !== undefined) this.manifest.viewer_settings.measurement_unit = settings.measurementUnit;
         if (settings.postProcessing !== undefined) this.manifest.viewer_settings.post_processing = settings.postProcessing;
+        if (settings.flightColorMode !== undefined) this.manifest.viewer_settings.flight_color_mode = settings.flightColorMode;
+        if (settings.flightShowEndpoints !== undefined) this.manifest.viewer_settings.flight_show_endpoints = settings.flightShowEndpoints;
+        if (settings.flightShowDirection !== undefined) this.manifest.viewer_settings.flight_show_direction = settings.flightShowDirection;
     }
 
     setAlignment(data: {
