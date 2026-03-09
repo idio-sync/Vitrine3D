@@ -2427,13 +2427,14 @@ async function loadSingleFile(file: File): Promise<void> {
     const ext = name.includes('.') ? name.split('.').pop()! : '';
 
     const ARCHIVE_EXTS = ['ddim', 'a3d', 'a3z'];
-    const MESH_EXTS    = ['glb', 'gltf', 'obj'];
-    const SPLAT_EXTS   = ['ply', 'splat', 'sog'];
+    const MESH_EXTS    = ['glb', 'gltf', 'obj', 'stl'];
+    const SPLAT_EXTS   = ['ply', 'splat', 'sog', 'ksplat', 'spz'];
     const E57_EXTS     = ['e57'];
     const CAD_EXTS     = ['step', 'stp', 'iges', 'igs'];
     const FLIGHT_EXTS  = ['csv', 'kml', 'kmz', 'srt'];
 
     if (ARCHIVE_EXTS.includes(ext)) {
+        state.archiveSourceUrl = null;
         await handleArchiveFile(file);
     } else if (MESH_EXTS.includes(ext)) {
         await loadModelFromFile([file] as any, createModelDeps());
