@@ -261,6 +261,14 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
 
     // Add splat if loaded and selected
     log.info(' Checking splat:', { splatBlob: !!assets.splatBlob, splatLoaded: state.splatLoaded });
+    // If viewing a proxy (SD device) the full-res blob was not pre-fetched — extract it on demand now
+    if (includeSplat && state.splatLoaded && !assets.splatBlob && state.viewingProxy && state.archiveLoader) {
+        const sceneEntry = state.archiveLoader.getSceneEntry();
+        if (sceneEntry) {
+            const fullData = await state.archiveLoader.extractFile(sceneEntry.file_name);
+            if (fullData) assets.splatBlob = fullData.blob;
+        }
+    }
     if (includeSplat && assets.splatBlob && state.splatLoaded) {
         const fileName = document.getElementById('splat-filename')?.textContent || 'scene.ply';
         const position = splatMesh ? [splatMesh.position.x, splatMesh.position.y, splatMesh.position.z] : [0, 0, 0];

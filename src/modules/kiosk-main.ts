@@ -1268,7 +1268,7 @@ async function showClickGate(archiveUrl: string): Promise<void> {
         // Remove poster blob URL from loader's tracked URLs before dispose
         // so it isn't revoked before the <img> finishes loading
         if (posterBlobUrl) {
-            loader.blobUrls = loader.blobUrls.filter(u => u !== posterBlobUrl);
+            loader.removeBlobUrl(posterBlobUrl);
         }
         loader.dispose();
     } catch (e) {
@@ -2020,19 +2020,56 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
 
         // === Phase 3: Background-load remaining assets ===
 
-        // Progressive mesh upgrade: swap SD proxy for HD in the background
+        // Progressive mesh upgrade: park SD proxy, load HD in background for instant switching
         if (shouldProgressiveLoad && state.archiveLoader) {
             showBgLoadingIndicator();
             log.info('Progressive load: starting background HD mesh upgrade');
             setTimeout(async () => {
+                // Capture SD proxy children from modelGroup BEFORE HD load.
+                // swapMeshChildren() disposes old geometry — we must remove SD first so
+                // HD takes the empty-group path (add only, no dispose).
+                const sdChildren: THREE.Object3D[] = [];
+                if (modelGroup && modelGroup.children.length > 0) {
+                    sdChildren.push(...modelGroup.children);
+                    sdChildren.forEach(c => {
+                        (c as any).userData.lodLevel = 'sd';
+                        c.visible = false;
+                        modelGroup!.remove(c);
+                    });
+                }
+
                 try {
                     const result = await loadArchiveFullResMesh(state.archiveLoader!, createArchiveDeps());
                     if (result.loaded) {
-                        log.info(`Progressive load: HD mesh swapped (${result.faceCount?.toLocaleString()} faces)`);
+                        // Tag HD children and add SD back as hidden siblings for instant toggle
+                        if (modelGroup) {
+                            modelGroup.children.forEach((c: any) => {
+                                if (!c.userData.lodLevel) c.userData.lodLevel = 'hd';
+                            });
+                            sdChildren.forEach(c => modelGroup!.add(c));
+                        }
+                        // Revoke blob URLs: THREE.js and GPU hold the data, blobs are consumed
+                        const proxyEntry = state.archiveLoader!.getMeshProxyEntry();
+                        if (proxyEntry) state.archiveLoader!.revokeBlobForFile(proxyEntry.file_name);
+                        const meshEntry = state.archiveLoader!.getMeshEntry();
+                        if (meshEntry) state.archiveLoader!.revokeBlobForFile(meshEntry.file_name);
+                        // Evict mesh _fileCache: dual-geometry is live so switching never re-parses.
+                        // Only safe when range-based — server can re-fetch on the rare fallback path.
+                        if (state.archiveLoader!.canRefetch) {
+                            if (proxyEntry) state.archiveLoader!.evictFileCache(proxyEntry.file_name);
+                            if (meshEntry) state.archiveLoader!.evictFileCache(meshEntry.file_name);
+                        }
+                        log.info(`Progressive load: HD mesh ready (${result.faceCount?.toLocaleString()} faces), SD retained for instant switching`);
                         const facesEl = document.getElementById('model-faces');
                         if (facesEl && result.faceCount) facesEl.textContent = result.faceCount.toLocaleString();
+                    } else {
+                        // HD load failed — restore SD children as visible
+                        sdChildren.forEach(c => { c.visible = true; modelGroup?.add(c); });
+                        log.warn('Progressive load: HD mesh upgrade failed, restored SD proxy');
                     }
                 } catch (e: any) {
+                    // HD load threw — restore SD children as visible
+                    sdChildren.forEach(c => { c.visible = true; modelGroup?.add(c); });
                     log.warn('Progressive load: HD mesh upgrade failed, keeping SD proxy:', e.message);
                 } finally {
                     hideBgLoadingIndicator();
@@ -2043,47 +2080,67 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         const remainingTypes = ['splat', 'mesh', 'pointcloud'].filter(
             t => state.assetStates[t] === ASSET_STATE.UNLOADED
         );
-        if (remainingTypes.length > 0) {
-            setTimeout(async () => {
-                for (const type of remainingTypes) {
-                    const typeAvailable = (type === 'splat' && contentInfo.hasSplat && state.qualityResolved !== QUALITY_TIER.SD) ||
-                                          (type === 'mesh' && contentInfo.hasMesh) ||
-                                          (type === 'pointcloud' && contentInfo.hasPointcloud);
-                    if (typeAvailable) {
-                        log.info(`Background loading: ${type}`);
-                        await ensureAssetLoaded(type as AssetType);
-                        // Update settings visibility after background load
-                        showRelevantSettings(state.splatLoaded, state.modelLoaded, state.pointcloudLoaded);
-                        // Update visibility to match current display mode
-                        const deps = createDisplayModeDeps();
-                        if (deps.updateVisibility) deps.updateVisibility();
-                        // Re-apply viewer settings to newly loaded meshes
-                        if (type === 'mesh' && manifest.viewer_settings?.single_sided !== undefined) {
-                            const side = manifest.viewer_settings.single_sided ? THREE.FrontSide : THREE.DoubleSide;
-                            modelGroup.traverse((child: any) => {
-                                if (child.isMesh && child.material) {
-                                    const mats = Array.isArray(child.material) ? child.material : [child.material];
-                                    mats.forEach((m: any) => { m.side = side; m.needsUpdate = true; });
-                                }
-                            });
+        setTimeout(async () => {
+            for (const type of remainingTypes) {
+                const typeAvailable = (type === 'splat' && contentInfo.hasSplat && state.qualityResolved !== QUALITY_TIER.SD) ||
+                                      (type === 'mesh' && contentInfo.hasMesh) ||
+                                      (type === 'pointcloud' && contentInfo.hasPointcloud);
+                if (typeAvailable) {
+                    log.info(`Background loading: ${type}`);
+                    await ensureAssetLoaded(type as AssetType);
+                    // Update settings visibility after background load
+                    showRelevantSettings(state.splatLoaded, state.modelLoaded, state.pointcloudLoaded);
+                    // Update visibility to match current display mode
+                    const deps = createDisplayModeDeps();
+                    if (deps.updateVisibility) deps.updateVisibility();
+                    // Re-apply viewer settings to newly loaded meshes
+                    if (type === 'mesh' && manifest.viewer_settings?.single_sided !== undefined) {
+                        const side = manifest.viewer_settings.single_sided ? THREE.FrontSide : THREE.DoubleSide;
+                        modelGroup.traverse((child: any) => {
+                            if (child.isMesh && child.material) {
+                                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                                mats.forEach((m: any) => { m.side = side; m.needsUpdate = true; });
+                            }
+                        });
+                        // Also apply to hidden SD proxy children if present
+                        modelGroup.children.forEach((c: any) => {
+                            if (c.userData?.lodLevel === 'sd') {
+                                c.traverse((child: any) => {
+                                    if (child.isMesh && child.material) {
+                                        const mats = Array.isArray(child.material) ? child.material : [child.material];
+                                        mats.forEach((m: any) => { m.side = side; m.needsUpdate = true; });
+                                    }
+                                });
+                            }
+                        });
+                    }
+                    // After splat loads: revoke blob URL and evict raw bytes — Spark.js holds GPU data
+                    if (type === 'splat' && state.archiveLoader) {
+                        const splatEntry = state.archiveLoader.getSceneEntry();
+                        if (splatEntry) {
+                            state.archiveLoader.revokeBlobForFile(splatEntry.file_name);
+                            // Only evict if no scene proxy (proxy switching re-uses cached bytes)
+                            if (!contentInfo.hasSceneProxy) {
+                                state.archiveLoader.evictFileCache(splatEntry.file_name);
+                            }
                         }
                     }
+                    // After non-progressive mesh loads: revoke blob URL (THREE.js holds parsed data)
+                    if (type === 'mesh' && state.archiveLoader && !shouldProgressiveLoad) {
+                        const meshEntry = state.archiveLoader.getMeshEntry();
+                        if (meshEntry) state.archiveLoader.revokeBlobForFile(meshEntry.file_name);
+                    }
                 }
-                // Re-apply global alignment to ensure late-loaded assets get
-                // correct transforms (alignment may have been skipped earlier
-                // when the asset didn't exist yet).
-                // Skip camera — it was already set from viewer_settings or
-                // fitCameraToScene during initial load; overwriting it here
-                // would cause an abrupt jump after the background load.
-                if (globalAlignment) {
-                    applyGlobalAlignment(globalAlignment, { skipCamera: true });
-                }
-                // Keep archive data available for export downloads
-                log.info('All archive assets loaded, raw data retained for export');
-            }, 100);
-        } else {
-            log.info('Archive data retained for export');
-        }
+            }
+            // Re-apply global alignment to ensure late-loaded assets get correct transforms.
+            // Skip camera — it was set from viewer_settings or fitCameraToScene during initial load.
+            if (globalAlignment) {
+                applyGlobalAlignment(globalAlignment, { skipCamera: true });
+            }
+            // Release raw ZIP data: all assets extracted, re-extraction uses _fileCache
+            state.archiveLoader?.releaseRawData();
+            log.info('Background load complete, raw archive data released');
+        }, 100);
 
     } catch (e) {
         log.error('Error loading archive:', e);
@@ -2189,10 +2246,20 @@ async function switchQualityTier(newTier: string): Promise<void> {
         }
         // Switch mesh if proxy exists
         if (contentInfo.hasMeshProxy) {
-            if (newTier === 'hd') {
-                await loadArchiveFullResMesh(archiveLoader, deps);
+            // Instant toggle: both geometries already in modelGroup, just flip visibility
+            const hasLodChildren = modelGroup?.children.some((c: any) => c.userData?.lodLevel);
+            if (hasLodChildren && modelGroup) {
+                modelGroup.children.forEach((c: any) => {
+                    if (c.userData?.lodLevel) c.visible = (c.userData.lodLevel === newTier);
+                });
+                log.info(`Quality tier mesh toggled to ${newTier} (instant)`);
             } else {
-                await loadArchiveProxyMesh(archiveLoader, deps);
+                // Fallback: re-parse from _fileCache (dual geometry not yet loaded)
+                if (newTier === 'hd') {
+                    await loadArchiveFullResMesh(archiveLoader, deps);
+                } else {
+                    await loadArchiveProxyMesh(archiveLoader, deps);
+                }
             }
         }
         log.info(`Quality tier switched to ${newTier}`);

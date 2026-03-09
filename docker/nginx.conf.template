@@ -143,8 +143,9 @@ server {
         add_header Cache-Control "public";
     }
 
-    # Serve archive files (.a3d, .a3z) with proper headers
-    location ~* \.(a3d|a3z)$ {
+    # Serve archive files (.ddim, .a3d, .a3z) with proper headers
+    # Range header must be in Allow-Headers for cross-origin byte-range requests (used by loadRemoteIndex)
+    location ~* \.(ddim|a3d|a3z)$ {
         expires 1d;
         add_header Cache-Control "public";
         add_header Access-Control-Allow-Origin $cors_origin always;
@@ -153,7 +154,7 @@ server {
         add_header Vary "Origin" always;
         # Serve as application/zip for proper handling
         types {
-            application/zip a3d a3z;
+            application/zip ddim a3d a3z;
         }
     }
 

@@ -351,11 +351,9 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
                 currentSplat.scale.set(...s);
             }
             if (useProxy) {
-                // Store the proxy blob for re-export, extract full-res blob in background
+                // Store the proxy blob for re-export. Full-res blob is extracted on-demand
+                // at export time (export-controller.ts) to avoid wasting ~100MB+ RAM on SD/kiosk devices.
                 assets.proxySplatBlob = splatData.blob;
-                archiveLoader.extractFile(sceneEntry.file_name).then((fullData: any) => {
-                    if (fullData) assets.splatBlob = fullData.blob;
-                }).catch(() => {});
             } else {
                 assets.splatBlob = splatData.blob;
                 // Extract proxy blob in background so it survives re-export

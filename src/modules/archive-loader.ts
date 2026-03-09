@@ -229,11 +229,16 @@ export class ArchiveLoader {
     private _ipcCloseFn: (() => Promise<void>) | null = null;
     private _fileSize: number = 0;
     private _fileCache: Map<string, Uint8Array> = new Map();
+    private _blobUrlMap: Map<string, string> = new Map(); // sanitized filename → blob URL
     private _fileIndex: FileIndexEntry[] = [];
     private _centralDir: Map<string, CentralDirEntry> | null = null;
     private _contentInfoCache: ContentInfo | null = null;
     manifest: ArchiveManifest | null = null;
-    blobUrls: string[] = [];
+
+    /** All currently live blob URLs (read-only view). */
+    get blobUrls(): string[] {
+        return Array.from(this._blobUrlMap.values());
+    }
 
     /**
      * Check if archive data is available (either File reference or raw buffer).
@@ -826,7 +831,7 @@ export class ArchiveLoader {
             : new Uint8Array(fileData);
         const blob = new Blob([blobData]);
         const url = URL.createObjectURL(blob);
-        this.blobUrls.push(url);
+        this._blobUrlMap.set(safeFilename, url);
 
         return { blob, url, name: safeFilename };
     }
@@ -1021,6 +1026,15 @@ export class ArchiveLoader {
     }
 
     /**
+     * True if a remote source (URL or IPC handle) is still available for
+     * on-demand re-extraction after releaseRawData() is called.
+     * When false, _fileCache is the only remaining data source.
+     */
+    get canRefetch(): boolean {
+        return !!(this._url || this._ipcReadFn);
+    }
+
+    /**
      * Release the raw ZIP data to free memory.
      * Call this after all needed assets have been extracted and cached.
      * After calling this, no new files can be extracted.
@@ -1035,13 +1049,53 @@ export class ArchiveLoader {
     }
 
     /**
+     * Evict a single file from the decompressed cache to free memory.
+     * Use after a renderer has consumed the data and no re-extraction is needed.
+     */
+    evictFileCache(filename: string): void {
+        const sanitization = sanitizeArchiveFilename(filename);
+        const key = sanitization.safe ? sanitization.sanitized : filename;
+        if (this._fileCache.delete(key)) {
+            log.info(`Evicted file cache for: ${key}`);
+        }
+    }
+
+    /**
+     * Revoke the blob URL for a specific file and remove it from tracking.
+     * Use after the renderer has consumed the blob (no longer needs the URL).
+     */
+    revokeBlobForFile(filename: string): void {
+        const sanitization = sanitizeArchiveFilename(filename);
+        const key = sanitization.safe ? sanitization.sanitized : filename;
+        const url = this._blobUrlMap.get(key);
+        if (url) {
+            URL.revokeObjectURL(url);
+            this._blobUrlMap.delete(key);
+            log.info(`Revoked blob URL for: ${key}`);
+        }
+    }
+
+    /**
+     * Remove a blob URL from tracking without revoking it.
+     * Use when the caller wants to keep the URL alive beyond this loader's lifecycle.
+     */
+    removeBlobUrl(url: string): void {
+        for (const [key, val] of this._blobUrlMap) {
+            if (val === url) {
+                this._blobUrlMap.delete(key);
+                return;
+            }
+        }
+    }
+
+    /**
      * Clean up all created blob URLs
      */
     cleanup(): void {
-        for (const url of this.blobUrls) {
+        for (const url of this._blobUrlMap.values()) {
             URL.revokeObjectURL(url);
         }
-        this.blobUrls = [];
+        this._blobUrlMap.clear();
     }
 
     /**
