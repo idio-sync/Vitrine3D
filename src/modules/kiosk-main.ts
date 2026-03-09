@@ -2046,7 +2046,7 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         if (remainingTypes.length > 0) {
             setTimeout(async () => {
                 for (const type of remainingTypes) {
-                    const typeAvailable = (type === 'splat' && contentInfo.hasSplat) ||
+                    const typeAvailable = (type === 'splat' && contentInfo.hasSplat && state.qualityResolved !== QUALITY_TIER.SD) ||
                                           (type === 'mesh' && contentInfo.hasMesh) ||
                                           (type === 'pointcloud' && contentInfo.hasPointcloud);
                     if (typeAvailable) {
