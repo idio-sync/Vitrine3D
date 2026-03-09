@@ -28,7 +28,7 @@ body.kiosk-mode.kiosk-industrial .ind-menubar {
 
 body.kiosk-mode.kiosk-industrial .ind-menu-item {
     padding: 2px 8px;
-    cursor: default;
+    cursor: pointer;
     border-radius: 0;
     white-space: nowrap;
     line-height: 20px;
