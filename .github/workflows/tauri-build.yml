@@ -17,10 +17,24 @@ jobs:
         include:
           - platform: ubuntu-22.04
             target: linux
+            variant: editorial
+            config_args: ""
+            release_name: "Vitrine3D"
           - platform: windows-latest
             target: windows
+            variant: editorial
+            config_args: ""
+            release_name: "Vitrine3D"
           - platform: macos-latest
             target: macos
+            variant: editorial
+            config_args: ""
+            release_name: "Vitrine3D"
+          - platform: windows-latest
+            target: windows
+            variant: pass
+            config_args: "--config ./src-tauri/tauri.pass.conf.json"
+            release_name: "Direct Dimensions PASS Viewer"
 
     runs-on: ${{ matrix.platform }}
 
@@ -67,10 +81,11 @@ jobs:
           SITE_URL: ${{ vars.SITE_URL }}
         with:
           tagName: ${{ steps.release_tag.outputs.tag }}
-          releaseName: 'Vitrine3D ${{ steps.release_tag.outputs.tag }}'
+          releaseName: '${{ matrix.release_name }} ${{ steps.release_tag.outputs.tag }}'
           releaseBody: 'Desktop release for Windows, Linux, and macOS.'
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.config_args }}
 
   build-android:
     runs-on: ubuntu-latest
