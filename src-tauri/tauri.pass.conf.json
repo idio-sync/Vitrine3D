@@ -17,5 +17,12 @@
   },
   "build": {
     "devUrl": "http://localhost:8080/?home=true&kiosk=true&theme=industrial"
+  },
+  "bundle": {
+    "windows": {
+      "nsis": {
+        "installerHooks": "./windows/hooks.pass.nsh"
+      }
+    }
   }
 }
