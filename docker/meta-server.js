@@ -757,7 +757,7 @@ function handleDjiKeychains(req, res) {
         return res.end(JSON.stringify({ error: 'Method not allowed' }));
     }
 
-    const apiKey = getSetting('flight.djiApiKey');
+    const apiKey = getSetting('flight.djiApiKey') || process.env.DJI_API_KEY || '';
     console.log('[meta-server] DJI keychains proxy — apiKey resolved:', apiKey ? '***' + apiKey.slice(-4) : '(empty)', '| env:', process.env.DJI_API_KEY ? 'set' : 'unset');
     if (!apiKey) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
