@@ -2434,19 +2434,16 @@ async function loadSingleFile(file: File): Promise<void> {
     const FLIGHT_EXTS  = ['csv', 'kml', 'kmz', 'srt'];
 
     if (ARCHIVE_EXTS.includes(ext)) {
-        await loadArchiveFromFile(file, { state: state as any });
+        await handleArchiveFile(file);
     } else if (MESH_EXTS.includes(ext)) {
-        const { loadModelFromFile } = await import('./file-handlers.js');
         await loadModelFromFile([file] as any, createModelDeps());
     } else if (SPLAT_EXTS.includes(ext)) {
-        const { loadSplatFromFile } = await import('./file-handlers.js');
         await loadSplatFromFile(file, createSplatDeps());
     } else if (E57_EXTS.includes(ext)) {
-        const { loadPointcloudFromFile } = await import('./file-handlers.js');
         await loadPointcloudFromFile(file, createPointcloudDeps());
     } else if (CAD_EXTS.includes(ext)) {
         const { loadCADFromFile } = await import('./cad-loader.js');
-        await loadCADFromFile(file, createArchiveDeps());
+        await loadCADFromFile(file, { cadGroup: sceneManager.cadGroup, state, showLoading, hideLoading });
     } else if (FLIGHT_EXTS.includes(ext)) {
         if (flightPathManager) await flightPathManager.importFromFile(file);
         else notify.warning('Flight path viewer not available.');
