@@ -206,8 +206,8 @@ export function parseSrt(srtText: string): FlightPoint[] {
 
     const latRe = /\[latitude\s*:\s*([-\d.]+)\]/i;
     const lonRe = /\[(?:longitude|longtitude)\s*:\s*([-\d.]+)\]/i;
-    const relAltRe = /\[rel_alt\s*:\s*([-\d.]+)\]/i;
-    const absAltRe = /\[abs_alt\s*:\s*([-\d.]+)\]/i;
+    const relAltRe = /\[?rel_alt\s*:\s*([-\d.]+)/i;
+    const absAltRe = /\[?abs_alt\s*:\s*([-\d.]+)/i;
     const altRe = /\[(?:altitude|height)\s*:\s*([-\d.]+)\]/i;
     const timeRe = /(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/;
 

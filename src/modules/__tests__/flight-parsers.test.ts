@@ -191,4 +191,9 @@ describe('parseSrt', () => {
         const points = parseSrt(srt);
         expect(points[0].alt).toBeCloseTo(30.0, 1);
     });
+    it('parses combined rel_alt/abs_alt in single bracket (DJI Mini/Air format)', () => {
+        const srt = '1\n00:00:00,000 --> 00:00:01,000\n<font size="28">[latitude: 39.329024] [longitude: -76.636289] [rel_alt: 0.900 abs_alt: 114.268]</font>\n';
+        const points = parseSrt(srt);
+        expect(points[0].alt).toBeCloseTo(0.9, 1);
+    });
 });
