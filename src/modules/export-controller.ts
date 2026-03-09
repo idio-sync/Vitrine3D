@@ -54,7 +54,7 @@ function updateArchiveAssetCheckboxes(deps: ExportDeps): void {
     // Show Draco sub-row only when a GLB mesh is loaded
     const dracoHdRow = document.getElementById('export-draco-hd-row');
     if (dracoHdRow) {
-        const fileName = (document.getElementById('model-filename')?.textContent || '').toLowerCase();
+        const fileName = (state._meshFileName || document.getElementById('model-filename')?.textContent || '').toLowerCase();
         const isGlb = fileName.endsWith('.glb');
         dracoHdRow.style.display = (state.modelLoaded && isGlb) ? '' : 'none';
     }
