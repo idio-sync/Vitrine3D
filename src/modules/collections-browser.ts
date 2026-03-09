@@ -541,3 +541,82 @@ async function navigateToCollection(slug: string, name: string): Promise<void> {
         container.querySelector('.cb-nav-back')?.addEventListener('click', () => { void navigateToCollections(); });
     }
 }
+
+// ── Archive viewer transition ──
+
+function openArchive(archive: CollectionArchive, collectionName: string): void {
+    if (!_opts) return;
+
+    const libraryBaseUrl = _opts.libraryBaseUrl;
+    const fullUrl = archive.path.startsWith('http')
+        ? archive.path
+        : libraryBaseUrl + archive.path;
+
+    // Hide browser, show app
+    hideBrowserContainer();
+    const app = document.getElementById('app');
+    if (app) app.style.display = '';
+
+    // Relabel the kiosk-back-library button and show it
+    const backBtn = getBackButtonEl();
+    if (backBtn) {
+        backBtn.textContent = '\u2190 ' + collectionName;
+        backBtn.classList.remove('hidden');
+    }
+
+    // Hide file picker (may be visible if no archive was loaded yet)
+    const picker = document.getElementById('kiosk-file-picker');
+    if (picker) picker.classList.add('hidden');
+
+    log.info('Opening archive:', fullUrl);
+    _opts.loadArchiveFromUrl(fullUrl);
+}
+
+// ── Public API ──
+
+/**
+ * Called when the viewer's back button (#kiosk-back-library) is clicked.
+ * Returns to the collection detail that launched the current archive.
+ */
+export function handleViewerBack(): void {
+    const backBtn = getBackButtonEl();
+    if (backBtn) backBtn.classList.add('hidden');
+
+    const app = document.getElementById('app');
+    if (app) app.style.display = 'none';
+
+    if (_currentView.kind === 'collection') {
+        showBrowserContainer();
+        if (_cachedCollection) {
+            renderCollectionDetailPage(_cachedCollection);
+        } else {
+            void navigateToCollection(_currentView.slug, _currentView.name);
+        }
+    } else {
+        void navigateToCollections();
+    }
+
+    log.info('Returned from viewer to collection browser');
+}
+
+/**
+ * Initialize the collections browser. Call once during kiosk init.
+ * Sets up the overlay container and injects styles.
+ */
+export function initCollectionsBrowser(opts: CollectionsBrowserOpts): void {
+    _opts = opts;
+    injectCardStyles();           // cp-* styles from collection-page.ts
+    injectCollectionCardStyles(); // cb-* styles
+    const container = getContainer();
+    container.style.display = 'none'; // hidden until Browse Library clicked
+    log.info('Collections browser initialized, base URL:', opts.libraryBaseUrl);
+}
+
+/**
+ * Show the collections list. Called by the "Browse Library" button click handler.
+ */
+export async function showCollectionsBrowser(): Promise<void> {
+    const picker = document.getElementById('kiosk-file-picker');
+    if (picker) picker.classList.add('hidden');
+    await navigateToCollections();
+}
