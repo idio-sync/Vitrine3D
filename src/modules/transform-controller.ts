@@ -35,6 +35,9 @@ const lastCadScale = new THREE.Vector3(1, 1, 1);
 const lastDrawingPosition = new THREE.Vector3();
 const lastDrawingRotation = new THREE.Euler();
 const lastDrawingScale = new THREE.Vector3(1, 1, 1);
+const lastFlightpathPosition = new THREE.Vector3();
+const lastFlightpathRotation = new THREE.Euler();
+const lastFlightpathScale = new THREE.Vector3(1, 1, 1);
 
 // Quaternion tracking for pivot rotation
 const lastSplatQuat = new THREE.Quaternion();
@@ -48,20 +51,21 @@ interface SetSelectedObjectDeps {
     stlGroup: any; // THREE.Group
     cadGroup: any; // THREE.Group
     drawingGroup: any; // THREE.Group
+    flightpathGroup: any; // THREE.Group
     state: AppState;
 }
 
 /**
  * Set the selected object for transform controls.
- * @param selection - 'splat', 'model', 'pointcloud', 'stl', 'cad', 'drawing', 'both', or 'none'
- * @param deps - { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state }
+ * @param selection - 'splat', 'model', 'pointcloud', 'stl', 'cad', 'drawing', 'flightpath', 'both', or 'none'
+ * @param deps - { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state }
  */
 export function setSelectedObject(selection: SelectedObject, deps: SetSelectedObjectDeps): void {
-    const { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state } = deps;
+    const { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state } = deps;
     state.selectedObject = selection;
 
     // Update button states
-    (['splat', 'model', 'pointcloud', 'stl', 'cad', 'drawing', 'both', 'none'] as const).forEach(s => {
+    (['splat', 'model', 'pointcloud', 'stl', 'cad', 'drawing', 'flightpath', 'both', 'none'] as const).forEach(s => {
         const btn = document.getElementById(`btn-select-${s}`);
         if (btn) btn.classList.toggle('active', s === selection);
     });
@@ -86,6 +90,8 @@ export function setSelectedObject(selection: SelectedObject, deps: SetSelectedOb
             transformControls.attach(cadGroup);
         } else if (selection === 'drawing' && drawingGroup && drawingGroup.children.length > 0) {
             transformControls.attach(drawingGroup);
+        } else if (selection === 'flightpath' && flightpathGroup && flightpathGroup.children.length > 0) {
+            transformControls.attach(flightpathGroup);
         } else if (selection === 'both') {
             // For both, attach to splat first, then model, then other groups as fallback
             if (splatMesh) {
@@ -100,6 +106,8 @@ export function setSelectedObject(selection: SelectedObject, deps: SetSelectedOb
                 transformControls.attach(cadGroup);
             } else if (drawingGroup && drawingGroup.children.length > 0) {
                 transformControls.attach(drawingGroup);
+            } else if (flightpathGroup && flightpathGroup.children.length > 0) {
+                transformControls.attach(flightpathGroup);
             }
         }
     } catch (attachError) {
@@ -117,6 +125,7 @@ interface SyncBothObjectsDeps {
     stlGroup: any; // THREE.Group
     cadGroup: any; // THREE.Group
     drawingGroup: any; // THREE.Group
+    flightpathGroup: any; // THREE.Group
 }
 
 /**
@@ -125,7 +134,7 @@ interface SyncBothObjectsDeps {
  * @param deps - { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup }
  */
 export function syncBothObjects(deps: SyncBothObjectsDeps): void {
-    const { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup } = deps;
+    const { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup } = deps;
 
     // Helper to apply delta to a group
     const applyDelta = (obj: any, deltaPos: THREE.Vector3, deltaRot: THREE.Euler, scaleRatio: number) => {
@@ -152,6 +161,7 @@ export function syncBothObjects(deps: SyncBothObjectsDeps): void {
         applyDelta(stlGroup, deltaPos, deltaRot, scaleRatio);
         applyDelta(cadGroup, deltaPos, deltaRot, scaleRatio);
         applyDelta(drawingGroup, deltaPos, deltaRot, scaleRatio);
+        applyDelta(flightpathGroup, deltaPos, deltaRot, scaleRatio);
     } else if (modelGroup && transformControls.object === modelGroup) {
         const deltaPos = new THREE.Vector3().subVectors(modelGroup.position, lastModelPosition);
         const deltaRot = new THREE.Euler(
@@ -172,6 +182,7 @@ export function syncBothObjects(deps: SyncBothObjectsDeps): void {
         applyDelta(stlGroup, deltaPos, deltaRot, scaleRatio);
         applyDelta(cadGroup, deltaPos, deltaRot, scaleRatio);
         applyDelta(drawingGroup, deltaPos, deltaRot, scaleRatio);
+        applyDelta(flightpathGroup, deltaPos, deltaRot, scaleRatio);
     } else if (pointcloudGroup && transformControls.object === pointcloudGroup) {
         const deltaPos = new THREE.Vector3().subVectors(pointcloudGroup.position, lastPointcloudPosition);
         const deltaRot = new THREE.Euler(
@@ -192,6 +203,7 @@ export function syncBothObjects(deps: SyncBothObjectsDeps): void {
         applyDelta(stlGroup, deltaPos, deltaRot, scaleRatio);
         applyDelta(cadGroup, deltaPos, deltaRot, scaleRatio);
         applyDelta(drawingGroup, deltaPos, deltaRot, scaleRatio);
+        applyDelta(flightpathGroup, deltaPos, deltaRot, scaleRatio);
     } else if (stlGroup && transformControls.object === stlGroup) {
         const deltaPos = new THREE.Vector3().subVectors(stlGroup.position, lastStlPosition);
         const deltaRot = new THREE.Euler(
@@ -212,6 +224,7 @@ export function syncBothObjects(deps: SyncBothObjectsDeps): void {
         applyDelta(pointcloudGroup, deltaPos, deltaRot, scaleRatio);
         applyDelta(cadGroup, deltaPos, deltaRot, scaleRatio);
         applyDelta(drawingGroup, deltaPos, deltaRot, scaleRatio);
+        applyDelta(flightpathGroup, deltaPos, deltaRot, scaleRatio);
     } else if (cadGroup && transformControls.object === cadGroup) {
         const deltaPos = new THREE.Vector3().subVectors(cadGroup.position, lastCadPosition);
         const deltaRot = new THREE.Euler(
@@ -232,6 +245,7 @@ export function syncBothObjects(deps: SyncBothObjectsDeps): void {
         applyDelta(pointcloudGroup, deltaPos, deltaRot, scaleRatio);
         applyDelta(stlGroup, deltaPos, deltaRot, scaleRatio);
         applyDelta(drawingGroup, deltaPos, deltaRot, scaleRatio);
+        applyDelta(flightpathGroup, deltaPos, deltaRot, scaleRatio);
     } else if (drawingGroup && transformControls.object === drawingGroup) {
         const deltaPos = new THREE.Vector3().subVectors(drawingGroup.position, lastDrawingPosition);
         const deltaRot = new THREE.Euler(
@@ -252,6 +266,28 @@ export function syncBothObjects(deps: SyncBothObjectsDeps): void {
         applyDelta(pointcloudGroup, deltaPos, deltaRot, scaleRatio);
         applyDelta(stlGroup, deltaPos, deltaRot, scaleRatio);
         applyDelta(cadGroup, deltaPos, deltaRot, scaleRatio);
+        applyDelta(flightpathGroup, deltaPos, deltaRot, scaleRatio);
+    } else if (flightpathGroup && transformControls.object === flightpathGroup) {
+        const deltaPos = new THREE.Vector3().subVectors(flightpathGroup.position, lastFlightpathPosition);
+        const deltaRot = new THREE.Euler(
+            flightpathGroup.rotation.x - lastFlightpathRotation.x,
+            flightpathGroup.rotation.y - lastFlightpathRotation.y,
+            flightpathGroup.rotation.z - lastFlightpathRotation.z
+        );
+        const scaleRatio = lastFlightpathScale.x !== 0 ? flightpathGroup.scale.x / lastFlightpathScale.x : 1;
+
+        if (splatMesh) {
+            splatMesh.position.add(deltaPos);
+            splatMesh.rotation.x += deltaRot.x;
+            splatMesh.rotation.y += deltaRot.y;
+            splatMesh.rotation.z += deltaRot.z;
+            splatMesh.scale.multiplyScalar(scaleRatio);
+        }
+        applyDelta(modelGroup, deltaPos, deltaRot, scaleRatio);
+        applyDelta(pointcloudGroup, deltaPos, deltaRot, scaleRatio);
+        applyDelta(stlGroup, deltaPos, deltaRot, scaleRatio);
+        applyDelta(cadGroup, deltaPos, deltaRot, scaleRatio);
+        applyDelta(drawingGroup, deltaPos, deltaRot, scaleRatio);
     }
 
     // Update last positions and scales for all objects
@@ -285,6 +321,11 @@ export function syncBothObjects(deps: SyncBothObjectsDeps): void {
         lastDrawingRotation.copy(drawingGroup.rotation);
         lastDrawingScale.copy(drawingGroup.scale);
     }
+    if (flightpathGroup) {
+        lastFlightpathPosition.copy(flightpathGroup.position);
+        lastFlightpathRotation.copy(flightpathGroup.rotation);
+        lastFlightpathScale.copy(flightpathGroup.scale);
+    }
 }
 
 interface StoreLastPositionsDeps {
@@ -294,15 +335,16 @@ interface StoreLastPositionsDeps {
     stlGroup: any; // THREE.Group
     cadGroup: any; // THREE.Group
     drawingGroup: any; // THREE.Group
+    flightpathGroup: any; // THREE.Group
 }
 
 /**
  * Store last positions, rotations, and scales for delta calculations.
  * Must be called when selection changes or after applying transforms.
- * @param deps - { splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup }
+ * @param deps - { splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup }
  */
 export function storeLastPositions(deps: StoreLastPositionsDeps): void {
-    const { splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup } = deps;
+    const { splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup } = deps;
     if (splatMesh) {
         lastSplatPosition.copy(splatMesh.position);
         lastSplatRotation.copy(splatMesh.rotation);
@@ -335,6 +377,11 @@ export function storeLastPositions(deps: StoreLastPositionsDeps): void {
         lastDrawingRotation.copy(drawingGroup.rotation);
         lastDrawingScale.copy(drawingGroup.scale);
     }
+    if (flightpathGroup) {
+        lastFlightpathPosition.copy(flightpathGroup.position);
+        lastFlightpathRotation.copy(flightpathGroup.rotation);
+        lastFlightpathScale.copy(flightpathGroup.scale);
+    }
 }
 
 interface SetTransformModeDeps {
@@ -346,15 +393,16 @@ interface SetTransformModeDeps {
     stlGroup: any; // THREE.Group
     cadGroup: any; // THREE.Group
     drawingGroup: any; // THREE.Group
+    flightpathGroup: any; // THREE.Group
 }
 
 /**
  * Set the transform mode (translate/rotate/scale).
  * @param mode - 'translate', 'rotate', or 'scale'
- * @param deps - { transformControls, state, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup }
+ * @param deps - { transformControls, state, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup }
  */
 export function setTransformMode(mode: TransformMode, deps: SetTransformModeDeps): void {
-    const { transformControls, state, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup } = deps;
+    const { transformControls, state, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup } = deps;
     state.transformMode = mode;
     transformControls.setMode(mode);
 
@@ -366,7 +414,7 @@ export function setTransformMode(mode: TransformMode, deps: SetTransformModeDeps
     });
 
     // Store positions when changing mode
-    storeLastPositions({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup });
+    storeLastPositions({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup });
 }
 
 interface ResetTransformDeps {
@@ -376,15 +424,16 @@ interface ResetTransformDeps {
     stlGroup: any;
     cadGroup: any;
     drawingGroup: any;
+    flightpathGroup: any;
     state: AppState;
 }
 
 /**
  * Reset position and rotation to zero for the selected object(s).
- * @param deps - { splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state }
+ * @param deps - { splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state }
  */
 export function resetTransform(deps: ResetTransformDeps): void {
-    const { splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state } = deps;
+    const { splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state } = deps;
     const sel = state.selectedObject;
     if (sel === 'none') return;
 
@@ -412,9 +461,13 @@ export function resetTransform(deps: ResetTransformDeps): void {
         drawingGroup.position.set(0, 0, 0);
         drawingGroup.rotation.set(0, 0, 0);
     }
+    if ((sel === 'flightpath' || sel === 'both') && flightpathGroup) {
+        flightpathGroup.position.set(0, 0, 0);
+        flightpathGroup.rotation.set(0, 0, 0);
+    }
 
     // Re-store positions for delta tracking
-    storeLastPositions({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup });
+    storeLastPositions({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup });
     log.info(`Reset transform for: ${sel}`);
 }
 
@@ -429,6 +482,7 @@ interface CenterAtOriginDeps {
     stlGroup: any;
     cadGroup: any;
     drawingGroup: any;
+    flightpathGroup: any;
     camera: any;         // THREE.PerspectiveCamera
     controls: any;       // OrbitControls
     state: AppState;
@@ -441,7 +495,7 @@ interface CenterAtOriginDeps {
  * and reset the orbit-controls target to the origin.
  */
 export function centerAtOrigin(deps: CenterAtOriginDeps): void {
-    const { splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, camera, controls, state } = deps;
+    const { splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, camera, controls, state } = deps;
 
     const box = new THREE.Box3();
     let hasContent = false;
@@ -500,6 +554,15 @@ export function centerAtOrigin(deps: CenterAtOriginDeps): void {
         }
     }
 
+    // Flight path
+    if (flightpathGroup && state.flightPathLoaded && flightpathGroup.children.length > 0) {
+        const tempBox = new THREE.Box3().setFromObject(flightpathGroup);
+        if (!tempBox.isEmpty()) {
+            box.union(tempBox);
+            hasContent = true;
+        }
+    }
+
     if (!hasContent) {
         log.warn('centerAtOrigin: no loaded objects to center');
         return;
@@ -528,6 +591,9 @@ export function centerAtOrigin(deps: CenterAtOriginDeps): void {
     if (drawingGroup) {
         drawingGroup.position.sub(offset);
     }
+    if (flightpathGroup) {
+        flightpathGroup.position.sub(offset);
+    }
 
     // Move camera and orbit target by the same offset so the view doesn't jump
     camera.position.sub(offset);
@@ -535,7 +601,7 @@ export function centerAtOrigin(deps: CenterAtOriginDeps): void {
     controls.update();
 
     // Re-store positions for delta tracking
-    storeLastPositions({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup });
+    storeLastPositions({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup });
 
     log.info('Centered objects on XZ plane (offset:', offset.x.toFixed(3), offset.z.toFixed(3), ')');
 }
@@ -552,6 +618,7 @@ interface ApplyPivotRotationDeps {
     stlGroup: any;
     cadGroup: any;
     drawingGroup: any;
+    flightpathGroup: any;
     state: AppState;
 }
 
@@ -567,7 +634,7 @@ interface ApplyPivotRotationDeps {
  * the pivot offset on top).
  */
 export function applyPivotRotation(deps: ApplyPivotRotationDeps): void {
-    const { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state } = deps;
+    const { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state } = deps;
     if (state.rotationPivot !== 'origin') return;
     if (state.transformMode !== 'rotate') return;
 
@@ -604,6 +671,9 @@ export function applyPivotRotation(deps: ApplyPivotRotationDeps): void {
         if (drawingGroup) {
             drawingGroup.position.applyQuaternion(deltaQuat);
         }
+        if (flightpathGroup) {
+            flightpathGroup.position.applyQuaternion(deltaQuat);
+        }
     }
 
     // Update stored quaternion for next delta
@@ -626,6 +696,7 @@ interface ApplyUniformScaleDeps {
     stlGroup: any;
     cadGroup: any;
     drawingGroup: any;
+    flightpathGroup: any;
     state: AppState;
 }
 
@@ -636,7 +707,7 @@ interface ApplyUniformScaleDeps {
  * Must be called from the objectChange callback.
  */
 export function applyUniformScale(deps: ApplyUniformScaleDeps): void {
-    const { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state } = deps;
+    const { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state } = deps;
     if (!state.scaleLockProportions) return;
     if (state.transformMode !== 'scale') return;
 
@@ -651,6 +722,7 @@ export function applyUniformScale(deps: ApplyUniformScaleDeps): void {
     else if (obj === stlGroup) lastScale = lastStlScale;
     else if (obj === cadGroup) lastScale = lastCadScale;
     else if (obj === drawingGroup) lastScale = lastDrawingScale;
+    else if (obj === flightpathGroup) lastScale = lastFlightpathScale;
     else lastScale = lastModelScale; // fallback
 
     // Find which axis changed the most (largest absolute ratio delta from 1.0)
