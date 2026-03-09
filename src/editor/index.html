@@ -291,6 +291,7 @@
             </div>
             <div id="proxy-mesh-indicator" class="hidden">
                 Viewing display proxy &middot; <a href="#" id="proxy-load-full-link">Load full resolution</a>
+                <button class="prop-btn mt4" id="btn-load-full-res" style="display:none;">Load Full Resolution</button>
             </div>
 
             <!-- Library overlay — replaces canvas when Library mode is active -->
@@ -1450,6 +1451,7 @@
                             Click a point on the 3D model to place a new annotation marker.
                         </p>
                         <button class="prop-btn accent" id="btn-annotate">+ Place Annotation</button>
+                        <button class="prop-btn accent mt4" id="btn-sidebar-add-annotation" style="display:none;">+ Add Annotation</button>
                         <button class="prop-btn mt4" id="btn-toggle-annotations" style="display:none;">Toggle Annotations</button>
                     </div>
                 </div>
@@ -2559,6 +2561,8 @@
                             <!-- DEPRECATED: downloadable offline viewer — do not re-enable -->
                             <button class="prop-btn" id="btn-download-viewer" style="display:none">Download Offline Viewer</button>
                             <button class="prop-btn mt4" id="btn-export-cancel" style="display:none;">Cancel Export</button>
+                            <button class="prop-btn mt4" id="btn-share">Share Link</button>
+                            <button class="prop-btn mt4" id="btn-preview-kiosk">Preview Kiosk Mode</button>
                         </div>
                     </div>
 
