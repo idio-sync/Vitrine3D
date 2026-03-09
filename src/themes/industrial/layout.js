@@ -14,7 +14,7 @@
 
 var _deps = null;
 var _activeTool = null;
-var _toggles = { matcap: false, texture: true, wireframe: false };
+var _toggles = { matcap: false, texture: true, wireframe: false, trackball: true, toolbar: true, annotations: true };
 
 // Light widget drag state
 var _lightDragging = false;
@@ -28,6 +28,15 @@ var _statusBar = null;
 var _sectionControls = null;
 var _lightWidget = null;
 var _trackballOverlay = null;
+
+// Menu system state
+var _openMenu = null;            // 'file' | 'view' | 'render' | 'tools' | 'help' | null
+var _renderMode = 'solid';       // 'solid' | 'wireframe' | 'matcap'
+var _cameraMode = 'perspective'; // 'perspective' | 'orthographic'
+var _orthoCam = null;            // cached OrthographicCamera instance
+var _perspCam = null;            // cached PerspectiveCamera reference
+var _menuCloseListener = null;   // document mousedown listener reference
+var _manifest = null;            // archive manifest (stored in setup())
 
 // ---- SVG Icons ----
 
@@ -91,6 +100,33 @@ function createEl(tag, className, innerHTML) {
     if (className) el.className = className;
     if (innerHTML) el.innerHTML = innerHTML;
     return el;
+}
+
+function closeAllMenus() {
+    if (!_openMenu) return;
+    var items = document.querySelectorAll('.ind-menu-item.open');
+    for (var i = 0; i < items.length; i++) items[i].classList.remove('open');
+    _openMenu = null;
+}
+
+/** Create a dropdown menu item. hint is optional keyboard shortcut text. */
+function ddItem(label, hint, action, extraClass) {
+    var el = createEl('div', 'ind-dd-item' + (extraClass ? ' ' + extraClass : ''), label);
+    if (hint) {
+        var hintEl = createEl('span', 'ind-dd-hint', hint);
+        el.appendChild(hintEl);
+    }
+    el.addEventListener('click', function(e) {
+        e.stopPropagation();
+        closeAllMenus();
+        if (action) action();
+    });
+    return el;
+}
+
+/** Create a dropdown separator. */
+function ddSep() {
+    return createEl('div', 'ind-dd-sep');
 }
 
 // ---- Tool activation / deactivation ----
@@ -188,6 +224,14 @@ function toggleDisplay(name) {
     } else if (name === 'wireframe' && _deps.updateModelWireframe) {
         _deps.updateModelWireframe(_deps.modelGroup, _toggles.wireframe);
     }
+
+    // Sync _renderMode so the Render menu radio stays consistent
+    if (name === 'wireframe') {
+        _renderMode = _toggles.wireframe ? 'wireframe' : 'solid';
+    } else if (name === 'matcap') {
+        _renderMode = _toggles.matcap ? 'matcap' : 'solid';
+    }
+    if (typeof updateRenderMenuChecks === 'function') updateRenderMenuChecks();
 }
 
 // ---- Screenshot ----
@@ -294,17 +338,368 @@ function wireSliceControls() {
     }
 }
 
+// ---- Menu builders ----
+
+// -- File Menu --
+
+function buildFileMenu(dropdown) {
+    var fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.ddim,.a3d,.a3z,.glb,.gltf,.obj,.stl,.e57,.ply,.splat,.sog,.ksplat,.spz,.step,.stp,.iges,.igs,.csv,.kml,.kmz,.srt';
+    fileInput.style.display = 'none';
+    fileInput.addEventListener('change', function() {
+        var file = fileInput.files && fileInput.files[0];
+        if (file && _deps && _deps.loadFile) _deps.loadFile(file);
+        fileInput.value = '';
+    });
+    document.body.appendChild(fileInput);
+
+    dropdown.appendChild(ddItem('Open File\u2026', '', function() { fileInput.click(); }));
+    dropdown.appendChild(ddSep());
+    dropdown.appendChild(ddItem('Take Screenshot', 'P', function() { doScreenshot(); }));
+    dropdown.appendChild(ddItem('Reset View', '', function() { fitCamera(); }));
+    dropdown.appendChild(ddSep());
+    dropdown.appendChild(ddItem('Reset Scene', '', function() {
+        if (window.confirm('Reload and reset the scene?')) window.location.reload();
+    }));
+}
+
+// -- View Menu --
+
+var _viewMenuItems = {};
+
+function setCameraPreset(axis) {
+    if (!_deps || !_deps.sceneManager) return;
+    var camera = _deps.sceneManager.camera;
+    var controls = _deps.sceneManager.controls;
+    if (!camera || !controls) return;
+
+    var target = controls.target;
+    var dist = camera.position.distanceTo(target);
+
+    var offsets = {
+        '+z': [0, 0,  dist],
+        '-z': [0, 0, -dist],
+        '+x': [ dist, 0, 0],
+        '-x': [-dist, 0, 0],
+        '+y': [0,  dist, 0],
+        '-y': [0, -dist, 0]
+    };
+    var o = offsets[axis] || [0, 0, dist];
+    camera.position.set(target.x + o[0], target.y + o[1], target.z + o[2]);
+    camera.lookAt(target);
+    if (controls.update) controls.update();
+}
+
+function toggleOrthographic() {
+    if (!_deps || !_deps.sceneManager) return;
+    var sm = _deps.sceneManager;
+    var camera = sm.camera;
+    var controls = sm.controls;
+    var renderer = sm.renderer;
+    if (!camera || !controls || !renderer) return;
+
+    var w = renderer.domElement.clientWidth || 800;
+    var h = renderer.domElement.clientHeight || 600;
+    var aspect = w / h;
+    var dist = camera.position.distanceTo(controls.target);
+
+    if (_cameraMode === 'perspective') {
+        _perspCam = camera;
+        var fovRad = (camera.fov || 45) * Math.PI / 180;
+        var frustH = 2 * Math.tan(fovRad / 2) * dist;
+        var frustW = frustH * aspect;
+
+        if (!_orthoCam) {
+            var OrthoCls = (window.THREE && window.THREE.OrthographicCamera) || null;
+            if (!OrthoCls) {
+                console.warn('[industrial] THREE not in global scope, orthographic not available');
+                return;
+            }
+            _orthoCam = new OrthoCls(-frustW/2, frustW/2, frustH/2, -frustH/2, 0.01, 10000);
+        }
+        _orthoCam.position.copy(camera.position);
+        _orthoCam.quaternion.copy(camera.quaternion);
+        _orthoCam.updateProjectionMatrix();
+        sm.camera = _orthoCam;
+        controls.object = _orthoCam;
+        _cameraMode = 'orthographic';
+    } else {
+        if (_perspCam) {
+            _perspCam.position.copy(sm.camera.position);
+            _perspCam.quaternion.copy(sm.camera.quaternion);
+            sm.camera = _perspCam;
+            controls.object = _perspCam;
+        }
+        _cameraMode = 'perspective';
+    }
+    updateViewMenuChecks();
+}
+
+function updateViewMenuChecks() {
+    if (_viewMenuItems.ortho) _viewMenuItems.ortho.classList.toggle('checked', _cameraMode === 'orthographic');
+    if (_viewMenuItems.trackball) _viewMenuItems.trackball.classList.toggle('checked', _toggles.trackball);
+    if (_viewMenuItems.toolbar) _viewMenuItems.toolbar.classList.toggle('checked', _toggles.toolbar);
+}
+
+function buildViewMenu(dropdown) {
+    dropdown.appendChild(ddItem('Fit to View', 'F', function() { fitCamera(); }));
+    dropdown.appendChild(ddSep());
+
+    [['Front','+z'],['Back','-z'],['Left','+x'],['Right','-x'],['Top','+y'],['Bottom','-y']].forEach(function(p) {
+        dropdown.appendChild(ddItem(p[0], '', function() { setCameraPreset(p[1]); }));
+    });
+
+    dropdown.appendChild(ddSep());
+
+    var orthoItem = ddItem('Perspective / Orthographic', '', function() { toggleOrthographic(); });
+    _viewMenuItems.ortho = orthoItem;
+    dropdown.appendChild(orthoItem);
+
+    dropdown.appendChild(ddSep());
+
+    var trackballItem = ddItem('Show Trackball', '', function() {
+        _toggles.trackball = !_toggles.trackball;
+        if (_trackballOverlay) _trackballOverlay.classList.toggle('hidden', !_toggles.trackball);
+        updateViewMenuChecks();
+    });
+    trackballItem.classList.add('checked');
+    _viewMenuItems.trackball = trackballItem;
+    dropdown.appendChild(trackballItem);
+
+    var toolbarItem = ddItem('Show Toolbar', '', function() {
+        _toggles.toolbar = !_toggles.toolbar;
+        if (_toolbar) _toolbar.classList.toggle('hidden', !_toggles.toolbar);
+        updateViewMenuChecks();
+    });
+    toolbarItem.classList.add('checked');
+    _viewMenuItems.toolbar = toolbarItem;
+    dropdown.appendChild(toolbarItem);
+}
+
+// -- Render Menu --
+
+var _renderMenuItems = {};
+
+function updateRenderMenuChecks() {
+    ['solid','wireframe','matcap'].forEach(function(mode) {
+        if (_renderMenuItems[mode]) _renderMenuItems[mode].classList.toggle('radio-active', _renderMode === mode);
+    });
+    if (_renderMenuItems.texture) _renderMenuItems.texture.classList.toggle('checked', _toggles.texture);
+}
+
+function syncToolbarRenderButtons() {
+    var btnW = _toolbar ? _toolbar.querySelector('[data-toggle="wireframe"]') : null;
+    var btnM = _toolbar ? _toolbar.querySelector('[data-toggle="matcap"]') : null;
+    var btnT = _toolbar ? _toolbar.querySelector('[data-toggle="texture"]') : null;
+    if (btnW) btnW.classList.toggle('active', _toggles.wireframe);
+    if (btnM) btnM.classList.toggle('active', _toggles.matcap);
+    if (btnT) btnT.classList.toggle('active', _toggles.texture);
+}
+
+function buildRenderMenu(dropdown) {
+    function setRenderMode(mode) {
+        _renderMode = mode;
+        if (!_deps) return;
+        _toggles.wireframe = mode === 'wireframe';
+        _toggles.matcap = mode === 'matcap';
+        if (_deps.updateModelWireframe) _deps.updateModelWireframe(_deps.modelGroup, _toggles.wireframe);
+        if (_deps.updateModelMatcap) _deps.updateModelMatcap(_deps.modelGroup, _toggles.matcap, 'clay');
+        updateRenderMenuChecks();
+        syncToolbarRenderButtons();
+    }
+
+    var solidItem = ddItem('Solid', '', function() { setRenderMode('solid'); });
+    solidItem.classList.add('radio-active');
+    _renderMenuItems.solid = solidItem;
+
+    var wireItem = ddItem('Wireframe', 'W', function() { setRenderMode('wireframe'); });
+    _renderMenuItems.wireframe = wireItem;
+
+    var matcapItem = ddItem('Matcap', 'M', function() { setRenderMode('matcap'); });
+    _renderMenuItems.matcap = matcapItem;
+
+    dropdown.appendChild(solidItem);
+    dropdown.appendChild(wireItem);
+    dropdown.appendChild(matcapItem);
+    dropdown.appendChild(ddSep());
+
+    var texItem = ddItem('Texture On/Off', 'T', function() {
+        _toggles.texture = !_toggles.texture;
+        if (_deps && _deps.updateModelTextures) _deps.updateModelTextures(_deps.modelGroup, _toggles.texture);
+        updateRenderMenuChecks();
+        syncToolbarRenderButtons();
+    });
+    texItem.classList.add('checked');
+    _renderMenuItems.texture = texItem;
+    dropdown.appendChild(texItem);
+
+    dropdown.appendChild(ddSep());
+    dropdown.appendChild(ddItem('Lighting', 'L', function() { toggleTool('light'); }));
+}
+
+// -- Tools Menu --
+
+var _toolsMenuItems = {};
+
+function updateToolsMenuChecks() {
+    if (_toolsMenuItems.annotations) _toolsMenuItems.annotations.classList.toggle('checked', _toggles.annotations);
+}
+
+function buildToolsMenu(dropdown) {
+    dropdown.appendChild(ddItem('Section Plane', '1', function() { activateTool('slice'); }));
+    dropdown.appendChild(ddItem('Measure', '2', function() { activateTool('measure'); }));
+    dropdown.appendChild(ddItem('Annotate', '3', function() { activateTool('annotate'); }));
+    dropdown.appendChild(ddSep());
+
+    var annoItem = ddItem('Show Annotations', '', function() {
+        _toggles.annotations = !_toggles.annotations;
+        if (_deps && _deps.annotationSystem) {
+            if (typeof _deps.annotationSystem.setVisible === 'function') {
+                _deps.annotationSystem.setVisible(_toggles.annotations);
+            } else if (typeof _deps.annotationSystem.setMarkersVisible === 'function') {
+                _deps.annotationSystem.setMarkersVisible(_toggles.annotations);
+            }
+        }
+        updateToolsMenuChecks();
+    });
+    annoItem.classList.add('checked');
+    _toolsMenuItems.annotations = annoItem;
+    dropdown.appendChild(annoItem);
+}
+
+// -- Help Menu --
+
+var SHORTCUTS = [
+    { key: '1',      desc: 'Section Plane' },
+    { key: '2',      desc: 'Measure' },
+    { key: '3',      desc: 'Annotate' },
+    { key: 'T',      desc: 'Toggle Texture' },
+    { key: 'W',      desc: 'Toggle Wireframe' },
+    { key: 'M',      desc: 'Toggle Matcap' },
+    { key: 'L',      desc: 'Lighting Widget' },
+    { key: 'P',      desc: 'Take Screenshot' },
+    { key: 'F',      desc: 'Fit to View' },
+    { key: 'Escape', desc: 'Deactivate Tool / Close Menu' }
+];
+
+function showShortcutsOverlay() {
+    var overlay = createEl('div', 'ind-shortcuts-overlay');
+    var panel = createEl('div', 'ind-shortcuts-panel');
+    var title = createEl('div', 'ind-shortcuts-title', 'Keyboard Shortcuts');
+    var table = createEl('div', 'ind-shortcuts-table');
+
+    SHORTCUTS.forEach(function(s) {
+        var row = createEl('div', 'ind-shortcuts-row');
+        var key = createEl('span', 'ind-shortcuts-key', s.key);
+        var desc = createEl('span', 'ind-shortcuts-desc', s.desc);
+        row.appendChild(key);
+        row.appendChild(desc);
+        table.appendChild(row);
+    });
+
+    var closeBtn = createEl('button', 'ind-shortcuts-close', 'Close');
+
+    function dismiss() { document.body.removeChild(overlay); }
+    closeBtn.addEventListener('click', dismiss);
+    overlay.addEventListener('mousedown', function(e) {
+        if (e.target === overlay) dismiss();
+    });
+
+    var escHandler = function(e) {
+        if (e.key === 'Escape') { dismiss(); document.removeEventListener('keydown', escHandler); }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    panel.appendChild(title);
+    panel.appendChild(table);
+    panel.appendChild(closeBtn);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+}
+
+function showAboutOverlay() {
+    var overlay = createEl('div', 'ind-about-overlay');
+    var panel = createEl('div', 'ind-about-panel');
+    var title = createEl('div', 'ind-about-title', 'About');
+    var body = createEl('div', 'ind-about-body');
+
+    var name = (_manifest && _manifest.title) || 'Vitrine3D Industrial Viewer';
+    var version = (_manifest && _manifest.version) || '\u2014';
+    body.innerHTML = '<strong>' + name + '</strong><br>Theme: Industrial (MeshLab Workbench)<br>Version: ' + version;
+
+    var closeBtn = createEl('button', 'ind-about-close', 'Close');
+    function dismiss() { document.body.removeChild(overlay); }
+    closeBtn.addEventListener('click', dismiss);
+    overlay.addEventListener('mousedown', function(e) { if (e.target === overlay) dismiss(); });
+    var escHandler = function(e) {
+        if (e.key === 'Escape') { dismiss(); document.removeEventListener('keydown', escHandler); }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    panel.appendChild(title);
+    panel.appendChild(body);
+    panel.appendChild(closeBtn);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+}
+
+function buildHelpMenu(dropdown) {
+    dropdown.appendChild(ddItem('Keyboard Shortcuts', '', function() { showShortcutsOverlay(); }));
+    dropdown.appendChild(ddSep());
+    dropdown.appendChild(ddItem('About', '', function() { showAboutOverlay(); }));
+}
+
 // ---- DOM creation ----
 
 function createMenuBar() {
     var bar = createEl('div', 'ind-menubar');
 
-    var items = ['File', 'View', 'Render', 'Tools', 'Help'];
-    for (var i = 0; i < items.length; i++) {
-        var item = createEl('span', 'ind-menu-item', items[i]);
-        // Menu items are decorative — no dropdowns in kiosk mode
+    var menuDefs = [
+        { id: 'file',   label: 'File' },
+        { id: 'view',   label: 'View' },
+        { id: 'render', label: 'Render' },
+        { id: 'tools',  label: 'Tools' },
+        { id: 'help',   label: 'Help' }
+    ];
+
+    menuDefs.forEach(function(def) {
+        var item = createEl('div', 'ind-menu-item', def.label);
+        item.dataset.menu = def.id;
+
+        var dropdown = createEl('div', 'ind-dropdown');
+        dropdown.dataset.menuFor = def.id;
+        item.appendChild(dropdown);
+
+        if (def.id === 'file')   buildFileMenu(dropdown);
+        if (def.id === 'view')   buildViewMenu(dropdown);
+        if (def.id === 'render') buildRenderMenu(dropdown);
+        if (def.id === 'tools')  buildToolsMenu(dropdown);
+        if (def.id === 'help')   buildHelpMenu(dropdown);
+
+        item.addEventListener('mousedown', function(e) {
+            e.stopPropagation();
+            var isOpen = item.classList.contains('open');
+            closeAllMenus();
+            if (!isOpen) {
+                item.classList.add('open');
+                _openMenu = def.id;
+            }
+        });
+
         bar.appendChild(item);
-    }
+    });
+
+    // Close on outside click
+    _menuCloseListener = function(e) {
+        if (!e.target.closest('.ind-menu-item')) closeAllMenus();
+    };
+    document.addEventListener('mousedown', _menuCloseListener);
+
+    // Close on Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeAllMenus();
+    });
 
     return bar;
 }
@@ -477,6 +872,7 @@ function createTrackballOverlay() {
 // ---- setup ----
 
 function setup(manifest, deps) {
+    _manifest = manifest;
     _deps = deps;
 
     // Lock orbit-only navigation
@@ -558,6 +954,7 @@ function setup(manifest, deps) {
             case '2': toggleTool('measure'); handled = true; break;
             case '3': toggleTool('annotate'); handled = true; break;
             case 't': toggleDisplay('texture'); handled = true; break;
+            case 'm': toggleDisplay('matcap'); handled = true; break;
             case 'w': toggleDisplay('wireframe'); handled = true; break;
             case 'l': toggleTool('light'); handled = true; break;
             case 'p': doScreenshot(); handled = true; break;
