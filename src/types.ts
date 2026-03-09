@@ -1,7 +1,7 @@
 // ===== Union Types =====
 
 export type DisplayMode = 'splat' | 'model' | 'pointcloud' | 'both' | 'split' | 'stl';
-export type SelectedObject = 'splat' | 'model' | 'pointcloud' | 'stl' | 'cad' | 'drawing' | 'both' | 'none';
+export type SelectedObject = 'splat' | 'model' | 'pointcloud' | 'stl' | 'cad' | 'drawing' | 'flightpath' | 'both' | 'none';
 export type TransformMode = 'translate' | 'rotate' | 'scale';
 export type RotationPivot = 'object' | 'origin';
 export type QualityTier = 'sd' | 'hd';
@@ -410,6 +410,10 @@ export interface EventWiringDeps {
     };
     tauri: {
         wireNativeDialogsIfAvailable: () => void;
+    };
+    undo: {
+        performUndo: () => void;
+        performRedo: () => void;
     };
 }
 

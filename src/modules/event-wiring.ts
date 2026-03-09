@@ -909,7 +909,18 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             return;
         }
 
-        if (e.ctrlKey || e.metaKey) return;
+        // Handle Ctrl/Cmd shortcuts
+        if (e.ctrlKey || e.metaKey) {
+            const key = e.key.toLowerCase();
+            if (key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                deps.undo.performUndo();
+            } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+                e.preventDefault();
+                deps.undo.performRedo();
+            }
+            return;
+        }
 
         const key = e.key.toLowerCase();
 

@@ -170,6 +170,8 @@ import {
 import {
     setupUIEvents as setupUIEventsCtrl
 } from './modules/event-wiring.js';
+import { UndoManager } from './modules/undo-manager.js';
+import type { MatrixSnapshot } from './modules/undo-manager.js';
 import type { AppState, SceneRefs, ExportDeps, ArchivePipelineDeps, EventWiringDeps, DisplayMode, SelectedObject, TransformMode, DecimationOptions } from './types.js';
 import { generateProxy, estimateFaceCount } from './modules/mesh-decimator.js';
 // kiosk-viewer.js is loaded dynamically in downloadGenericViewer() to avoid
@@ -349,6 +351,8 @@ let landmarkAlignment: any = null;
 let archiveCreator: any = null;
 let crossSection: CrossSectionTool | null = null;
 let flightPathManager: FlightPathManager | null = null;
+let _dragBeforeMatrices: MatrixSnapshot | null = null;
+let undoManager: UndoManager;
 
 // Asset blob store (ES module singleton — shared with archive-pipeline, export-controller, etc.)
 const assets = getStore();
@@ -748,7 +752,11 @@ function createEventWiringDeps(): EventWiringDeps {
                     }).catch(() => {});
                 }
             }
-        }
+        },
+        undo: {
+            performUndo,
+            performRedo,
+        },
     };
 }
 
@@ -1099,6 +1107,23 @@ async function init() {
         applyUniformScale();
     };
 
+    // Initialize undo manager for transform operations
+    undoManager = new UndoManager(20);
+
+    sceneManager.onDraggingChanged = (dragging: boolean) => {
+        if (dragging) {
+            _dragBeforeMatrices = captureTransformMatrices();
+        } else if (_dragBeforeMatrices) {
+            const afterMatrices = captureTransformMatrices();
+            undoManager.push({
+                objectId: state.selectedObject,
+                beforeMatrices: _dragBeforeMatrices,
+                afterMatrices,
+            });
+            _dragBeforeMatrices = null;
+        }
+    };
+
     // Initialize annotation system
     annotationSystem = new AnnotationSystem(scene, camera, renderer, controls);
     annotationSystem.onAnnotationCreated = onAnnotationPlaced;
@@ -1157,6 +1182,7 @@ async function init() {
                     const fpStore = getStore();
                     fpStore.flightPathBlobs.push({ blob: file, fileName: file.name });
                     state.flightPathLoaded = true;
+                    updateObjectSelectButtons();
                     hideLoading();
                     notify.success('Flight path loaded: ' + data.points.length + ' points');
                 } catch (err: any) {
@@ -1386,37 +1412,103 @@ function setBackgroundColor(hexColor: string) {
 
 // Transform controls (delegated to transform-controller.js)
 function setSelectedObject(selection: SelectedObject) {
-    setSelectedObjectHandler(selection, { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state });
-    updateTransformPaneSelection(selection as string, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup);
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    setSelectedObjectHandler(selection, { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state });
+    updateTransformPaneSelection(selection as string, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup);
 }
 
 function syncBothObjects() {
-    syncBothObjectsHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    syncBothObjectsHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup });
 }
 
 function applyPivotRotation() {
-    applyPivotRotationHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    applyPivotRotationHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state });
 }
 
 function applyUniformScale() {
-    applyUniformScaleHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    applyUniformScaleHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state });
+}
+
+function captureTransformMatrices(): MatrixSnapshot {
+    const result: MatrixSnapshot = {};
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const objects: [any, string][] = [
+        [splatMesh, 'splat'],
+        [modelGroup, 'model'],
+        [pointcloudGroup, 'pointcloud'],
+        [stlGroup, 'stl'],
+        [cadGroup, 'cad'],
+        [drawingGroup, 'drawing'],
+        [flightpathGroup, 'flightpath'],
+    ];
+    for (const [obj, key] of objects) {
+        if (obj) {
+            obj.updateMatrix();
+            result[key] = obj.matrix.clone();
+        }
+    }
+    return result;
+}
+
+function applyTransformMatrices(snapshot: MatrixSnapshot): void {
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const objects: [any, string][] = [
+        [splatMesh, 'splat'],
+        [modelGroup, 'model'],
+        [pointcloudGroup, 'pointcloud'],
+        [stlGroup, 'stl'],
+        [cadGroup, 'cad'],
+        [drawingGroup, 'drawing'],
+        [flightpathGroup, 'flightpath'],
+    ];
+    for (const [obj, key] of objects) {
+        const mat = snapshot[key];
+        if (!obj || !mat) continue;
+        (mat as THREE.Matrix4).decompose(obj.position, obj.quaternion, obj.scale);
+        obj.rotation.setFromQuaternion(obj.quaternion);
+    }
+    storeLastPositions();
+    updateTransformInputs();
+}
+
+function performUndo(): void {
+    const entry = undoManager.undo();
+    if (entry) {
+        applyTransformMatrices(entry.beforeMatrices);
+        notify('Undo transform', 'info');
+    }
+}
+
+function performRedo(): void {
+    const entry = undoManager.redo();
+    if (entry) {
+        applyTransformMatrices(entry.afterMatrices);
+        notify('Redo transform', 'info');
+    }
 }
 
 function storeLastPositions() {
-    storeLastPositionsHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    storeLastPositionsHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup });
 }
 
 function setTransformMode(mode: TransformMode) {
-    setTransformModeHandler(mode, { transformControls, state, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    setTransformModeHandler(mode, { transformControls, state, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup });
 }
 
 function centerAtOrigin() {
-    centerAtOriginHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, camera, controls, state });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    centerAtOriginHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, camera, controls, state });
     updateTransformInputs();
 }
 
 function resetTransform() {
-    resetTransformHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    resetTransformHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state });
     updateTransformInputs();
 }
 
@@ -1432,7 +1524,8 @@ function updateVisibility() {
 }
 
 function updateTransformInputs() {
-    updateTransformInputsHandler(splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup);
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    updateTransformInputsHandler(splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup);
 }
 
 /** Show/hide the object-select buttons in the Transform pane based on what is loaded. */
@@ -1447,8 +1540,9 @@ function updateObjectSelectButtons() {
     show('btn-select-stl', state.stlLoaded);
     show('btn-select-cad', state.cadLoaded);
     show('btn-select-drawing', state.drawingLoaded);
+    show('btn-select-flightpath', state.flightPathLoaded);
     // "All" only when 2+ types are loaded
-    const loadedCount = [state.splatLoaded, state.modelLoaded, state.pointcloudLoaded, state.stlLoaded, state.cadLoaded, state.drawingLoaded].filter(Boolean).length;
+    const loadedCount = [state.splatLoaded, state.modelLoaded, state.pointcloudLoaded, state.stlLoaded, state.cadLoaded, state.drawingLoaded, state.flightPathLoaded].filter(Boolean).length;
     show('btn-select-both', loadedCount >= 2);
 }
 
