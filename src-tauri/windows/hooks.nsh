@@ -27,26 +27,38 @@
     WriteRegStr SHCTX "Software\Classes\Vitrine3D.File\DefaultIcon" "" "$INSTDIR\Vitrine3D.exe,0"
     WriteRegStr SHCTX "Software\Classes\Vitrine3D.File\shell\open\command" "" '"$INSTDIR\Vitrine3D.exe" "%1"'
 
-    ; --- 3D Models ---
+    ; --- glTF / GLB (interchange formats) ---
     MessageBox MB_YESNO|MB_ICONQUESTION \
-        "Associate 3D model files with Vitrine3D?$\n$\n  .glb  .gltf  .obj  .stl$\n$\nYou can change this later in Windows Settings." \
-        IDNO skip_models
+        "Associate glTF/GLB files with Vitrine3D?$\n$\n  .glb  .gltf$\n$\nYou can change this later in Windows Settings." \
+        IDNO skip_gltf
         !insertmacro _RegisterExt ".glb"
         !insertmacro _RegisterExt ".gltf"
+    skip_gltf:
+
+    ; --- OBJ / STL (common CAD/print formats) ---
+    MessageBox MB_YESNO|MB_ICONQUESTION \
+        "Associate OBJ and STL files with Vitrine3D?$\n$\n  .obj  .stl$\n$\nYou can change this later in Windows Settings." \
+        IDNO skip_objstl
         !insertmacro _RegisterExt ".obj"
         !insertmacro _RegisterExt ".stl"
-    skip_models:
+    skip_objstl:
 
-    ; --- Gaussian Splats ---
+    ; --- Gaussian Splats (splat-specific formats) ---
     MessageBox MB_YESNO|MB_ICONQUESTION \
-        "Associate Gaussian splat files with Vitrine3D?$\n$\n  .ply  .splat  .ksplat  .spz  .sog$\n$\nYou can change this later in Windows Settings." \
+        "Associate Gaussian splat files with Vitrine3D?$\n$\n  .splat  .ksplat  .spz  .sog$\n$\nYou can change this later in Windows Settings." \
         IDNO skip_splats
-        !insertmacro _RegisterExt ".ply"
         !insertmacro _RegisterExt ".splat"
         !insertmacro _RegisterExt ".ksplat"
         !insertmacro _RegisterExt ".spz"
         !insertmacro _RegisterExt ".sog"
     skip_splats:
+
+    ; --- PLY (polygon mesh — also used for splats, but widely shared) ---
+    MessageBox MB_YESNO|MB_ICONQUESTION \
+        "Associate PLY files with Vitrine3D?$\n$\n  .ply$\n$\nNote: PLY is used by many applications. Only say Yes if you$\nprimarily use PLY for 3D scans or Gaussian splats.$\n$\nYou can change this later in Windows Settings." \
+        IDNO skip_ply
+        !insertmacro _RegisterExt ".ply"
+    skip_ply:
 
     ; --- Point Clouds ---
     MessageBox MB_YESNO|MB_ICONQUESTION \
