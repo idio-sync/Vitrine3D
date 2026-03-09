@@ -1,0 +1,24 @@
+{
+  "productName": "Direct Dimensions PASS Viewer",
+  "identifier": "com.directdimensions.passviewer",
+  "app": {
+    "windows": [
+      {
+        "title": "Direct Dimensions PASS Viewer",
+        "url": "index.html?home=true&kiosk=true&theme=industrial",
+        "width": 1400,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ]
+  },
+  "build": {
+    "beforeDevCommand": "npx vite --port 8080",
+    "devUrl": "http://localhost:8080/?home=true&kiosk=true&theme=industrial",
+    "beforeBuildCommand": "npx vite build",
+    "frontendDist": "../dist"
+  }
+}
