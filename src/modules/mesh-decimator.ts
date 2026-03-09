@@ -415,11 +415,13 @@ function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
 }
 
 async function isAlreadyDracoCompressed(blob: Blob): Promise<boolean> {
-    const fullBuffer = await blobToArrayBuffer(blob);
-    const view = new DataView(fullBuffer);
+    // Read only the 20-byte file+chunk header to get JSON chunk length, then
+    // slice only the JSON chunk data — avoids buffering large HD mesh blobs.
+    const headerBuf = await blobToArrayBuffer(blob.slice(0, 20));
+    const view = new DataView(headerBuf);
     const jsonLength = view.getUint32(12, true);
-    const jsonBytes = new Uint8Array(fullBuffer, 20, jsonLength);
-    const json = JSON.parse(new TextDecoder().decode(jsonBytes).replace(/[\0\s]+$/, ''));
+    const jsonBuf = await blobToArrayBuffer(blob.slice(20, 20 + jsonLength));
+    const json = JSON.parse(new TextDecoder().decode(new Uint8Array(jsonBuf)).replace(/\0+$/, ''));
     return (json.extensionsUsed ?? []).includes('KHR_draco_mesh_compression');
 }
 
