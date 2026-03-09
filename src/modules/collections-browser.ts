@@ -71,7 +71,7 @@ function injectCollectionCardStyles(): void {
     color: rgba(232, 236, 240, 0.95);
     font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
-    z-index: 200;
+    z-index: 201; /* above #metadata-display which is also z-index:200 */
 }
 
 /* Nav bar at top of browser */
@@ -290,6 +290,7 @@ function hideBrowserContainer(): void {
     el.style.display = 'none';
 }
 
+// Not cached — element is created dynamically by kiosk-main after module load
 function getBackButtonEl(): HTMLElement | null {
     return document.getElementById('kiosk-back-library');
 }
