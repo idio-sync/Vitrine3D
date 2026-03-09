@@ -34,25 +34,31 @@ export async function parseDjiTxt(buffer: ArrayBuffer): Promise<FlightPoint[]> {
     const mod = await getModule();
     const parser = new mod.DJILog(new Uint8Array(buffer));
 
-    // For v13+ logs, fetch keychains using DJI API key if available
+    // For v13+ logs, fetch keychains via server-side proxy to avoid CORS
     let keychains;
-    const apiKey = (window as any).APP_CONFIG?.djiApiKey || '';
 
-    if (parser.version >= 13 && apiKey) {
+    if (parser.version >= 13) {
         try {
-            log.info(`Log version ${parser.version} — fetching decryption keychains...`);
-            keychains = await parser.fetchKeychains(apiKey);
+            log.info(`Log version ${parser.version} — fetching decryption keychains via proxy...`);
+            const reqBody = parser.keychainsRequest();
+            const resp = await fetch('/api/dji-keychains', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(reqBody),
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({ error: resp.statusText }));
+                throw new Error((err as any).error || `HTTP ${resp.status}`);
+            }
+            const result = await resp.json();
+            keychains = (result as any).data;
         } catch (err: any) {
             throw new Error(
                 `Failed to fetch DJI decryption keychains: ${err?.message || err}. ` +
-                'Check that DJI_API_KEY is set correctly (Docker env var or admin settings).'
+                'Check that DJI_API_KEY is set correctly (Docker env var or admin settings), ' +
+                'or export the log as CSV from airdata.com'
             );
         }
-    } else if (parser.version >= 13) {
-        throw new Error(
-            'This DJI flight log is encrypted (v' + parser.version + ') and requires a DJI API key for decryption. ' +
-            'Set DJI_API_KEY in Docker env or configure via admin settings, or export the log as CSV from airdata.com'
-        );
     }
 
     let frames;

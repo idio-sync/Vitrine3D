@@ -24,6 +24,7 @@
  */
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -743,6 +744,59 @@ function handleOembed(req, res) {
 function handleHealth(req, res) {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('ok');
+}
+
+/**
+ * Proxy DJI keychain requests to avoid browser CORS restrictions.
+ * POST /api/dji-keychains  — body: KeychainsRequest JSON from dji-log-parser-js
+ * Forwards to DJI's API server-side with the configured API key.
+ */
+function handleDjiKeychains(req, res) {
+    if (req.method !== 'POST') {
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Method not allowed' }));
+    }
+
+    const apiKey = getSetting('flight.djiApiKey');
+    if (!apiKey) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'DJI API key not configured. Set DJI_API_KEY env var or configure via admin settings.' }));
+    }
+
+    let body = '';
+    req.on('data', chunk => { body += chunk; if (body.length > 1e6) req.destroy(); });
+    req.on('end', () => {
+        const postData = Buffer.from(body, 'utf-8');
+        const options = {
+            hostname: 'dev.dji.com',
+            port: 443,
+            path: '/openapi/v1/flight-records/keychains',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Api-Key': apiKey,
+                'Content-Length': postData.length,
+            },
+        };
+
+        const proxyReq = https.request(options, (proxyRes) => {
+            let data = '';
+            proxyRes.on('data', chunk => { data += chunk; });
+            proxyRes.on('end', () => {
+                res.writeHead(proxyRes.statusCode, { 'Content-Type': 'application/json' });
+                res.end(data);
+            });
+        });
+
+        proxyReq.on('error', (err) => {
+            console.error('[meta-server] DJI keychains proxy error:', err.message);
+            res.writeHead(502, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to reach DJI API: ' + err.message }));
+        });
+
+        proxyReq.write(postData);
+        proxyReq.end();
+    });
 }
 
 // --- Admin Helpers ---
@@ -2506,6 +2560,11 @@ const server = http.createServer((req, res) => {
     if (pathname === '/api/media' && req.method === 'GET') return handleListMedia(req, res, parsedUrl.query || {});
     if (mediaMatch && req.method === 'GET') return handleGetMedia(req, res, mediaMatch[1]);
     if (mediaMatch && req.method === 'DELETE') return handleDeleteMedia(req, res, mediaMatch[1]);
+
+    // DJI keychain proxy (no admin auth needed — API key is server-side)
+    if (pathname === '/api/dji-keychains' && req.method === 'POST') {
+        return handleDjiKeychains(req, res);
+    }
 
     // Admin routes (only when enabled)
     if (ADMIN_ENABLED) {
