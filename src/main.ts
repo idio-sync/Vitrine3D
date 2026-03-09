@@ -2492,7 +2492,7 @@ function animate() {
                 fps: sceneManager.lastFPS ?? 0,
                 renderer: sceneManager.rendererType ?? 'WebGL',
                 tris: ri?.render?.triangles ?? 0,
-                splats: splatMesh?.packedSplats?.splatCount ?? 0,
+                splats: splatMesh?.packedSplats?.numSplats ?? 0,
                 cameraMode: (flyControls && flyControls.enabled) ? 'Fly' : 'Orbit',
                 filename: state.archiveFileName ?? ''
             });

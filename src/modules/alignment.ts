@@ -153,7 +153,7 @@ interface SavedTransform {
 /** SplatMesh interface (minimal, for Spark.js internals) */
 interface SplatMesh extends Object3D {
     packedSplats?: {
-        splatCount?: number;
+        numSplats?: number;
         forEachSplat?: (callback: (index: number, center: Point3D) => void) => void;
     };
 }
@@ -278,7 +278,7 @@ function computeSplatBoundsFromPositions(splatMeshObj: Object3D): SplatBounds {
     const splatMesh = splatMeshObj as SplatMesh;
     if (splatMesh.packedSplats && typeof splatMesh.packedSplats.forEachSplat === 'function') {
         let count = 0;
-        const splatCount = splatMesh.packedSplats.splatCount || 0;
+        const splatCount = splatMesh.packedSplats.numSplats || 0;
 
         if (splatCount > 0) {
             const maxSamples = 10000;
@@ -844,7 +844,7 @@ export class LandmarkAlignment {
         let closestPoint: Vector3 | null = null;
         let closestDistance = Infinity;
 
-        const splatCount = (splatMesh.packedSplats as any).splatCount || 0;
+        const splatCount = (splatMesh.packedSplats as any).numSplats || 0;
         if (splatCount === 0) {
             log.warn('[_raycastSplatMesh] splatCount is 0');
             return null;
