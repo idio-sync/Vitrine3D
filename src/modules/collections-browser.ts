@@ -406,7 +406,7 @@ function renderCollectionsPage(collections: CollectionItem[]): void {
     const header = document.createElement('div');
     header.className = 'cp-header';
     header.innerHTML =
-        '<img class="cp-logo" src="' + logoSrc + '" alt="" onerror="this.style.display=\'none\'">' +
+        '<img class="cp-logo" src="' + escapeHtml(logoSrc) + '" alt="" onerror="this.style.display=\'none\'">' +
         '<div class="cp-eyebrow">Collections</div>' +
         '<h1 class="cp-title">Browse Collections</h1>' +
         '<div class="cp-rule"></div>' +
@@ -458,5 +458,85 @@ async function navigateToCollections(): Promise<void> {
                 '<button class="cb-retry">Try again</button>' +
             '</div>';
         container.querySelector('.cb-retry')?.addEventListener('click', () => { void navigateToCollections(); });
+    }
+}
+
+// ── Render: collection detail page ──
+
+function renderCollectionDetailPage(data: CollectionDetail): void {
+    const container = getContainer();
+    container.innerHTML = '';
+
+    // Gold spine
+    const spine = document.createElement('div');
+    spine.className = 'cp-spine';
+    container.appendChild(spine);
+
+    // Nav bar with ← Collections back button
+    container.appendChild(renderNavBar({
+        backLabel: 'Collections',
+        onBack: () => navigateToCollections(),
+        crumb: data.name,
+        onClose: closeCollectionsBrowser,
+    }));
+
+    // Editorial header
+    const logoSrc = getLogoSrc();
+    const header = document.createElement('div');
+    header.className = 'cp-header';
+    header.innerHTML =
+        '<img class="cp-logo" src="' + escapeHtml(logoSrc) + '" alt="" onerror="this.style.display=\'none\'">' +
+        '<div class="cp-eyebrow">Collection</div>' +
+        '<h1 class="cp-title">' + escapeHtml(data.name) + '</h1>' +
+        '<div class="cp-rule"></div>' +
+        (data.description ? '<p class="cp-description">' + escapeHtml(data.description) + '</p>' : '') +
+        '<span class="cp-count">' + data.archiveCount + ' Archive' + (data.archiveCount !== 1 ? 's' : '') + '</span>';
+    container.appendChild(header);
+
+    if (data.archives.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'cb-loading';
+        empty.textContent = 'This collection is empty.';
+        container.appendChild(empty);
+        return;
+    }
+
+    // Archive grid — reuse existing cp-card poster style from collection-page.ts
+    const grid = document.createElement('div');
+    grid.className = 'cp-grid';
+    data.archives.forEach((archive, i) => {
+        const card = renderCard(archive, i, (a) => openArchive(a, data.name));
+        grid.appendChild(card);
+    });
+    container.appendChild(grid);
+
+    // Cache for return-from-viewer navigation
+    _cachedCollection = data;
+}
+
+async function navigateToCollection(slug: string, name: string): Promise<void> {
+    _currentView = { kind: 'collection', slug, name };
+    const container = getContainer();
+
+    // Show loading state
+    container.innerHTML = '<div class="cb-loading">Loading\u2026</div>';
+
+    try {
+        // Use cache if we have the same collection (e.g. returning from viewer)
+        const data = (_cachedCollection?.slug === slug)
+            ? _cachedCollection!
+            : await fetchCollection(slug);
+        renderCollectionDetailPage(data);
+        log.info('Collection loaded:', data.name, '(' + data.archives.length + ' archives)');
+    } catch (err) {
+        log.error('Failed to load collection:', err);
+        container.innerHTML =
+            '<div class="cb-error">' +
+                '<p>Failed to load collection.</p>' +
+                '<button class="cb-retry">Try again</button>' +
+                '<br><button class="cb-nav-back" style="margin-top:12px">\u2190 Collections</button>' +
+            '</div>';
+        container.querySelector('.cb-retry')?.addEventListener('click', () => { void navigateToCollection(slug, name); });
+        container.querySelector('.cb-nav-back')?.addEventListener('click', () => { void navigateToCollections(); });
     }
 }
