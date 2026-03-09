@@ -294,3 +294,169 @@ function hideBrowserContainer(): void {
 function getBackButtonEl(): HTMLElement | null {
     return document.getElementById('kiosk-back-library');
 }
+
+// ── Fetch ──
+
+async function fetchCollections(): Promise<CollectionItem[]> {
+    const url = (_opts?.libraryBaseUrl || '') + '/api/collections';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to fetch collections (' + res.status + ')');
+    const data = await res.json() as { collections: CollectionItem[] };
+    return data.collections;
+}
+
+async function fetchCollection(slug: string): Promise<CollectionDetail> {
+    const url = (_opts?.libraryBaseUrl || '') + '/api/collections/' + encodeURIComponent(slug);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Collection not found (' + res.status + ')');
+    return res.json() as Promise<CollectionDetail>;
+}
+
+// ── Render: nav bar ──
+
+function renderNavBar(opts: {
+    backLabel?: string;
+    onBack?: () => void;
+    crumb?: string;
+    onClose: () => void;
+}): HTMLElement {
+    const nav = document.createElement('div');
+    nav.className = 'cb-nav';
+
+    if (opts.backLabel && opts.onBack) {
+        const back = document.createElement('button');
+        back.className = 'cb-nav-back';
+        back.textContent = '\u2190 ' + opts.backLabel;
+        back.addEventListener('click', opts.onBack);
+        nav.appendChild(back);
+
+        if (opts.crumb) {
+            const sep = document.createElement('span');
+            sep.className = 'cb-nav-sep';
+            sep.textContent = '/';
+            nav.appendChild(sep);
+
+            const crumb = document.createElement('span');
+            crumb.className = 'cb-nav-crumb';
+            crumb.textContent = opts.crumb;
+            nav.appendChild(crumb);
+        }
+    }
+
+    const close = document.createElement('button');
+    close.className = 'cb-close';
+    close.title = 'Return to main menu';
+    close.textContent = '\u00d7';
+    close.addEventListener('click', opts.onClose);
+    nav.appendChild(close);
+
+    return nav;
+}
+
+// ── Render: collection card ──
+
+function renderCollectionCard(coll: CollectionItem, index: number, onClick: () => void): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'cb-coll-card';
+    card.style.animationDelay = (0.1 + index * 0.05) + 's';
+    card.setAttribute('role', 'button');
+    card.tabIndex = 0;
+    card.addEventListener('click', onClick);
+    card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); });
+
+    const thumbHtml = coll.thumbnail
+        ? '<img src="' + escapeHtml(coll.thumbnail) + '" alt="" loading="lazy">'
+        : '<div class="cb-coll-placeholder"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="rgba(254,192,58,0.2)" stroke-width="0.8"><rect x="4" y="8" width="24" height="18" rx="1"/><path d="M8 8V6a1 1 0 011-1h14a1 1 0 011 1v2"/></svg></div>';
+
+    const descHtml = coll.description
+        ? '<div class="cb-coll-desc">' + escapeHtml(coll.description) + '</div>'
+        : '';
+
+    const countText = coll.archiveCount + ' Archive' + (coll.archiveCount !== 1 ? 's' : '');
+
+    card.innerHTML =
+        '<div class="cb-coll-thumb">' + thumbHtml + '</div>' +
+        '<div class="cb-coll-body">' +
+            '<div class="cb-coll-name">' + escapeHtml(coll.name) + '</div>' +
+            descHtml +
+            '<div class="cb-coll-count">' + escapeHtml(countText) + '</div>' +
+        '</div>';
+
+    return card;
+}
+
+// ── Render: collections list page ──
+
+function renderCollectionsPage(collections: CollectionItem[]): void {
+    const container = getContainer();
+    container.innerHTML = '';
+
+    // Gold spine
+    const spine = document.createElement('div');
+    spine.className = 'cp-spine';
+    container.appendChild(spine);
+
+    // Nav bar — no back button at top level; close returns to file picker
+    container.appendChild(renderNavBar({
+        onClose: closeCollectionsBrowser,
+    }));
+
+    // Editorial header
+    const logoSrc = getLogoSrc();
+    const header = document.createElement('div');
+    header.className = 'cp-header';
+    header.innerHTML =
+        '<img class="cp-logo" src="' + logoSrc + '" alt="" onerror="this.style.display=\'none\'">' +
+        '<div class="cp-eyebrow">Collections</div>' +
+        '<h1 class="cp-title">Browse Collections</h1>' +
+        '<div class="cp-rule"></div>' +
+        '<span class="cp-count">' + collections.length + ' Collection' + (collections.length !== 1 ? 's' : '') + '</span>';
+    container.appendChild(header);
+
+    if (collections.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'cb-loading';
+        empty.textContent = 'No collections available.';
+        container.appendChild(empty);
+        return;
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'cb-coll-grid';
+    collections.forEach((coll, i) => {
+        grid.appendChild(renderCollectionCard(coll, i, () => navigateToCollection(coll.slug, coll.name)));
+    });
+    container.appendChild(grid);
+}
+
+// ── Navigation ──
+
+function closeCollectionsBrowser(): void {
+    hideBrowserContainer();
+    const picker = document.getElementById('kiosk-file-picker');
+    if (picker) picker.classList.remove('hidden');
+    log.info('Closed collections browser');
+}
+
+async function navigateToCollections(): Promise<void> {
+    _currentView = { kind: 'collections' };
+    const container = getContainer();
+
+    // Show loading state
+    container.innerHTML = '<div class="cb-loading">Loading collections\u2026</div>';
+    showBrowserContainer();
+
+    try {
+        const collections = await fetchCollections();
+        renderCollectionsPage(collections);
+        log.info('Collections loaded:', collections.length);
+    } catch (err) {
+        log.error('Failed to load collections:', err);
+        container.innerHTML =
+            '<div class="cb-error">' +
+                '<p>Failed to load collections.</p>' +
+                '<button class="cb-retry">Try again</button>' +
+            '</div>';
+        container.querySelector('.cb-retry')?.addEventListener('click', () => { void navigateToCollections(); });
+    }
+}
