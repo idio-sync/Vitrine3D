@@ -443,3 +443,218 @@ body.kiosk-mode.kiosk-industrial .kiosk-wall-label,
 body.kiosk-mode.kiosk-industrial #kiosk-info-overlay {
     display: none !important;
 }
+
+/* ============================================================
+   MENU DROPDOWNS
+   ============================================================ */
+
+body.kiosk-mode.kiosk-industrial .ind-menu-item {
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 200px;
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid var(--kiosk-border-dark);
+    border-top: none;
+    box-shadow: 1px 3px 6px rgba(0, 0, 0, 0.35);
+    z-index: 110;
+    padding: 3px 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-menu-item.open .ind-dropdown {
+    display: block;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item {
+    display: flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 20px 0 26px;
+    font-size: 0.72rem;
+    color: var(--kiosk-text-primary, #1a1a1a);
+    cursor: pointer;
+    white-space: nowrap;
+    position: relative;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item:hover {
+    background: var(--kiosk-accent);
+    color: #fff;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    font-size: 0.72rem;
+    line-height: 22px;
+    color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item.checked::before {
+    content: '✓';
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item.radio-active::before {
+    content: '•';
+    font-size: 1.1rem;
+    line-height: 20px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-hint {
+    margin-left: auto;
+    padding-left: 16px;
+    font-size: 0.68rem;
+    color: var(--kiosk-text-muted, #888);
+    opacity: 0.7;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item:hover .ind-dd-hint {
+    color: rgba(255, 255, 255, 0.75);
+    opacity: 1;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-sep {
+    height: 1px;
+    background: var(--kiosk-border-dark);
+    margin: 3px 0;
+}
+
+/* ============================================================
+   KEYBOARD SHORTCUTS OVERLAY
+   ============================================================ */
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-panel {
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid var(--kiosk-border-dark);
+    min-width: 320px;
+    max-width: 420px;
+    box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-title {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--kiosk-border-dark);
+    background: var(--kiosk-border-light, #e0e0e0);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-table {
+    padding: 6px 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-row {
+    display: flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 12px;
+    font-size: 0.70rem;
+    gap: 8px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-key {
+    min-width: 80px;
+    font-family: monospace;
+    font-size: 0.69rem;
+    color: var(--kiosk-accent);
+    font-weight: 600;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-desc {
+    color: var(--kiosk-text-primary, #1a1a1a);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-close {
+    display: block;
+    width: 100%;
+    padding: 5px;
+    font-size: 0.70rem;
+    text-align: center;
+    border: none;
+    border-top: 1px solid var(--kiosk-border-dark);
+    background: var(--kiosk-border-light, #e0e0e0);
+    cursor: pointer;
+    color: inherit;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-close:hover {
+    background: var(--kiosk-accent);
+    color: #fff;
+}
+
+/* ============================================================
+   ABOUT OVERLAY
+   ============================================================ */
+
+body.kiosk-mode.kiosk-industrial .ind-about-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-about-panel {
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid var(--kiosk-border-dark);
+    min-width: 280px;
+    box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-about-title {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--kiosk-border-dark);
+    background: var(--kiosk-border-light, #e0e0e0);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-about-body {
+    padding: 10px 12px;
+    font-size: 0.70rem;
+    line-height: 1.7;
+    color: var(--kiosk-text-primary, #1a1a1a);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-about-close {
+    display: block;
+    width: 100%;
+    padding: 5px;
+    font-size: 0.70rem;
+    text-align: center;
+    border: none;
+    border-top: 1px solid var(--kiosk-border-dark);
+    background: var(--kiosk-border-light, #e0e0e0);
+    cursor: pointer;
+    color: inherit;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-about-close:hover {
+    background: var(--kiosk-accent);
+    color: #fff;
+}
