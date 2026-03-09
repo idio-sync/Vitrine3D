@@ -213,18 +213,16 @@ pub fn run() {
         ]);
 
     // Single-instance plugin is desktop-only (not available on Android/iOS).
-    // When a second instance is launched (e.g. via deep link), inject any
-    // vitrine3d:// URLs directly into the webview via eval() — more reliable
-    // than the Tauri event system for cross-process deep link delivery.
+    // When a second instance is launched (e.g. via deep link or file association),
+    // inject URLs/file paths directly into the webview via eval().
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
-                // Forward deep link URLs — all logic in one eval call to avoid
-                // WebView2 dropping queued evals while a previous one is pending.
                 for arg in &args {
                     if arg.starts_with("vitrine3d://") {
+                        // Deep link URL
                         let _ = app.emit("deep-link-received", arg.clone());
                         let escaped = arg.replace('\\', "\\\\").replace('\"', "\\\"");
                         let js = format!(
@@ -234,6 +232,18 @@ pub fn run() {
                                 "if(window.__vitrine3dDeepLink){{window.__vitrine3dDeepLink(_dl)}}",
                                 "else{{window.dispatchEvent(new CustomEvent('vitrine3d:deep-link',{{detail:_dl}}))}}",
                                 "}}catch(_e){{console.error('deep-link eval:',_e)}}"
+                            ),
+                            escaped
+                        );
+                        let _ = window.eval(&js);
+                    } else if is_supported_file(arg) {
+                        // File association — forward path to webview
+                        let escaped = arg.replace('\\', "\\\\").replace('\"', "\\\"");
+                        let js = format!(
+                            concat!(
+                                "try{{",
+                                "window.dispatchEvent(new CustomEvent('vitrine3d:file-open',{{detail:\"{0}\"}}));",
+                                "}}catch(_e){{console.error('file-open eval:',_e)}}"
                             ),
                             escaped
                         );
@@ -249,6 +259,55 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_deep_link::init())
+        .setup(|app| {
+            // On first launch, check CLI args for file associations.
+            // The OS passes the file path as a CLI argument when a .ddim/.a3d/.a3z
+            // file is double-clicked.
+            let args: Vec<String> = std::env::args().collect();
+            let file_args: Vec<String> = args.iter()
+                .skip(1) // skip executable path
+                .filter(|a| is_supported_file(a))
+                .cloned()
+                .collect();
+
+            if !file_args.is_empty() {
+                let window = app.get_webview_window("main")
+                    .expect("main window not found");
+                let file_path = file_args[0].clone();
+                // Defer until the webview is ready
+                window.on_page_load(move |window, payload| {
+                    if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
+                        let escaped = file_path.replace('\\', "\\\\").replace('\"', "\\\"");
+                        let js = format!(
+                            concat!(
+                                "try{{",
+                                "window.dispatchEvent(new CustomEvent('vitrine3d:file-open',{{detail:\"{0}\"}}));",
+                                "}}catch(_e){{console.error('file-open eval:',_e)}}"
+                            ),
+                            escaped
+                        );
+                        let _ = window.eval(&js);
+                    }
+                });
+            }
+
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Check if a CLI argument looks like a supported file path.
+/// Matches all file types the app can open: archives, splats, models, point clouds, CAD.
+fn is_supported_file(path: &str) -> bool {
+    let lower = path.to_lowercase();
+    // Archives
+    lower.ends_with(".ddim") || lower.ends_with(".a3d") || lower.ends_with(".a3z")
+    // 3D models
+    || lower.ends_with(".glb") || lower.ends_with(".gltf") || lower.ends_with(".obj") || lower.ends_with(".stl")
+    // Gaussian splats
+    || lower.ends_with(".ply") || lower.ends_with(".splat") || lower.ends_with(".ksplat")
+    || lower.ends_with(".spz") || lower.ends_with(".sog")
+    // Point clouds
+    || lower.ends_with(".e57")
 }

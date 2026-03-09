@@ -52,7 +52,19 @@
       "icons/icon.icns",
       "icons/icon.ico",
       "icons/icon.png"
-    ]
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["ddim"],
+        "mimeType": "application/octet-stream",
+        "description": "Vitrine3D Scene Archive"
+      }
+    ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "./windows/hooks.nsh"
+      }
+    }
   },
   "plugins": {
     "deep-link": {

@@ -56,6 +56,21 @@ if ((window as any).__TAURI__) {
             handleDeepLinkUrl(event.detail);
         }
     }) as EventListener);
+
+    // File association handler — when a .ddim/.a3d/.a3z file is opened via OS
+    // file association, Rust forwards the path as a 'vitrine3d:file-open' event.
+    window.addEventListener('vitrine3d:file-open', ((event: CustomEvent) => {
+        if (typeof event.detail === 'string') {
+            const filePath = event.detail;
+            const fileName = filePath.split(/[\\/]/).pop() || 'archive.ddim';
+            // Lazy-import kiosk-main and load the archive via IPC byte-serving
+            import('./modules/kiosk-main.js').then(m => {
+                m.loadArchiveFromFilePath(filePath, fileName);
+            }).catch(err => {
+                console.error('Failed to load archive from file association:', err);
+            });
+        }
+    }) as EventListener);
 }
 
 // Check page modes in priority order:
