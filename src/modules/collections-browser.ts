@@ -520,6 +520,7 @@ async function navigateToCollection(slug: string, name: string): Promise<void> {
 
     // Show loading state
     container.innerHTML = '<div class="cb-loading">Loading\u2026</div>';
+    showBrowserContainer();
 
     try {
         // Use cache if we have the same collection (e.g. returning from viewer)
