@@ -7,6 +7,7 @@
 
 import { captureScreenshot } from './archive-creator.js';
 import { Logger, notify } from './utilities.js';
+import { dracoCompressGLB } from './mesh-decimator.js';
 import { formatFileSize, getActiveProfile, VALIDATION_RULES } from './metadata-manager.js';
 import { validateSIP, toManifestCompliance } from './sip-validator.js';
 import type { SIPValidationResult } from './sip-validator.js';
@@ -49,6 +50,14 @@ function updateArchiveAssetCheckboxes(deps: ExportDeps): void {
             el.disabled = !loaded;
         }
     });
+
+    // Show Draco sub-row only when a GLB mesh is loaded
+    const dracoHdRow = document.getElementById('export-draco-hd-row');
+    if (dracoHdRow) {
+        const fileName = (document.getElementById('model-filename')?.textContent || '').toLowerCase();
+        const isGlb = fileName.endsWith('.glb');
+        dracoHdRow.style.display = (state.modelLoaded && isGlb) ? '' : 'none';
+    }
 }
 
 /**
@@ -331,8 +340,15 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         const rotation = modelGroup ? [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z] : [0, 0, 0];
         const scale: [number, number, number] = modelGroup ? [modelGroup.scale.x, modelGroup.scale.y, modelGroup.scale.z] : [1, 1, 1];
 
+        let meshBlob = assets.meshBlob;
+        const dracoHdEl = document.getElementById('export-draco-hd') as HTMLInputElement | null;
+        const shouldDracoHD = dracoHdEl?.checked ?? true;
+        if (shouldDracoHD && fileName.toLowerCase().endsWith('.glb')) {
+            meshBlob = await dracoCompressGLB(meshBlob);
+        }
+
         log.info(' Adding mesh:', { fileName, position, rotation, scale });
-        archiveCreator.addMesh(assets.meshBlob, fileName, {
+        archiveCreator.addMesh(meshBlob, fileName, {
             position, rotation, scale,
             created_by: metadata.meshMetadata.createdBy || 'unknown',
             created_by_version: metadata.meshMetadata.version || '',
