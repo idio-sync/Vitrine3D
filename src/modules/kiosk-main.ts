@@ -2419,6 +2419,43 @@ function createDisplayModeDeps(): any {
 }
 
 /**
+ * Unified single-file loader for the industrial theme's File > Open menu.
+ * Routes by extension to the appropriate loader already available in kiosk-main.
+ */
+async function loadSingleFile(file: File): Promise<void> {
+    const name = file.name.toLowerCase();
+    const ext = name.includes('.') ? name.split('.').pop()! : '';
+
+    const ARCHIVE_EXTS = ['ddim', 'a3d', 'a3z'];
+    const MESH_EXTS    = ['glb', 'gltf', 'obj'];
+    const SPLAT_EXTS   = ['ply', 'splat', 'sog'];
+    const E57_EXTS     = ['e57'];
+    const CAD_EXTS     = ['step', 'stp', 'iges', 'igs'];
+    const FLIGHT_EXTS  = ['csv', 'kml', 'kmz', 'srt'];
+
+    if (ARCHIVE_EXTS.includes(ext)) {
+        await loadArchiveFromFile(file, { state: state as any });
+    } else if (MESH_EXTS.includes(ext)) {
+        const { loadModelFromFile } = await import('./file-handlers.js');
+        await loadModelFromFile([file] as any, createModelDeps());
+    } else if (SPLAT_EXTS.includes(ext)) {
+        const { loadSplatFromFile } = await import('./file-handlers.js');
+        await loadSplatFromFile(file, createSplatDeps());
+    } else if (E57_EXTS.includes(ext)) {
+        const { loadPointcloudFromFile } = await import('./file-handlers.js');
+        await loadPointcloudFromFile(file, createPointcloudDeps());
+    } else if (CAD_EXTS.includes(ext)) {
+        const { loadCADFromFile } = await import('./cad-loader.js');
+        await loadCADFromFile(file, createArchiveDeps());
+    } else if (FLIGHT_EXTS.includes(ext)) {
+        if (flightPathManager) await flightPathManager.importFromFile(file);
+        else notify.warning('Flight path viewer not available.');
+    } else {
+        notify.warning(`Unsupported file type: .${ext || '(none)'}`);
+    }
+}
+
+/**
  * Build the dependency object for theme layout modules.
  * Layout modules receive everything via this object — no ES imports.
  */
@@ -2464,6 +2501,7 @@ function createLayoutDeps(): any {
         setLocalClippingEnabled: (enabled: boolean) => sceneManager?.setLocalClippingEnabled(enabled),
         applyBackgroundForMode,
         flightPathManager,
+        loadFile: loadSingleFile,
     };
 }
 
