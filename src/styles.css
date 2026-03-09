@@ -519,6 +519,10 @@ input, select, textarea {
 
 .cb-row:last-child { margin-bottom: 0; }
 
+.cb-row.cb-subrow {
+    padding-left: 18px;
+}
+
 .cb-row input[type="checkbox"] {
     width: 12px;
     height: 12px;
