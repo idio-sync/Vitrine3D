@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { UndoManager } from '../undo-manager.js';
-import type { UndoEntry, MatrixSnapshot } from '../undo-manager.js';
+import type { UndoEntry } from '../undo-manager.js';
 import type { SelectedObject } from '@/types.js';
 
 /** Helper to create a mock matrix object */
