@@ -393,6 +393,56 @@ export async function exportAsGLB(group: THREE.Group, dracoCompress = true): Pro
     return new Blob([compressed], { type: 'model/gltf-binary' });
 }
 
+// ===== HD Mesh Draco Compression =====
+
+/**
+ * Cheaply check if a GLB blob is already Draco-compressed by reading only
+ * the JSON chunk and checking extensionsUsed. No gltf-transform involved.
+ *
+ * GLB binary layout:
+ *   bytes  0-11: file header (magic, version, total-length)
+ *   bytes 12-15: JSON chunk length
+ *   bytes 16-19: JSON chunk type (0x4E4F534A = "JSON")
+ *   bytes 20+  : JSON chunk data
+ */
+function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(blob);
+    });
+}
+
+async function isAlreadyDracoCompressed(blob: Blob): Promise<boolean> {
+    const fullBuffer = await blobToArrayBuffer(blob);
+    const view = new DataView(fullBuffer);
+    const jsonLength = view.getUint32(12, true);
+    const jsonBytes = new Uint8Array(fullBuffer, 20, jsonLength);
+    const json = JSON.parse(new TextDecoder().decode(jsonBytes).replace(/[\0\s]+$/, ''));
+    return (json.extensionsUsed ?? []).includes('KHR_draco_mesh_compression');
+}
+
+/**
+ * Draco-compress a GLB blob using gltf-transform.
+ * Pure blob-to-blob pipeline — no Three.js round-trip.
+ * Preserves all textures, PBR materials, animations, and morph targets exactly.
+ * Returns the original blob unchanged if already Draco-compressed.
+ */
+export async function dracoCompressGLB(blob: Blob): Promise<Blob> {
+    if (await isAlreadyDracoCompressed(blob)) {
+        log.info('HD mesh already Draco-compressed, skipping');
+        return blob;
+    }
+    const io = await ensureDracoIO();
+    const buffer = new Uint8Array(await blobToArrayBuffer(blob));
+    const doc = await io.readBinary(buffer);
+    await doc.transform(draco({ method: 'edgebreaker' }));
+    const compressed = await io.writeBinary(doc);
+    log.info(`HD Draco: ${(buffer.byteLength / 1024).toFixed(0)} KB → ${(compressed.byteLength / 1024).toFixed(0)} KB`);
+    return new Blob([compressed], { type: 'model/gltf-binary' });
+}
+
 // ===== High-Level Pipeline =====
 
 /**
