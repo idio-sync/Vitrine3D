@@ -1558,22 +1558,17 @@ export function setup(manifest, deps) {
     const mobilePill = document.createElement('div');
     mobilePill.className = 'editorial-mobile-pill';
 
-    // Annotation badge (shown when annotations exist)
-    const pillBadge = document.createElement('span');
-    pillBadge.className = 'editorial-pill-badge';
+    // --- Details button: chevron-up + label, opens/collapses the info sheet ---
+    const barDetailsBtn = document.createElement('button');
+    barDetailsBtn.className = 'editorial-bar-btn editorial-bar-details-btn';
+    barDetailsBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg><span class="editorial-bar-label">Details</span>';
     if (annotations.length > 0) {
-        pillBadge.textContent = annotations.length;
-    } else {
-        pillBadge.style.display = 'none';
+        const barAnnoBadge = document.createElement('span');
+        barAnnoBadge.className = 'editorial-bar-anno-badge';
+        barAnnoBadge.textContent = String(annotations.length);
+        barDetailsBtn.appendChild(barAnnoBadge);
     }
-    mobilePill.appendChild(pillBadge);
-
-    // Title label — tappable to open info sheet
-    const pillLabel = document.createElement('button');
-    pillLabel.className = 'editorial-pill-label';
-    const pillTitle = manifest?.title || manifest?.project?.title || manifest?.archival_record?.title || 'View Details';
-    pillLabel.textContent = pillTitle;
-    pillLabel.addEventListener('click', () => {
+    barDetailsBtn.addEventListener('click', () => {
         const sidebar = document.getElementById('metadata-sidebar');
         if (!sidebar) return;
         if (sidebar.classList.contains('sheet-half') || sidebar.classList.contains('sheet-full')) {
@@ -1584,126 +1579,115 @@ export function setup(manifest, deps) {
             sidebar.classList.add('sheet-half');
         }
     });
-    mobilePill.appendChild(pillLabel);
+    mobilePill.appendChild(barDetailsBtn);
 
-    // Kebab menu button (visual tools)
+    // --- Tool icon buttons (texture + view mode) — only when mesh is present ---
     const hasMeshContent = contentInfo && contentInfo.hasMesh;
     if (hasMeshContent) {
-        const kebabBtn = document.createElement('button');
-        kebabBtn.className = 'editorial-pill-kebab';
-        kebabBtn.title = 'Visual tools';
-        kebabBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
+        // Vertical divider between details and tools
+        const barDivider = document.createElement('div');
+        barDivider.className = 'editorial-bar-divider';
+        mobilePill.appendChild(barDivider);
 
-        const kebabMenu = document.createElement('div');
-        kebabMenu.className = 'editorial-pill-menu';
+        // Texture toggle button
+        let barTexturesVisible = true;
+        const barTexBtn = document.createElement('button');
+        barTexBtn.className = 'editorial-bar-btn';
+        barTexBtn.title = 'Toggle textures';
+        barTexBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span class="editorial-bar-label">Texture</span>';
+        barTexBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            barTexturesVisible = !barTexturesVisible;
+            updateModelTextures(modelGroup, barTexturesVisible);
+            barTexBtn.classList.toggle('off', !barTexturesVisible);
+            textureToggle.classList.toggle('off', !barTexturesVisible);
+        });
+        mobilePill.appendChild(barTexBtn);
 
-        // Shared state for material views
-        let pillActiveView = null;
-        const pillSetMaterialView = (view) => {
-            if (view === pillActiveView) view = null;
-            if (pillActiveView) {
-                if (pillActiveView === 'wireframe') updateModelWireframe(modelGroup, false);
-                else if (pillActiveView === 'normals') updateModelNormals(modelGroup, false);
-                else if (pillActiveView === 'roughness') updateModelRoughness(modelGroup, false);
-                else if (pillActiveView === 'metalness') updateModelMetalness(modelGroup, false);
-                else if (pillActiveView === 'specularF0') updateModelSpecularF0(modelGroup, false);
-                else if (pillActiveView.startsWith('matcap:')) updateModelMatcap(modelGroup, false);
+        // View mode button + upward popover
+        let barActiveView = null;
+        const barViewBtn = document.createElement('button');
+        barViewBtn.className = 'editorial-bar-btn';
+        barViewBtn.title = 'View mode';
+        barViewBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><ellipse cx="12" cy="12" rx="4" ry="10"/><path d="M2 12h20"/></svg><span class="editorial-bar-label">View</span>';
+
+        const barViewPopover = document.createElement('div');
+        barViewPopover.className = 'editorial-bar-popover';
+
+        const barSetView = (view) => {
+            if (view === barActiveView) view = null;
+            if (barActiveView) {
+                if (barActiveView === 'wireframe') updateModelWireframe(modelGroup, false);
+                else if (barActiveView === 'normals') updateModelNormals(modelGroup, false);
+                else if (barActiveView === 'roughness') updateModelRoughness(modelGroup, false);
+                else if (barActiveView === 'metalness') updateModelMetalness(modelGroup, false);
+                else if (barActiveView === 'specularF0') updateModelSpecularF0(modelGroup, false);
+                else if (barActiveView.startsWith('matcap:')) updateModelMatcap(modelGroup, false);
             }
-            pillActiveView = view;
-            if (pillActiveView) {
-                if (pillActiveView === 'wireframe') updateModelWireframe(modelGroup, true);
-                else if (pillActiveView === 'normals') updateModelNormals(modelGroup, true);
-                else if (pillActiveView === 'roughness') updateModelRoughness(modelGroup, true);
-                else if (pillActiveView === 'metalness') updateModelMetalness(modelGroup, true);
-                else if (pillActiveView === 'specularF0') updateModelSpecularF0(modelGroup, true);
-                else if (pillActiveView.startsWith('matcap:')) updateModelMatcap(modelGroup, true, pillActiveView.split(':')[1]);
+            barActiveView = view;
+            if (barActiveView) {
+                if (barActiveView === 'wireframe') updateModelWireframe(modelGroup, true);
+                else if (barActiveView === 'normals') updateModelNormals(modelGroup, true);
+                else if (barActiveView === 'roughness') updateModelRoughness(modelGroup, true);
+                else if (barActiveView === 'metalness') updateModelMetalness(modelGroup, true);
+                else if (barActiveView === 'specularF0') updateModelSpecularF0(modelGroup, true);
+                else if (barActiveView.startsWith('matcap:')) updateModelMatcap(modelGroup, true, barActiveView.split(':')[1]);
             }
-            kebabMenu.querySelectorAll('.editorial-pill-menu-item').forEach(el => {
-                el.classList.toggle('active', el.dataset.view === pillActiveView);
+            barViewBtn.classList.toggle('active', !!barActiveView);
+            barViewPopover.querySelectorAll('.editorial-bar-popover-item').forEach(el => {
+                el.classList.toggle('active', el.dataset.view === barActiveView);
             });
             // Sync desktop ribbon material dropdown
             materialDropdown.querySelectorAll('.editorial-matcap-item').forEach(el => {
-                el.classList.toggle('active', el.dataset.view === pillActiveView);
+                el.classList.toggle('active', el.dataset.view === barActiveView);
             });
-            materialBtn.classList.toggle('active', !!pillActiveView);
+            materialBtn.classList.toggle('active', !!barActiveView);
+            barViewPopover.classList.remove('open');
         };
 
-        // Texture toggle
-        let pillTexturesVisible = true;
-        const texItem = document.createElement('button');
-        texItem.className = 'editorial-pill-menu-item';
-        texItem.textContent = 'Hide Textures';
-        texItem.addEventListener('click', (e) => {
-            e.stopPropagation();
-            pillTexturesVisible = !pillTexturesVisible;
-            updateModelTextures(modelGroup, pillTexturesVisible);
-            texItem.textContent = pillTexturesVisible ? 'Hide Textures' : 'Show Textures';
-            texItem.classList.toggle('active', !pillTexturesVisible);
-            // Sync desktop texture toggle
-            textureToggle.classList.toggle('off', !pillTexturesVisible);
-        });
-        kebabMenu.appendChild(texItem);
-
-        // Divider
-        const div1 = document.createElement('div');
-        div1.className = 'editorial-pill-menu-divider';
-        kebabMenu.appendChild(div1);
-
-        // Material view items
-        const pillViews = [
-            ['Wireframe', 'wireframe'], ['Normals', 'normals'],
-            ['Roughness', 'roughness'], ['Metalness', 'metalness']
-        ];
-        pillViews.forEach(([label, key]) => {
+        [['Wireframe', 'wireframe'], ['Normals', 'normals'], ['Roughness', 'roughness'], ['Metalness', 'metalness']].forEach(([label, key]) => {
             const item = document.createElement('button');
-            item.className = 'editorial-pill-menu-item';
+            item.className = 'editorial-bar-popover-item';
             item.dataset.view = key;
             item.textContent = label;
-            item.addEventListener('click', (e) => { e.stopPropagation(); pillSetMaterialView(key); });
-            kebabMenu.appendChild(item);
+            item.addEventListener('click', (e) => { e.stopPropagation(); barSetView(key); });
+            barViewPopover.appendChild(item);
         });
+        const popDivider = document.createElement('div');
+        popDivider.className = 'editorial-pill-menu-divider';
+        barViewPopover.appendChild(popDivider);
+        const resetItem = document.createElement('button');
+        resetItem.className = 'editorial-bar-popover-item editorial-pill-menu-off';
+        resetItem.textContent = 'Reset';
+        resetItem.addEventListener('click', (e) => { e.stopPropagation(); barSetView(null); barViewPopover.classList.remove('open'); });
+        barViewPopover.appendChild(resetItem);
 
-        // Matcap divider + presets
-        const div2 = document.createElement('div');
-        div2.className = 'editorial-pill-menu-divider';
-        kebabMenu.appendChild(div2);
+        barViewBtn.addEventListener('click', (e) => { e.stopPropagation(); barViewPopover.classList.toggle('open'); });
+        document.addEventListener('click', () => barViewPopover.classList.remove('open'));
 
-        const pillMatcaps = [['Clay', 'clay'], ['Chrome', 'chrome'], ['Pearl', 'pearl'], ['Jade', 'jade'], ['Copper', 'copper'], ['Bronze', 'bronze']];
-        pillMatcaps.forEach(([label, style]) => {
-            const item = document.createElement('button');
-            item.className = 'editorial-pill-menu-item';
-            item.dataset.view = 'matcap:' + style;
-            item.textContent = label;
-            item.addEventListener('click', (e) => { e.stopPropagation(); pillSetMaterialView('matcap:' + style); });
-            kebabMenu.appendChild(item);
-        });
+        const barViewWrapper = document.createElement('div');
+        barViewWrapper.style.cssText = 'position:relative;display:flex;';
+        barViewWrapper.appendChild(barViewBtn);
+        barViewWrapper.appendChild(barViewPopover);
+        mobilePill.appendChild(barViewWrapper);
+    }
 
-        // Off item
-        const div3 = document.createElement('div');
-        div3.className = 'editorial-pill-menu-divider';
-        kebabMenu.appendChild(div3);
-        const offItem2 = document.createElement('button');
-        offItem2.className = 'editorial-pill-menu-item editorial-pill-menu-off';
-        offItem2.textContent = 'Reset View';
-        offItem2.addEventListener('click', (e) => {
+    // --- Annotations toggle — shown in bar when annotations exist ---
+    if (annotations.length > 0) {
+        const barAnnoDivider = document.createElement('div');
+        barAnnoDivider.className = 'editorial-bar-divider';
+        mobilePill.appendChild(barAnnoDivider);
+
+        const barAnnoBtn = document.createElement('button');
+        barAnnoBtn.className = 'editorial-bar-btn';
+        barAnnoBtn.title = 'Toggle annotation markers';
+        barAnnoBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="editorial-bar-label">Markers</span>';
+        barAnnoBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            pillSetMaterialView(null);
-            if (!pillTexturesVisible) {
-                pillTexturesVisible = true;
-                updateModelTextures(modelGroup, true);
-                texItem.textContent = 'Hide Textures';
-                texItem.classList.remove('active');
-                textureToggle.classList.remove('off');
-            }
-            kebabMenu.classList.remove('open');
+            setMarkersVisible(!markersVisible);
+            barAnnoBtn.classList.toggle('off', !markersVisible);
         });
-        kebabMenu.appendChild(offItem2);
-
-        kebabBtn.addEventListener('click', (e) => { e.stopPropagation(); kebabMenu.classList.toggle('open'); });
-        document.addEventListener('click', () => { kebabMenu.classList.remove('open'); });
-
-        mobilePill.appendChild(kebabBtn);
-        mobilePill.appendChild(kebabMenu);
+        mobilePill.appendChild(barAnnoBtn);
     }
 
     viewerContainer.appendChild(mobilePill);
