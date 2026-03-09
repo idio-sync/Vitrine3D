@@ -3,7 +3,7 @@
  *
  * Parses DJI binary flight record files (.txt) using dji-log-parser-js (WASM).
  * Handles all log versions (1–14). Versions 13+ require a DJI API key
- * configured via the VITE_DJI_API_KEY environment variable.
+ * configured via Docker env var DJI_API_KEY or admin settings (flight.djiApiKey).
  */
 
 import { Logger } from './utilities.js';
@@ -36,7 +36,7 @@ export async function parseDjiTxt(buffer: ArrayBuffer): Promise<FlightPoint[]> {
 
     // For v13+ logs, fetch keychains using DJI API key if available
     let keychains;
-    const apiKey = (import.meta.env.VITE_DJI_API_KEY as string | undefined) || '';
+    const apiKey = (window as any).APP_CONFIG?.djiApiKey || '';
 
     if (parser.version >= 13 && apiKey) {
         try {
@@ -45,13 +45,13 @@ export async function parseDjiTxt(buffer: ArrayBuffer): Promise<FlightPoint[]> {
         } catch (err: any) {
             throw new Error(
                 `Failed to fetch DJI decryption keychains: ${err?.message || err}. ` +
-                'Check that VITE_DJI_API_KEY is valid.'
+                'Check that DJI_API_KEY is set correctly (Docker env var or admin settings).'
             );
         }
     } else if (parser.version >= 13) {
         throw new Error(
             'This DJI flight log is encrypted (v' + parser.version + ') and requires a DJI API key for decryption. ' +
-            'Set VITE_DJI_API_KEY in your environment, or export the log as CSV from airdata.com'
+            'Set DJI_API_KEY in Docker env or configure via admin settings, or export the log as CSV from airdata.com'
         );
     }
 

@@ -62,6 +62,7 @@ docker compose up -d
 | `APP_TITLE` | `Vitrine3D` | Browser tab title shown in the page `<title>` tag |
 | `DEFAULT_KIOSK_THEME` | `editorial` | Default theme for clean URL kiosk views. See [Clean Archive URLs](#clean-archive-urls) |
 | `DEV_AUTH_USER` | _(empty)_ | **Local dev only.** Email injected as the Cloudflare Access header so the admin API authenticates without a real Cloudflare tunnel. Remove before production. |
+| `DJI_API_KEY` | _(empty)_ | DJI developer API key for decrypting v13+ binary flight logs (`.txt`). Register at [developer.dji.com](https://developer.dji.com). Without this, encrypted logs prompt users to export as CSV instead. Also configurable at runtime via admin settings (`flight.djiApiKey`). |
 
 #### Build-Time Variables
 
@@ -69,7 +70,6 @@ These `VITE_*` variables are inlined by Vite during `npm run build`. Set them **
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VITE_DJI_API_KEY` | _(empty)_ | DJI developer API key for decrypting v13+ binary flight logs (`.txt`). Register at [developer.dji.com](https://developer.dji.com). Without this, encrypted logs prompt users to export as CSV instead. |
 | `VITE_SPARK_VERSION` | `2.0` | Spark.js renderer version toggle (build-time equivalent of `SPARK_VERSION`) |
 | `VITE_APP_LIBRARY_URL` | _(empty)_ | Library API base URL for the library panel |
 

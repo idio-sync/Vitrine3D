@@ -229,7 +229,10 @@
         libraryEnabled: false,
 
         // Spark.js renderer version: '2.0' (default, with LOD) or '0.1' (legacy OldSparkRenderer)
-        sparkVersion: '2.0'
+        sparkVersion: '2.0',
+
+        // DJI API key for decrypting v13+ binary flight logs (empty in local dev, set via admin settings or Docker env var)
+        djiApiKey: ''
     };
 
     // Fetch server-managed settings (non-blocking — modules await settingsReady if needed)
@@ -243,6 +246,7 @@
             if (s['recording.bitrate'])      window.APP_CONFIG.recordingBitrate = Number(s['recording.bitrate'].value);
             if (s['recording.framerate'])    window.APP_CONFIG.recordingFramerate = Number(s['recording.framerate'].value);
             if (s['recording.maxDuration'])  window.APP_CONFIG.recordingMaxDuration = Number(s['recording.maxDuration'].value);
+            if (s['flight.djiApiKey'])       window.APP_CONFIG.djiApiKey = s['flight.djiApiKey'].value;
         })
         .catch(function() {
             // Silently fail — local dev / Tauri won't have this endpoint

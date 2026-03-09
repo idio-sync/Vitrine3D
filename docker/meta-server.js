@@ -69,6 +69,7 @@ const SETTINGS_DEFAULTS = {
     'lod.budgetSd':           { default: '1000000', type: 'number', label: 'LOD Budget — SD',         group: 'Renderer',         description: 'Max splats per frame (SD tier)' },
     'lod.budgetHd':           { default: '5000000', type: 'number', label: 'LOD Budget — HD',         group: 'Renderer',         description: 'Max splats per frame (HD tier)' },
     'renderer.maxPixelRatio': { default: '2',       type: 'number', label: 'Max Pixel Ratio',         group: 'Renderer',         description: 'Cap for high-DPI displays', min: 1, max: 4 },
+    'flight.djiApiKey':       { default: '',        type: 'string', label: 'DJI API Key',             group: 'Flight Logs',      description: 'API key for decrypting v13+ DJI binary flight logs (.txt). Register at developer.dji.com' },
 };
 
 // Env var mapping for settings (key → env var name)
@@ -79,6 +80,7 @@ const SETTINGS_ENV_MAP = {
     'gif.fps':          'GIF_FPS',
     'gif.width':        'GIF_WIDTH',
     'thumbnail.size':   'THUMBNAIL_SIZE',
+    'flight.djiApiKey': 'DJI_API_KEY',
 };
 
 // In-memory cache: { key: { value, expiry } }

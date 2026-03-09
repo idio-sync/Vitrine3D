@@ -146,7 +146,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 ### Asset Types
 - [x] **Done** — DXF drawing files as an independent asset type (loaded via `three-dxf-loader`, displayed in a dedicated drawing layer)
 - [x] **Done** — STEP/IGES parametric CAD files as an independent asset type (loaded via `occt-import-js` OpenCASCADE WASM, tessellated and rendered in a dedicated CAD layer; stored as `cad_` entries in archives)
-- [x] **Done** — DJI flight path import (CSV, KML/KMZ, SRT, DJI binary .txt) as an independent asset type (`flightpath_` entries in archives); GPS→local coordinate conversion, 3D line rendering with instanced markers, hover telemetry tooltips, manual alignment via transform gizmo. Binary .txt logs parsed via `dji-log-parser-js` WASM; v13+ encrypted logs require `VITE_DJI_API_KEY`
+- [x] **Done** — DJI flight path import (CSV, KML/KMZ, SRT, DJI binary .txt) as an independent asset type (`flightpath_` entries in archives); GPS→local coordinate conversion, 3D line rendering with instanced markers, hover telemetry tooltips, manual alignment via transform gizmo. Binary .txt logs parsed via `dji-log-parser-js` WASM; v13+ encrypted logs require `DJI_API_KEY` (Docker env var or admin settings)
 
 ### Annotations & Walkthrough
 - [x] **Done** — Image attachments in annotations via `asset:` protocol
