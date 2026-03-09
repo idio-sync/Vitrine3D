@@ -758,6 +758,7 @@ function handleDjiKeychains(req, res) {
     }
 
     const apiKey = getSetting('flight.djiApiKey');
+    console.log('[meta-server] DJI keychains proxy — apiKey resolved:', apiKey ? '***' + apiKey.slice(-4) : '(empty)', '| env:', process.env.DJI_API_KEY ? 'set' : 'unset');
     if (!apiKey) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: 'DJI API key not configured. Set DJI_API_KEY env var or configure via admin settings.' }));
