@@ -548,6 +548,7 @@ function openArchive(archive: CollectionArchive, collectionName: string): void {
     if (!_opts) return;
 
     const libraryBaseUrl = _opts.libraryBaseUrl;
+    // archive.path is either an absolute http(s) URL or a root-relative path
     const fullUrl = archive.path.startsWith('http')
         ? archive.path
         : libraryBaseUrl + archive.path;
