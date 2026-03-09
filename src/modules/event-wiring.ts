@@ -347,6 +347,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     // ─── Transform pane inputs ────────────────────────────────
     (['x', 'y', 'z'] as const).forEach(axis => {
         addListener(`transform-pos-${axis}`, 'change', (e: Event) => {
+            deps.undo.captureBeforeNumericEdit();
             const val = parseFloat((e.target as HTMLInputElement).value) || 0;
             const sel = state.selectedObject;
             if (sel === 'splat' && sceneRefs.splatMesh) {
@@ -369,8 +370,10 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 if ((sceneRefs as any).cadGroup) (sceneRefs as any).cadGroup.position[axis] = val;
                 if ((sceneRefs as any).drawingGroup) (sceneRefs as any).drawingGroup.position[axis] = val;
             }
+            deps.undo.pushAfterNumericEdit();
         });
         addListener(`transform-rot-${axis}`, 'change', (e: Event) => {
+            deps.undo.captureBeforeNumericEdit();
             const val = parseFloat((e.target as HTMLInputElement).value) || 0;
             const rad = THREE.MathUtils.degToRad(val);
             const sel = state.selectedObject;
@@ -394,8 +397,10 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 if ((sceneRefs as any).cadGroup) (sceneRefs as any).cadGroup.rotation[axis] = rad;
                 if ((sceneRefs as any).drawingGroup) (sceneRefs as any).drawingGroup.rotation[axis] = rad;
             }
+            deps.undo.pushAfterNumericEdit();
         });
         addListener(`transform-scale-${axis}`, 'change', (e: Event) => {
+            deps.undo.captureBeforeNumericEdit();
             const val = parseFloat((e.target as HTMLInputElement).value);
             if (isNaN(val) || val <= 0) return;
             const sel = state.selectedObject;
@@ -442,6 +447,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                     if (label) label.textContent = val.toFixed(1);
                 }
             }
+            deps.undo.pushAfterNumericEdit();
         });
     });
 

@@ -414,6 +414,8 @@ export interface EventWiringDeps {
     undo: {
         performUndo: () => void;
         performRedo: () => void;
+        captureBeforeNumericEdit: () => void;
+        pushAfterNumericEdit: () => void;
     };
 }
 

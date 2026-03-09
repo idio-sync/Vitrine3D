@@ -352,6 +352,7 @@ let archiveCreator: any = null;
 let crossSection: CrossSectionTool | null = null;
 let flightPathManager: FlightPathManager | null = null;
 let _dragBeforeMatrices: MatrixSnapshot | null = null;
+let _numericEditBefore: MatrixSnapshot | null = null;
 let undoManager: UndoManager;
 
 // Asset blob store (ES module singleton — shared with archive-pipeline, export-controller, etc.)
@@ -756,6 +757,20 @@ function createEventWiringDeps(): EventWiringDeps {
         undo: {
             performUndo,
             performRedo,
+            captureBeforeNumericEdit: () => {
+                _numericEditBefore = captureTransformMatrices();
+            },
+            pushAfterNumericEdit: () => {
+                if (_numericEditBefore) {
+                    const after = captureTransformMatrices();
+                    undoManager.push({
+                        objectId: state.selectedObject,
+                        beforeMatrices: _numericEditBefore,
+                        afterMatrices: after,
+                    });
+                    _numericEditBefore = null;
+                }
+            },
         },
     };
 }
@@ -2377,6 +2392,7 @@ function _wireMeasurementControls() {
 
 // Load default files from configuration
 async function loadDefaultFiles() {
+    undoManager.clear();
     // Archive URL takes priority over splat/model URLs
     if (config.defaultArchiveUrl) {
         log.info(' Loading archive from URL:', config.defaultArchiveUrl);
