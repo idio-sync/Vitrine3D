@@ -653,8 +653,14 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
             const fpStore = getStore();
             for (const fp of fpStore.flightPathBlobs) {
                 try {
-                    const text = await fp.blob.text();
-                    flightPathManager.importFromText(text, fp.fileName);
+                    const ext = fp.fileName.split('.').pop()?.toLowerCase() || '';
+                    if (ext === 'txt') {
+                        const buffer = await fp.blob.arrayBuffer();
+                        await flightPathManager.importBinary(buffer, fp.fileName, 'dji-txt');
+                    } else {
+                        const text = await fp.blob.text();
+                        flightPathManager.importFromText(text, fp.fileName);
+                    }
                 } catch (err) {
                     console.warn('[main] Failed to parse flight path:', fp.fileName, err);
                 }

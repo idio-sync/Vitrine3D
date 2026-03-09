@@ -134,7 +134,7 @@ export default defineConfig({
     optimizeDeps: {
         // Spark.js uses eval() for WASM — excluding prevents esbuild from breaking it.
         // occt-import-js uses dynamic import + locateFile for WASM — exclude to prevent esbuild inlining.
-        exclude: ['@sparkjsdev/spark', 'occt-import-js', 'meshoptimizer'],
+        exclude: ['@sparkjsdev/spark', 'occt-import-js', 'meshoptimizer', 'dji-log-parser-js'],
     },
 
     plugins: [

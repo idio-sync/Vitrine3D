@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { Logger } from './utilities.js';
 import { FLIGHT_LOG } from './constants.js';
 import { parseDjiCsv, parseKml, parseSrt, detectFormat } from './flight-parsers.js';
+import { parseDjiTxt } from './dji-txt-parser.js';
 import type { FlightPoint, FlightPathData } from '@/types.js';
 
 const log = Logger.getLogger('flight-path');
@@ -53,6 +54,11 @@ export class FlightPathManager {
 
     /** Import a flight log file. Returns the parsed FlightPathData. */
     async importFile(file: File): Promise<FlightPathData> {
+        const ext = file.name.split('.').pop()?.toLowerCase() || '';
+        if (ext === 'txt') {
+            const buffer = await file.arrayBuffer();
+            return this.importBinary(buffer, file.name, 'dji-txt');
+        }
         const text = await file.text();
         return this.importFromText(text, file.name);
     }
@@ -75,6 +81,37 @@ export class FlightPathManager {
                 break;
             default:
                 throw new Error(`Unsupported format: ${format}`);
+        }
+
+        if (points.length === 0) throw new Error('No valid GPS points found in flight log');
+
+        const id = `flightpath_${this.paths.length}`;
+        const lastPoint = points[points.length - 1];
+        const data: FlightPathData = {
+            id,
+            points,
+            sourceFormat: format,
+            fileName,
+            originGps: [points[0].lat, points[0].lon],
+            durationS: Math.round(lastPoint.timestamp / 1000),
+            maxAltM: Math.max(...points.map(p => p.alt)),
+        };
+
+        this.paths.push(data);
+        this.renderPath(data);
+        log.info(`Imported flight path "${fileName}": ${points.length} points, ${data.durationS}s duration`);
+        return data;
+    }
+
+    /** Import from binary ArrayBuffer. Used for DJI .txt flight records. */
+    async importBinary(buffer: ArrayBuffer, fileName: string, format: string): Promise<FlightPathData> {
+        let points: FlightPoint[];
+        switch (format) {
+            case 'dji-txt':
+                points = await parseDjiTxt(buffer);
+                break;
+            default:
+                throw new Error(`Unsupported binary format: ${format}`);
         }
 
         if (points.length === 0) throw new Error('No valid GPS points found in flight log');

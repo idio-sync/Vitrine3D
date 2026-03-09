@@ -304,7 +304,7 @@ export const DEFAULT_DECIMATION_PRESET = 'medium';
 // =============================================================================
 
 export const FLIGHT_LOG = {
-    EXTENSIONS: ['.csv', '.kml', '.kmz', '.srt'],
+    EXTENSIONS: ['.csv', '.kml', '.kmz', '.srt', '.txt'],
     /** Default line color — light blue, distinct from annotation/measurement orange */
     LINE_COLOR: 0x4FC3F7,
     /** Max rendered segments before subsampling kicks in */

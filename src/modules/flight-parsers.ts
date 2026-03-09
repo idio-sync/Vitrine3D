@@ -26,6 +26,17 @@ export function gpsToLocal(
     return { x, y, z };
 }
 
+// ===== Helpers =====
+
+/** Check if a string contains non-printable (binary) characters. */
+function hasBinaryChars(s: string): boolean {
+    for (let i = 0; i < s.length; i++) {
+        const c = s.charCodeAt(i);
+        if ((c >= 0 && c <= 8) || (c >= 14 && c <= 31)) return true;
+    }
+    return false;
+}
+
 // ===== Format Detection =====
 
 export function detectFormat(fileName: string, contentPeek: string): string | null {
@@ -35,10 +46,22 @@ export function detectFormat(fileName: string, contentPeek: string): string | nu
     if (ext === 'kmz') return 'kmz';
     if (ext === 'srt') return 'srt';
 
+    // Content-based detection (for files with ambiguous extensions like .txt)
     const lower = contentPeek.toLowerCase();
     if (lower.includes('latitude') && lower.includes('longitude')) return 'dji-csv';
     if (lower.includes('<kml') || (lower.includes('<?xml') && lower.includes('kml'))) return 'kml';
     if (/\[latitude[:\s]/i.test(contentPeek)) return 'srt';
+
+    // DJI binary .txt flight records — only match DJI naming pattern or
+    // files whose content starts with binary (non-printable) data
+    if (ext === 'txt') {
+        const baseName = fileName.split('/').pop()?.split('\\').pop() || '';
+        if (/^DJIFlightRecord/i.test(baseName)) return 'dji-txt';
+        // Check for binary content: DJI logs start with a binary header,
+        // so if the first bytes contain non-printable characters it's likely a DJI log
+        const head = contentPeek.slice(0, 20);
+        if (head.length > 0 && hasBinaryChars(head)) return 'dji-txt';
+    }
 
     return null;
 }

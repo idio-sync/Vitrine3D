@@ -205,7 +205,7 @@ export interface FlightPoint {
 export interface FlightPathData {
     id: string;              // e.g. 'flightpath_0'
     points: FlightPoint[];   // full parsed data
-    sourceFormat: string;    // 'dji-csv' | 'kml' | 'srt'
+    sourceFormat: string;    // 'dji-csv' | 'kml' | 'srt' | 'dji-txt'
     fileName: string;        // original filename
     originGps: [number, number]; // [lat, lon] of first point
     durationS: number;       // total flight duration in seconds
