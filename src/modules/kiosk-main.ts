@@ -60,9 +60,7 @@ import { loadCADFromBlobUrl } from './cad-loader.js';
 import { KIOSK_SECTION_TIERS, EDITORIAL_SECTION_TIERS, isTierVisible } from './metadata-profile.js';
 import type { MetadataProfile } from './metadata-profile.js';
 import * as postProcessing from './post-processing.js';
-import { hasCfToken } from './tauri-auth.js';
-import { initLibraryPage, setOnArchiveSelect } from './library-page.js';
-import type { CollectionArchive } from './collection-page.js';
+import { initCollectionsBrowser, showCollectionsBrowser, handleViewerBack } from './collections-browser.js';
 
 
 // =============================================================================
@@ -260,67 +258,6 @@ function classifyFile(filename: string): FileCategory | null {
 }
 
 // =============================================================================
-// LIBRARY INTEGRATION — in-app library with CF Access auth
-// =============================================================================
-
-let _launchedFromLibrary = false;
-
-async function showLibraryInApp(): Promise<void> {
-    log.info('Showing in-app library');
-
-    const config = (window as any).APP_CONFIG || {};
-    config.library = true;
-
-    const libraryUrl = (import.meta.env.VITE_APP_LIBRARY_URL as string | undefined) || '';
-
-    // Set up card click handler before init
-    setOnArchiveSelect((archive: CollectionArchive) => {
-        _launchedFromLibrary = true;
-        const archiveUrl = archive.path;
-        const fullUrl = archiveUrl.startsWith('http') ? archiveUrl : libraryUrl + archiveUrl;
-
-        // Hide library, show viewer
-        const libContainer = document.getElementById('library-container');
-        if (libContainer) libContainer.style.display = 'none';
-        const app = document.getElementById('app');
-        if (app) app.style.display = '';
-
-        // Show back button
-        const backBtn = document.getElementById('kiosk-back-library');
-        if (backBtn) backBtn.classList.remove('hidden');
-
-        // Hide the file picker
-        const picker = document.getElementById('kiosk-file-picker');
-        if (picker) picker.classList.add('hidden');
-
-        // Load the archive
-        log.info('Loading archive from library:', fullUrl);
-        loadArchiveFromUrl(fullUrl);
-    });
-
-    await initLibraryPage();
-}
-
-function returnToLibrary(): void {
-    log.info('Returning to library');
-    _launchedFromLibrary = false;
-
-    // Hide back button
-    const backBtn = document.getElementById('kiosk-back-library');
-    if (backBtn) backBtn.classList.add('hidden');
-
-    // Hide viewer app, show library
-    const app = document.getElementById('app');
-    if (app) app.style.display = 'none';
-    const libContainer = document.getElementById('library-container');
-    if (libContainer) libContainer.style.display = '';
-
-    // Hide quality toggle — not relevant in library view
-    const qualityToggle = document.getElementById('quality-toggle-container');
-    if (qualityToggle) qualityToggle.classList.add('hidden');
-}
-
-// =============================================================================
 // INITIALIZATION
 // =============================================================================
 
@@ -512,6 +449,15 @@ async function _doInit(): Promise<void> {
         }
     } else if (requestedLayout !== 'sidebar') {
         log.warn(`Layout "${requestedLayout}" requested but no layout module available — using sidebar`);
+    }
+
+    // Initialize collections browser (public, no auth required)
+    const libraryUrl = (import.meta.env.VITE_APP_LIBRARY_URL as string | undefined) || '';
+    if (config.home && libraryUrl) {
+        initCollectionsBrowser({
+            loadArchiveFromUrl,
+            libraryBaseUrl: libraryUrl,
+        });
     }
 
     // Inject library button after layout module may have replaced picker HTML
@@ -746,39 +692,7 @@ function injectLibraryButton(): void {
         else picker.appendChild(btn);
     }
 
-    btn.addEventListener('click', async () => {
-        if (hasCfToken()) {
-            await showLibraryInApp();
-            return;
-        }
-        const authUrl = libraryUrl + '/api/auth-callback';
-        if ((window as any).__TAURI__) {
-            // Open browser for CF Access auth — after login, the server redirects
-            // to vitrine3d://auth?token=JWT which the app intercepts via deep link
-            // (desktop) or intent filter (Android, patched in CI).
-            try {
-                log.info('Opening browser for CF Access auth:', authUrl);
-                const { open } = await import('@tauri-apps/plugin-shell');
-                await open(authUrl);
-            } catch (err) {
-                // Fallback: window.open if shell plugin fails (e.g. on Android)
-                log.warn('shell.open failed, using window.open fallback:', (err as Error).message);
-                window.open(authUrl, '_blank');
-            }
-        } else {
-            window.location.href = libraryUrl + '/library';
-        }
-    });
-
-    // If token was already received (e.g. deep link fired before this module loaded),
-    // show library immediately. Otherwise listen for the auth callback.
-    if (hasCfToken()) {
-        showLibraryInApp();
-    } else {
-        window.addEventListener('vitrine3d:auth', () => {
-            showLibraryInApp();
-        }, { once: true });
-    }
+    btn.addEventListener('click', () => { void showCollectionsBrowser(); });
 
     log.info('Library button injected');
 }
@@ -3012,7 +2926,7 @@ function setupViewerUI(): void {
     backBtn.id = 'kiosk-back-library';
     backBtn.className = 'kiosk-back-library hidden';
     backBtn.textContent = '\u2190 Library';
-    backBtn.addEventListener('click', returnToLibrary);
+    backBtn.addEventListener('click', handleViewerBack);
     document.body.appendChild(backBtn);
 }
 
