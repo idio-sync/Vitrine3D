@@ -454,11 +454,23 @@ export async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, de
 /**
  * Load GLTF/GLB model
  */
-export function loadGLTF(source: File | string, onProgress?: (loaded: number, total: number) => void): Promise<THREE.Group> {
+export function loadGLTF(source: File | string | ArrayBuffer, onProgress?: (loaded: number, total: number) => void): Promise<THREE.Group> {
     return new Promise((resolve, reject) => {
         const loader = new GLTFLoader();
         loader.setDRACOLoader(dracoLoader);
         loader.setMeshoptDecoder(MeshoptDecoder);
+
+        // Direct parse path — no fetch, no Blob, no intermediate copy
+        if (source instanceof ArrayBuffer) {
+            loader.parse(
+                source,
+                '',
+                (gltf) => { processMeshMaterials(gltf.scene); resolve(gltf.scene); },
+                (error) => reject(error)
+            );
+            return;
+        }
+
         const url = source instanceof File ? URL.createObjectURL(source) : source;
         const isFile = source instanceof File;
 
@@ -1660,18 +1672,18 @@ export async function loadArchiveAsset(archiveLoader: ArchiveLoader, assetType: 
  * Parse a mesh from a blob URL into a temporary off-scene group.
  * Returns the loaded object without adding it to any scene graph.
  */
-async function parseMeshOffScene(blobUrl: string, fileName: string, onProgress?: (loaded: number, total: number) => void): Promise<{ object: THREE.Object3D; faceCount: number } | null> {
+async function parseMeshOffScene(source: string | ArrayBuffer, fileName: string, onProgress?: (loaded: number, total: number) => void): Promise<{ object: THREE.Object3D; faceCount: number } | null> {
     const extension = fileName.split('.').pop()?.toLowerCase();
     let loadedObject: THREE.Object3D | undefined;
 
     if (extension === 'glb' || extension === 'gltf') {
-        loadedObject = await loadGLTF(blobUrl, onProgress);
+        loadedObject = await loadGLTF(source, onProgress);
     } else if (extension === 'obj') {
-        loadedObject = await loadOBJFromUrl(blobUrl, onProgress);
+        loadedObject = await loadOBJFromUrl(source as string, onProgress);
     } else if (extension === 'stl') {
-        loadedObject = await loadSTLFromUrl(blobUrl, onProgress);
+        loadedObject = await loadSTLFromUrl(source as string, onProgress);
     } else if (extension === 'drc') {
-        loadedObject = await loadDRC(blobUrl, onProgress);
+        loadedObject = await loadDRC(source as string, onProgress);
     }
 
     if (!loadedObject) return null;
@@ -1755,11 +1767,6 @@ export async function loadArchiveFullResMesh(archiveLoader: ArchiveLoader, deps:
         return { loaded: false, blob: null, error: 'No full-resolution mesh in archive' };
     }
 
-    const meshData = await archiveLoader.extractFile(meshEntry.file_name);
-    if (!meshData) {
-        return { loaded: false, blob: null, error: 'Failed to extract full-resolution mesh' };
-    }
-
     const { modelGroup } = deps;
 
     // Capture current modelGroup transform (preserves user edits during quality switch)
@@ -1769,8 +1776,28 @@ export async function loadArchiveFullResMesh(archiveLoader: ArchiveLoader, deps:
         scale: [modelGroup.scale.x, modelGroup.scale.y, modelGroup.scale.z] as [number, number, number]
     } : null;
 
-    // Parse HD mesh off-scene (no visual disruption)
-    const parsed = await parseMeshOffScene(meshData.url, meshEntry.file_name);
+    // Try direct ArrayBuffer path for GLB/GLTF (no Blob, no _fileCache copy — single Range request)
+    const extension = meshEntry.file_name.split('.').pop()?.toLowerCase();
+    let parsed: { object: THREE.Object3D; faceCount: number } | null = null;
+    let meshBlob: Blob | null = null;
+
+    if (extension === 'glb' || extension === 'gltf') {
+        const buffer = await archiveLoader.extractFileBuffer(meshEntry.file_name);
+        if (buffer) {
+            parsed = await parseMeshOffScene(buffer, meshEntry.file_name);
+        }
+    }
+
+    if (!parsed) {
+        // Fall back to Blob URL path (non-GLB formats, or Range request unavailable)
+        const meshData = await archiveLoader.extractFile(meshEntry.file_name);
+        if (!meshData) {
+            return { loaded: false, blob: null, error: 'Failed to extract full-resolution mesh' };
+        }
+        meshBlob = meshData.blob;
+        parsed = await parseMeshOffScene(meshData.url, meshEntry.file_name);
+    }
+
     if (!parsed) {
         return { loaded: false, blob: null, error: 'Failed to parse full-resolution mesh' };
     }
@@ -1794,7 +1821,7 @@ export async function loadArchiveFullResMesh(archiveLoader: ArchiveLoader, deps:
     }
 
     state.assetStates.mesh = ASSET_STATE.LOADED;
-    return { loaded: true, blob: meshData.blob, error: null, faceCount: parsed.faceCount };
+    return { loaded: true, blob: meshBlob, error: null, faceCount: parsed.faceCount };
 }
 
 /**

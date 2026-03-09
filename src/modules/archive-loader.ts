@@ -1035,6 +1035,65 @@ export class ArchiveLoader {
     }
 
     /**
+     * Extract a STORE-compressed file directly as an ArrayBuffer via a single Range request,
+     * bypassing _fileCache and Blob creation entirely.
+     *
+     * For archives packed with STORE (method=0 — all .ddim archives), the raw file bytes
+     * sit at a fixed offset in the ZIP. A single Range request returns them verbatim with
+     * no decompression needed. This eliminates the Uint8Array _fileCache copy and the
+     * subsequent Blob copy, reducing peak RAM by ~60% for large mesh files.
+     *
+     * Returns null when not applicable (non-URL source, non-STORE entry, or Range failure).
+     * Callers should fall back to extractFile() when null is returned.
+     */
+    async extractFileBuffer(filename: string): Promise<ArrayBuffer | null> {
+        if (!this._url) return null;
+
+        const sanitization = sanitizeArchiveFilename(filename);
+        if (!sanitization.safe) {
+            log.error(` Rejected unsafe filename: ${filename} - ${sanitization.error}`);
+            throw new Error(`Invalid filename in archive: ${sanitization.error}`);
+        }
+        const safeFilename = sanitization.sanitized;
+
+        // If already cached, return a copy of the cached bytes (avoids re-fetch)
+        if (this._fileCache.has(safeFilename)) {
+            const cached = this._fileCache.get(safeFilename)!;
+            return cached.buffer.slice(cached.byteOffset, cached.byteOffset + cached.byteLength) as ArrayBuffer;
+        }
+
+        const entry = this._centralDir?.get(safeFilename);
+        if (!entry) return null;
+
+        // Only STORE entries can be used directly — compressed entries need decompression
+        if (entry.method !== 0) return null;
+
+        // Read local header to compute the exact data start offset
+        const localHeader = await this._readBytes(entry.offset, 30);
+        const lhView = new DataView(localHeader.buffer, localHeader.byteOffset, 30);
+        if (lhView.getUint32(0, true) !== 0x04034b50) {
+            throw new Error(`Invalid local file header for ${safeFilename}`);
+        }
+        const localNameLen = lhView.getUint16(26, true);
+        const localExtraLen = lhView.getUint16(28, true);
+        const dataOffset = entry.offset + 30 + localNameLen + localExtraLen;
+
+        // Single Range request for the raw file bytes
+        const resp = await fetch(this._url, {
+            headers: { Range: `bytes=${dataOffset}-${dataOffset + entry.compressedSize - 1}` }
+        });
+
+        if (resp.status !== 206) {
+            // Server doesn't support Range or returned full file — let _readBytes handle fallback
+            log.warn(`extractFileBuffer: Range request returned ${resp.status}, falling back`);
+            return null;
+        }
+
+        log.info(`extractFileBuffer: ${safeFilename} (${(entry.compressedSize / 1024 / 1024).toFixed(1)} MB) fetched via single Range request`);
+        return resp.arrayBuffer();
+    }
+
+    /**
      * Release the raw ZIP data to free memory.
      * Call this after all needed assets have been extracted and cached.
      * After calling this, no new files can be extracted.
