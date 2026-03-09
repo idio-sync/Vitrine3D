@@ -39,7 +39,7 @@ const log = Logger.getLogger('archive-pipeline');
  * Load splat from a blob URL (used by archive loader).
  * Reassigns splatMesh via deps.setSplatMesh.
  */
-async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: ArchivePipelineDeps): Promise<void> {
+async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: ArchivePipelineDeps, rawBytes?: Uint8Array): Promise<void> {
     const { sceneRefs, state, setSplatMesh } = deps;
 
     // Spark.js requires WebGL — switch renderer if currently WebGPU
@@ -57,12 +57,12 @@ async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
     // Ensure WASM is ready (required for compressed formats like .sog, .spz)
     await SplatMesh.staticInitialized;
 
-    // .sog (pcsogszip) must be pre-decoded via legacy worker; new WASM path doesn't support it
+    // .sog (pcsogszip) must be pre-decoded via legacy worker; new WASM path doesn't support it.
+    // If rawBytes are provided (from extractFileRaw), use them directly to skip the fetch round-trip.
     const fileType = getSplatFileType(fileName);
     let newSplatMesh: any;
     if (fileType === 'pcsogszip') {
-        const response = await fetch(blobUrl);
-        const fileBytes = new Uint8Array(await response.arrayBuffer());
+        const fileBytes = rawBytes ?? new Uint8Array(await (await fetch(blobUrl)).arrayBuffer());
         const decoded = await unpackSplats({ input: fileBytes, fileType: 'pcsogszip' });
         const packedSplats = new PackedSplats(decoded);
         newSplatMesh = new SplatMesh({ packedSplats });
@@ -335,7 +335,12 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
 
             const splatData = await archiveLoader.extractFile(entryToLoad.file_name);
             if (!splatData) { state.assetStates[assetType] = ASSET_STATE.ERROR; return false; }
-            await loadSplatFromBlobUrl(splatData.url, entryToLoad.file_name, deps);
+            // For .sog files, pass cached raw bytes directly to skip the fetch round-trip in loadSplatFromBlobUrl.
+            // extractFileRaw hits _fileCache (already populated by extractFile above) at zero decompression cost.
+            const sogRawBytes = getSplatFileType(entryToLoad.file_name) === 'pcsogszip'
+                ? (await archiveLoader.extractFileRaw(entryToLoad.file_name)) ?? undefined
+                : undefined;
+            await loadSplatFromBlobUrl(splatData.url, entryToLoad.file_name, deps, sogRawBytes);
             // Apply transform from primary scene entry
             const transform = archiveLoader.getEntryTransform(sceneEntry);
             const currentSplat = sceneRefs.splatMesh;
@@ -508,14 +513,12 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
             }
 
             const fpStore = getStore();
-            for (const { entry } of flightEntries) {
+            const fpResults = await Promise.all(flightEntries.map(async ({ entry }) => {
                 const fileData = await archiveLoader.extractFile(entry.file_name);
-                if (!fileData) continue;
-                fpStore.flightPathBlobs.push({
-                    blob: fileData.blob,
-                    fileName: entry.original_name || entry.file_name.split('/').pop() || entry.file_name
-                });
-            }
+                if (!fileData) return null;
+                return { blob: fileData.blob, fileName: entry.original_name || entry.file_name.split('/').pop() || entry.file_name };
+            }));
+            for (const r of fpResults) { if (r) fpStore.flightPathBlobs.push(r); }
 
             state.flightPathLoaded = true;
             state.assetStates[assetType] = ASSET_STATE.LOADED;
@@ -725,18 +728,23 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
         const imageEntries = archiveLoader.getImageEntries();
         if (imageEntries.length > 0) {
             state.imageAssets.clear();
-            Promise.all(imageEntries.map(async (entry: any) => {
-                try {
-                    const data = await archiveLoader.extractFile(entry.file_name);
-                    if (data) {
-                        state.imageAssets.set(entry.file_name, { blob: data.blob, url: data.url, name: entry.file_name });
-                    }
-                } catch (e: any) {
-                    log.warn('Failed to extract image:', entry.file_name, e.message);
+            // Extract in batches of 4 to cap concurrent Range requests and memory pressure.
+            (async () => {
+                const BATCH_SIZE = 4;
+                for (let i = 0; i < imageEntries.length; i += BATCH_SIZE) {
+                    await Promise.all(imageEntries.slice(i, i + BATCH_SIZE).map(async (entry: any) => {
+                        try {
+                            const data = await archiveLoader.extractFile(entry.file_name);
+                            if (data) {
+                                state.imageAssets.set(entry.file_name, { blob: data.blob, url: data.url, name: entry.file_name });
+                            }
+                        } catch (e: any) {
+                            log.warn('Failed to extract image:', entry.file_name, e.message);
+                        }
+                    }));
                 }
-            })).then(() => {
                 log.info(`Extracted ${state.imageAssets.size} embedded images`);
-            });
+            })();
         }
 
         // === Phase 3: Background-load remaining assets (in parallel) ===
@@ -755,7 +763,11 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
                 );
                 await Promise.all(typesToLoad.map(async (type) => {
                     log.info(`Background loading: ${type}`);
-                    await ensureAssetLoaded(type, deps);
+                    const loaded = await ensureAssetLoaded(type, deps);
+                    if (!loaded && state.assetStates[type] === ASSET_STATE.ERROR) {
+                        log.error(`Background load failed for: ${type}`);
+                        notify.error(`Failed to load ${type} from archive`);
+                    }
                     deps.ui.updateTransformInputs();
                     // Re-apply viewer settings to newly loaded meshes
                     if (type === 'mesh' && manifest.viewer_settings) {
