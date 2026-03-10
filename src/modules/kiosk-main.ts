@@ -2481,6 +2481,17 @@ function createLayoutDeps(): any {
         applyBackgroundForMode,
         flightPathManager,
         loadFile: loadSingleFile,
+        THREE,
+        toggleFlyMode,
+        toggleGrid: (on: boolean) => {
+            const cb = document.getElementById('toggle-gridlines') as HTMLInputElement | null;
+            if (cb) { cb.checked = on; sceneManager?.toggleGrid(on); }
+        },
+        setAutoRotate: (on: boolean) => {
+            if (controls) controls.autoRotate = on;
+        },
+        getAutoRotate: () => !!(controls && controls.autoRotate),
+        getFlyModeActive: () => state.flyModeActive,
     };
 }
 
