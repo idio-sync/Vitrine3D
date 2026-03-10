@@ -950,10 +950,40 @@ function createEventWiringDeps(): EventWiringDeps {
                     const points3D = colmapManager.points3D!;
                     const points3DCount = colmapManager.points3DCount;
 
+                    // Diagnostic: log point cloud stats
+                    {
+                        const logStats = (name: string, pts: Float64Array, count: number) => {
+                            let cx = 0, cy = 0, cz = 0;
+                            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+                            for (let i = 0; i < count; i++) {
+                                const x = pts[i * 3], y = pts[i * 3 + 1], z = pts[i * 3 + 2];
+                                cx += x; cy += y; cz += z;
+                                if (x < minX) minX = x; if (x > maxX) maxX = x;
+                                if (y < minY) minY = y; if (y > maxY) maxY = y;
+                                if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+                            }
+                            cx /= count; cy /= count; cz /= count;
+                            console.log(`[ICP-DEBUG] ${name}: count=${count}, centroid=(${cx.toFixed(3)}, ${cy.toFixed(3)}, ${cz.toFixed(3)}), ` +
+                                `extent=(${(maxX-minX).toFixed(3)}, ${(maxY-minY).toFixed(3)}, ${(maxZ-minZ).toFixed(3)}), ` +
+                                `range X=[${minX.toFixed(3)},${maxX.toFixed(3)}] Y=[${minY.toFixed(3)},${maxY.toFixed(3)}] Z=[${minZ.toFixed(3)},${maxZ.toFixed(3)}]`);
+                        };
+                        logStats('points3D (source)', points3D, points3DCount);
+                        logStats('splatSample (target)', splatSample.points, splatSample.count);
+                        console.log(`[ICP-DEBUG] splatMesh.matrixWorld:`, splatMesh.matrixWorld.elements.map(v => v.toFixed(4)).join(', '));
+                    }
+
                     const icpResult = runICP(points3D, points3DCount, splatSample.points, splatSample.count);
                     if (!icpResult) {
                         notify.error('Alignment failed — insufficient point overlap');
                         return;
+                    }
+
+                    // Diagnostic: log ICP result
+                    {
+                        const euler = new THREE.Euler().setFromQuaternion(icpResult.rotation);
+                        console.log(`[ICP-DEBUG] Result: scale=${icpResult.scale.toFixed(6)}, RMSE=${icpResult.rmse.toFixed(6)}, matches=${icpResult.matchCount}, converged=${icpResult.converged}`);
+                        console.log(`[ICP-DEBUG] Rotation (deg): X=${THREE.MathUtils.radToDeg(euler.x).toFixed(2)}, Y=${THREE.MathUtils.radToDeg(euler.y).toFixed(2)}, Z=${THREE.MathUtils.radToDeg(euler.z).toFixed(2)}`);
+                        console.log(`[ICP-DEBUG] Translation: (${icpResult.translation.x.toFixed(4)}, ${icpResult.translation.y.toFixed(4)}, ${icpResult.translation.z.toFixed(4)})`);
                     }
 
                     const colmapGrp = sceneManager?.colmapGroup;

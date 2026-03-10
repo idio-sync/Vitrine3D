@@ -195,7 +195,8 @@ export interface SimilarityTransformResult {
  */
 export function computeSimilarityTransform(
     source: [number, number, number][],
-    target: [number, number, number][]
+    target: [number, number, number][],
+    rigid = false
 ): SimilarityTransformResult | null {
     const n = source.length;
     if (n < 3 || n !== target.length) return null;
@@ -267,7 +268,7 @@ export function computeSimilarityTransform(
         const rotSrc = srcCentered[i].clone().applyQuaternion(rotation);
         traceRH += rotSrc.dot(tgtCentered[i]);
     }
-    const scale = traceRH / (n * srcVar);
+    const scale = rigid ? 1.0 : traceRH / (n * srcVar);
 
     // Step 7: Compute translation
     const rotatedCentroid = srcCentroid.clone().applyQuaternion(rotation).multiplyScalar(scale);

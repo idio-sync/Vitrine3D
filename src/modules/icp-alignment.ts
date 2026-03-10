@@ -282,13 +282,12 @@ export function runICP(
 
         const srcPts = inliers.map(p => p.srcPt);
         const tgtPts = inliers.map(p => p.tgtPt);
-        const stepResult = computeSimilarityTransform(srcPts, tgtPts);
+        const stepResult = computeSimilarityTransform(srcPts, tgtPts, true);
         if (!stepResult) break;
 
         for (let i = 0; i < sourceCount; i++) {
             const v = new THREE.Vector3(currentSource[i * 3], currentSource[i * 3 + 1], currentSource[i * 3 + 2])
                 .applyQuaternion(stepResult.rotation)
-                .multiplyScalar(stepResult.scale)
                 .add(stepResult.translation);
             currentSource[i * 3] = v.x;
             currentSource[i * 3 + 1] = v.y;
