@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::sync::Mutex;
+use futures_util::StreamExt;
 use tauri::{Emitter, Manager, State};
 use uuid::Uuid;
 
@@ -234,16 +235,18 @@ async fn api_download_to_temp(url: String, store: State<'_, FileHandleStore>) ->
         return Err(format!("HTTP {}", response.status()));
     }
 
-    let bytes = response.bytes()
-        .await
-        .map_err(|e| e.to_string())?;
-
     let temp_path = std::env::temp_dir().join(format!("vitrine_{}.tmp", Uuid::new_v4()));
     let temp_path_str = temp_path.to_str().unwrap_or("").to_string();
 
+    // Stream response body to disk in chunks to avoid buffering the entire
+    // archive in RAM (archives can be hundreds of MB).
     {
         let mut f = File::create(&temp_path).map_err(|e| format!("create temp: {e}"))?;
-        f.write_all(&bytes).map_err(|e| format!("write temp: {e}"))?;
+        let mut stream = response.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("download stream: {e}"))?;
+            f.write_all(&chunk).map_err(|e| format!("write temp: {e}"))?;
+        }
     }
 
     let file = File::open(&temp_path).map_err(|e| format!("open temp: {e}"))?;

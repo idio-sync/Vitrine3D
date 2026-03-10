@@ -53,6 +53,7 @@ var _dropZone = null;            // P2 drag-and-drop empty state overlay
 var _fpsLast = 0;
 var _fpsFrames = 0;
 var _fpsEl = null;
+var _fpsRafId = null;
 
 // ---- SVG Icons ----
 
@@ -242,22 +243,28 @@ function updateModeButtons(mode) {
 }
 
 function startFpsCounter() {
+    stopFpsCounter();
     _fpsEl = document.getElementById('ind-status-fps');
     function tick(now) {
+        if (!_fpsEl || !_fpsEl.isConnected) { _fpsRafId = null; return; }
         _fpsFrames++;
         var elapsed = now - _fpsLast;
         if (elapsed >= 1000) {
             var fps = Math.round(_fpsFrames * 1000 / elapsed);
             _fpsFrames = 0;
             _fpsLast = now;
-            if (_fpsEl) _fpsEl.textContent = fps + ' fps';
+            _fpsEl.textContent = fps + ' fps';
         }
-        requestAnimationFrame(tick);
+        _fpsRafId = requestAnimationFrame(tick);
     }
-    requestAnimationFrame(function(now) {
+    _fpsRafId = requestAnimationFrame(function(now) {
         _fpsLast = now;
-        requestAnimationFrame(tick);
+        _fpsRafId = requestAnimationFrame(tick);
     });
+}
+
+function stopFpsCounter() {
+    if (_fpsRafId != null) { cancelAnimationFrame(_fpsRafId); _fpsRafId = null; }
 }
 
 function toggleTool(name) {
@@ -690,9 +697,10 @@ function showAboutOverlay() {
     var title = createEl('div', 'ind-about-title', 'About');
     var body = createEl('div', 'ind-about-body');
 
+    var esc = (_deps && _deps.escapeHtml) || function(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
     var name = (_manifest && _manifest.title) || 'Vitrine3D Industrial Viewer';
     var version = (_manifest && _manifest.version) || '\u2014';
-    body.innerHTML = '<strong>' + name + '</strong><br>Theme: Industrial (MeshLab Workbench)<br>Version: ' + version;
+    body.innerHTML = '<strong>' + esc(name) + '</strong><br>Theme: Industrial (MeshLab Workbench)<br>Version: ' + esc(version);
 
     var closeBtn = createEl('button', 'ind-about-close', 'Close');
     function dismiss() { document.body.removeChild(overlay); }

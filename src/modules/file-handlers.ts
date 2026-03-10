@@ -1785,6 +1785,10 @@ export async function loadArchiveFullResMesh(archiveLoader: ArchiveLoader, deps:
         const buffer = await archiveLoader.extractFileBuffer(meshEntry.file_name);
         if (buffer) {
             parsed = await parseMeshOffScene(buffer, meshEntry.file_name);
+            if (parsed) {
+                // Create a Blob from the buffer so callers (e.g. editor export) can re-use it
+                meshBlob = new Blob([buffer]);
+            }
         }
     }
 

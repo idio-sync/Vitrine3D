@@ -47,6 +47,8 @@ type BrowserView =
 export interface CollectionsBrowserOpts {
     loadArchiveFromUrl: (url: string) => void;
     libraryBaseUrl: string;
+    /** Called before navigating back from viewer — use to dispose scene resources. */
+    onViewerBack?: () => void;
 }
 
 let _opts: CollectionsBrowserOpts | null = null;
@@ -650,6 +652,9 @@ function openArchive(archive: CollectionArchive, collectionName: string): void {
  * Returns to the collection detail that launched the current archive.
  */
 export function handleViewerBack(): void {
+    // Let the host (kiosk-main) dispose scene resources before we navigate away
+    if (_opts?.onViewerBack) _opts.onViewerBack();
+
     const backBtn = getBackButtonEl();
     if (backBtn) backBtn.classList.add('hidden');
 

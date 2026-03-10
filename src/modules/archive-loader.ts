@@ -244,7 +244,7 @@ export class ArchiveLoader {
      * Check if archive data is available (either File reference or raw buffer).
      */
     private get _hasData(): boolean {
-        return !!(this._file || this._rawData || this._url || this._ipcReadFn);
+        return !!(this._file || this._rawData || this._url || this._ipcReadFn || this._fileCache?.size);
     }
 
     /**
