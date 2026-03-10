@@ -258,7 +258,26 @@ function handleDeleteSetting(req, res, key) {
  * Defense in depth: Cloudflare injects this header on every authenticated request.
  */
 function requireAuth(req, res) {
-    const user = req.headers['cf-access-authenticated-user-email'];
+    let user = req.headers['cf-access-authenticated-user-email'];
+
+    // Fallback: decode CF_Authorization JWT cookie for CF Access-bypassed paths
+    // (e.g. /api/collections/* bypassed so Tauri can read without auth, but
+    // the browser still carries the cookie from the main CF Access app)
+    if (!user) {
+        const cookieHeader = req.headers.cookie || '';
+        const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
+        if (match) {
+            try {
+                const payload = JSON.parse(Buffer.from(match[1].split('.')[1], 'base64url').toString());
+                if (payload.email) {
+                    user = payload.email;
+                    // Set on req so downstream checkCsrf() can find it
+                    req.headers['cf-access-authenticated-user-email'] = user;
+                }
+            } catch (_) { /* invalid or expired JWT — ignore */ }
+        }
+    }
+
     if (!user) {
         sendJson(res, 401, { error: 'Unauthorized' });
         return null;
