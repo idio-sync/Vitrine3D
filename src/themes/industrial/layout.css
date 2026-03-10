@@ -267,6 +267,18 @@ body.kiosk-mode.kiosk-industrial .ind-light-widget canvas {
     border-radius: 50%;
 }
 
+body.kiosk-mode.kiosk-industrial .ind-light-indicator {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    box-shadow: 0 0 3px rgba(255, 200, 0, 0.7);
+}
+
 /* =============================================================================
    CROSS-SECTION AXIS PICKER — small floating widget
    ============================================================================= */
@@ -603,6 +615,371 @@ body.kiosk-mode.kiosk-industrial .ind-shortcuts-close {
 body.kiosk-mode.kiosk-industrial .ind-shortcuts-close:hover {
     background: var(--kiosk-accent);
     color: #fff;
+}
+
+/* =============================================================================
+   TOOLBAR SPACER — pushes right-side buttons to the right edge
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-toolbar-spacer {
+    flex: 1;
+}
+
+/* =============================================================================
+   DISPLAY MODE BUTTONS — [Mesh] [Splat] [Cloud] segmented in toolbar
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-mode-btn {
+    width: auto;
+    padding: 0 7px;
+    gap: 4px;
+    display: flex;
+    align-items: center;
+    font-family: var(--kiosk-font-body);
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: rgba(var(--kiosk-text-body-rgb), 0.85);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-mode-btn svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-mode-btn span {
+    line-height: 1;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-mode-btn.active {
+    border-top-color: var(--kiosk-border-dark);
+    border-left-color: var(--kiosk-border-dark);
+    border-bottom-color: var(--kiosk-border-light);
+    border-right-color: var(--kiosk-border-light);
+    background: rgb(var(--kiosk-bg-deep-rgb));
+    color: var(--kiosk-accent);
+}
+
+/* =============================================================================
+   QUALITY BUTTONS — [SD] [HD] pair in toolbar
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-quality-btn {
+    width: auto;
+    padding: 0 8px;
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-quality-btn.active {
+    border-top-color: var(--kiosk-border-dark);
+    border-left-color: var(--kiosk-border-dark);
+    border-bottom-color: var(--kiosk-border-light);
+    border-right-color: var(--kiosk-border-light);
+    background: rgb(var(--kiosk-bg-deep-rgb));
+    color: var(--kiosk-accent);
+}
+
+/* =============================================================================
+   RIGHT INFO PANEL — MeshLab-style docked properties panel
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-panel {
+    position: fixed;
+    top: 58px;      /* below menubar + toolbar */
+    right: 0;
+    bottom: 22px;   /* above status bar */
+    width: 220px;
+    z-index: 92;
+    background: rgb(var(--kiosk-surface-rgb));
+    border-left: 1px solid var(--kiosk-border-dark);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    font-family: var(--kiosk-font-body);
+    font-size: 0.70rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.95);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel.hidden {
+    display: none;
+}
+
+/* Viewport, overlay, and floating widgets shrink when panel is open */
+body.kiosk-mode.kiosk-industrial.ind-panel-open #viewer-container {
+    right: 220px !important;
+}
+
+body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-trackball-overlay {
+    right: 220px;
+}
+
+body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-light-widget {
+    right: 232px; /* 12px gap + 220px panel */
+}
+
+/* ---- Panel section header ---- */
+
+body.kiosk-mode.kiosk-industrial .ind-panel-section {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--kiosk-border-dark);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-section-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 20px;
+    padding: 0 6px;
+    background: rgb(var(--kiosk-elevated-rgb));
+    border-bottom: 1px solid var(--kiosk-border-dark);
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.67rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: rgba(var(--kiosk-text-heading-rgb), 0.9);
+    text-transform: uppercase;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-section-header:hover {
+    background: rgb(var(--kiosk-bg-deep-rgb));
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-arrow {
+    font-size: 0.55rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.7);
+    width: 10px;
+    text-align: center;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-section-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-section-body {
+    padding: 4px 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-section-body.collapsed {
+    display: none;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-empty {
+    padding: 6px 10px;
+    font-size: 0.65rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.6);
+    font-style: italic;
+}
+
+/* ---- Layer items ---- */
+
+body.kiosk-mode.kiosk-industrial .ind-layer-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px 4px 10px;
+    cursor: default;
+    border-left: 2px solid transparent;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-layer-item:hover {
+    background: rgba(var(--kiosk-accent-rgb), 0.08);
+    border-left-color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-layer-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    font-size: 0.55rem;
+    font-weight: 700;
+    border-radius: 2px;
+    flex-shrink: 0;
+    color: #fff;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-badge-mesh    { background: #3874CB; }
+body.kiosk-mode.kiosk-industrial .ind-badge-splat   { background: #2a8a5a; }
+body.kiosk-mode.kiosk-industrial .ind-badge-cloud   { background: #7a5aaa; }
+body.kiosk-mode.kiosk-industrial .ind-badge-flight  { background: #c06020; }
+
+body.kiosk-mode.kiosk-industrial .ind-layer-name {
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: rgba(var(--kiosk-text-bright-rgb), 0.95);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-layer-stats {
+    width: 100%;
+    padding-left: 21px;
+    font-size: 0.60rem;
+    font-family: var(--kiosk-font-mono);
+    color: rgba(var(--kiosk-text-dim-rgb), 0.75);
+    margin-top: -2px;
+}
+
+/* ---- Property rows ---- */
+
+body.kiosk-mode.kiosk-industrial .ind-prop-row {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 2px 10px;
+    min-height: 18px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-prop-label {
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
+    min-width: 52px;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-prop-value {
+    font-size: 0.67rem;
+    color: rgba(var(--kiosk-text-bright-rgb), 0.9);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-prop-sep {
+    height: 1px;
+    background: var(--kiosk-border-subtle);
+    margin: 4px 8px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-prop-desc {
+    padding: 3px 10px 5px 10px;
+    font-size: 0.65rem;
+    line-height: 1.5;
+    color: rgba(var(--kiosk-text-body-rgb), 0.85);
+    white-space: pre-line;
+    overflow-wrap: break-word;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 3px 10px 6px 10px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tag {
+    padding: 1px 6px;
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+    border: 1px solid rgba(var(--kiosk-accent-rgb), 0.3);
+    border-radius: 2px;
+    font-size: 0.60rem;
+    color: var(--kiosk-accent);
+    font-weight: 500;
+}
+
+/* ---- Annotation list ---- */
+
+body.kiosk-mode.kiosk-industrial .ind-anno-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 10px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-anno-item:hover {
+    background: rgba(var(--kiosk-accent-rgb), 0.08);
+    border-left-color: rgba(var(--kiosk-accent-rgb), 0.4);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-anno-item.selected {
+    background: rgba(var(--kiosk-accent-rgb), 0.15);
+    border-left-color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-anno-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    background: var(--kiosk-accent);
+    border-radius: 50%;
+    font-size: 0.60rem;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-anno-item.selected .ind-anno-num {
+    background: #1a50a0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-anno-title {
+    font-size: 0.68rem;
+    color: rgba(var(--kiosk-text-bright-rgb), 0.9);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- FPS field in status bar ---- */
+
+body.kiosk-mode.kiosk-industrial .ind-status-fps-field {
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.60rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.7);
+    min-width: 44px;
+    text-align: right;
+}
+
+/* =============================================================================
+   ANNOTATION POPUP OVERRIDE — light Qt palette (overrides dark kiosk defaults)
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial #annotation-info-popup {
+    background: rgb(var(--kiosk-surface-rgb)) !important;
+    border: 1px solid var(--kiosk-border-dark) !important;
+    border-radius: 0 !important;
+    color: rgba(var(--kiosk-text-body-rgb), 0.95) !important;
+    box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.kiosk-mode.kiosk-industrial #annotation-info-popup .annotation-popup-title,
+body.kiosk-mode.kiosk-industrial #annotation-info-popup .popup-title {
+    color: rgba(var(--kiosk-text-bright-rgb), 1) !important;
+    border-bottom: 1px solid var(--kiosk-border-dark) !important;
+    background: rgb(var(--kiosk-elevated-rgb)) !important;
+}
+
+body.kiosk-mode.kiosk-industrial #annotation-info-popup .annotation-popup-body,
+body.kiosk-mode.kiosk-industrial #annotation-info-popup .popup-body {
+    color: rgba(var(--kiosk-text-body-rgb), 0.9) !important;
+}
+
+body.kiosk-mode.kiosk-industrial #annotation-info-popup .popup-close {
+    color: rgba(var(--kiosk-text-dim-rgb), 0.8) !important;
+}
+
+body.kiosk-mode.kiosk-industrial #annotation-info-popup .popup-close:hover {
+    color: var(--kiosk-accent) !important;
+    background: rgba(var(--kiosk-accent-rgb), 0.08) !important;
 }
 
 /* ============================================================
