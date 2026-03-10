@@ -309,7 +309,13 @@ export class ArchiveLoader {
                 onProgress(position / contentLength);
             }
 
-            await this.loadFromArrayBuffer(arrayBuffer.buffer);
+            // Trim to actual bytes received — Content-Length may exceed reality
+            // (e.g. chunked transfer, server misconfiguration). Trailing zeros
+            // would corrupt ZIP central directory parsing.
+            const finalBuffer = position === contentLength
+                ? arrayBuffer.buffer
+                : arrayBuffer.buffer.slice(0, position);
+            await this.loadFromArrayBuffer(finalBuffer);
         } else {
             const arrayBuffer = await response.arrayBuffer();
             await this.loadFromArrayBuffer(arrayBuffer);
@@ -435,7 +441,7 @@ export class ArchiveLoader {
             }
             throw new Error(`Range request failed: HTTP ${resp.status}`);
         }
-        throw new Error('No archive data available');
+        throw new Error('No archive data available (raw data was released; only previously cached files can be accessed)');
     }
 
     /**
@@ -831,6 +837,9 @@ export class ArchiveLoader {
             : new Uint8Array(fileData);
         const blob = new Blob([blobData]);
         const url = URL.createObjectURL(blob);
+        // Revoke any previous blob URL for this filename to prevent memory leaks
+        const prevUrl = this._blobUrlMap.get(safeFilename);
+        if (prevUrl) URL.revokeObjectURL(prevUrl);
         this._blobUrlMap.set(safeFilename, url);
 
         return { blob, url, name: safeFilename };
@@ -1096,7 +1105,9 @@ export class ArchiveLoader {
     /**
      * Release the raw ZIP data to free memory.
      * Call this after all needed assets have been extracted and cached.
-     * After calling this, no new files can be extracted.
+     * After calling this, only previously cached files and Range-based
+     * extraction (via _url) remain available. Files not yet in _fileCache
+     * can still be extracted if the archive was loaded via loadRemoteIndex().
      */
     releaseRawData(): void {
         const hadData = this._hasData;

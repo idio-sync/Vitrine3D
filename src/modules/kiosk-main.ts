@@ -2000,6 +2000,9 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
 
         const remainingTypes = ['splat', 'mesh', 'pointcloud'].filter(
             t => state.assetStates[t] === ASSET_STATE.UNLOADED
+                // When progressive load is handling HD mesh upgrade, exclude mesh
+                // from background loading to prevent concurrent mesh loads racing.
+                && !(t === 'mesh' && shouldProgressiveLoad)
         );
         setTimeout(async () => {
             for (const type of remainingTypes) {
