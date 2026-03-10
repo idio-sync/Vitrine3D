@@ -59,6 +59,7 @@ var _qualityBtns = null;         // { sd, hd } toolbar buttons
 var _bboxHelper = null;          // THREE.Box3Helper instance
 var _bboxBtn = null;             // toolbar bounding box button
 var _dropZone = null;            // P2 drag-and-drop empty state overlay
+var _selectedLayerKey = null;    // currently selected layer asset key
 
 // FPS counter state
 var _fpsLast = 0;
@@ -1121,6 +1122,47 @@ function createPanelSection(id, title, initiallyOpen) {
     return { section: section, body: body, label: label };
 }
 
+function setAssetVisible(role, asset, visible) {
+    if (!_deps) return;
+    if (role === 'splat' && _deps.sparkRenderer) {
+        if (_deps.sparkRenderer.visible !== undefined) _deps.sparkRenderer.visible = visible;
+    } else if (role === 'mesh' || role === 'cad') {
+        if (_deps.modelGroup) _deps.modelGroup.visible = visible;
+    } else if (role === 'pointcloud') {
+        if (_deps.pointcloudGroup) _deps.pointcloudGroup.visible = visible;
+    } else if (role === 'flightpath' && _deps.flightPathManager) {
+        _deps.flightPathManager.setVisible(visible);
+    }
+}
+
+function buildSubMeshList(container, group) {
+    var found = 0;
+    group.traverse(function(child) {
+        if (!child.isMesh) return;
+        var childItem = createEl('div', 'ind-layer-item ind-layer-child');
+        var childBadge = createEl('span', 'ind-layer-badge ind-badge-mesh', 'M');
+        var childName = child.name || ('mesh_' + found);
+        var childNameEl = createEl('span', 'ind-layer-name', childName);
+
+        var childEye = createEl('button', 'ind-layer-eye active', '\u{1F441}');
+        childEye.setAttribute('aria-label', 'Toggle visibility');
+        childEye.style.cssText = 'margin-left:auto; background:none; border:none; cursor:pointer; padding:0 4px; font-size:13px;';
+        childEye.addEventListener('click', function(e) {
+            e.stopPropagation();
+            child.visible = childEye.classList.toggle('active');
+        });
+
+        childItem.appendChild(childBadge);
+        childItem.appendChild(childNameEl);
+        childItem.appendChild(childEye);
+        container.appendChild(childItem);
+        found++;
+    });
+    if (found === 0) {
+        container.appendChild(createEl('div', 'ind-panel-empty', 'No sub-meshes'));
+    }
+}
+
 function buildLayersSection(body, manifest) {
     body.innerHTML = '';
     var assets = manifest && manifest.assets ? manifest.assets : [];
@@ -1143,6 +1185,8 @@ function buildLayersSection(body, manifest) {
         name = name.replace(/^assets\//, '').replace(/\.\w+$/, '');
 
         var item = createEl('div', 'ind-layer-item');
+        item.setAttribute('data-asset-key', asset.key || role);
+        item.style.cursor = 'pointer';
         var badge = createEl('span', 'ind-layer-badge ' + info.cls, info.badge);
         var nameEl = createEl('span', 'ind-layer-name', name);
 
@@ -1183,23 +1227,60 @@ function buildLayersSection(body, manifest) {
             }
         }
 
-        // Flight path visibility toggle
-        if (role === 'flightpath' && _deps && _deps.flightPathManager) {
-            var fpCheck = document.createElement('input');
-            fpCheck.type = 'checkbox';
-            fpCheck.checked = true;
-            fpCheck.style.cssText = 'margin-left:auto; cursor:pointer;';
-            fpCheck.setAttribute('aria-label', 'Toggle flight path visibility');
-            fpCheck.addEventListener('change', function() {
-                if (_deps && _deps.flightPathManager) _deps.flightPathManager.setVisible(fpCheck.checked);
-            });
-            item.appendChild(fpCheck);
-        }
+        // Eye toggle — works for all asset types
+        var eyeBtn = createEl('button', 'ind-layer-eye active', '\u{1F441}');
+        eyeBtn.setAttribute('aria-label', 'Toggle visibility');
+        eyeBtn.style.cssText = 'margin-left:auto; background:none; border:none; cursor:pointer; padding:0 4px; font-size:14px;';
+        eyeBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var visible = eyeBtn.classList.toggle('active');
+            setAssetVisible(role, asset, visible);
+        });
+        item.appendChild(eyeBtn);
 
         // Size sub-line
         if (asset.size) {
             var sizeEl = createEl('div', 'ind-layer-stats', formatFileSize(asset.size));
             item.appendChild(sizeEl);
+        }
+
+        // Click-to-select handler
+        item.addEventListener('click', function() {
+            body.querySelectorAll('.ind-layer-item').forEach(function(el) {
+                el.classList.remove('selected');
+            });
+            item.classList.add('selected');
+            _selectedLayerKey = asset.key || role;
+            // Refresh properties panel for this asset
+            if (_panel && _panel._projBody) {
+                buildPropertiesSection(_panel._projBody, _manifest, asset);
+            }
+        });
+
+        // Expandable sub-mesh tree for mesh/cad assets
+        if ((role === 'mesh' || role === 'cad') && _deps && _deps.modelGroup
+                && _deps.modelGroup.children.length > 0) {
+            var arrow = createEl('span', 'ind-layer-arrow', '\u25B6');
+            item.insertBefore(arrow, badge);
+
+            var childList = createEl('div', 'ind-layer-children');
+            childList.style.display = 'none';
+
+            var expanded = false;
+            arrow.addEventListener('click', function(e) {
+                e.stopPropagation();
+                expanded = !expanded;
+                childList.style.display = expanded ? '' : 'none';
+                arrow.style.transform = expanded ? 'rotate(90deg)' : '';
+                if (expanded && childList.childElementCount === 0) {
+                    buildSubMeshList(childList, _deps.modelGroup);
+                }
+            });
+
+            body.appendChild(item);
+            body.appendChild(childList);
+            added++;
+            return; // skip the default body.appendChild(item) below
         }
 
         body.appendChild(item);
@@ -1211,7 +1292,7 @@ function buildLayersSection(body, manifest) {
     }
 }
 
-function buildPropertiesSection(body, manifest) {
+function buildPropertiesSection(body, manifest, selectedAsset) {
     body.innerHTML = '';
     if (!manifest) {
         body.appendChild(createEl('div', 'ind-panel-empty', 'No project loaded'));
@@ -1228,12 +1309,122 @@ function buildPropertiesSection(body, manifest) {
         body.appendChild(row);
     }
 
+    function addSection(title) {
+        body.appendChild(createEl('div', 'ind-prop-sep'));
+        body.appendChild(createEl('div', 'ind-prop-section-title', title));
+    }
+
+    // --- Project info (always from manifest) ---
     addRow('Title', manifest.title);
     addRow('Creator', manifest.creator || (manifest.metadata && manifest.metadata.creator));
     var dateVal = manifest.date_created || (manifest.metadata && manifest.metadata.date);
     if (dateVal) addRow('Date', String(dateVal).slice(0, 10));
     addRow('Format', manifest.format_version ? 'DDIM v' + manifest.format_version : null);
 
+    // --- Geometry stats ---
+    var assetRole = selectedAsset ? (selectedAsset.role || 'mesh') : null;
+    var meshGroup = _deps && _deps.modelGroup;
+    var showGeometry = selectedAsset ? (assetRole === 'mesh' || assetRole === 'cad') : true;
+    if (showGeometry && meshGroup) {
+        var verts = countVertices(meshGroup);
+        var faces = countFaces(meshGroup);
+        if (verts > 0 || faces > 0) {
+            addSection('Geometry');
+            if (verts > 0) addRow('Vertices', formatNumber(verts));
+            if (faces > 0) addRow('Faces', formatNumber(faces));
+
+            // Bounding box dimensions
+            var bbox = new THREE.Box3();
+            meshGroup.traverse(function(child) {
+                if (child.isMesh && child.geometry) {
+                    child.geometry.computeBoundingBox();
+                    bbox.expandByObject(child);
+                }
+            });
+            if (!bbox.isEmpty()) {
+                var size = new THREE.Vector3();
+                bbox.getSize(size);
+                var units = (manifest.metadata && manifest.metadata.units) || 'm';
+                addRow('Width',  size.x.toFixed(3) + ' ' + units);
+                addRow('Height', size.y.toFixed(3) + ' ' + units);
+                addRow('Depth',  size.z.toFixed(3) + ' ' + units);
+            }
+        }
+    }
+    // Point cloud geometry
+    if ((!selectedAsset || assetRole === 'pointcloud') && _deps && _deps.pointcloudGroup) {
+        var pcVerts = countVertices(_deps.pointcloudGroup);
+        if (pcVerts > 0) {
+            addSection('Geometry');
+            addRow('Points', formatNumber(pcVerts));
+        }
+    }
+
+    // --- Texture info ---
+    if (showGeometry && meshGroup) {
+        var textures = [];
+        meshGroup.traverse(function(child) {
+            if (child.isMesh && child.material) {
+                var mats = Array.isArray(child.material) ? child.material : [child.material];
+                mats.forEach(function(mat) {
+                    ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'].forEach(function(slot) {
+                        if (mat[slot] && mat[slot].image && textures.indexOf(mat[slot]) === -1) {
+                            textures.push(mat[slot]);
+                        }
+                    });
+                });
+            }
+        });
+        if (textures.length > 0) {
+            addSection('Textures');
+            addRow('Maps', String(textures.length));
+            var firstImg = textures[0].image;
+            if (firstImg && firstImg.width) {
+                addRow('Resolution', firstImg.width + ' \u00d7 ' + firstImg.height);
+            }
+            var srcName = textures[0].name || (textures[0].image && textures[0].image.src) || '';
+            var ext = srcName.split('.').pop().toUpperCase();
+            if (ext === 'JPG' || ext === 'JPEG' || ext === 'PNG' || ext === 'WEBP' || ext === 'KTX2') {
+                addRow('Format', ext === 'JPEG' ? 'JPG' : ext);
+            }
+        }
+    }
+
+    // --- File info ---
+    var fileAsset = selectedAsset || (manifest.assets && manifest.assets.find(function(a) {
+        return a.role === 'mesh' || a.role === 'cad';
+    }));
+    if (fileAsset) {
+        addSection('File');
+        if (fileAsset.size) addRow('Size', formatFileSize(fileAsset.size));
+        var filename = fileAsset.filename || fileAsset.key || '';
+        var extMatch = filename.match(/\.(\w+)$/);
+        if (extMatch) addRow('Format', extMatch[1].toUpperCase());
+        var compression = (fileAsset.extras && fileAsset.extras.compression) || null;
+        if (compression) addRow('Compression', compression);
+        var origName = fileAsset.original_filename || fileAsset.source_filename || null;
+        if (origName) addRow('Source', origName.replace(/^.*[/\\]/, ''));
+    }
+
+    // --- Scan metadata ---
+    var meta = manifest.metadata;
+    if (meta) {
+        var scanFields = [
+            ['Accuracy',  meta.accuracy || meta.scan_accuracy],
+            ['Device',    meta.device || meta.scanner || meta.instrument],
+            ['Operator',  meta.operator || meta.surveyor],
+            ['Scan Date', meta.scan_date || meta.acquisition_date]
+        ];
+        var hasScan = scanFields.some(function(f) { return !!f[1]; });
+        if (hasScan) {
+            addSection('Scan');
+            scanFields.forEach(function(f) {
+                if (f[1]) addRow(f[0], f[0] === 'Scan Date' ? String(f[1]).slice(0, 10) : String(f[1]));
+            });
+        }
+    }
+
+    // --- Description ---
     var desc = manifest.description || (manifest.metadata && manifest.metadata.description);
     if (desc) {
         body.appendChild(createEl('div', 'ind-prop-sep'));
@@ -1296,7 +1487,13 @@ function buildCrossSectionPanel(body) {
         btn.addEventListener('click', function() {
             axisRow.querySelectorAll('.ind-xsec-axis-btn').forEach(function(b) { b.classList.remove('active'); });
             btn.classList.add('active');
-            if (_deps.crossSection) _deps.crossSection.setAxis(axis.toLowerCase());
+            var a = axis.toLowerCase();
+            if (_deps.crossSection) {
+                _deps.crossSection.setAxis(a);
+                // Sync slider to live position on the new axis
+                var t = _deps.crossSection.getPositionAlongAxis(a);
+                slider.value = String(Math.round(t * 100));
+            }
         });
         axisRow.appendChild(btn);
     });
@@ -1329,6 +1526,43 @@ function buildCrossSectionPanel(body) {
     });
     sliderRow.appendChild(slider);
     body.appendChild(sliderRow);
+
+    // Mode toggle row (Translate / Rotate)
+    var modeRow = createEl('div', 'ind-xsec-mode-row');
+    var modeLabel = createEl('span', 'ind-xsec-label', 'Gizmo');
+    modeRow.appendChild(modeLabel);
+
+    var translateBtn = createEl('button', 'ind-xsec-mode-btn active', 'Translate');
+    translateBtn.setAttribute('data-mode', 'translate');
+    var rotateBtn = createEl('button', 'ind-xsec-mode-btn', 'Rotate');
+    rotateBtn.setAttribute('data-mode', 'rotate');
+
+    function setModeActive(mode) {
+        translateBtn.classList.toggle('active', mode === 'translate');
+        rotateBtn.classList.toggle('active', mode === 'rotate');
+        if (_deps && _deps.crossSection) _deps.crossSection.setMode(mode);
+    }
+    translateBtn.addEventListener('click', function() { setModeActive('translate'); });
+    rotateBtn.addEventListener('click', function() { setModeActive('rotate'); });
+
+    modeRow.appendChild(translateBtn);
+    modeRow.appendChild(rotateBtn);
+    body.appendChild(modeRow);
+
+    // Reset row
+    var resetRow = createEl('div', 'ind-xsec-reset-row');
+    var resetBtn = createEl('button', 'ind-tool-btn', 'Reset Plane');
+    resetBtn.setAttribute('data-tooltip', 'Re-center plane on scene bounding box');
+    resetBtn.addEventListener('click', function() {
+        if (!_deps || !_deps.crossSection) return;
+        var bbox = _deps.crossSection.getBBox();
+        var center = new THREE.Vector3();
+        bbox.getCenter(center);
+        _deps.crossSection.reset(center);
+        slider.value = '50';
+    });
+    resetRow.appendChild(resetBtn);
+    body.appendChild(resetRow);
 
     // Hint text
     var hint = createEl('div', 'ind-xsec-hint', 'Press 1 or use the toolbar to toggle');

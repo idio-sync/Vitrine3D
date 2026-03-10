@@ -1027,6 +1027,80 @@ body.kiosk-mode.kiosk-industrial .ind-xsec-hint {
     font-style: italic;
 }
 
+/* Cross-section mode toggle */
+body.kiosk-mode.kiosk-industrial .ind-xsec-mode-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 6px 0 0;
+}
+body.kiosk-mode.kiosk-industrial .ind-xsec-mode-btn {
+    flex: 1;
+    padding: 4px 0;
+    background: rgb(var(--kiosk-bg-deep-rgb));
+    border: 1px solid var(--kiosk-border);
+    color: rgba(var(--kiosk-text-body-rgb), 0.7);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--kiosk-font-body);
+}
+body.kiosk-mode.kiosk-industrial .ind-xsec-mode-btn:hover {
+    background: rgba(var(--kiosk-bg-deep-rgb), 0.8);
+}
+body.kiosk-mode.kiosk-industrial .ind-xsec-mode-btn.active {
+    background: var(--kiosk-accent);
+    color: #fff;
+    border-color: var(--kiosk-accent);
+}
+body.kiosk-mode.kiosk-industrial .ind-xsec-reset-row {
+    margin: 6px 0 0;
+}
+body.kiosk-mode.kiosk-industrial .ind-xsec-reset-row .ind-tool-btn {
+    width: 100%;
+    font-size: 11px;
+}
+
+/* Properties sub-section title */
+body.kiosk-mode.kiosk-industrial .ind-prop-section-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.65);
+    margin: 2px 0 4px;
+}
+
+/* Layer tree — selection, children, eye toggle */
+body.kiosk-mode.kiosk-industrial .ind-layer-item.selected {
+    background: rgba(56, 116, 203, 0.18);
+    border-left: 2px solid var(--kiosk-accent);
+}
+body.kiosk-mode.kiosk-industrial .ind-layer-children {
+    padding-left: 20px;
+}
+body.kiosk-mode.kiosk-industrial .ind-layer-child {
+    opacity: 0.85;
+    font-size: 11px;
+}
+body.kiosk-mode.kiosk-industrial .ind-layer-arrow {
+    display: inline-block;
+    width: 12px;
+    font-size: 9px;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.6);
+    transition: transform 0.15s;
+    user-select: none;
+    cursor: pointer;
+    margin-right: 4px;
+}
+body.kiosk-mode.kiosk-industrial .ind-layer-eye {
+    opacity: 0.5;
+    transition: opacity 0.15s;
+}
+body.kiosk-mode.kiosk-industrial .ind-layer-eye.active {
+    opacity: 1;
+}
+
 /* =============================================================================
    SPLAT BUDGET SLIDER — in layers panel for splat assets
    ============================================================================= */
