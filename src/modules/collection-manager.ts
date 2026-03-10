@@ -43,6 +43,10 @@ let isManualThumb = false;
 
 function headers(): Record<string, string> {
     const h = authHeadersGetter ? authHeadersGetter() : {};
+    if (_csrfTokenGetter) {
+        const token = _csrfTokenGetter();
+        if (token) h['x-csrf-token'] = token;
+    }
     return h;
 }
 
