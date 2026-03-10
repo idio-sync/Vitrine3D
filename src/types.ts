@@ -272,7 +272,7 @@ export interface AssetStore {
     cadBlob: Blob | null;
     cadFileName: string | null;
     flightPathBlobs: Array<{ blob: Blob; fileName: string; trimStart?: number; trimEnd?: number }>;
-    colmapBlobs: Array<{ camerasBlob: Blob; imagesBlob: Blob }>;
+    colmapBlobs: Array<{ camerasBlob: Blob; imagesBlob: Blob; points3DBuffer?: ArrayBuffer }>;
     sourceFiles: Array<{ name: string; blob: Blob }>;
 }
 
@@ -353,6 +353,11 @@ export interface ArchivePipelineDeps {
     };
     measurementSystem?: any;
     renderFlightPaths?: () => Promise<void>;
+    colmap?: {
+        loadFromBuffers: (cameras: ArrayBuffer, images: ArrayBuffer) => void;
+        loadPoints3D?: (positions: Float64Array, count: number) => void;
+        points3DBuffer?: ArrayBuffer | null;
+    };
 }
 
 export interface EventWiringDeps {
@@ -474,6 +479,11 @@ export interface EventWiringDeps {
         setDisplayMode: (mode: string) => void;
         setFrustumScale: (scale: number) => void;
         alignFlightPath: () => void;
+        hasData: boolean;
+        hasPoints3D: boolean;
+        loadPoints3D: (positions: Float64Array, count: number) => void;
+        points3DBuffer: ArrayBuffer | null;
+        alignFromCameraData: () => Promise<void>;
     };
     overlay?: {
         toggleSfm: (visible: boolean) => void;
