@@ -358,6 +358,15 @@ let _dragBeforeMatrices: MatrixSnapshot | null = null;
 let _numericEditBefore: MatrixSnapshot | null = null;
 let undoManager: UndoManager;
 
+// Trim undo stack (separate from transform undo — stores before/after trim indices)
+interface TrimUndoEntry {
+    pathId: string;
+    before: { trimStart?: number; trimEnd?: number };
+    after: { trimStart?: number; trimEnd?: number };
+}
+const trimUndoStack: TrimUndoEntry[] = [];
+const trimRedoStack: TrimUndoEntry[] = [];
+
 // Asset blob store (ES module singleton — shared with archive-pipeline, export-controller, etc.)
 const assets = getStore();
 
@@ -1725,6 +1734,25 @@ function applyTransformMatrices(snapshot: MatrixSnapshot): void {
 }
 
 function performUndo(): void {
+    // Try trim undo first (most recent action wins)
+    if (trimUndoStack.length > 0) {
+        const lastTransform = undoManager.canUndo() ? undoManager['undoStack'][undoManager['undoStack'].length - 1] : null;
+        const lastTrim = trimUndoStack[trimUndoStack.length - 1];
+        // Simple heuristic: trim undo stack is always more recent if it has entries
+        // (transforms push to their own stack, trims push to theirs)
+        if (lastTrim && flightPathManager) {
+            trimUndoStack.pop();
+            trimRedoStack.push(lastTrim);
+            flightPathManager.setTrim(lastTrim.pathId, lastTrim.before.trimStart ?? 0, lastTrim.before.trimEnd ?? (flightPathManager.getPaths().find(p => p.id === lastTrim.pathId)?.points.length ?? 1) - 1);
+            if (lastTrim.before.trimStart === undefined && lastTrim.before.trimEnd === undefined) {
+                flightPathManager.resetTrim(lastTrim.pathId);
+            }
+            syncTrimToStore(lastTrim.pathId);
+            updateFlightPathUI();
+            notify.info('Undo trim');
+            return;
+        }
+    }
     const entry = undoManager.undo();
     if (entry) {
         applyTransformMatrices(entry.beforeMatrices);
@@ -1733,6 +1761,18 @@ function performUndo(): void {
 }
 
 function performRedo(): void {
+    if (trimRedoStack.length > 0) {
+        const lastTrim = trimRedoStack[trimRedoStack.length - 1];
+        if (lastTrim && flightPathManager) {
+            trimRedoStack.pop();
+            trimUndoStack.push(lastTrim);
+            flightPathManager.setTrim(lastTrim.pathId, lastTrim.after.trimStart ?? 0, lastTrim.after.trimEnd ?? (flightPathManager.getPaths().find(p => p.id === lastTrim.pathId)?.points.length ?? 1) - 1);
+            syncTrimToStore(lastTrim.pathId);
+            updateFlightPathUI();
+            notify.info('Redo trim');
+            return;
+        }
+    }
     const entry = undoManager.redo();
     if (entry) {
         applyTransformMatrices(entry.afterMatrices);
@@ -1993,7 +2033,11 @@ function updateFlightPathUI(): void {
             resetLink.title = 'Reset trim to full path';
             resetLink.style.display = isTrimmed ? '' : 'none';
             resetLink.addEventListener('click', () => {
+                const before = { trimStart: p.trimStart, trimEnd: p.trimEnd };
                 flightPathManager!.resetTrim(p.id);
+                trimUndoStack.push({ pathId: p.id, before, after: { trimStart: undefined, trimEnd: undefined } });
+                trimRedoStack.length = 0;
+                if (trimUndoStack.length > 20) trimUndoStack.shift();
                 syncTrimToStore(p.id);
                 updateFlightPathUI();
             });
@@ -2051,25 +2095,41 @@ function updateFlightPathUI(): void {
                 bar.appendChild(handleStart);
                 bar.appendChild(handleEnd);
 
-                // Drag logic
+                // Drag logic — update handle/range positions directly during drag,
+                // only rebuild full UI on mouseup to avoid detaching the bar element.
                 const setupDrag = (handle: HTMLElement, isStart: boolean) => {
                     let dragging = false;
+                    let beforeTrim: { trimStart?: number; trimEnd?: number } | null = null;
+
+                    const updatePositions = (startIdx: number, endIdx: number) => {
+                        const sPct = (startIdx / (totalPts - 1)) * 100;
+                        const ePct = (endIdx / (totalPts - 1)) * 100;
+                        handleStart.style.left = `${sPct}%`;
+                        handleEnd.style.left = `${ePct}%`;
+                        range.style.left = `${sPct}%`;
+                        range.style.width = `${ePct - sPct}%`;
+                    };
 
                     const onMove = (e: MouseEvent) => {
                         if (!dragging) return;
                         const rect = bar.getBoundingClientRect();
+                        if (rect.width === 0) return; // safety: bar detached
                         const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
                         const idx = Math.round(pct * (totalPts - 1));
 
+                        // Read live trim values from the path data
+                        const liveStart = p.trimStart ?? 0;
+                        const liveEnd = p.trimEnd ?? (totalPts - 1);
+
                         if (isStart) {
-                            const newStart = Math.min(idx, trimEnd - 1);
-                            flightPathManager!.setTrim(p.id, newStart, trimEnd);
+                            const newStart = Math.min(idx, liveEnd - 1);
+                            flightPathManager!.setTrim(p.id, newStart, liveEnd);
+                            updatePositions(newStart, liveEnd);
                         } else {
-                            const newEnd = Math.max(idx, trimStart + 1);
-                            flightPathManager!.setTrim(p.id, trimStart, newEnd);
+                            const newEnd = Math.max(idx, liveStart + 1);
+                            flightPathManager!.setTrim(p.id, liveStart, newEnd);
+                            updatePositions(liveStart, newEnd);
                         }
-                        syncTrimToStore(p.id);
-                        updateFlightPathUI();
                     };
 
                     const onUp = () => {
@@ -2077,12 +2137,27 @@ function updateFlightPathUI(): void {
                         handle.classList.remove('dragging');
                         document.removeEventListener('mousemove', onMove);
                         document.removeEventListener('mouseup', onUp);
+
+                        // Push trim undo entry
+                        if (beforeTrim) {
+                            const afterTrim = { trimStart: p.trimStart, trimEnd: p.trimEnd };
+                            if (beforeTrim.trimStart !== afterTrim.trimStart || beforeTrim.trimEnd !== afterTrim.trimEnd) {
+                                trimUndoStack.push({ pathId: p.id, before: beforeTrim, after: afterTrim });
+                                trimRedoStack.length = 0;
+                                if (trimUndoStack.length > 20) trimUndoStack.shift();
+                            }
+                            beforeTrim = null;
+                        }
+
+                        syncTrimToStore(p.id);
+                        updateFlightPathUI(); // full rebuild only on mouseup
                     };
 
                     handle.addEventListener('mousedown', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         dragging = true;
+                        beforeTrim = { trimStart: p.trimStart, trimEnd: p.trimEnd };
                         handle.classList.add('dragging');
                         document.addEventListener('mousemove', onMove);
                         document.addEventListener('mouseup', onUp);
