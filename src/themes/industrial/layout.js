@@ -45,6 +45,9 @@ var _panelToggleBtn = null;      // toolbar panel toggle button
 var _modeBtns = null;            // { model, splat, pointcloud } toolbar buttons
 var _viewToggles = null;         // { grid, autorotate, fly } toolbar buttons
 var _qualityBtns = null;         // { sd, hd } toolbar buttons
+var _bboxHelper = null;          // THREE.Box3Helper instance
+var _bboxBtn = null;             // toolbar bounding box button
+var _dropZone = null;            // P2 drag-and-drop empty state overlay
 
 // FPS counter state
 var _fpsLast = 0;
@@ -70,7 +73,9 @@ var ICONS = {
     panel: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="16" height="14" rx="1"/><line x1="13" y1="3" x2="13" y2="17"/></svg>',
     mesh: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3l7 4v6l-7 4-7-4V7z"/><path d="M10 3v14M3 7l7 4 7-4"/></svg>',
     splat: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="1.5" fill="currentColor"/><circle cx="5" cy="7" r="1" fill="currentColor"/><circle cx="15" cy="7" r="1" fill="currentColor"/><circle cx="5" cy="13" r="1" fill="currentColor"/><circle cx="15" cy="13" r="1" fill="currentColor"/><circle cx="10" cy="4" r="0.75" fill="currentColor"/><circle cx="10" cy="16" r="0.75" fill="currentColor"/></svg>',
-    cloud: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="13" r="1" fill="currentColor"/><circle cx="10" cy="11" r="1" fill="currentColor"/><circle cx="14" cy="13" r="1" fill="currentColor"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/><circle cx="7" cy="9" r="0.75" fill="currentColor"/><circle cx="13" cy="9" r="0.75" fill="currentColor"/><circle cx="10" cy="7" r="0.75" fill="currentColor"/></svg>'
+    cloud: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="13" r="1" fill="currentColor"/><circle cx="10" cy="11" r="1" fill="currentColor"/><circle cx="14" cy="13" r="1" fill="currentColor"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/><circle cx="7" cy="9" r="0.75" fill="currentColor"/><circle cx="13" cy="9" r="0.75" fill="currentColor"/><circle cx="10" cy="7" r="0.75" fill="currentColor"/></svg>',
+    bbox: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3l7 4v6l-7 4-7-4V7z"/><line x1="10" y1="3" x2="10" y2="17" stroke-dasharray="2 2"/><line x1="3" y1="7" x2="17" y2="7" stroke-dasharray="2 2"/></svg>',
+    upload: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 13V4M7 7l3-3 3 3"/><path d="M4 14v2a1 1 0 001 1h10a1 1 0 001-1v-2"/></svg>'
 };
 
 // ---- Helpers ----
@@ -639,6 +644,7 @@ var SHORTCUTS = [
     { key: 'M',      desc: 'Toggle Matcap' },
     { key: 'L',      desc: 'Lighting Widget' },
     { key: 'P',      desc: 'Take Screenshot' },
+    { key: 'B',      desc: 'Toggle Bounding Box' },
     { key: 'F',      desc: 'Fit to View' },
     { key: 'Escape', desc: 'Deactivate Tool / Close Menu' }
 ];
@@ -790,6 +796,12 @@ function createToolbar() {
     utilGroup.appendChild(createToolBtn('light', 'Light Direction [L]', ICONS.light));
     utilGroup.appendChild(createActionBtn('screenshot', 'Screenshot [P]', ICONS.screenshot));
     utilGroup.appendChild(createActionBtn('fitview', 'Fit to View [F]', ICONS.fitView));
+    var bboxBtn = createEl('button', 'ind-tool-btn', ICONS.bbox);
+    bboxBtn.setAttribute('data-toggle', 'bbox');
+    bboxBtn.setAttribute('data-tooltip', 'Bounding Box [B]');
+    bboxBtn.addEventListener('click', toggleBoundingBox);
+    _bboxBtn = bboxBtn;
+    utilGroup.appendChild(bboxBtn);
     toolbar.appendChild(utilGroup);
 
     toolbar.appendChild(createEl('div', 'ind-toolbar-sep'));
@@ -922,6 +934,44 @@ function createActionBtn(action, tooltip, icon) {
     return btn;
 }
 
+function toggleBoundingBox() {
+    var THREE = (_deps && _deps.THREE) || window.THREE;
+    if (!THREE) return;
+    var scene = _deps && _deps.sceneManager && _deps.sceneManager.scene;
+    if (!scene) return;
+
+    if (_bboxHelper) {
+        scene.remove(_bboxHelper);
+        _bboxHelper = null;
+        if (_bboxBtn) _bboxBtn.classList.remove('active');
+        return;
+    }
+
+    var box = new THREE.Box3();
+    var hasContent = false;
+    var groups = [_deps.modelGroup, _deps.pointcloudGroup];
+    for (var gi = 0; gi < groups.length; gi++) {
+        var grp = groups[gi];
+        if (!grp) continue;
+        grp.traverse(function(child) {
+            if (child.isMesh && child.geometry) {
+                child.geometry.computeBoundingBox();
+                if (child.geometry.boundingBox) {
+                    var wb = child.geometry.boundingBox.clone();
+                    wb.applyMatrix4(child.matrixWorld);
+                    box.union(wb);
+                    hasContent = true;
+                }
+            }
+        });
+    }
+    if (!hasContent || box.isEmpty()) return;
+
+    _bboxHelper = new THREE.Box3Helper(box, 0x3874CB);
+    scene.add(_bboxHelper);
+    if (_bboxBtn) _bboxBtn.classList.add('active');
+}
+
 function createStatusBar(manifest) {
     var bar = createEl('div', 'ind-status-bar');
 
@@ -1018,6 +1068,35 @@ function createSectionControls() {
     return panel;
 }
 
+// ---- Drop Zone Overlay (P2) ----
+
+function createDropZone() {
+    var el = createEl('div', 'ind-drop-zone');
+    var inner = createEl('div', 'ind-drop-zone-inner');
+    inner.innerHTML = ICONS.upload +
+        '<div class="ind-drop-zone-text">Drop a file to view</div>' +
+        '<div class="ind-drop-zone-hint">.ddim &nbsp; .glb &nbsp; .splat &nbsp; .ply &nbsp; .e57</div>';
+    el.appendChild(inner);
+
+    el.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        el.classList.add('drag-active');
+    });
+    el.addEventListener('dragleave', function(e) {
+        if (!el.contains(e.relatedTarget)) el.classList.remove('drag-active');
+    });
+    el.addEventListener('drop', function(e) {
+        e.preventDefault();
+        el.classList.remove('drag-active');
+        if (e.dataTransfer && e.dataTransfer.files.length > 0 && _deps && _deps.loadFile) {
+            el.style.display = 'none';
+            _deps.loadFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    return el;
+}
+
 // ---- Info Panel ----
 
 function createPanelSection(id, title, initiallyOpen) {
@@ -1070,6 +1149,28 @@ function buildLayersSection(body, manifest) {
 
         item.appendChild(badge);
         item.appendChild(nameEl);
+
+        // Splat point budget slider
+        if (role === 'splat' && _deps && _deps.getSplatBudget) {
+            var sliderRow = createEl('div', 'ind-layer-slider-row');
+            var budgetSlider = document.createElement('input');
+            budgetSlider.type = 'range';
+            budgetSlider.className = 'ind-budget-slider';
+            budgetSlider.min = '100000';
+            budgetSlider.max = '2000000';
+            budgetSlider.step = '100000';
+            budgetSlider.value = String(_deps.getSplatBudget());
+            var budgetVal = createEl('span', 'ind-budget-val', formatNumber(parseInt(budgetSlider.value)));
+            budgetSlider.addEventListener('input', function() {
+                var v = parseInt(budgetSlider.value);
+                if (_deps && _deps.setSplatBudget) _deps.setSplatBudget(v);
+                budgetVal.textContent = formatNumber(v);
+            });
+            sliderRow.appendChild(createEl('span', 'ind-budget-label', 'Budget'));
+            sliderRow.appendChild(budgetSlider);
+            sliderRow.appendChild(budgetVal);
+            item.appendChild(sliderRow);
+        }
 
         // Vertex/face stats sub-line for meshes
         if (role === 'mesh' || role === 'cad') {
@@ -1164,6 +1265,31 @@ function buildAnnotationsSection(body, manifest) {
     });
 }
 
+function buildMeasuresSection(body) {
+    body.innerHTML = '';
+    if (!_deps || !_deps.measurementSystem) {
+        body.appendChild(createEl('div', 'ind-panel-empty', 'No measurements'));
+        return;
+    }
+    var measurements = _deps.measurementSystem.getMeasurements();
+    if (!measurements || measurements.length === 0) {
+        body.appendChild(createEl('div', 'ind-panel-empty', 'No measurements'));
+        return;
+    }
+    measurements.forEach(function(m, i) {
+        var row = createEl('div', 'ind-measure-item');
+        var numEl = createEl('span', 'ind-measure-num', String(i + 1));
+        var distTextEl = m.labelEl ? m.labelEl.querySelector('.measure-label-text') : null;
+        var unitEl = m.labelEl ? m.labelEl.querySelector('.measure-unit-btn') : null;
+        var dist = distTextEl ? distTextEl.textContent : '\u2014';
+        var unit = unitEl ? unitEl.textContent : '';
+        var valEl = createEl('span', 'ind-measure-value', dist + (unit ? ' ' + unit : ''));
+        row.appendChild(numEl);
+        row.appendChild(valEl);
+        body.appendChild(row);
+    });
+}
+
 function updateAnnotationSectionHeader(sectionLabel) {
     var annotations = _deps && _deps.annotationSystem ? _deps.annotationSystem.getAnnotations() : [];
     var count = annotations ? annotations.length : 0;
@@ -1189,11 +1315,18 @@ function createInfoPanel(manifest) {
     updateAnnotationSectionHeader(annos.label);
     panel.appendChild(annos.section);
 
+    // Measurements section
+    var measures = createPanelSection('ind-panel-measures', 'Measurements', false);
+    buildMeasuresSection(measures.body);
+    panel.appendChild(measures.section);
+
     // Store label refs for later updates
     panel._annoLabel = annos.label;
     panel._annosBody = annos.body;
     panel._projBody = proj.body;
     panel._layersBody = layers.body;
+    panel._measuresBody = measures.body;
+    panel._measuresLabel = measures.label;
 
     return panel;
 }
@@ -1216,6 +1349,47 @@ function createTrackballOverlay() {
 }
 
 // ---- Exported kiosk callbacks ----
+
+function onAutoRotateChange(active) {
+    _toggles.autorotate = active;
+    if (_viewToggles && _viewToggles.autorotate) {
+        _viewToggles.autorotate.classList.toggle('active', active);
+    }
+}
+
+function onAssetLoaded() {
+    if (!_panel || !_deps) return;
+    // Rebuild layers with updated asset info
+    if (_panel._layersBody) buildLayersSection(_panel._layersBody, _manifest);
+    // Refresh vertex/face status bar counts
+    var vertCount = countVertices(_deps.modelGroup) + countVertices(_deps.pointcloudGroup);
+    var faceCount = countFaces(_deps.modelGroup) + countFaces(_deps.pointcloudGroup);
+    var vertEl = document.getElementById('ind-status-vertices');
+    if (vertEl && vertCount > 0) vertEl.textContent = formatNumber(vertCount);
+    var faceEl = document.getElementById('ind-status-faces');
+    if (faceEl && faceCount > 0) faceEl.textContent = formatNumber(faceCount);
+    // Hide drop zone
+    if (_dropZone) _dropZone.style.display = 'none';
+}
+
+function onMeasurementChanged() {
+    if (!_panel) return;
+    if (_panel._measuresBody) buildMeasuresSection(_panel._measuresBody);
+    if (_panel._measuresLabel) {
+        var ms = _deps && _deps.measurementSystem ? _deps.measurementSystem.getMeasurements() : [];
+        _panel._measuresLabel.textContent = 'Measurements' + (ms.length > 0 ? ' (' + ms.length + ')' : '');
+        // Auto-expand section when first measurement added
+        if (ms.length === 1) {
+            var sec = document.getElementById('ind-panel-measures');
+            if (sec) {
+                var body = sec.querySelector('.ind-panel-section-body');
+                var arrow = sec.querySelector('.ind-panel-arrow');
+                if (body) body.classList.remove('collapsed');
+                if (arrow) arrow.textContent = '\u25bc';
+            }
+        }
+    }
+}
 
 function onAnnotationSelect(annotationId) {
     if (!_panel) return;
@@ -1256,6 +1430,13 @@ function setup(manifest, deps) {
     _manifest = manifest;
     _deps = deps;
 
+    // Update window title
+    if (manifest && manifest.title) {
+        document.title = manifest.title + ' \u2014 Vitrine3D';
+    } else if (!document.title || document.title === 'Vitrine3D') {
+        document.title = 'Vitrine3D';
+    }
+
     // Lock orbit-only navigation
     var controls = deps.sceneManager ? deps.sceneManager.controls : null;
     if (controls) {
@@ -1294,6 +1475,12 @@ function setup(manifest, deps) {
     _panel = createInfoPanel(manifest);
     document.body.appendChild(_panel);
     document.body.classList.add('ind-panel-open');
+
+    // Create drop zone overlay (P2 — shown when no asset is loaded)
+    var hasAssets = manifest && manifest.assets && manifest.assets.length > 0;
+    _dropZone = createDropZone();
+    document.body.appendChild(_dropZone);
+    if (hasAssets) _dropZone.style.display = 'none';
 
     // Update initial light indicator position
     updateLightIndicator();
@@ -1340,6 +1527,22 @@ function setup(manifest, deps) {
         document.addEventListener('mouseup', function () {
             if (_trackballOverlay) _trackballOverlay.style.opacity = '';
         });
+        // Show drop zone overlay on file drag-enter (before drop)
+        document.addEventListener('dragenter', function(e) {
+            if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).indexOf('Files') >= 0) {
+                if (_dropZone && _dropZone.style.display !== 'none') {
+                    _dropZone.classList.add('drag-active');
+                }
+            }
+        });
+        document.addEventListener('dragleave', function(e) {
+            if (!e.relatedTarget || e.relatedTarget === document.documentElement) {
+                if (_dropZone) _dropZone.classList.remove('drag-active');
+            }
+        });
+        document.addEventListener('drop', function() {
+            if (_dropZone) _dropZone.classList.remove('drag-active');
+        });
     }
 
     // Register keyboard shortcuts in capture phase
@@ -1355,6 +1558,7 @@ function setup(manifest, deps) {
             case '1': toggleTool('slice'); handled = true; break;
             case '2': toggleTool('measure'); handled = true; break;
             case '3': toggleTool('annotate'); handled = true; break;
+            case 'b': toggleBoundingBox(); handled = true; break;
             case 't': toggleDisplay('texture'); handled = true; break;
             case 'm': toggleDisplay('matcap'); handled = true; break;
             case 'w': toggleDisplay('wireframe'); handled = true; break;
@@ -1402,6 +1606,7 @@ function onKeyboardShortcut(key) {
         case '1': toggleTool('slice'); return true;
         case '2': toggleTool('measure'); return true;
         case '3': toggleTool('annotate'); return true;
+        case 'b': toggleBoundingBox(); return true;
         case 'm': toggleDisplay('matcap'); return true;
         case 't': toggleDisplay('texture'); return true;
         case 'w': toggleDisplay('wireframe'); return true;
@@ -1422,6 +1627,9 @@ window.__KIOSK_LAYOUTS__['industrial'] = {
     onAnnotationSelect: onAnnotationSelect,
     onAnnotationDeselect: onAnnotationDeselect,
     onViewModeChange: onViewModeChange,
+    onAutoRotateChange: onAutoRotateChange,
+    onAssetLoaded: onAssetLoaded,
+    onMeasurementChanged: onMeasurementChanged,
     hasOwnInfoPanel: true,
     hasOwnQualityToggle: true
 };
