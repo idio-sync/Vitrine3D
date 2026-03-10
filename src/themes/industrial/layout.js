@@ -14,7 +14,7 @@
 
 var _deps = null;
 var _activeTool = null;
-var _toggles = { matcap: false, texture: true, wireframe: false, trackball: true, toolbar: true, annotations: true };
+var _toggles = { matcap: false, texture: true, wireframe: false, trackball: true, toolbar: true, annotations: true, grid: false, autorotate: true };
 
 // Light widget drag state
 var _lightDragging = false;
@@ -38,6 +38,19 @@ var _perspCam = null;            // cached PerspectiveCamera reference
 var _menuCloseListener = null;   // document mousedown listener reference
 var _manifest = null;            // archive manifest (stored in setup())
 
+// New UI references
+var _panel = null;               // right info panel element
+var _panelOpen = true;           // panel visible by default
+var _panelToggleBtn = null;      // toolbar panel toggle button
+var _modeBtns = null;            // { model, splat, pointcloud } toolbar buttons
+var _viewToggles = null;         // { grid, autorotate, fly } toolbar buttons
+var _qualityBtns = null;         // { sd, hd } toolbar buttons
+
+// FPS counter state
+var _fpsLast = 0;
+var _fpsFrames = 0;
+var _fpsEl = null;
+
 // ---- SVG Icons ----
 
 var ICONS = {
@@ -50,7 +63,14 @@ var ICONS = {
     light: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="10" y1="16" x2="10" y2="18"/><line x1="2" y1="10" x2="4" y2="10"/><line x1="16" y1="10" x2="18" y2="10"/><line x1="4.34" y1="4.34" x2="5.76" y2="5.76"/><line x1="14.24" y1="14.24" x2="15.66" y2="15.66"/><line x1="4.34" y1="15.66" x2="5.76" y2="14.24"/><line x1="14.24" y1="5.76" x2="15.66" y2="4.34"/></svg>',
     screenshot: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5" width="16" height="12" rx="1.5"/><circle cx="10" cy="11" r="3"/><path d="M7 5V4a1 1 0 011-1h4a1 1 0 011 1v1"/></svg>',
     flip: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3v14M6 7l4-4 4 4M6 13l4 4 4-4"/></svg>',
-    fitView: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="12" height="12" rx="1"/><path d="M2 7V3h4M14 2h4v4M18 13v4h-4M6 18H2v-4"/></svg>'
+    fitView: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="12" height="12" rx="1"/><path d="M2 7V3h4M14 2h4v4M18 13v4h-4M6 18H2v-4"/></svg>',
+    grid: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7h14M3 13h14M7 3v14M13 3v14"/></svg>',
+    autoRotate: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 10a6 6 0 1 0 6-6"/><path d="M7 1l3 3-3 3"/></svg>',
+    fly: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="1.5" fill="currentColor"/><line x1="10" y1="3" x2="10" y2="7"/><line x1="10" y1="13" x2="10" y2="17"/><line x1="3" y1="10" x2="7" y2="10"/><line x1="13" y1="10" x2="17" y2="10"/></svg>',
+    panel: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="16" height="14" rx="1"/><line x1="13" y1="3" x2="13" y2="17"/></svg>',
+    mesh: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3l7 4v6l-7 4-7-4V7z"/><path d="M10 3v14M3 7l7 4 7-4"/></svg>',
+    splat: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="1.5" fill="currentColor"/><circle cx="5" cy="7" r="1" fill="currentColor"/><circle cx="15" cy="7" r="1" fill="currentColor"/><circle cx="5" cy="13" r="1" fill="currentColor"/><circle cx="15" cy="13" r="1" fill="currentColor"/><circle cx="10" cy="4" r="0.75" fill="currentColor"/><circle cx="10" cy="16" r="0.75" fill="currentColor"/></svg>',
+    cloud: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="13" r="1" fill="currentColor"/><circle cx="10" cy="11" r="1" fill="currentColor"/><circle cx="14" cy="13" r="1" fill="currentColor"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/><circle cx="7" cy="9" r="0.75" fill="currentColor"/><circle cx="13" cy="9" r="0.75" fill="currentColor"/><circle cx="10" cy="7" r="0.75" fill="currentColor"/></svg>'
 };
 
 // ---- Helpers ----
@@ -193,6 +213,46 @@ function deactivateTool(name) {
 
 function deactivateAllTools() {
     if (_activeTool) deactivateTool(_activeTool);
+}
+
+function updateQualityButtons() {
+    if (!_qualityBtns || !_deps) return;
+    var tier = (_deps.state && _deps.state.qualityResolved) || 'hd';
+    _qualityBtns.sd.classList.toggle('active', tier === 'sd');
+    _qualityBtns.hd.classList.toggle('active', tier === 'hd');
+}
+
+function toggleInfoPanel() {
+    _panelOpen = !_panelOpen;
+    if (_panel) _panel.classList.toggle('hidden', !_panelOpen);
+    document.body.classList.toggle('ind-panel-open', _panelOpen);
+}
+
+function updateModeButtons(mode) {
+    if (!_modeBtns) return;
+    var m = mode || (_deps && _deps.state && _deps.state.displayMode) || 'model';
+    Object.keys(_modeBtns).forEach(function(k) {
+        _modeBtns[k].classList.toggle('active', k === m);
+    });
+}
+
+function startFpsCounter() {
+    _fpsEl = document.getElementById('ind-status-fps');
+    function tick(now) {
+        _fpsFrames++;
+        var elapsed = now - _fpsLast;
+        if (elapsed >= 1000) {
+            var fps = Math.round(_fpsFrames * 1000 / elapsed);
+            _fpsFrames = 0;
+            _fpsLast = now;
+            if (_fpsEl) _fpsEl.textContent = fps + ' fps';
+        }
+        requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(function(now) {
+        _fpsLast = now;
+        requestAnimationFrame(tick);
+    });
 }
 
 function toggleTool(name) {
@@ -411,12 +471,12 @@ function toggleOrthographic() {
         var frustW = frustH * aspect;
 
         if (!_orthoCam) {
-            var OrthoCls = (window.THREE && window.THREE.OrthographicCamera) || null;
-            if (!OrthoCls) {
-                console.warn('[industrial] THREE not in global scope, orthographic not available');
+            var THREE = (_deps && _deps.THREE) || window.THREE || null;
+            if (!THREE || !THREE.OrthographicCamera) {
+                console.warn('[industrial] THREE not available, orthographic not supported');
                 return;
             }
-            _orthoCam = new OrthoCls(-frustW/2, frustW/2, frustH/2, -frustH/2, 0.01, 10000);
+            _orthoCam = new THREE.OrthographicCamera(-frustW/2, frustW/2, frustH/2, -frustH/2, 0.01, 10000);
         }
         _orthoCam.position.copy(camera.position);
         _orthoCam.quaternion.copy(camera.quaternion);
@@ -716,7 +776,7 @@ function createToolbar() {
 
     toolbar.appendChild(createEl('div', 'ind-toolbar-sep'));
 
-    // Display toggles group
+    // Render toggles group
     var dispGroup = createEl('div', 'ind-toolbar-group');
     dispGroup.appendChild(createToggleBtn('matcap', 'Matcap [M]', ICONS.matcap));
     dispGroup.appendChild(createToggleBtn('texture', 'Texture [T]', ICONS.texture));
@@ -731,6 +791,105 @@ function createToolbar() {
     utilGroup.appendChild(createActionBtn('screenshot', 'Screenshot [P]', ICONS.screenshot));
     utilGroup.appendChild(createActionBtn('fitview', 'Fit to View [F]', ICONS.fitView));
     toolbar.appendChild(utilGroup);
+
+    toolbar.appendChild(createEl('div', 'ind-toolbar-sep'));
+
+    // Display mode segment (Mesh / Splat / Cloud)
+    var modeGroup = createEl('div', 'ind-toolbar-group');
+    var meshBtn = createEl('button', 'ind-tool-btn ind-mode-btn', ICONS.mesh + '<span>Mesh</span>');
+    meshBtn.setAttribute('data-mode', 'model');
+    meshBtn.setAttribute('data-tooltip', 'Mesh view [1]');
+    var splatBtn = createEl('button', 'ind-tool-btn ind-mode-btn', ICONS.splat + '<span>Splat</span>');
+    splatBtn.setAttribute('data-mode', 'splat');
+    splatBtn.setAttribute('data-tooltip', 'Gaussian splat view [2]');
+    var cloudBtn = createEl('button', 'ind-tool-btn ind-mode-btn', ICONS.cloud + '<span>Cloud</span>');
+    cloudBtn.setAttribute('data-mode', 'pointcloud');
+    cloudBtn.setAttribute('data-tooltip', 'Point cloud view [3]');
+    [meshBtn, splatBtn, cloudBtn].forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (_deps && _deps.setDisplayMode) {
+                _deps.setDisplayMode(btn.getAttribute('data-mode'));
+            }
+        });
+        modeGroup.appendChild(btn);
+    });
+    _modeBtns = { model: meshBtn, splat: splatBtn, pointcloud: cloudBtn };
+    toolbar.appendChild(modeGroup);
+
+    toolbar.appendChild(createEl('div', 'ind-toolbar-sep'));
+
+    // View helpers group
+    var viewGroup = createEl('div', 'ind-toolbar-group');
+    var gridBtn = createEl('button', 'ind-tool-btn', ICONS.grid);
+    gridBtn.setAttribute('data-toggle', 'grid');
+    gridBtn.setAttribute('data-tooltip', 'Toggle Grid [G]');
+    gridBtn.addEventListener('click', function() {
+        _toggles.grid = !_toggles.grid;
+        gridBtn.classList.toggle('active', _toggles.grid);
+        if (_deps && _deps.toggleGrid) _deps.toggleGrid(_toggles.grid);
+    });
+    var autoRotBtn = createEl('button', 'ind-tool-btn', ICONS.autoRotate);
+    autoRotBtn.setAttribute('data-toggle', 'autorotate');
+    autoRotBtn.setAttribute('data-tooltip', 'Auto-Rotate');
+    autoRotBtn.addEventListener('click', function() {
+        _toggles.autorotate = !_toggles.autorotate;
+        autoRotBtn.classList.toggle('active', _toggles.autorotate);
+        if (_deps && _deps.setAutoRotate) _deps.setAutoRotate(_toggles.autorotate);
+    });
+    var flyBtn = createEl('button', 'ind-tool-btn', ICONS.fly);
+    flyBtn.setAttribute('data-toggle', 'fly');
+    flyBtn.setAttribute('data-tooltip', 'Fly Mode [F]');
+    flyBtn.addEventListener('click', function() {
+        if (_deps && _deps.toggleFlyMode) _deps.toggleFlyMode();
+        // State is read from deps.getFlyModeActive after the toggle
+        setTimeout(function() {
+            var active = _deps && _deps.getFlyModeActive ? _deps.getFlyModeActive() : false;
+            flyBtn.classList.toggle('active', active);
+        }, 0);
+    });
+    _viewToggles = { grid: gridBtn, autorotate: autoRotBtn, fly: flyBtn };
+    viewGroup.appendChild(gridBtn);
+    viewGroup.appendChild(autoRotBtn);
+    viewGroup.appendChild(flyBtn);
+    toolbar.appendChild(viewGroup);
+
+    // Push HD/SD and panel toggle to the right
+    var spacer = createEl('div', 'ind-toolbar-spacer');
+    toolbar.appendChild(spacer);
+
+    // HD / SD quality toggle
+    var qualityGroup = createEl('div', 'ind-toolbar-group');
+    var sdBtn = createEl('button', 'ind-tool-btn ind-quality-btn', 'SD');
+    sdBtn.setAttribute('data-tier', 'sd');
+    sdBtn.setAttribute('data-tooltip', 'Standard Definition');
+    var hdBtn = createEl('button', 'ind-tool-btn ind-quality-btn', 'HD');
+    hdBtn.setAttribute('data-tier', 'hd');
+    hdBtn.setAttribute('data-tooltip', 'High Definition');
+    [sdBtn, hdBtn].forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (_deps && _deps.switchQualityTier) {
+                _deps.switchQualityTier(btn.getAttribute('data-tier'));
+                updateQualityButtons();
+            }
+        });
+        qualityGroup.appendChild(btn);
+    });
+    _qualityBtns = { sd: sdBtn, hd: hdBtn };
+    toolbar.appendChild(qualityGroup);
+
+    toolbar.appendChild(createEl('div', 'ind-toolbar-sep'));
+
+    // Info panel toggle
+    var panelBtn = createEl('button', 'ind-tool-btn', ICONS.panel);
+    panelBtn.setAttribute('data-toggle', 'panel');
+    panelBtn.setAttribute('data-tooltip', 'Properties Panel');
+    panelBtn.classList.add('active'); // panel open by default
+    panelBtn.addEventListener('click', function() {
+        toggleInfoPanel();
+        panelBtn.classList.toggle('active', _panelOpen);
+    });
+    _panelToggleBtn = panelBtn;
+    toolbar.appendChild(panelBtn);
 
     return toolbar;
 }
@@ -809,10 +968,17 @@ function createStatusBar(manifest) {
     }
     bar.appendChild(createStatusField('ind-status-filesize', fileSize));
 
-    // Right-aligned measurement readout
+    // Right-aligned: measurement readout | FPS
     var measureField = createEl('span', 'ind-status-right');
     measureField.id = 'ind-status-measure';
     bar.appendChild(measureField);
+
+    bar.appendChild(createEl('span', 'ind-status-sep', '|'));
+
+    var fpsField = createEl('span', 'ind-status-field ind-status-fps-field');
+    fpsField.id = 'ind-status-fps';
+    fpsField.textContent = '\u2014';
+    bar.appendChild(fpsField);
 
     return bar;
 }
@@ -852,6 +1018,186 @@ function createSectionControls() {
     return panel;
 }
 
+// ---- Info Panel ----
+
+function createPanelSection(id, title, initiallyOpen) {
+    var section = createEl('div', 'ind-panel-section');
+    section.id = id;
+
+    var header = createEl('div', 'ind-panel-section-header');
+    var arrow = createEl('span', 'ind-panel-arrow', initiallyOpen !== false ? '▼' : '▶');
+    var label = createEl('span', 'ind-panel-section-label', title);
+    header.appendChild(arrow);
+    header.appendChild(label);
+
+    var body = createEl('div', 'ind-panel-section-body');
+    if (initiallyOpen === false) body.classList.add('collapsed');
+
+    header.addEventListener('click', function() {
+        var collapsed = body.classList.toggle('collapsed');
+        arrow.textContent = collapsed ? '▶' : '▼';
+    });
+
+    section.appendChild(header);
+    section.appendChild(body);
+    return { section: section, body: body, label: label };
+}
+
+function buildLayersSection(body, manifest) {
+    body.innerHTML = '';
+    var assets = manifest && manifest.assets ? manifest.assets : [];
+    var added = 0;
+
+    // Map asset roles/types to what's visually meaningful
+    var typeInfo = {
+        splat:      { label: 'Splat',  badge: 'S', cls: 'ind-badge-splat' },
+        mesh:       { label: 'Mesh',   badge: 'M', cls: 'ind-badge-mesh' },
+        pointcloud: { label: 'Cloud',  badge: 'C', cls: 'ind-badge-cloud' },
+        flightpath: { label: 'Flight', badge: 'F', cls: 'ind-badge-flight' },
+        cad:        { label: 'CAD',    badge: 'D', cls: 'ind-badge-mesh' }
+    };
+
+    assets.forEach(function(asset) {
+        var role = asset.role || 'mesh';
+        var info = typeInfo[role] || typeInfo.mesh;
+        var name = asset.filename || asset.key || role;
+        // Strip path prefix
+        name = name.replace(/^assets\//, '').replace(/\.\w+$/, '');
+
+        var item = createEl('div', 'ind-layer-item');
+        var badge = createEl('span', 'ind-layer-badge ' + info.cls, info.badge);
+        var nameEl = createEl('span', 'ind-layer-name', name);
+
+        item.appendChild(badge);
+        item.appendChild(nameEl);
+
+        // Vertex/face stats sub-line for meshes
+        if (role === 'mesh' || role === 'cad') {
+            var meshGroup = _deps && _deps.modelGroup;
+            var verts = countVertices(meshGroup);
+            var faces = countFaces(meshGroup);
+            if (verts > 0 || faces > 0) {
+                var stats = createEl('div', 'ind-layer-stats',
+                    'V: ' + formatNumber(verts) + '  F: ' + formatNumber(faces));
+                item.appendChild(stats);
+            }
+        }
+
+        // Size sub-line
+        if (asset.size) {
+            var sizeEl = createEl('div', 'ind-layer-stats', formatFileSize(asset.size));
+            item.appendChild(sizeEl);
+        }
+
+        body.appendChild(item);
+        added++;
+    });
+
+    if (added === 0) {
+        body.appendChild(createEl('div', 'ind-panel-empty', 'No assets loaded'));
+    }
+}
+
+function buildPropertiesSection(body, manifest) {
+    body.innerHTML = '';
+    if (!manifest) {
+        body.appendChild(createEl('div', 'ind-panel-empty', 'No archive loaded'));
+        return;
+    }
+
+    function addRow(labelText, valueText) {
+        if (!valueText && valueText !== 0) return;
+        var row = createEl('div', 'ind-prop-row');
+        var lbl = createEl('span', 'ind-prop-label', labelText);
+        var val = createEl('span', 'ind-prop-value', String(valueText));
+        row.appendChild(lbl);
+        row.appendChild(val);
+        body.appendChild(row);
+    }
+
+    addRow('Title', manifest.title);
+    addRow('Creator', manifest.creator || (manifest.metadata && manifest.metadata.creator));
+    var dateVal = manifest.date_created || (manifest.metadata && manifest.metadata.date);
+    if (dateVal) addRow('Date', String(dateVal).slice(0, 10));
+    addRow('Format', manifest.format_version ? 'DDIM v' + manifest.format_version : null);
+
+    var desc = manifest.description || (manifest.metadata && manifest.metadata.description);
+    if (desc) {
+        body.appendChild(createEl('div', 'ind-prop-sep'));
+        var descLabel = createEl('div', 'ind-prop-label', 'Description');
+        body.appendChild(descLabel);
+        var descText = createEl('div', 'ind-prop-desc', desc);
+        body.appendChild(descText);
+    }
+
+    var tags = manifest.tags || (manifest.metadata && manifest.metadata.tags);
+    if (tags && tags.length > 0) {
+        body.appendChild(createEl('div', 'ind-prop-sep'));
+        var tagRow = createEl('div', 'ind-tag-row');
+        (Array.isArray(tags) ? tags : [tags]).forEach(function(t) {
+            tagRow.appendChild(createEl('span', 'ind-tag', String(t)));
+        });
+        body.appendChild(tagRow);
+    }
+}
+
+function buildAnnotationsSection(body, manifest) {
+    body.innerHTML = '';
+    var annotations = _deps && _deps.annotationSystem ? _deps.annotationSystem.getAnnotations() : [];
+    if (!annotations || annotations.length === 0) {
+        body.appendChild(createEl('div', 'ind-panel-empty', 'No annotations'));
+        return;
+    }
+    annotations.forEach(function(anno, i) {
+        var item = createEl('div', 'ind-anno-item');
+        item.setAttribute('data-anno-id', anno.id);
+        var num = createEl('span', 'ind-anno-num', String(i + 1));
+        var title = createEl('span', 'ind-anno-title', anno.title || ('Annotation ' + (i + 1)));
+        item.appendChild(num);
+        item.appendChild(title);
+        item.addEventListener('click', function() {
+            if (_deps && _deps.annotationSystem) {
+                _deps.annotationSystem.goToAnnotation(anno.id);
+            }
+        });
+        body.appendChild(item);
+    });
+}
+
+function updateAnnotationSectionHeader(sectionLabel) {
+    var annotations = _deps && _deps.annotationSystem ? _deps.annotationSystem.getAnnotations() : [];
+    var count = annotations ? annotations.length : 0;
+    if (sectionLabel) sectionLabel.textContent = 'Annotations' + (count > 0 ? ' (' + count + ')' : '');
+}
+
+function createInfoPanel(manifest) {
+    var panel = createEl('div', 'ind-panel');
+
+    // Layers section
+    var layers = createPanelSection('ind-panel-layers', 'Layers', true);
+    buildLayersSection(layers.body, manifest);
+    panel.appendChild(layers.section);
+
+    // Project info section
+    var proj = createPanelSection('ind-panel-project', 'Project', true);
+    buildPropertiesSection(proj.body, manifest);
+    panel.appendChild(proj.section);
+
+    // Annotations section
+    var annos = createPanelSection('ind-panel-annotations', 'Annotations', true);
+    buildAnnotationsSection(annos.body, manifest);
+    updateAnnotationSectionHeader(annos.label);
+    panel.appendChild(annos.section);
+
+    // Store label refs for later updates
+    panel._annoLabel = annos.label;
+    panel._annosBody = annos.body;
+    panel._projBody = proj.body;
+    panel._layersBody = layers.body;
+
+    return panel;
+}
+
 function createLightWidget() {
     var widget = createEl('div', 'ind-light-widget');
     var indicator = createEl('div', 'ind-light-indicator');
@@ -867,6 +1213,41 @@ function createTrackballOverlay() {
     var circle = createEl('div', 'ind-trackball-circle');
     overlay.appendChild(circle);
     return overlay;
+}
+
+// ---- Exported kiosk callbacks ----
+
+function onAnnotationSelect(annotationId) {
+    if (!_panel) return;
+    // Highlight the matching item in the annotations list (called with ID, not object)
+    var id = String(annotationId);
+    var items = _panel.querySelectorAll('.ind-anno-item');
+    for (var i = 0; i < items.length; i++) {
+        var match = items[i].getAttribute('data-anno-id') === id;
+        items[i].classList.toggle('selected', match);
+        if (match) items[i].scrollIntoView({ block: 'nearest' });
+    }
+    // Expand the annotations section if it's collapsed
+    var annosSection = document.getElementById('ind-panel-annotations');
+    if (annosSection) {
+        var body = annosSection.querySelector('.ind-panel-section-body');
+        var arrow = annosSection.querySelector('.ind-panel-arrow');
+        if (body && body.classList.contains('collapsed')) {
+            body.classList.remove('collapsed');
+            if (arrow) arrow.textContent = '▼';
+        }
+    }
+}
+
+function onAnnotationDeselect() {
+    if (!_panel) return;
+    _panel.querySelectorAll('.ind-anno-item.selected').forEach(function(el) {
+        el.classList.remove('selected');
+    });
+}
+
+function onViewModeChange(mode) {
+    updateModeButtons(mode);
 }
 
 // ---- setup ----
@@ -909,6 +1290,11 @@ function setup(manifest, deps) {
     _trackballOverlay = createTrackballOverlay();
     document.body.appendChild(_trackballOverlay);
 
+    // Create info panel
+    _panel = createInfoPanel(manifest);
+    document.body.appendChild(_panel);
+    document.body.classList.add('ind-panel-open');
+
     // Update initial light indicator position
     updateLightIndicator();
 
@@ -928,6 +1314,22 @@ function setup(manifest, deps) {
     // Set texture toggle button active by default (texture starts on)
     var texBtn = _toolbar.querySelector('[data-toggle="texture"]');
     if (texBtn) texBtn.classList.add('active');
+
+    // Sync auto-rotate button with current state
+    var autoRotateOn = deps.getAutoRotate ? deps.getAutoRotate() : true;
+    _toggles.autorotate = autoRotateOn;
+    if (_viewToggles && _viewToggles.autorotate) {
+        _viewToggles.autorotate.classList.toggle('active', autoRotateOn);
+    }
+
+    // Sync quality buttons
+    updateQualityButtons();
+
+    // Sync display mode buttons with current state
+    updateModeButtons(deps.state ? deps.state.displayMode : 'model');
+
+    // Start FPS counter
+    startFpsCounter();
 
     // Hide trackball during drag for cleaner viewport
     var viewerContainer = document.getElementById('viewer-container');
@@ -1017,6 +1419,9 @@ window.__KIOSK_LAYOUTS__['industrial'] = {
     setup: setup,
     initLoadingScreen: initLoadingScreen,
     onKeyboardShortcut: onKeyboardShortcut,
+    onAnnotationSelect: onAnnotationSelect,
+    onAnnotationDeselect: onAnnotationDeselect,
+    onViewModeChange: onViewModeChange,
     hasOwnInfoPanel: true,
     hasOwnQualityToggle: true
 };
