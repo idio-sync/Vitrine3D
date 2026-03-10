@@ -201,16 +201,18 @@ function injectCollectionCardStyles(): void {
     color: #FEC03A;
 }
 
-/* Collection cards grid */
+/* ── Collection cards grid ── */
+/* Wider cards, 2-col max to feel like a curated index, not an archive listing */
 .cb-coll-grid {
     max-width: 960px;
     margin: 0 auto;
     padding: 40px 48px 48px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 24px;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 28px;
 }
 
+/* Stacked-folder aesthetic: pseudo-element peeks behind the card */
 .cb-coll-card {
     display: block;
     text-decoration: none;
@@ -219,19 +221,37 @@ function injectCollectionCardStyles(): void {
     border: 1px solid rgba(254, 192, 58, 0.08);
     overflow: hidden;
     cursor: pointer;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
     animation: cpSlideUp 0.4s ease-out both;
+    position: relative;
+}
+
+/* Stacked sheet peeking behind the card — implies "contains items" */
+.cb-coll-card::before {
+    content: '';
+    position: absolute;
+    inset: 5px -4px -5px 4px;
+    background: rgba(17, 48, 78, 0.35);
+    border: 1px solid rgba(254, 192, 58, 0.05);
+    z-index: -1;
+    transition: transform 0.25s ease, opacity 0.25s ease;
 }
 
 .cb-coll-card:hover {
-    border-color: rgba(254, 192, 58, 0.25);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    border-color: rgba(254, 192, 58, 0.3);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+    transform: translateY(-2px);
+}
+
+.cb-coll-card:hover::before {
+    transform: translate(-2px, 3px);
+    opacity: 0.7;
 }
 
 .cb-coll-card:hover .cb-coll-thumb img { transform: scale(1.03); }
 
 .cb-coll-thumb {
-    aspect-ratio: 16 / 10;
+    aspect-ratio: 16 / 9;
     overflow: hidden;
     background: rgba(8, 24, 42, 0.8);
     position: relative;
@@ -244,6 +264,24 @@ function injectCollectionCardStyles(): void {
     transition: transform 0.4s ease;
 }
 
+/* Archive count badge overlaid on thumbnail */
+.cb-coll-badge {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(8, 24, 42, 0.82);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(254, 192, 58, 0.18);
+    color: rgba(254, 192, 58, 0.9);
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 4px 10px;
+    white-space: nowrap;
+}
+
 .cb-coll-placeholder {
     width: 100%;
     height: 100%;
@@ -254,12 +292,12 @@ function injectCollectionCardStyles(): void {
 }
 
 .cb-coll-body {
-    padding: 14px 16px 16px;
+    padding: 16px 18px 18px;
     border-top: 1px solid rgba(254, 192, 58, 0.1);
 }
 
 .cb-coll-name {
-    font-size: 0.82rem;
+    font-size: 0.88rem;
     font-weight: 600;
     letter-spacing: 0.01em;
     color: rgba(232, 236, 240, 0.95);
@@ -270,27 +308,19 @@ function injectCollectionCardStyles(): void {
 }
 
 .cb-coll-desc {
-    font-size: 0.72rem;
-    line-height: 1.5;
+    font-size: 0.74rem;
+    line-height: 1.55;
     color: rgba(170, 185, 200, 0.75);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    margin-bottom: 8px;
-}
-
-.cb-coll-count {
-    font-size: 0.6rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: rgba(140, 160, 180, 0.55);
 }
 
 @media (max-width: 768px) {
     .cb-nav { padding: 0 24px 0 22px; height: 48px; }
-    .cb-coll-grid { padding: 32px 24px; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+    .cb-coll-grid { padding: 32px 24px; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+    .cb-coll-card::before { display: none; } /* hide stacked sheet on tablet */
 }
 
 @media (max-width: 480px) {
@@ -460,22 +490,21 @@ function renderCollectionCard(coll: CollectionItem, index: number, onClick: () =
     card.addEventListener('click', onClick);
     card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); });
 
-    const thumbHtml = coll.thumbnail
+    const thumbImg = coll.thumbnail
         ? '<img src="' + escapeHtml(resolveUrl(coll.thumbnail)) + '" alt="" loading="lazy">'
         : '<div class="cb-coll-placeholder"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="rgba(254,192,58,0.2)" stroke-width="0.8"><rect x="4" y="8" width="24" height="18" rx="1"/><path d="M8 8V6a1 1 0 011-1h14a1 1 0 011 1v2"/></svg></div>';
+
+    const badgeText = coll.archiveCount + ' Archive' + (coll.archiveCount !== 1 ? 's' : '');
 
     const descHtml = coll.description
         ? '<div class="cb-coll-desc">' + escapeHtml(coll.description) + '</div>'
         : '';
 
-    const countText = coll.archiveCount + ' Archive' + (coll.archiveCount !== 1 ? 's' : '');
-
     card.innerHTML =
-        '<div class="cb-coll-thumb">' + thumbHtml + '</div>' +
+        '<div class="cb-coll-thumb">' + thumbImg + '<span class="cb-coll-badge">' + escapeHtml(badgeText) + '</span></div>' +
         '<div class="cb-coll-body">' +
             '<div class="cb-coll-name">' + escapeHtml(coll.name) + '</div>' +
             descHtml +
-            '<div class="cb-coll-count">' + escapeHtml(countText) + '</div>' +
         '</div>';
 
     return card;
@@ -492,8 +521,10 @@ function renderCollectionsPage(collections: CollectionItem[]): void {
     spine.className = 'cp-spine';
     container.appendChild(spine);
 
-    // Nav bar — no back button at top level; close returns to file picker
+    // Nav bar — back button returns to file picker (consistent with collection detail)
     container.appendChild(renderNavBar({
+        backLabel: 'Home',
+        onBack: closeCollectionsBrowser,
         onClose: closeCollectionsBrowser,
     }));
 
