@@ -4,7 +4,7 @@ Kiosk view mode is a read-only mode used for presentation of 3D data. It can be 
 
 ## Capabilities
 
-- Full 3D rendering (splats, meshes, point clouds, flight paths) with display mode switching
+- Full 3D rendering (splats, meshes, point clouds, flight paths, SfM cameras) with display mode switching
 - Orbit and fly camera controls
 - Auto-rotate turntable (enabled by default, auto-disables on manual interaction)
 - Shadow casting with shadow catcher ground plane
@@ -21,6 +21,45 @@ Kiosk view mode is a read-only mode used for presentation of 3D data. It can be 
 - Guided walkthrough playback — auto-plays a sequence of named camera stops with fly/fade/cut transitions, dwell times, and optional annotation links; play/pause button; loop and auto-play configurable in the archive
 - Annotation popups constrained to the 3D viewport — popups reposition automatically to stay within the visible canvas area rather than overflowing outside it
 - Cross-section clipping plane — if included in the archive, the clipping plane state is available in the kiosk viewer
+- SfM camera visualization — displays Colmap camera positions as frustum wireframes or instanced markers, with a toggle button that appears when camera data is present in the archive
+
+## SfM Cameras (Colmap)
+
+The viewer supports Colmap Structure-from-Motion camera data as a native asset type. When an archive contains `colmap_sfm` entries, camera positions are rendered in the scene and a toggle button appears.
+
+### What it shows
+
+Camera positions from Colmap's `cameras.bin` + `images.bin` binary files are visualized as:
+- **Frustums** (default) — wireframe pyramids showing camera position, orientation, and approximate field of view. Color-coded blue→red by sequence order.
+- **Markers** — instanced spheres at each camera position. Useful when frustums are too dense.
+
+### Editor features
+
+In the editor (`/editor/`), the Assets pane has an **SfM Cameras** section where you can load `cameras.bin` and `images.bin` files separately (both are required). Once loaded:
+- Switch between Frustums and Markers display modes
+- Adjust frustum scale with a slider
+- Transform (position/rotate/scale) the camera group independently or linked with other assets
+- **Align to Cameras** button — automatically aligns a loaded flight path to match the splat's coordinate system using timestamp-matched Colmap↔GPS point pairs and a Umeyama similarity transform (requires both SfM cameras and a flight path to be loaded)
+
+### Archive format
+
+Colmap data is stored in `.ddim` archives under the `colmap_sfm_N` key prefix:
+```
+assets/colmap_sfm_0/cameras.bin
+assets/colmap_sfm_0/images.bin
+```
+
+The manifest entry uses role `colmap_sfm` with position/rotation/scale parameters.
+
+### Flight path alignment
+
+When both Colmap cameras and a flight path are loaded, the **Align to Cameras** button computes an automatic alignment:
+1. Extracts timestamps from DJI image filenames (e.g., `DJI_20240315_142532_0001.jpg`)
+2. Matches each camera to the nearest flight log GPS point by relative timestamp
+3. Computes a 7-DOF similarity transform (translation + rotation + uniform scale) via the Umeyama algorithm
+4. Applies the transform to the flight path group, aligning GPS coordinates to splat-space
+
+Requires at least 3 matched point pairs. Reports RMSE — values above 1.0 trigger a warning.
 
 ## Keyboard Shortcuts
 
