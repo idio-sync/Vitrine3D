@@ -12,6 +12,69 @@ import type { ColmapCamera, FlightPoint } from '../types.js';
 
 const log = Logger.getLogger('colmap-alignment');
 
+// ─── Points3D parser ─────────────────────────────────────────────────
+
+/** Result from parsing points3D.bin */
+export interface Points3DResult {
+    positions: Float64Array;  // flat xyz, length = count * 3
+    count: number;
+}
+
+/** Read a uint64 as a Number (safe for values < 2^53). Little-endian. */
+function readUint64(view: DataView, offset: number): number {
+    const lo = view.getUint32(offset, true);
+    const hi = view.getUint32(offset + 4, true);
+    return hi * 0x100000000 + lo;
+}
+
+/**
+ * Parse Colmap points3D.bin → Float64Array of xyz positions.
+ * Coordinate-converts from Colmap (Y-down, Z-forward) to Three.js (Y-up, Z-backward)
+ * by negating Y and Z, matching what colmap-loader.ts does for camera positions.
+ */
+export function parsePoints3D(buffer: ArrayBuffer, maxPoints = 20000): Points3DResult | null {
+    if (buffer.byteLength < 8) return null;
+    const view = new DataView(buffer);
+    const numPoints = readUint64(view, 0);
+    if (numPoints === 0) return null;
+
+    // First pass: collect byte offsets (variable-length records)
+    const offsets: number[] = [];
+    let off = 8;
+    for (let i = 0; i < numPoints; i++) {
+        offsets.push(off);
+        off += 8;  // point3D_id (uint64)
+        off += 24; // xyz (3 × float64)
+        off += 3;  // rgb (3 × uint8)
+        off += 8;  // error (float64)
+        const trackLength = readUint64(view, off);
+        off += 8;  // track_length (uint64)
+        off += trackLength * 8; // track entries
+    }
+
+    // Subsample
+    const stride = numPoints > maxPoints ? Math.ceil(numPoints / maxPoints) : 1;
+    const sampleCount = Math.ceil(numPoints / stride);
+    const positions = new Float64Array(sampleCount * 3);
+    let outIdx = 0;
+
+    for (let i = 0; i < numPoints; i += stride) {
+        const pOff = offsets[i] + 8; // skip point3D_id
+        const x = view.getFloat64(pOff, true);
+        const y = view.getFloat64(pOff + 8, true);
+        const z = view.getFloat64(pOff + 16, true);
+        positions[outIdx++] = x;
+        positions[outIdx++] = -y;
+        positions[outIdx++] = -z;
+    }
+
+    const actualCount = outIdx / 3;
+    const trimmed = actualCount < sampleCount ? positions.slice(0, actualCount * 3) : positions;
+
+    log.info(`Parsed ${numPoints} points from points3D.bin, sampled ${actualCount} (stride ${stride})`);
+    return { positions: trimmed, count: actualCount };
+}
+
 // ─── Timestamp extraction ───────────────────────────────────────────
 
 /** DJI filename patterns: DJI_YYYYMMDD_HHMMSS_NNNN or DJI_YYYYMMDDHHMMSS_NNNN */
