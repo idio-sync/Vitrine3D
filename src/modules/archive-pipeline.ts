@@ -997,13 +997,24 @@ export async function switchQualityTier(newTier: string, deps: ArchivePipelineDe
 
     try {
         if (contentInfo.hasSceneProxy) {
+            const oldSplatEntry = newTier === 'hd'
+                ? archiveLoader.getSceneProxyEntry()
+                : archiveLoader.getSceneEntry();
             if (newTier === 'hd') {
                 await loadArchiveFullResSplat(archiveLoader, fileHandlerDeps);
             } else {
                 await loadArchiveProxySplat(archiveLoader, fileHandlerDeps);
             }
+            // Free replaced splat source data (Range re-fetch on demand)
+            if (oldSplatEntry) {
+                archiveLoader.revokeBlobForFile(oldSplatEntry.file_name);
+                archiveLoader.evictFileCache(oldSplatEntry.file_name);
+            }
         }
         if (contentInfo.hasMeshProxy) {
+            const oldMeshEntry = newTier === 'hd'
+                ? archiveLoader.getMeshProxyEntry()
+                : archiveLoader.getMeshEntry();
             if (newTier === 'hd') {
                 const result = await loadArchiveFullResMesh(archiveLoader, fileHandlerDeps);
                 if (result.loaded) {
@@ -1015,6 +1026,19 @@ export async function switchQualityTier(newTier: string, deps: ArchivePipelineDe
                 await loadArchiveProxyMesh(archiveLoader, fileHandlerDeps);
                 state.viewingProxy = true;
                 document.getElementById('proxy-mesh-indicator')?.classList.remove('hidden');
+            }
+            // Free replaced mesh source data (Range re-fetch on demand)
+            if (oldMeshEntry) {
+                archiveLoader.revokeBlobForFile(oldMeshEntry.file_name);
+                archiveLoader.evictFileCache(oldMeshEntry.file_name);
+            }
+            // Evict new mesh's cached bytes — Three.js holds parsed geometry;
+            // editor keeps the blob ref via assets.meshBlob for re-export
+            const newMeshEntry = newTier === 'hd'
+                ? archiveLoader.getMeshEntry()
+                : archiveLoader.getMeshProxyEntry();
+            if (newMeshEntry) {
+                archiveLoader.evictFileCache(newMeshEntry.file_name);
             }
         }
         deps.ui.updateVisibility();

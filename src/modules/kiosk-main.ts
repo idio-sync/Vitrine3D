@@ -1979,11 +1979,17 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                     // for an atomic replacement — SD stays visible until HD is ready.
                     const result = await loadArchiveFullResMesh(state.archiveLoader!, createArchiveDeps());
                     if (result.loaded) {
-                        // Revoke blob URLs: THREE.js and GPU hold the data, blobs are consumed
+                        // Free source data: THREE.js holds parsed geometry, blobs + cache are consumed
                         const proxyEntry = state.archiveLoader!.getMeshProxyEntry();
-                        if (proxyEntry) state.archiveLoader!.revokeBlobForFile(proxyEntry.file_name);
+                        if (proxyEntry) {
+                            state.archiveLoader!.revokeBlobForFile(proxyEntry.file_name);
+                            state.archiveLoader!.evictFileCache(proxyEntry.file_name);
+                        }
                         const meshEntry = state.archiveLoader!.getMeshEntry();
-                        if (meshEntry) state.archiveLoader!.revokeBlobForFile(meshEntry.file_name);
+                        if (meshEntry) {
+                            state.archiveLoader!.revokeBlobForFile(meshEntry.file_name);
+                            state.archiveLoader!.evictFileCache(meshEntry.file_name);
+                        }
                         log.info(`Progressive load: HD mesh swapped (${result.faceCount?.toLocaleString()} faces)`);
                         const facesEl = document.getElementById('model-faces');
                         if (facesEl && result.faceCount) facesEl.textContent = result.faceCount.toLocaleString();
@@ -2151,18 +2157,44 @@ async function switchQualityTier(newTier: string): Promise<void> {
     try {
         // Switch splat if proxy exists
         if (contentInfo.hasSceneProxy) {
+            // Identify the entry being replaced so we can free its memory after swap
+            const oldSplatEntry = newTier === 'hd'
+                ? archiveLoader.getSceneProxyEntry()
+                : archiveLoader.getSceneEntry();
             if (newTier === 'hd') {
                 await loadArchiveFullResSplat(archiveLoader, deps);
             } else {
                 await loadArchiveProxySplat(archiveLoader, deps);
             }
+            // Free replaced splat: blob URL + cached bytes (Range re-fetch on demand)
+            if (oldSplatEntry) {
+                archiveLoader.revokeBlobForFile(oldSplatEntry.file_name);
+                archiveLoader.evictFileCache(oldSplatEntry.file_name);
+            }
         }
         // Switch mesh if proxy exists
         if (contentInfo.hasMeshProxy) {
+            // Identify the entry being replaced so we can free its memory after swap
+            const oldMeshEntry = newTier === 'hd'
+                ? archiveLoader.getMeshProxyEntry()
+                : archiveLoader.getMeshEntry();
             if (newTier === 'hd') {
                 await loadArchiveFullResMesh(archiveLoader, deps);
             } else {
                 await loadArchiveProxyMesh(archiveLoader, deps);
+            }
+            // Free replaced mesh: blob URL + cached bytes (Range re-fetch on demand)
+            if (oldMeshEntry) {
+                archiveLoader.revokeBlobForFile(oldMeshEntry.file_name);
+                archiveLoader.evictFileCache(oldMeshEntry.file_name);
+            }
+            // Also free the newly loaded asset's source data — Three.js holds parsed geometry
+            const newMeshEntry = newTier === 'hd'
+                ? archiveLoader.getMeshEntry()
+                : archiveLoader.getMeshProxyEntry();
+            if (newMeshEntry) {
+                archiveLoader.revokeBlobForFile(newMeshEntry.file_name);
+                archiveLoader.evictFileCache(newMeshEntry.file_name);
             }
         }
         log.info(`Quality tier switched to ${newTier}`);

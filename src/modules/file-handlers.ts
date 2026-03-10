@@ -1829,10 +1829,60 @@ export async function loadArchiveFullResMesh(archiveLoader: ArchiveLoader, deps:
 }
 
 /**
+ * Swap splat assets using load-then-swap: create the new SplatMesh off-scene,
+ * wait for it to initialize, then atomically remove old + add new.
+ * Eliminates blank frames during quality tier switches.
+ */
+async function swapSplatAsset(
+    blobUrl: string, fileName: string,
+    deps: LoadFullResDeps,
+    transformEntry: any
+): Promise<void> {
+    const { state, scene, getSplatMesh, setSplatMesh, callbacks = {} } = deps;
+
+    // Ensure WebGL renderer (Spark.js requirement)
+    if (deps.sceneManager) await deps.sceneManager.ensureWebGLRenderer();
+    await SplatMesh.staticInitialized;
+
+    const fileType = getSplatFileType(fileName);
+
+    // Capture current transform before swap (preserves user edits)
+    const existingSplat = getSplatMesh();
+    const currentTransform = existingSplat ? {
+        position: [existingSplat.position.x, existingSplat.position.y, existingSplat.position.z] as [number, number, number],
+        rotation: [existingSplat.rotation.x, existingSplat.rotation.y, existingSplat.rotation.z] as [number, number, number],
+        scale: [existingSplat.scale.x, existingSplat.scale.y, existingSplat.scale.z] as [number, number, number]
+    } : null;
+
+    // Create new SplatMesh off-scene — old one stays visible during load
+    const newSplat = await createSplatMesh(blobUrl, fileType);
+    newSplat.rotation.x = Math.PI;
+    newSplat.frustumCulled = false;
+    await newSplat.initialized;
+
+    // Atomic swap: remove old, add new in the same synchronous block
+    if (existingSplat) {
+        scene.remove(existingSplat);
+        existingSplat.dispose?.();
+    }
+    scene.add(newSplat);
+    setSplatMesh(newSplat);
+    state.splatLoaded = true;
+
+    // Re-apply the captured transform, falling back to manifest
+    const transform = currentTransform || (transformEntry
+        ? deps.archiveLoader?.getEntryTransform?.(transformEntry) ?? null
+        : null);
+    if (transform && callbacks.onApplySplatTransform) {
+        callbacks.onApplySplatTransform(transform);
+    }
+}
+
+/**
  * Load the full-resolution splat from an archive, replacing the currently displayed proxy.
+ * Uses load-then-swap to avoid blank frames.
  */
 export async function loadArchiveFullResSplat(archiveLoader: ArchiveLoader, deps: LoadFullResDeps): Promise<AssetLoadResult> {
-    const { state, scene, getSplatMesh, setSplatMesh, callbacks = {} } = deps;
     const sceneEntry = archiveLoader.getSceneEntry();
     if (!sceneEntry) {
         return { loaded: false, blob: null, error: 'No full-resolution splat in archive' };
@@ -1843,39 +1893,17 @@ export async function loadArchiveFullResSplat(archiveLoader: ArchiveLoader, deps
         return { loaded: false, blob: null, error: 'Failed to extract full-resolution splat' };
     }
 
-    // Capture current transform before disposing (preserves user edits during quality switch)
-    const existingSplat = getSplatMesh();
-    const currentTransform = existingSplat ? {
-        position: [existingSplat.position.x, existingSplat.position.y, existingSplat.position.z] as [number, number, number],
-        rotation: [existingSplat.rotation.x, existingSplat.rotation.y, existingSplat.rotation.z] as [number, number, number],
-        scale: [existingSplat.scale.x, existingSplat.scale.y, existingSplat.scale.z] as [number, number, number]
-    } : null;
+    await swapSplatAsset(splatData.url, sceneEntry.file_name, deps, sceneEntry);
 
-    // Remove existing splat (the proxy) before loading
-    if (existingSplat) {
-        scene.remove(existingSplat);
-        if (existingSplat.dispose) existingSplat.dispose();
-        setSplatMesh(null);
-    }
-
-    state.splatLoaded = false;
-    await loadSplatFromBlobUrl(splatData.url, sceneEntry.file_name, deps);
-
-    // Re-apply the captured transform (user's current position), falling back to manifest
-    const transform = currentTransform || archiveLoader.getEntryTransform(sceneEntry);
-    if (callbacks.onApplySplatTransform) {
-        callbacks.onApplySplatTransform(transform);
-    }
-
-    state.assetStates.splat = ASSET_STATE.LOADED;
+    deps.state.assetStates.splat = ASSET_STATE.LOADED;
     return { loaded: true, blob: splatData.blob, error: null };
 }
 
 /**
  * Load the proxy splat from an archive, replacing the currently displayed full-res.
+ * Uses load-then-swap to avoid blank frames.
  */
 export async function loadArchiveProxySplat(archiveLoader: ArchiveLoader, deps: LoadFullResDeps): Promise<AssetLoadResult> {
-    const { state, scene, getSplatMesh, setSplatMesh, callbacks = {} } = deps;
     const proxyEntry = archiveLoader.getSceneProxyEntry();
     if (!proxyEntry) {
         return { loaded: false, blob: null, error: 'No proxy splat in archive' };
@@ -1886,37 +1914,17 @@ export async function loadArchiveProxySplat(archiveLoader: ArchiveLoader, deps: 
         return { loaded: false, blob: null, error: 'Failed to extract proxy splat' };
     }
 
-    // Capture current transform before disposing (preserves user edits during quality switch)
-    const existingSplat = getSplatMesh();
-    const currentTransform = existingSplat ? {
-        position: [existingSplat.position.x, existingSplat.position.y, existingSplat.position.z] as [number, number, number],
-        rotation: [existingSplat.rotation.x, existingSplat.rotation.y, existingSplat.rotation.z] as [number, number, number],
-        scale: [existingSplat.scale.x, existingSplat.scale.y, existingSplat.scale.z] as [number, number, number]
-    } : null;
-
-    // Remove existing splat (the full-res) before loading
-    if (existingSplat) {
-        scene.remove(existingSplat);
-        if (existingSplat.dispose) existingSplat.dispose();
-        setSplatMesh(null);
-    }
-
-    state.splatLoaded = false;
-    await loadSplatFromBlobUrl(splatData.url, proxyEntry.file_name, deps);
-
-    // Re-apply the captured transform (user's current position), falling back to manifest
     const sceneEntry = archiveLoader.getSceneEntry();
-    const transform = currentTransform || archiveLoader.getEntryTransform(sceneEntry || proxyEntry);
-    if (callbacks.onApplySplatTransform) {
-        callbacks.onApplySplatTransform(transform);
-    }
+    await swapSplatAsset(splatData.url, proxyEntry.file_name, deps, sceneEntry || proxyEntry);
 
-    state.assetStates.splat = ASSET_STATE.LOADED;
+    deps.state.assetStates.splat = ASSET_STATE.LOADED;
     return { loaded: true, blob: splatData.blob, error: null };
 }
 
 /**
  * Load the proxy mesh from an archive, replacing the currently displayed full-res.
+ * Uses off-scene parsing and atomic swap (same pattern as loadArchiveFullResMesh)
+ * to avoid blank frames during the transition.
  */
 export async function loadArchiveProxyMesh(archiveLoader: ArchiveLoader, deps: LoadFullResDeps): Promise<AssetLoadResult> {
     const { state, callbacks = {} } = deps;
@@ -1925,30 +1933,51 @@ export async function loadArchiveProxyMesh(archiveLoader: ArchiveLoader, deps: L
         return { loaded: false, blob: null, error: 'No proxy mesh in archive' };
     }
 
-    const meshData = await archiveLoader.extractFile(proxyEntry.file_name);
-    if (!meshData) {
-        return { loaded: false, blob: null, error: 'Failed to extract proxy mesh' };
-    }
+    const { modelGroup } = deps;
 
     // Capture current modelGroup transform (preserves user edits during quality switch)
-    const { modelGroup } = deps;
     const currentTransform = modelGroup ? {
         position: [modelGroup.position.x, modelGroup.position.y, modelGroup.position.z] as [number, number, number],
         rotation: [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z] as [number, number, number],
         scale: [modelGroup.scale.x, modelGroup.scale.y, modelGroup.scale.z] as [number, number, number]
     } : null;
 
-    // Clear existing model (the full-res) before loading
-    if (modelGroup) {
-        while (modelGroup.children.length > 0) {
-            const child = modelGroup.children[0];
-            modelGroup.remove(child);
-            disposeObject(child);
+    // Try direct ArrayBuffer path for GLB/GLTF (same as loadArchiveFullResMesh)
+    const extension = proxyEntry.file_name.split('.').pop()?.toLowerCase();
+    let parsed: { object: THREE.Object3D; faceCount: number } | null = null;
+    let meshBlob: Blob | null = null;
+
+    if (extension === 'glb' || extension === 'gltf') {
+        const buffer = await archiveLoader.extractFileBuffer(proxyEntry.file_name);
+        if (buffer) {
+            parsed = await parseMeshOffScene(buffer, proxyEntry.file_name);
+            if (parsed) {
+                meshBlob = new Blob([buffer]);
+            }
         }
     }
 
-    state.modelLoaded = false;
-    const result = await loadModelFromBlobUrl(meshData.url, proxyEntry.file_name, deps);
+    if (!parsed) {
+        const meshData = await archiveLoader.extractFile(proxyEntry.file_name);
+        if (!meshData) {
+            return { loaded: false, blob: null, error: 'Failed to extract proxy mesh' };
+        }
+        meshBlob = meshData.blob;
+        parsed = await parseMeshOffScene(meshData.url, proxyEntry.file_name);
+    }
+
+    if (!parsed) {
+        return { loaded: false, blob: null, error: 'Failed to parse proxy mesh' };
+    }
+
+    // Atomic swap: no blank frames
+    if (modelGroup && modelGroup.children.length > 0) {
+        swapMeshChildren(modelGroup, parsed.object);
+    } else if (modelGroup) {
+        modelGroup.add(parsed.object);
+    }
+
+    state.modelLoaded = true;
 
     // Re-apply the captured transform (user's current position), falling back to manifest
     const meshEntry = archiveLoader.getMeshEntry();
@@ -1958,7 +1987,7 @@ export async function loadArchiveProxyMesh(archiveLoader: ArchiveLoader, deps: L
     }
 
     state.assetStates.mesh = ASSET_STATE.LOADED;
-    return { loaded: true, blob: meshData.blob, error: null, faceCount: result?.faceCount || 0 };
+    return { loaded: true, blob: meshBlob, error: null, faceCount: parsed.faceCount };
 }
 
 /**
