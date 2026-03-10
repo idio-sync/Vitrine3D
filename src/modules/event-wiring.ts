@@ -330,6 +330,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-select-cad', 'click', () => deps.transform.setSelectedObject('cad' as any));
     addListener('btn-select-drawing', 'click', () => deps.transform.setSelectedObject('drawing' as any));
     addListener('btn-select-flightpath', 'click', () => deps.transform.setSelectedObject('flightpath' as any));
+    addListener('btn-select-colmap', 'click', () => deps.transform.setSelectedObject('colmap'));
     addListener('btn-select-both', 'click', () => deps.transform.setSelectedObject('both' as any));
     const pivotSection = document.getElementById('rotation-pivot-section');
     const scaleLockSection = document.getElementById('scale-lock-section');
@@ -385,6 +386,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 (sceneRefs as any).drawingGroup.position[axis] = val;
             } else if (sel === 'flightpath' && sceneManager?.flightPathGroup) {
                 sceneManager.flightPathGroup.position[axis] = val;
+            } else if (sel === 'colmap' && sceneManager?.colmapGroup) {
+                sceneManager.colmapGroup.position[axis] = val;
             } else if (sel === 'both') {
                 if (sceneRefs.splatMesh) (sceneRefs.splatMesh as any).position[axis] = val;
                 if (sceneRefs.modelGroup) (sceneRefs.modelGroup as any).position[axis] = val;
@@ -393,6 +396,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 if ((sceneRefs as any).cadGroup) (sceneRefs as any).cadGroup.position[axis] = val;
                 if ((sceneRefs as any).drawingGroup) (sceneRefs as any).drawingGroup.position[axis] = val;
                 if (sceneManager?.flightPathGroup) sceneManager.flightPathGroup.position[axis] = val;
+                if (sceneManager?.colmapGroup) sceneManager.colmapGroup.position[axis] = val;
             }
             deps.undo.pushAfterNumericEdit();
         });
@@ -415,6 +419,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 (sceneRefs as any).drawingGroup.rotation[axis] = rad;
             } else if (sel === 'flightpath' && sceneManager?.flightPathGroup) {
                 sceneManager.flightPathGroup.rotation[axis] = rad;
+            } else if (sel === 'colmap' && sceneManager?.colmapGroup) {
+                sceneManager.colmapGroup.rotation[axis] = rad;
             } else if (sel === 'both') {
                 if (sceneRefs.splatMesh) (sceneRefs.splatMesh as any).rotation[axis] = rad;
                 if (sceneRefs.modelGroup) (sceneRefs.modelGroup as any).rotation[axis] = rad;
@@ -423,6 +429,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 if ((sceneRefs as any).cadGroup) (sceneRefs as any).cadGroup.rotation[axis] = rad;
                 if ((sceneRefs as any).drawingGroup) (sceneRefs as any).drawingGroup.rotation[axis] = rad;
                 if (sceneManager?.flightPathGroup) sceneManager.flightPathGroup.rotation[axis] = rad;
+                if (sceneManager?.colmapGroup) sceneManager.colmapGroup.rotation[axis] = rad;
             }
             deps.undo.pushAfterNumericEdit();
         });
@@ -450,6 +457,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 apply((sceneRefs as any).drawingGroup);
             } else if (sel === 'flightpath' && sceneManager?.flightPathGroup) {
                 apply(sceneManager.flightPathGroup);
+            } else if (sel === 'colmap' && sceneManager?.colmapGroup) {
+                apply(sceneManager.colmapGroup);
             } else if (sel === 'both') {
                 if (sceneRefs.splatMesh) apply(sceneRefs.splatMesh);
                 if (sceneRefs.modelGroup) apply(sceneRefs.modelGroup);
@@ -458,6 +467,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 if ((sceneRefs as any).cadGroup) apply((sceneRefs as any).cadGroup);
                 if ((sceneRefs as any).drawingGroup) apply((sceneRefs as any).drawingGroup);
                 if (sceneManager?.flightPathGroup) apply(sceneManager.flightPathGroup);
+                if (sceneManager?.colmapGroup) apply(sceneManager.colmapGroup);
             }
             if (uniform) {
                 // Sync the other two axis inputs
@@ -1139,6 +1149,43 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             if (valueEl) valueEl.textContent = val.toFixed(1);
         });
     }
+
+    // ─── SfM Camera settings ─────────────────────────────────
+    let pendingCamerasBin: ArrayBuffer | null = null;
+    let pendingImagesBin: ArrayBuffer | null = null;
+
+    const tryLoadColmap = () => {
+        if (!pendingCamerasBin || !pendingImagesBin) return;
+        deps.colmap.loadFromBuffers(pendingCamerasBin, pendingImagesBin);
+        pendingCamerasBin = null;
+        pendingImagesBin = null;
+    };
+
+    addListener('colmap-cameras-input', 'change', async (e: Event) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        pendingCamerasBin = await file.arrayBuffer();
+        tryLoadColmap();
+    });
+
+    addListener('colmap-images-input', 'change', async (e: Event) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        pendingImagesBin = await file.arrayBuffer();
+        tryLoadColmap();
+    });
+
+    addListener('btn-colmap-frustums', 'click', () => deps.colmap.setDisplayMode('frustums'));
+    addListener('btn-colmap-markers', 'click', () => deps.colmap.setDisplayMode('markers'));
+
+    addListener('colmap-scale', 'input', (e: Event) => {
+        const scale = parseFloat((e.target as HTMLInputElement).value);
+        const valueEl = document.getElementById('colmap-scale-value');
+        if (valueEl) valueEl.textContent = scale.toFixed(1);
+        deps.colmap.setFrustumScale(scale);
+    });
+
+    addListener('btn-align-flightpath', 'click', () => deps.colmap.alignFlightPath());
 
     // ─── Setup collapsible sections ──────────────────────────
     setupCollapsibles();

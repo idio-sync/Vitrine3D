@@ -357,7 +357,8 @@ export function updateTransformInputs(
     stlGroup?: any, // THREE.Group
     cadGroup?: any, // THREE.Group
     drawingGroup?: any, // THREE.Group
-    flightpathGroup?: any // THREE.Group
+    flightpathGroup?: any, // THREE.Group
+    colmapGroup?: any // THREE.Group
 ): void {
     // Helper to safely set input value
     const setInputValue = (id: string, value: string | number): void => {
@@ -400,7 +401,8 @@ export function updateTransformInputs(
         else if (selection === 'cad' && cadGroup) src = cadGroup;
         else if (selection === 'drawing' && drawingGroup) src = drawingGroup;
         else if (selection === 'flightpath' && flightpathGroup) src = flightpathGroup;
-        else if (selection === 'both') src = splatMesh || modelGroup || pointcloudGroup || stlGroup || cadGroup || drawingGroup || flightpathGroup;
+        else if (selection === 'colmap' && colmapGroup) src = colmapGroup;
+        else if (selection === 'both') src = splatMesh || modelGroup || pointcloudGroup || stlGroup || cadGroup || drawingGroup || flightpathGroup || colmapGroup;
 
         if (src) {
             setInputValue('transform-pos-x', src.position.x.toFixed(3));
@@ -428,7 +430,8 @@ export function updateTransformPaneSelection(
     stlGroup?: any,
     cadGroup?: any,
     drawingGroup?: any,
-    flightpathGroup?: any
+    flightpathGroup?: any,
+    colmapGroup?: any
 ): void {
     const label = document.getElementById('transform-object-label');
     const emptyHint = document.getElementById('transform-empty-hint');
@@ -445,6 +448,7 @@ export function updateTransformPaneSelection(
         cad: 'CAD selected',
         drawing: 'Drawing selected',
         flightpath: 'Flight Path selected',
+        colmap: 'SfM Cameras selected',
         both: 'All objects (linked)',
     };
     if (label) label.textContent = labels[selection] || 'No object selected';
@@ -465,7 +469,8 @@ export function updateTransformPaneSelection(
         else if (selection === 'cad' && cadGroup) src = cadGroup;
         else if (selection === 'drawing' && drawingGroup) src = drawingGroup;
         else if (selection === 'flightpath' && flightpathGroup) src = flightpathGroup;
-        else if (selection === 'both') src = splatMesh || modelGroup || pointcloudGroup || stlGroup || cadGroup || drawingGroup || flightpathGroup;
+        else if (selection === 'colmap' && colmapGroup) src = colmapGroup;
+        else if (selection === 'both') src = splatMesh || modelGroup || pointcloudGroup || stlGroup || cadGroup || drawingGroup || flightpathGroup || colmapGroup;
 
         if (src) {
             const setVal = (id: string, value: string | number): void => {
