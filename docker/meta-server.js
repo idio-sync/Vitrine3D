@@ -2851,10 +2851,26 @@ const server = http.createServer((req, res) => {
         const collSlugAdminMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})$/);
         if (collSlugAdminMatch) {
             const cSlug = collSlugAdminMatch[1];
+            const action = (url.parse(req.url, true).query.action || '').toString();
+
+            // Query-param actions (flat URLs for CF Access bypass compatibility)
+            if (action === 'add-archives' && req.method === 'POST') return handleAddCollectionArchives(req, res, cSlug);
+            if (action === 'remove-archive' && req.method === 'DELETE') {
+                const hash = (url.parse(req.url, true).query.hash || '').toString();
+                if (/^[a-f0-9]{16}$/.test(hash)) return handleRemoveCollectionArchive(req, res, cSlug, hash);
+                return sendJson(res, 400, { error: 'Invalid hash' });
+            }
+            if (action === 'reorder' && req.method === 'PATCH') return handleReorderCollection(req, res, cSlug);
+            if (action === 'upload-thumbnail' && req.method === 'POST') return handleUploadCollectionThumbnail(req, res, cSlug);
+            if (action === 'delete-thumbnail' && req.method === 'DELETE') return handleDeleteCollectionThumbnail(req, res, cSlug);
+            if (action === 'generate-thumbnail' && req.method === 'POST') return handleGenerateCollectionThumbnail(req, res, cSlug);
+
+            // Default slug actions (no action param)
             if (req.method === 'PATCH') return handleUpdateCollection(req, res, cSlug);
             if (req.method === 'DELETE') return handleDeleteCollection(req, res, cSlug);
         }
 
+        // Legacy sub-path routes (backward compatibility)
         const collArchivesMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})\/archives$/);
         if (collArchivesMatch && req.method === 'POST') {
             return handleAddCollectionArchives(req, res, collArchivesMatch[1]);

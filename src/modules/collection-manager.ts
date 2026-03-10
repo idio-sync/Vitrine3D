@@ -81,7 +81,7 @@ async function deleteCollection(slug: string): Promise<void> {
 }
 
 async function addToCollection(slug: string, hashes: string[]): Promise<void> {
-    const res = await apiFetch('/api/collections/' + slug + '/archives', {
+    const res = await apiFetch('/api/collections/' + slug + '?action=add-archives', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hashes }),
@@ -90,7 +90,7 @@ async function addToCollection(slug: string, hashes: string[]): Promise<void> {
 }
 
 async function removeFromCollection(slug: string, hash: string): Promise<void> {
-    const res = await apiFetch('/api/collections/' + slug + '/archives/' + hash, {
+    const res = await apiFetch('/api/collections/' + slug + '?action=remove-archive&hash=' + encodeURIComponent(hash), {
         method: 'DELETE',
     });
     if (!res.ok) throw new Error('Failed to remove from collection');
@@ -315,7 +315,7 @@ async function handleThumbFileSelected(): Promise<void> {
             const token = _csrfTokenGetter();
             if (token) headers['x-csrf-token'] = token;
         }
-        const res = await fetch(`/api/collections/${editingCollection.slug}/thumbnail`, {
+        const res = await fetch(`/api/collections/${editingCollection.slug}?action=upload-thumbnail`, {
             method: 'POST',
             headers,
             body: formData,
@@ -386,7 +386,7 @@ async function handlePickArchiveThumb(thumbUrl: string): Promise<void> {
 async function handleGenerateMosaic(): Promise<void> {
     if (!editingCollection) return;
     try {
-        const res = await apiFetch(`/api/collections/${editingCollection.slug}/generate-thumbnail`, { method: 'POST' });
+        const res = await apiFetch(`/api/collections/${editingCollection.slug}?action=generate-thumbnail`, { method: 'POST' });
         if (!res.ok) throw new Error(`Generate failed: ${res.status}`);
         const data = await res.json();
         updateThumbPreview(data.thumbnail);
@@ -403,7 +403,7 @@ async function handleGenerateMosaic(): Promise<void> {
 async function handleResetThumb(): Promise<void> {
     if (!editingCollection) return;
     try {
-        const res = await apiFetch(`/api/collections/${editingCollection.slug}/thumbnail`, { method: 'DELETE' });
+        const res = await apiFetch(`/api/collections/${editingCollection.slug}?action=delete-thumbnail`, { method: 'DELETE' });
         if (!res.ok) throw new Error(`Reset failed: ${res.status}`);
         const data = await res.json();
         updateThumbPreview(data.thumbnail);
