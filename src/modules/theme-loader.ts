@@ -33,6 +33,12 @@ export interface LayoutModule {
     onAnnotationDeselect?(): void;
     /** Called when the active display/view mode changes. */
     onViewModeChange?(mode: string): void;
+    /** Called when auto-rotate is toggled on or off (including by drag gesture). */
+    onAutoRotateChange?(active: boolean): void;
+    /** Called after a direct non-archive file finishes loading. */
+    onAssetLoaded?(): void;
+    /** Called when a measurement is added or removed. */
+    onMeasurementChanged?(): void;
     /** Called for keyboard shortcuts. Return true if the layout handled the key. */
     onKeyboardShortcut?(key: string): boolean;
 

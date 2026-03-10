@@ -393,6 +393,7 @@ async function _doInit(): Promise<void> {
 
     // Create measurement system
     measurementSystem = new MeasurementSystem(scene, camera, renderer, controls);
+    measurementSystem.onMeasurementChanged = () => { getLayoutModule()?.onMeasurementChanged?.(); };
 
     // Create kiosk-only DOM elements before theme init (layout modules customize them)
     createFilePicker();
@@ -2419,13 +2420,17 @@ async function loadSingleFile(file: File): Promise<void> {
         await handleArchiveFile(file);
     } else if (MESH_EXTS.includes(ext)) {
         await loadModelFromFile([file] as any, createModelDeps());
+        getLayoutModule()?.onAssetLoaded?.();
     } else if (SPLAT_EXTS.includes(ext)) {
         await loadSplatFromFile(file, createSplatDeps());
+        getLayoutModule()?.onAssetLoaded?.();
     } else if (E57_EXTS.includes(ext)) {
         await loadPointcloudFromFile(file, createPointcloudDeps());
+        getLayoutModule()?.onAssetLoaded?.();
     } else if (CAD_EXTS.includes(ext)) {
         const { loadCADFromFile } = await import('./cad-loader.js');
         await loadCADFromFile(file, { cadGroup: sceneManager.cadGroup, state, showLoading, hideLoading });
+        getLayoutModule()?.onAssetLoaded?.();
     } else if (FLIGHT_EXTS.includes(ext)) {
         if (flightPathManager) await flightPathManager.importFromFile(file);
         else notify.warning('Flight path viewer not available.');
@@ -2492,6 +2497,9 @@ function createLayoutDeps(): any {
         },
         getAutoRotate: () => !!(controls && controls.autoRotate),
         getFlyModeActive: () => state.flyModeActive,
+        sparkRenderer,
+        getSplatBudget: () => (sparkRenderer ? sparkRenderer.lodSplatCount : 500000),
+        setSplatBudget: (n: number) => { if (sparkRenderer) sparkRenderer.lodSplatCount = n; },
     };
 }
 
@@ -2608,6 +2616,7 @@ function setupViewerUI(): void {
         controls.autoRotate = !controls.autoRotate;
         const btn = document.getElementById('btn-auto-rotate');
         if (btn) btn.classList.toggle('active', controls.autoRotate);
+        getLayoutModule()?.onAutoRotateChange?.(controls.autoRotate);
     });
 
     // Disable auto-rotate on manual interaction so users can inspect freely
@@ -2616,6 +2625,7 @@ function setupViewerUI(): void {
             controls.autoRotate = false;
             const btn = document.getElementById('btn-auto-rotate');
             if (btn) btn.classList.remove('active');
+            getLayoutModule()?.onAutoRotateChange?.(false);
         }
     });
 

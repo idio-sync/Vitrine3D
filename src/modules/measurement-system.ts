@@ -69,6 +69,8 @@ export class MeasurementSystem {
 
     // Optional callback for mode changes (e.g. to update button state)
     onMeasureModeChanged: ((active: boolean) => void) | null;
+    // Optional callback for measurement list changes (add/remove)
+    onMeasurementChanged: (() => void) | null;
 
     constructor(scene: Scene, camera: Camera, renderer: WebGLRenderer, controls: OrbitControls) {
         this.scene = scene;
@@ -93,6 +95,7 @@ export class MeasurementSystem {
         this._projVec = new THREE.Vector3();
 
         this.onMeasureModeChanged = null;
+        this.onMeasurementChanged = null;
 
         this._onClick = this._onClickHandler.bind(this);
         this._createMarkersContainer();
@@ -272,6 +275,7 @@ export class MeasurementSystem {
             lineObject: line,
             labelEl
         });
+        if (this.onMeasurementChanged) this.onMeasurementChanged();
     }
 
     // -------------------------------------------------------------------------
@@ -417,6 +421,7 @@ export class MeasurementSystem {
         m.pointB.markerEl.remove();
         m.labelEl.remove();
         this.measurements.splice(idx, 1);
+        if (this.onMeasurementChanged) this.onMeasurementChanged();
     }
 
     clearAll(): void {
