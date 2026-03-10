@@ -56,6 +56,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             if (tool === 'library') onLibraryActivated();
             // Populate metadata display when opening the metadata pane
             if (tool === 'metadata') deps.metadata.populateMetadataDisplay();
+            // Refresh transform inputs when opening the transform pane
+            if (tool === 'transform') deps.transform.updateTransformInputs();
             // Show/hide transform gizmo and orbit center line based on active tool
             if (sceneRefs.transformControls) {
                 try {
@@ -145,6 +147,12 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (valueEl) valueEl.textContent = scale.toFixed(1);
         if (sceneRefs.splatMesh) {
             sceneRefs.splatMesh.scale.setScalar(scale);
+            // Sync transform pane XYZ inputs
+            const formatted = scale.toFixed(3);
+            for (const a of ['x', 'y', 'z']) {
+                const el = document.getElementById(`transform-scale-${a}`) as HTMLInputElement | null;
+                if (el) el.value = formatted;
+            }
         }
     });
 
@@ -156,6 +164,12 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (valueEl) valueEl.textContent = scale.toFixed(1);
         if (sceneRefs.modelGroup) {
             sceneRefs.modelGroup.scale.setScalar(scale);
+            // Sync transform pane XYZ inputs
+            const formatted = scale.toFixed(3);
+            for (const a of ['x', 'y', 'z']) {
+                const el = document.getElementById(`transform-scale-${a}`) as HTMLInputElement | null;
+                if (el) el.value = formatted;
+            }
         }
     });
 
@@ -235,6 +249,12 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (valueEl) valueEl.textContent = scale.toFixed(1);
         if (sceneRefs.pointcloudGroup) {
             sceneRefs.pointcloudGroup.scale.setScalar(scale);
+            // Sync transform pane XYZ inputs
+            const formatted = scale.toFixed(3);
+            for (const a of ['x', 'y', 'z']) {
+                const el = document.getElementById(`transform-scale-${a}`) as HTMLInputElement | null;
+                if (el) el.value = formatted;
+            }
         }
     });
 
@@ -363,6 +383,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 (sceneRefs as any).cadGroup.position[axis] = val;
             } else if (sel === 'drawing' && (sceneRefs as any).drawingGroup) {
                 (sceneRefs as any).drawingGroup.position[axis] = val;
+            } else if (sel === 'flightpath' && sceneManager?.flightPathGroup) {
+                sceneManager.flightPathGroup.position[axis] = val;
             } else if (sel === 'both') {
                 if (sceneRefs.splatMesh) (sceneRefs.splatMesh as any).position[axis] = val;
                 if (sceneRefs.modelGroup) (sceneRefs.modelGroup as any).position[axis] = val;
@@ -370,6 +392,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 if ((sceneRefs as any).stlGroup) (sceneRefs as any).stlGroup.position[axis] = val;
                 if ((sceneRefs as any).cadGroup) (sceneRefs as any).cadGroup.position[axis] = val;
                 if ((sceneRefs as any).drawingGroup) (sceneRefs as any).drawingGroup.position[axis] = val;
+                if (sceneManager?.flightPathGroup) sceneManager.flightPathGroup.position[axis] = val;
             }
             deps.undo.pushAfterNumericEdit();
         });
@@ -390,6 +413,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 (sceneRefs as any).cadGroup.rotation[axis] = rad;
             } else if (sel === 'drawing' && (sceneRefs as any).drawingGroup) {
                 (sceneRefs as any).drawingGroup.rotation[axis] = rad;
+            } else if (sel === 'flightpath' && sceneManager?.flightPathGroup) {
+                sceneManager.flightPathGroup.rotation[axis] = rad;
             } else if (sel === 'both') {
                 if (sceneRefs.splatMesh) (sceneRefs.splatMesh as any).rotation[axis] = rad;
                 if (sceneRefs.modelGroup) (sceneRefs.modelGroup as any).rotation[axis] = rad;
@@ -397,6 +422,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 if ((sceneRefs as any).stlGroup) (sceneRefs as any).stlGroup.rotation[axis] = rad;
                 if ((sceneRefs as any).cadGroup) (sceneRefs as any).cadGroup.rotation[axis] = rad;
                 if ((sceneRefs as any).drawingGroup) (sceneRefs as any).drawingGroup.rotation[axis] = rad;
+                if (sceneManager?.flightPathGroup) sceneManager.flightPathGroup.rotation[axis] = rad;
             }
             deps.undo.pushAfterNumericEdit();
         });
@@ -422,6 +448,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 apply((sceneRefs as any).cadGroup);
             } else if (sel === 'drawing' && (sceneRefs as any).drawingGroup) {
                 apply((sceneRefs as any).drawingGroup);
+            } else if (sel === 'flightpath' && sceneManager?.flightPathGroup) {
+                apply(sceneManager.flightPathGroup);
             } else if (sel === 'both') {
                 if (sceneRefs.splatMesh) apply(sceneRefs.splatMesh);
                 if (sceneRefs.modelGroup) apply(sceneRefs.modelGroup);
@@ -429,6 +457,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 if ((sceneRefs as any).stlGroup) apply((sceneRefs as any).stlGroup);
                 if ((sceneRefs as any).cadGroup) apply((sceneRefs as any).cadGroup);
                 if ((sceneRefs as any).drawingGroup) apply((sceneRefs as any).drawingGroup);
+                if (sceneManager?.flightPathGroup) apply(sceneManager.flightPathGroup);
             }
             if (uniform) {
                 // Sync the other two axis inputs
@@ -938,6 +967,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             case 'a': activateTool('assets'); activatedTool = 'assets'; break;
             case 't':
                 activateTool('transform'); activatedTool = 'transform';
+                deps.transform.updateTransformInputs();
                 if (state.selectedObject === 'none') {
                     if (sceneRefs.splatMesh) {
                         deps.transform.setSelectedObject('splat' as any);

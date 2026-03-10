@@ -746,7 +746,7 @@ function createEventWiringDeps(): EventWiringDeps {
         recording: { startRecording: handleStartRecording, stopRecording: handleStopRecording },
         metadata: { hideMetadataPanel, toggleMetadataDisplay, setupMetadataSidebar, populateMetadataDisplay },
         share: { copyShareLink },
-        transform: { setSelectedObject, setTransformMode, resetTransform },
+        transform: { setSelectedObject, setTransformMode, resetTransform, updateTransformInputs },
         crossSection: crossSection!,
         walkthrough: {
             addStop: wtAddStop,

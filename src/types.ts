@@ -386,6 +386,7 @@ export interface EventWiringDeps {
         setSelectedObject: (selection: SelectedObject) => void;
         setTransformMode: (mode: TransformMode) => void;
         resetTransform: () => void;
+        updateTransformInputs: () => void;
     };
     crossSection: {
         active: boolean;
