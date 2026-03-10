@@ -237,11 +237,17 @@ export interface AlignmentResult {
 }
 
 /**
- * Align a flight path to Colmap cameras.
+ * Align Colmap cameras to a (manually positioned) flight path.
+ * The flight path group's world matrix is used to convert local flight
+ * point positions to world space before computing the transform.
+ *
+ * Source = colmap camera positions, Target = flight point world positions.
+ * The returned transform should be applied to the colmap group.
  */
-export function alignFlightPathToColmap(
+export function alignCamerasToFlightPath(
     cameras: Pick<ColmapCamera, 'name' | 'position'>[],
     flightPoints: FlightPoint[],
+    flightPathWorldMatrix: THREE.Matrix4,
     options?: { timeTolerance?: number }
 ): AlignmentResult | null {
     const pairs = matchCamerasToFlightPoints(cameras, flightPoints, options);
@@ -250,8 +256,15 @@ export function alignFlightPathToColmap(
         return null;
     }
 
-    const source = pairs.map(p => p.gpsPos);
-    const target = pairs.map(p => p.colmapPos);
+    // Transform flight point positions from local to world space
+    const worldPairs = pairs.map(p => {
+        const worldPos = new THREE.Vector3(...p.gpsPos).applyMatrix4(flightPathWorldMatrix);
+        return { colmapPos: p.colmapPos, gpsWorldPos: [worldPos.x, worldPos.y, worldPos.z] as [number, number, number] };
+    });
+
+    // Source = colmap positions, Target = flight path world positions
+    const source = worldPairs.map(p => p.colmapPos);
+    const target = worldPairs.map(p => p.gpsWorldPos);
 
     const result = computeSimilarityTransform(source, target);
     if (!result) return null;

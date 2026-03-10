@@ -39,7 +39,7 @@ In the editor (`/editor/`), the Assets pane has an **SfM Cameras** section where
 - Switch between Frustums and Markers display modes
 - Adjust frustum scale with a slider
 - Transform (position/rotate/scale) the camera group independently or linked with other assets
-- **Align to Cameras** button — automatically aligns a loaded flight path to match the splat's coordinate system using timestamp-matched Colmap↔GPS point pairs and a Umeyama similarity transform (requires both SfM cameras and a flight path to be loaded)
+- **Align Cameras to Path** button — automatically aligns the SfM camera group to match a manually positioned flight path using timestamp-matched (or sequential) Colmap↔GPS point pairs and a Umeyama similarity transform (requires both SfM cameras and a flight path to be loaded)
 
 ### Archive format
 
@@ -53,11 +53,12 @@ The manifest entry uses role `colmap_sfm` with position/rotation/scale parameter
 
 ### Flight path alignment
 
-When both Colmap cameras and a flight path are loaded, the **Align to Cameras** button computes an automatic alignment:
-1. Extracts timestamps from DJI image filenames (e.g., `DJI_20240315_142532_0001.jpg`)
-2. Matches each camera to the nearest flight log GPS point by relative timestamp
-3. Computes a 7-DOF similarity transform (translation + rotation + uniform scale) via the Umeyama algorithm
-4. Applies the transform to the flight path group, aligning GPS coordinates to splat-space
+When both Colmap cameras and a flight path are loaded, the **Align Cameras to Path** button computes an automatic alignment:
+1. Manually position the flight path to match known points on the splat
+2. Click "Align Cameras to Path" — extracts timestamps from DJI image filenames (e.g., `DJI_20240315_142532_0001.jpg`), or falls back to sequential matching if filenames don't follow DJI naming
+3. Matches each camera to the corresponding flight log GPS point
+4. Computes a 7-DOF similarity transform (translation + rotation + uniform scale) via the Umeyama algorithm
+5. Applies the transform to the camera group, aligning cameras to the flight path's world-space positions
 
 Requires at least 3 matched point pairs. Reports RMSE — values above 1.0 trigger a warning.
 

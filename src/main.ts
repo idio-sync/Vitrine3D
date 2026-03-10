@@ -8,7 +8,7 @@ import { CrossSectionTool } from './modules/cross-section.js';
 import { MeasurementSystem } from './modules/measurement-system.js';
 import { FlightPathManager } from './modules/flight-path.js';
 import { ColmapManager } from './modules/colmap-loader.js';
-import { alignFlightPathToColmap } from './modules/colmap-alignment.js';
+import { alignCamerasToFlightPath } from './modules/colmap-alignment.js';
 import { ArchiveCreator, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
 import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS, DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET } from './modules/constants.js';
 import { getLodBudget } from './modules/quality-tier.js';
@@ -802,15 +802,19 @@ function createEventWiringDeps(): EventWiringDeps {
             setFrustumScale: (scale: number) => colmapManager?.setFrustumScale(scale),
             alignFlightPath: () => {
                 if (!colmapManager?.hasData || !flightPathManager?.hasData) return;
-                const result = alignFlightPathToColmap(
+                const fpGroup = sceneManager?.flightPathGroup;
+                if (!fpGroup) return;
+                fpGroup.updateMatrixWorld(true);
+                const result = alignCamerasToFlightPath(
                     colmapManager.colmapCameras,
                     flightPathManager.getAllPoints(),
+                    fpGroup.matrixWorld,
                 );
                 if (!result) {
                     notify.error('Could not align: insufficient matches (need >= 3)');
                     return;
                 }
-                const group = sceneManager?.flightPathGroup;
+                const group = sceneManager?.colmapGroup;
                 if (group) {
                     group.position.copy(result.position);
                     group.rotation.copy(result.rotation);
@@ -826,7 +830,7 @@ function createEventWiringDeps(): EventWiringDeps {
                 if (result.rmse > 1.0) {
                     notify.warning(`Alignment RMSE is high (${result.rmse.toFixed(2)}). Verify match quality.`);
                 } else {
-                    notify.success(`Flight path aligned (${result.matchCount} matches, RMSE: ${result.rmse.toFixed(3)})`);
+                    notify.success(`Cameras aligned to flight path (${result.matchCount} matches, RMSE: ${result.rmse.toFixed(3)})`);
                 }
             },
         },
