@@ -992,12 +992,33 @@ body.kiosk-mode.kiosk-industrial .ind-anno-cancel-btn {
 
 /* ---- FPS field in status bar ---- */
 
+body.kiosk-mode.kiosk-industrial .ind-status-coords {
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.65rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.7);
+    min-width: 180px;
+    text-align: right;
+    margin-left: auto;
+}
+
 body.kiosk-mode.kiosk-industrial .ind-status-fps-field {
     font-family: var(--kiosk-font-mono);
     font-size: 0.67rem;
     color: rgba(var(--kiosk-text-dim-rgb), 0.7);
     min-width: 44px;
     text-align: right;
+}
+
+/* View cube */
+body.kiosk-mode.kiosk-industrial .ind-view-cube {
+    position: fixed;
+    bottom: 32px;
+    right: 8px;
+    width: 120px;
+    height: 120px;
+    z-index: 50;
+    cursor: pointer;
+    border-radius: 4px;
 }
 
 /* =============================================================================

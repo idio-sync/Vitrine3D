@@ -60,6 +60,14 @@ var _bboxHelper = null;          // THREE.Box3Helper instance
 var _bboxBtn = null;             // toolbar bounding box button
 var _dropZone = null;            // P2 drag-and-drop empty state overlay
 var _selectedLayerKey = null;    // currently selected layer asset key
+var _coordRaycaster = null;      // raycaster for coordinate readout
+var _coordMouseMoveHandler = null;
+var _viewCubeCanvas = null;
+var _viewCubeRenderer = null;
+var _viewCubeScene = null;
+var _viewCubeCamera = null;
+var _viewCubeRafId = null;
+var _normalsHelpers = [];        // ArrowHelper instances for normals viz
 
 // FPS counter state
 var _fpsLast = 0;
@@ -345,19 +353,251 @@ function doScreenshot() {
     var sm = _deps && _deps.sceneManager;
     if (!sm || !sm.renderer) return;
     var renderer = sm.renderer;
-    // Force a render so the drawing buffer has content (Three.js clears it after each frame).
-    // Use sceneManager.render() which handles Spark splats and display-mode visibility.
+    // Force a render so the drawing buffer has content
     var mode = (_deps.state && _deps.state.displayMode) || 'model';
     sm.render(mode, _deps.sparkRenderer || null, _deps.modelGroup || null, _deps.pointcloudGroup || null, null);
-    renderer.domElement.toBlob(function (blob) {
+
+    var srcCanvas = renderer.domElement;
+
+    // Composite annotation markers onto the screenshot
+    var markers = document.querySelectorAll('.annotation-marker');
+    var visibleMarkers = [];
+    markers.forEach(function(marker) {
+        if (marker.style.display !== 'none' && !marker.classList.contains('hidden')) {
+            visibleMarkers.push(marker);
+        }
+    });
+
+    if (visibleMarkers.length === 0) {
+        // No markers — direct download
+        srcCanvas.toBlob(function(blob) {
+            if (!blob) return;
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'screenshot-' + Date.now() + '.png';
+            a.click();
+            setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+        }, 'image/png');
+        return;
+    }
+
+    // Composite markers onto a 2D canvas
+    var composite = document.createElement('canvas');
+    composite.width = srcCanvas.width;
+    composite.height = srcCanvas.height;
+    var ctx = composite.getContext('2d');
+    ctx.drawImage(srcCanvas, 0, 0);
+
+    var srcRect = srcCanvas.getBoundingClientRect();
+    var scaleX = srcCanvas.width / srcRect.width;
+    var scaleY = srcCanvas.height / srcRect.height;
+
+    visibleMarkers.forEach(function(marker) {
+        var mr = marker.getBoundingClientRect();
+        var cx = (mr.left + mr.width / 2 - srcRect.left) * scaleX;
+        var cy = (mr.top + mr.height / 2 - srcRect.top) * scaleY;
+        var r = (mr.width / 2) * scaleX;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 140, 0, 0.85)';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        var label = marker.textContent && marker.textContent.trim();
+        if (label) {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold ' + Math.round(r * 1.2) + 'px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, cx, cy);
+        }
+    });
+
+    composite.toBlob(function(blob) {
         if (!blob) return;
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
         a.href = url;
         a.download = 'screenshot-' + Date.now() + '.png';
         a.click();
-        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
     }, 'image/png');
+}
+
+// ---- Coordinate readout ----
+
+function startCoordReadout() {
+    if (!_deps || !_deps.sceneManager) return;
+    _coordRaycaster = new THREE.Raycaster();
+    var canvas = _deps.sceneManager.renderer.domElement;
+    _coordMouseMoveHandler = function(e) {
+        var rect = canvas.getBoundingClientRect();
+        var nx = ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+        var ny = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+        _coordRaycaster.setFromCamera({ x: nx, y: ny }, _deps.sceneManager.camera);
+        var targets = [_deps.modelGroup, _deps.pointcloudGroup].filter(Boolean);
+        var hits = _coordRaycaster.intersectObjects(targets, true);
+        var el = document.getElementById('ind-status-coords');
+        if (!el) return;
+        if (hits.length > 0) {
+            var p = hits[0].point;
+            el.textContent = 'X: ' + p.x.toFixed(3) + '  Y: ' + p.y.toFixed(3) + '  Z: ' + p.z.toFixed(3);
+        } else {
+            el.textContent = 'X: \u2014  Y: \u2014  Z: \u2014';
+        }
+    };
+    canvas.addEventListener('mousemove', _coordMouseMoveHandler);
+}
+
+// ---- View presets ----
+
+function applyViewPreset(axis) {
+    setCameraPreset(axis);
+    if (_cameraMode !== 'orthographic') toggleOrthographic();
+}
+
+function setIsoView() {
+    if (!_deps || !_deps.sceneManager) return;
+    var camera = _deps.sceneManager.camera;
+    var controls = _deps.sceneManager.controls;
+    var target = controls.target;
+    var dist = camera.position.distanceTo(target);
+    var d = dist / Math.sqrt(3);
+    camera.position.set(target.x + d, target.y + d, target.z + d);
+    camera.lookAt(target);
+    if (controls.update) controls.update();
+}
+
+// ---- View cube ----
+
+function createViewCube() {
+    _viewCubeCanvas = document.createElement('canvas');
+    _viewCubeCanvas.width = 120;
+    _viewCubeCanvas.height = 120;
+    _viewCubeCanvas.className = 'ind-view-cube';
+    document.body.appendChild(_viewCubeCanvas);
+
+    _viewCubeRenderer = new THREE.WebGLRenderer({ canvas: _viewCubeCanvas, alpha: true, antialias: true });
+    _viewCubeRenderer.setSize(120, 120);
+    _viewCubeRenderer.setClearColor(0x000000, 0);
+
+    _viewCubeScene = new THREE.Scene();
+    _viewCubeCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    _viewCubeCamera.position.set(0, 0, 3);
+
+    // Wireframe box
+    var boxGeo = new THREE.BoxGeometry(1, 1, 1);
+    var edges = new THREE.EdgesGeometry(boxGeo);
+    var lineMat = new THREE.LineBasicMaterial({ color: 0x888888 });
+    _viewCubeScene.add(new THREE.LineSegments(edges, lineMat));
+
+    // Colored face planes with canvas-rendered labels
+    var faceData = [
+        { label: 'RIGHT', color: 0xcc4444, dir: [1,0,0],  rot: [0, -Math.PI/2, 0] },
+        { label: 'LEFT',  color: 0xcc4444, dir: [-1,0,0], rot: [0,  Math.PI/2, 0] },
+        { label: 'TOP',   color: 0x44cc44, dir: [0,1,0],  rot: [-Math.PI/2, 0, 0] },
+        { label: 'BTM',   color: 0x44cc44, dir: [0,-1,0], rot: [ Math.PI/2, 0, 0] },
+        { label: 'FRONT', color: 0x4488cc, dir: [0,0,1],  rot: [0, 0, 0] },
+        { label: 'BACK',  color: 0x4488cc, dir: [0,0,-1], rot: [0, Math.PI, 0] }
+    ];
+    faceData.forEach(function(f) {
+        var planeGeo = new THREE.PlaneGeometry(0.9, 0.9);
+        var tc = document.createElement('canvas');
+        tc.width = 64; tc.height = 64;
+        var ctx2d = tc.getContext('2d');
+        ctx2d.fillStyle = '#' + f.color.toString(16).padStart(6, '0') + '44';
+        ctx2d.fillRect(0, 0, 64, 64);
+        ctx2d.fillStyle = '#ffffff';
+        ctx2d.font = 'bold 11px sans-serif';
+        ctx2d.textAlign = 'center';
+        ctx2d.textBaseline = 'middle';
+        ctx2d.fillText(f.label, 32, 32);
+        var tex = new THREE.CanvasTexture(tc);
+        var mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+        var mesh = new THREE.Mesh(planeGeo, mat);
+        mesh.position.set(f.dir[0]*0.5, f.dir[1]*0.5, f.dir[2]*0.5);
+        mesh.rotation.set(f.rot[0], f.rot[1], f.rot[2]);
+        mesh.userData.viewPreset = f.label;
+        _viewCubeScene.add(mesh);
+    });
+
+    // Animate: mirror main camera quaternion
+    function animateCube() {
+        _viewCubeRafId = requestAnimationFrame(animateCube);
+        var mainCam = _deps && _deps.sceneManager && _deps.sceneManager.camera;
+        if (mainCam) {
+            _viewCubeCamera.quaternion.copy(mainCam.quaternion);
+        }
+        _viewCubeRenderer.render(_viewCubeScene, _viewCubeCamera);
+    }
+    animateCube();
+
+    // Click: raycast against face planes to trigger view preset
+    var cubeRaycaster = new THREE.Raycaster();
+    _viewCubeCanvas.addEventListener('click', function(e) {
+        var rect = _viewCubeCanvas.getBoundingClientRect();
+        var nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        var ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        cubeRaycaster.setFromCamera({ x: nx, y: ny }, _viewCubeCamera);
+        var hits = cubeRaycaster.intersectObjects(_viewCubeScene.children, false);
+        if (hits.length > 0 && hits[0].object.userData.viewPreset) {
+            var label = hits[0].object.userData.viewPreset;
+            var presetMap = { 'TOP': '+y', 'BTM': '-y', 'FRONT': '+z', 'BACK': '-z', 'RIGHT': '-x', 'LEFT': '+x' };
+            var axis = presetMap[label];
+            if (axis) applyViewPreset(axis);
+        }
+    });
+}
+
+// ---- Normals visualization ----
+
+function toggleNormals() {
+    if (!_deps || !_deps.sceneManager || !_deps.modelGroup) return;
+    var scene = _deps.sceneManager.scene;
+
+    if (_normalsHelpers.length > 0) {
+        // Remove existing
+        _normalsHelpers.forEach(function(h) { scene.remove(h); h.dispose(); });
+        _normalsHelpers = [];
+        return false;
+    }
+
+    // Add normal arrows — sample every Nth face, cap at 5000
+    var arrows = [];
+    _deps.modelGroup.traverse(function(child) {
+        if (!child.isMesh || !child.geometry) return;
+        var geo = child.geometry;
+        var pos = geo.attributes.position;
+        if (!pos) return;
+        geo.computeVertexNormals();
+        var norm = geo.attributes.normal;
+        if (!norm) return;
+
+        var idx = geo.index;
+        var faceCount = idx ? idx.count / 3 : pos.count / 3;
+        var step = Math.max(1, Math.ceil(faceCount / 5000));
+
+        for (var f = 0; f < faceCount; f += step) {
+            if (arrows.length >= 5000) break;
+            var i0 = idx ? idx.getX(f * 3) : f * 3;
+            var cx = pos.getX(i0);
+            var cy = pos.getY(i0);
+            var cz = pos.getZ(i0);
+            var nx = norm.getX(i0);
+            var ny = norm.getY(i0);
+            var nz = norm.getZ(i0);
+
+            var origin = new THREE.Vector3(cx, cy, cz).applyMatrix4(child.matrixWorld);
+            var dir = new THREE.Vector3(nx, ny, nz).transformDirection(child.matrixWorld).normalize();
+            var arrow = new THREE.ArrowHelper(dir, origin, 0.02, 0x00ff00, 0.005, 0.005);
+            scene.add(arrow);
+            arrows.push(arrow);
+        }
+    });
+    _normalsHelpers = arrows;
+    return true;
 }
 
 // ---- Fit camera ----
@@ -538,6 +778,16 @@ function buildViewMenu(dropdown) {
     _viewMenuItems.trackball = trackballItem;
     dropdown.appendChild(trackballItem);
 
+    dropdown.appendChild(ddSep());
+
+    // Orthographic view presets
+    [['Top (Ortho)', '+y'], ['Front (Ortho)', '+z'], ['Right (Ortho)', '-x']].forEach(function(p) {
+        dropdown.appendChild(ddItem(p[0], '', function() { applyViewPreset(p[1]); }));
+    });
+    dropdown.appendChild(ddItem('ISO', '', function() {
+        if (_cameraMode === 'orthographic') toggleOrthographic();
+        setIsoView();
+    }));
 }
 
 // -- Render Menu --
@@ -599,6 +849,14 @@ function buildRenderMenu(dropdown) {
 
     dropdown.appendChild(ddSep());
     dropdown.appendChild(ddItem('Light Direction', 'L', function() { toggleTool('light'); }));
+
+    dropdown.appendChild(ddSep());
+    var normalsItem = ddItem('Show Normals', '', function() {
+        var active = toggleNormals();
+        normalsItem.classList.toggle('checked', active);
+    });
+    _renderMenuItems.normals = normalsItem;
+    dropdown.appendChild(normalsItem);
 }
 
 // -- Tools Menu --
@@ -1045,7 +1303,13 @@ function createStatusBar(manifest) {
     }
     bar.appendChild(createStatusField('ind-status-filesize', fileSize));
 
-    // Right-aligned: measurement readout | FPS
+    // Right-aligned: coords | measurement readout | FPS
+    var coordField = createEl('span', 'ind-status-field ind-status-coords');
+    coordField.id = 'ind-status-coords';
+    coordField.textContent = 'X: \u2014  Y: \u2014  Z: \u2014';
+    bar.appendChild(coordField);
+    bar.appendChild(createEl('span', 'ind-status-sep', '|'));
+
     var measureField = createEl('span', 'ind-status-right');
     measureField.id = 'ind-status-measure';
     bar.appendChild(measureField);
@@ -2138,6 +2402,10 @@ function setup(manifest, deps) {
 
     // Show/hide mode buttons based on initially loaded assets
     updateModeButtonVisibility();
+
+    // Start coordinate readout and view cube
+    startCoordReadout();
+    createViewCube();
 }
 
 // ---- initLoadingScreen ----
@@ -2265,6 +2533,28 @@ function destroy() {
 
     // Remove panel-open body class
     document.body.classList.remove('ind-panel-open');
+
+    // Clean up coordinate readout
+    if (_coordMouseMoveHandler && _deps && _deps.sceneManager) {
+        _deps.sceneManager.renderer.domElement.removeEventListener('mousemove', _coordMouseMoveHandler);
+    }
+    _coordMouseMoveHandler = null;
+    _coordRaycaster = null;
+
+    // Clean up view cube
+    if (_viewCubeRafId) { cancelAnimationFrame(_viewCubeRafId); _viewCubeRafId = null; }
+    if (_viewCubeRenderer) { _viewCubeRenderer.dispose(); _viewCubeRenderer = null; }
+    if (_viewCubeCanvas && _viewCubeCanvas.parentNode) { _viewCubeCanvas.parentNode.removeChild(_viewCubeCanvas); }
+    _viewCubeCanvas = null;
+    _viewCubeScene = null;
+    _viewCubeCamera = null;
+
+    // Clean up normals helpers
+    if (_normalsHelpers.length > 0 && _deps && _deps.sceneManager) {
+        var scene = _deps.sceneManager.scene;
+        _normalsHelpers.forEach(function(h) { scene.remove(h); h.dispose(); });
+    }
+    _normalsHelpers = [];
 
     // Reset module state
     _menubar = null;
