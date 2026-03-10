@@ -126,13 +126,19 @@ export function parseImagesBin(buffer: ArrayBuffer, intrinsics: ColmapIntrinsics
         const rInv = q.clone().invert();
         const pos = t.clone().negate().applyQuaternion(rInv);
 
+        // Convert from Colmap (Y-down, Z-forward) to Three.js (Y-up, Z-backward):
+        // Position: negate Y and Z
+        // Quaternion: negate Y and Z components (equivalent to 180° rotation around X)
+        const posConverted = new THREE.Vector3(pos.x, -pos.y, -pos.z);
+        const qConverted = new THREE.Quaternion(rInv.x, -rInv.y, -rInv.z, rInv.w);
+
         const intr = intrinsicsMap.get(cameraId);
         const focalLength = intr?.focalLength || 0;
 
         images.push({
             imageId,
-            quaternion: [rInv.x, rInv.y, rInv.z, rInv.w],
-            position: [pos.x, pos.y, pos.z],
+            quaternion: [qConverted.x, qConverted.y, qConverted.z, qConverted.w],
+            position: [posConverted.x, posConverted.y, posConverted.z],
             cameraId,
             name,
             focalLength,
