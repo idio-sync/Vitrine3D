@@ -688,6 +688,7 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
                 state.flightPathLoaded = true;
                 updateObjectSelectButtons();
                 updateFlightPathUI();
+                updateColmapUI();
             }
         }
     };
@@ -1266,6 +1267,7 @@ async function init() {
                     state.flightPathLoaded = true;
                     updateObjectSelectButtons();
                     updateFlightPathUI();
+                    updateColmapUI();
                     hideLoading();
                     notify.success('Flight path loaded: ' + data.points.length + ' points');
                 } catch (err: any) {
@@ -1290,6 +1292,7 @@ async function init() {
                     state.flightPathLoaded = true;
                     updateObjectSelectButtons();
                     updateFlightPathUI();
+                    updateColmapUI();
                     hideLoading();
                     notify.success('Flight path loaded: ' + data.points.length + ' points');
                 } catch (err: any) {
