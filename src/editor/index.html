@@ -1238,6 +1238,43 @@
                     </div>
                 </div>
 
+                <!-- HD Web Optimization -->
+                <div class="prop-section hidden" id="web-opt-section">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Web Optimization</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="prop-hint" id="web-opt-current-faces">
+                            Current faces: &mdash;
+                        </div>
+
+                        <label class="prop-label mt4">Target face count</label>
+                        <input type="number" class="prop-input" id="web-opt-target-faces"
+                               min="1000" step="1000" value="1000000" />
+
+                        <label class="prop-label mt4">
+                            <input type="checkbox" id="web-opt-draco" checked />
+                            Draco compression
+                        </label>
+
+                        <div class="mt4" style="display: flex; gap: 4px;">
+                            <button class="prop-btn" id="btn-web-opt-generate">Optimize</button>
+                            <button class="prop-btn small danger hidden" id="btn-web-opt-revert">Revert</button>
+                        </div>
+
+                        <div id="web-opt-status" class="prop-hint mt4 hidden"></div>
+
+                        <!-- Progress bar -->
+                        <div id="web-opt-progress" class="hidden mt4">
+                            <div class="progress-bar">
+                                <div class="progress-bar-fill" id="web-opt-progress-fill"></div>
+                            </div>
+                            <span class="prop-hint" id="web-opt-progress-text">Preparing...</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- SD Proxy (Decimation) -->
                 <div class="prop-section" id="proxy-section">
                     <div class="prop-section-hd">
