@@ -146,39 +146,50 @@ function createCollectionDetailPanel(): HTMLElement {
     el.id = 'collection-detail-panel';
     el.className = 'hidden';
     el.innerHTML = `
-        <div class="collection-detail-header">
-            <h3 class="collection-detail-title">Edit Collection</h3>
+        <div class="prop-section open">
+            <div class="prop-section-hd">
+                <span class="prop-section-title">Collection</span>
+                <span class="prop-section-chevron">&#9654;</span>
+            </div>
+            <div class="prop-section-body">
+                <div class="prop-row" style="flex-direction:column;align-items:stretch;">
+                    <label class="prop-row-label" style="margin-bottom:4px;">Name</label>
+                    <input type="text" id="collection-edit-name" class="collection-field-input" placeholder="Collection name" />
+                </div>
+                <div class="prop-row" style="flex-direction:column;align-items:stretch;margin-top:8px;">
+                    <label class="prop-row-label" style="margin-bottom:4px;">Description</label>
+                    <textarea id="collection-edit-desc" class="collection-field-textarea" rows="3" placeholder="Collection summary..."></textarea>
+                </div>
+            </div>
         </div>
-        <div class="collection-detail-body">
-            <label class="collection-field-label">Name</label>
-            <input type="text" id="collection-edit-name" class="collection-field-input" placeholder="Collection name" />
-
-            <label class="collection-field-label">Description</label>
-            <textarea id="collection-edit-desc" class="collection-field-textarea" rows="4" placeholder="Collection summary..."></textarea>
-
-            <label class="collection-field-label">Preview Image</label>
-            <div id="collection-thumb-preview" class="collection-thumb-preview">
-                <img id="collection-thumb-img" src="" alt="" />
-                <div id="collection-thumb-placeholder" class="collection-thumb-placeholder">No image</div>
+        <div class="prop-section open">
+            <div class="prop-section-hd">
+                <span class="prop-section-title">Preview Image</span>
+                <span class="prop-section-chevron">&#9654;</span>
             </div>
-            <div class="collection-thumb-actions">
-                <button id="collection-thumb-upload" class="collection-btn-secondary" type="button">Upload Image</button>
-                <button id="collection-thumb-pick" class="collection-btn-secondary" type="button">Choose from Archives</button>
-                <button id="collection-thumb-generate" class="collection-btn-secondary" type="button">Auto-generate</button>
+            <div class="prop-section-body">
+                <div id="collection-thumb-preview" class="collection-thumb-preview">
+                    <img id="collection-thumb-img" src="" alt="" />
+                    <div id="collection-thumb-placeholder" class="collection-thumb-placeholder">No image</div>
+                </div>
+                <div class="collection-thumb-actions">
+                    <button id="collection-thumb-upload" class="prop-btn small" type="button">Upload</button>
+                    <button id="collection-thumb-pick" class="prop-btn small" type="button">From Archives</button>
+                    <button id="collection-thumb-generate" class="prop-btn small" type="button">Auto-generate</button>
+                </div>
+                <div id="collection-thumb-reset" class="collection-thumb-reset hidden">
+                    <a href="#" id="collection-thumb-reset-link">Reset to auto-generated</a>
+                </div>
+                <div id="collection-archive-thumbs" class="collection-archive-thumbs hidden">
+                    <div class="prop-row-label" style="margin-bottom:6px;">Pick an archive thumbnail</div>
+                    <div id="collection-archive-thumb-grid" class="collection-archive-thumb-grid"></div>
+                </div>
+                <input type="file" id="collection-thumb-file" accept="image/*" style="display:none" />
             </div>
-            <div id="collection-thumb-reset" class="collection-thumb-reset hidden">
-                <a href="#" id="collection-thumb-reset-link">Reset to auto-generated</a>
-            </div>
-
-            <div id="collection-archive-thumbs" class="collection-archive-thumbs hidden">
-                <label class="collection-field-label">Pick an archive thumbnail</label>
-                <div id="collection-archive-thumb-grid" class="collection-archive-thumb-grid"></div>
-            </div>
-
-            <input type="file" id="collection-thumb-file" accept="image/*" style="display:none" />
-
-            <div class="collection-detail-footer">
-                <button id="collection-save-btn" class="collection-btn-primary" type="button">Save</button>
+        </div>
+        <div class="prop-section open">
+            <div class="prop-section-body" style="padding-top:8px;">
+                <button id="collection-save-btn" class="prop-btn accent" type="button">Save Changes</button>
             </div>
         </div>
     `;
@@ -330,7 +341,7 @@ function handleShowArchiveThumbs(): void {
     const archivesWithThumbs = editingCollection.archives.filter(a => a.thumbnail);
 
     if (archivesWithThumbs.length === 0) {
-        grid.innerHTML = '<p style="color: rgba(232,236,240,0.5); font-size: 0.8rem;">No archive thumbnails available</p>';
+        grid.innerHTML = '<p style="color: var(--text-muted); font-size: 11px;">No archive thumbnails available</p>';
         container.classList.remove('hidden');
         return;
     }

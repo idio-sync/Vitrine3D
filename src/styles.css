@@ -5549,59 +5549,42 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 /* Collection detail panel */
 #collection-detail-panel {
-    padding: 16px;
     overflow-y: auto;
     max-height: calc(100vh - 120px);
 }
 #collection-detail-panel.hidden { display: none; }
 
-.collection-detail-header { margin-bottom: 12px; }
-.collection-detail-title {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: rgba(232, 236, 240, 0.95);
-    margin: 0;
-}
-
-.collection-field-label {
-    display: block;
-    font-size: 0.75rem;
-    color: rgba(232, 236, 240, 0.6);
-    margin: 12px 0 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
 .collection-field-input,
 .collection-field-textarea {
     width: 100%;
     box-sizing: border-box;
-    padding: 8px 10px;
-    font-size: 0.85rem;
-    color: rgba(232, 236, 240, 0.95);
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 11px;
+    color: var(--text-primary);
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
     outline: none;
     font-family: inherit;
     resize: vertical;
 }
 .collection-field-input:focus,
 .collection-field-textarea:focus {
-    border-color: rgba(254, 192, 58, 0.5);
+    border-color: var(--accent);
 }
 
 .collection-thumb-preview {
     width: 100%;
     aspect-ratio: 16 / 9;
-    background: rgba(255, 255, 255, 0.04);
-    border-radius: 4px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-sm);
     overflow: hidden;
-    margin-top: 4px;
 }
 .collection-thumb-preview img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
 }
 .collection-thumb-placeholder {
     display: flex;
@@ -5609,83 +5592,50 @@ input[type="range"]::-webkit-slider-thumb:hover {
     justify-content: center;
     width: 100%;
     height: 100%;
-    color: rgba(232, 236, 240, 0.3);
-    font-size: 0.8rem;
+    color: var(--text-faint);
+    font-size: 11px;
 }
 
 .collection-thumb-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
     margin-top: 8px;
-}
-
-.collection-btn-secondary {
-    padding: 5px 10px;
-    font-size: 0.75rem;
-    color: rgba(232, 236, 240, 0.8);
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 4px;
-    cursor: pointer;
-    font-family: inherit;
-}
-.collection-btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.12);
-}
-
-.collection-btn-primary {
-    width: 100%;
-    padding: 8px;
-    font-size: 0.85rem;
-    color: #08182a;
-    background: #FEC03A;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 600;
-    font-family: inherit;
-}
-.collection-btn-primary:hover {
-    background: #ffd060;
 }
 
 .collection-thumb-reset {
     margin-top: 6px;
-    font-size: 0.75rem;
+    font-size: 10px;
 }
 .collection-thumb-reset.hidden { display: none; }
 .collection-thumb-reset a {
-    color: rgba(254, 192, 58, 0.7);
+    color: var(--accent-text);
     text-decoration: none;
 }
 .collection-thumb-reset a:hover {
-    color: #FEC03A;
+    color: var(--accent-hover);
 }
 
-.collection-archive-thumbs { margin-top: 10px; }
+.collection-archive-thumbs { margin-top: 8px; }
 .collection-archive-thumbs.hidden { display: none; }
 
 .collection-archive-thumb-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-    gap: 6px;
-    margin-top: 6px;
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    gap: 4px;
 }
 .collection-archive-thumb-option {
     width: 100%;
     aspect-ratio: 16 / 9;
     object-fit: cover;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     border: 2px solid transparent;
     transition: border-color 0.15s;
 }
 .collection-archive-thumb-option:hover {
-    border-color: #FEC03A;
+    border-color: var(--accent);
 }
-
-.collection-detail-footer { margin-top: 16px; }
 
 .library-collection-chip {
     display: inline-flex;
