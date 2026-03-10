@@ -1359,6 +1359,13 @@
                             </label>
                             <span class="prop-hint" style="font-size: 9px; margin-left: 18px; display: block;">Requires .spz or .ply input. .sog files use runtime LOD instead.</span>
                         </div>
+                        <div style="padding: 4px 0;">
+                            <label style="font-size: 10px; display: flex; align-items: flex-start; gap: 4px; cursor: pointer;">
+                                <input type="checkbox" id="chk-export-camera-data" style="margin-top: 2px;" />
+                                <span>Include camera data</span>
+                            </label>
+                            <span class="prop-hint" style="font-size: 9px; margin-left: 18px; display: block;">cameras.bin, images.bin, points3D.bin</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1524,6 +1531,8 @@
                         <button class="prop-btn accent" id="btn-align">Align Objects</button>
                         <button class="prop-btn mt4" id="btn-center-at-origin">Center at Origin</button>
                         <button class="prop-btn mt4" id="btn-reset-alignment">Reset All Transforms</button>
+                        <button class="prop-btn mt4" id="btn-align-from-camera-data" disabled title="Load camera data (cameras.bin, images.bin, points3D.bin) to enable">Align from Camera Data</button>
+                        <span id="icp-align-result" class="prop-hint mt4" style="display:none;"></span>
                     </div>
                 </div>
 
@@ -1730,9 +1739,15 @@
                             <label for="colmap-cameras-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#CE93D8;">+</span> cameras.bin</label>
                             <label for="colmap-images-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#CE93D8;">+</span> images.bin</label>
                         </div>
+                        <label for="colmap-points3d-input" class="prop-btn" style="cursor:pointer; margin-top:4px;"><span style="color:#CE93D8;">+</span> points3D.bin</label>
                         <input type="file" id="colmap-cameras-input" accept=".bin" style="display:none" />
                         <input type="file" id="colmap-images-input" accept=".bin" style="display:none" />
-                        <span id="colmap-filename" class="prop-hint">.bin (Colmap sparse)</span>
+                        <input type="file" id="colmap-points3d-input" accept=".bin" style="display:none" />
+                        <div id="colmap-file-status" class="prop-hint" style="margin-top:4px;">
+                            <span id="colmap-status-cameras">&#9675; cameras.bin</span><br>
+                            <span id="colmap-status-images">&#9675; images.bin</span><br>
+                            <span id="colmap-status-points3d">&#9675; points3D.bin</span>
+                        </div>
                         <div id="colmap-info" style="display:none;">
                             <span class="prop-hint">Cameras: <span id="colmap-camera-count">0</span></span>
                             <div class="prop-btn-row mt4">
