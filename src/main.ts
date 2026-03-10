@@ -735,7 +735,21 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
                 const fpPillBtn = document.getElementById('btn-overlay-flightpath');
                 if (fpPillBtn) fpPillBtn.classList.toggle('active', state.viewDefaults.flightPath.visible);
             }
-        }
+        },
+        colmap: {
+            loadFromBuffers: (camerasBuffer: ArrayBuffer, imagesBuffer: ArrayBuffer) => {
+                if (!colmapManager) return;
+                colmapManager.loadFromBuffers(camerasBuffer, imagesBuffer);
+                state.colmapLoaded = true;
+                updateObjectSelectButtons();
+                updateColmapUI();
+            },
+            loadPoints3D: (positions: Float64Array, count: number) => {
+                colmapManager?.loadPoints3D(positions, count);
+            },
+            get points3DBuffer() { return colmapManager?.points3DBuffer ?? null; },
+            set points3DBuffer(buf: ArrayBuffer | null) { if (colmapManager) colmapManager.points3DBuffer = buf; },
+        },
     };
 }
 

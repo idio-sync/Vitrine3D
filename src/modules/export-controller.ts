@@ -357,7 +357,14 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
             created_by: metadata.meshMetadata.createdBy || 'unknown',
             created_by_version: metadata.meshMetadata.version || '',
             source_notes: metadata.meshMetadata.sourceNotes || '',
-            role: metadata.meshMetadata.role || ''
+            role: metadata.meshMetadata.role || '',
+            parameters: state.meshOptimized && state.meshOptimizationSettings ? {
+                web_optimization: {
+                    originalFaces: state.meshOptimizationSettings.originalFaces,
+                    resultFaces: state.meshOptimizationSettings.resultFaces,
+                    dracoCompressed: state.meshOptimizationSettings.dracoEnabled,
+                }
+            } : undefined,
         });
     }
 
@@ -461,15 +468,17 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         }
     }
 
-    // Add colmap data if loaded
+    // Add colmap data if loaded and checkbox is checked
+    const includeColmap = (document.getElementById('chk-export-camera-data') as HTMLInputElement)?.checked ?? false;
     const colmapGroup = sceneRefs.colmapGroup;
-    if (state.colmapLoaded && assets.colmapBlobs.length > 0) {
+    if (state.colmapLoaded && assets.colmapBlobs.length > 0 && includeColmap) {
         log.info(` Adding ${assets.colmapBlobs.length} colmap SfM dataset(s)`);
-        for (const { camerasBlob, imagesBlob } of assets.colmapBlobs) {
+        for (const { camerasBlob, imagesBlob, points3DBuffer } of assets.colmapBlobs) {
             const position = colmapGroup ? [colmapGroup.position.x, colmapGroup.position.y, colmapGroup.position.z] : [0, 0, 0];
             const rotation = colmapGroup ? [colmapGroup.rotation.x, colmapGroup.rotation.y, colmapGroup.rotation.z] : [0, 0, 0];
             const scale = colmapGroup ? colmapGroup.scale.x : 1;
-            archiveCreator.addColmap(camerasBlob, imagesBlob, { position, rotation, scale });
+            const points3DBlob = points3DBuffer ? new Blob([points3DBuffer]) : undefined;
+            archiveCreator.addColmap(camerasBlob, imagesBlob, { position, rotation, scale, points3DBlob });
         }
     }
 

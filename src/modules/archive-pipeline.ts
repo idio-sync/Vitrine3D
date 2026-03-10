@@ -721,6 +721,19 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
             const imagesBuffer = await archiveLoader.extractFileBuffer(`${basePath}images.bin`);
             if (camerasBuffer && imagesBuffer && deps.colmap) {
                 deps.colmap.loadFromBuffers(camerasBuffer, imagesBuffer);
+
+                // Load points3D.bin if present
+                const points3DBuffer = await archiveLoader.extractFileBuffer(`${basePath}points3D.bin`);
+                if (points3DBuffer && deps.colmap.loadPoints3D) {
+                    const { parsePoints3D } = await import('./colmap-alignment.js');
+                    const result = parsePoints3D(points3DBuffer);
+                    if (result) {
+                        deps.colmap.loadPoints3D(result.positions, result.count);
+                        if (deps.colmap.points3DBuffer !== undefined) {
+                            deps.colmap.points3DBuffer = points3DBuffer;
+                        }
+                    }
+                }
             }
         }
 

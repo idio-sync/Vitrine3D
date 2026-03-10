@@ -1505,12 +1505,15 @@ export class ArchiveCreator {
         return entryKey;
     }
 
-    addColmap(camerasBlob: Blob, imagesBlob: Blob, options: AddAssetOptions = {}): string {
+    addColmap(camerasBlob: Blob, imagesBlob: Blob, options: AddAssetOptions & { points3DBlob?: Blob } = {}): string {
         const index = this._countEntriesOfType('colmap_sfm_');
         const entryKey = `colmap_sfm_${index}`;
 
         this.files.set(`assets/colmap_sfm_${index}/cameras.bin`, { blob: camerasBlob, originalName: 'cameras.bin' });
         this.files.set(`assets/colmap_sfm_${index}/images.bin`, { blob: imagesBlob, originalName: 'images.bin' });
+        if (options.points3DBlob) {
+            this.files.set(`assets/colmap_sfm_${index}/points3D.bin`, { blob: options.points3DBlob, originalName: 'points3D.bin' });
+        }
 
         this.manifest.data_entries[entryKey] = {
             file_name: `assets/colmap_sfm_${index}/`,
@@ -1523,6 +1526,7 @@ export class ArchiveCreator {
                 position: options.position || [0, 0, 0],
                 rotation: options.rotation || [0, 0, 0],
                 scale: options.scale !== undefined ? options.scale : 1,
+                hasPoints3D: !!options.points3DBlob,
                 ...(options.parameters || {})
             }
         };
