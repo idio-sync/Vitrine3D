@@ -1673,7 +1673,7 @@ function performUndo(): void {
     const entry = undoManager.undo();
     if (entry) {
         applyTransformMatrices(entry.beforeMatrices);
-        notify('Undo transform', 'info');
+        notify.info('Undo transform');
     }
 }
 
@@ -1681,7 +1681,7 @@ function performRedo(): void {
     const entry = undoManager.redo();
     if (entry) {
         applyTransformMatrices(entry.afterMatrices);
-        notify('Redo transform', 'info');
+        notify.info('Redo transform');
     }
 }
 

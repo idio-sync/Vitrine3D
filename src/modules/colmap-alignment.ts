@@ -42,6 +42,8 @@ export interface MatchedPair {
 
 /**
  * Match Colmap cameras to flight log GPS points by timestamp.
+ * Falls back to evenly-spaced sequential matching when timestamps
+ * cannot be extracted from camera filenames.
  * Returns matched point pairs for alignment computation.
  */
 export function matchCamerasToFlightPoints(
@@ -49,8 +51,9 @@ export function matchCamerasToFlightPoints(
     flightPoints: FlightPoint[],
     options: { timeTolerance?: number } = {}
 ): MatchedPair[] {
+    if (cameras.length === 0 || flightPoints.length === 0) return [];
+
     const tolerance = options.timeTolerance ?? 1000;
-    const pairs: MatchedPair[] = [];
 
     const cameraTimestamps: { camera: typeof cameras[0]; ts: number }[] = [];
     for (const cam of cameras) {
@@ -58,34 +61,53 @@ export function matchCamerasToFlightPoints(
         if (ts !== null) cameraTimestamps.push({ camera: cam, ts });
     }
 
-    if (cameraTimestamps.length === 0 || flightPoints.length === 0) return [];
+    // If timestamps could be parsed, match by time
+    if (cameraTimestamps.length > 0) {
+        const pairs: MatchedPair[] = [];
+        const camBaseTs = Math.min(...cameraTimestamps.map(c => c.ts));
 
-    const camBaseTs = Math.min(...cameraTimestamps.map(c => c.ts));
+        for (const { camera, ts } of cameraTimestamps) {
+            const camRelativeMs = ts - camBaseTs;
 
-    for (const { camera, ts } of cameraTimestamps) {
-        const camRelativeMs = ts - camBaseTs;
+            let bestIdx = 0;
+            let bestDelta = Math.abs(flightPoints[0].timestamp - camRelativeMs);
 
-        let bestIdx = 0;
-        let bestDelta = Math.abs(flightPoints[0].timestamp - camRelativeMs);
+            for (let i = 1; i < flightPoints.length; i++) {
+                const delta = Math.abs(flightPoints[i].timestamp - camRelativeMs);
+                if (delta < bestDelta) {
+                    bestDelta = delta;
+                    bestIdx = i;
+                }
+            }
 
-        for (let i = 1; i < flightPoints.length; i++) {
-            const delta = Math.abs(flightPoints[i].timestamp - camRelativeMs);
-            if (delta < bestDelta) {
-                bestDelta = delta;
-                bestIdx = i;
+            if (bestDelta <= tolerance) {
+                const fp = flightPoints[bestIdx];
+                pairs.push({
+                    colmapPos: camera.position,
+                    gpsPos: [fp.x, fp.y, fp.z],
+                });
             }
         }
 
-        if (bestDelta <= tolerance) {
-            const fp = flightPoints[bestIdx];
-            pairs.push({
-                colmapPos: camera.position,
-                gpsPos: [fp.x, fp.y, fp.z],
-            });
-        }
+        log.info(`Timestamp matching: ${pairs.length}/${cameras.length} cameras matched (tolerance: ${tolerance}ms)`);
+        return pairs;
     }
 
-    log.info(`Matched ${pairs.length}/${cameras.length} cameras to flight points (tolerance: ${tolerance}ms)`);
+    // Fallback: sequential matching — evenly space cameras along flight points
+    log.info(`No timestamps in camera filenames, using sequential matching for ${cameras.length} cameras across ${flightPoints.length} flight points`);
+    const pairs: MatchedPair[] = [];
+    const step = flightPoints.length / cameras.length;
+
+    for (let i = 0; i < cameras.length; i++) {
+        const fpIdx = Math.min(Math.round(i * step), flightPoints.length - 1);
+        const fp = flightPoints[fpIdx];
+        pairs.push({
+            colmapPos: cameras[i].position,
+            gpsPos: [fp.x, fp.y, fp.z],
+        });
+    }
+
+    log.info(`Sequential matching: ${pairs.length} pairs`);
     return pairs;
 }
 

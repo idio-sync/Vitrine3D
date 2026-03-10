@@ -63,16 +63,22 @@ describe('matchCamerasToFlightPoints', () => {
         expect(pairs.length).toBeLessThanOrEqual(3);
     });
 
-    it('returns empty for cameras with unparseable timestamps', () => {
+    it('falls back to sequential matching for unparseable timestamps', () => {
         const badCameras = [
             { name: 'photo_001.jpg', position: [1, 2, 3] as [number, number, number] },
+            { name: 'photo_002.jpg', position: [4, 5, 6] as [number, number, number] },
+            { name: 'photo_003.jpg', position: [7, 8, 9] as [number, number, number] },
         ];
         const pairs = matchCamerasToFlightPoints(
             badCameras as any,
             flightPoints as any,
             { timeTolerance: 1000 }
         );
-        expect(pairs).toHaveLength(0);
+        expect(pairs).toHaveLength(3);
+        expect(pairs[0].colmapPos).toEqual([1, 2, 3]);
+        expect(pairs[0].gpsPos).toEqual([10, 20, 30]);
+        expect(pairs[2].colmapPos).toEqual([7, 8, 9]);
+        expect(pairs[2].gpsPos).toEqual([70, 80, 90]);
     });
 });
 
