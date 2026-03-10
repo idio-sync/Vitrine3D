@@ -129,6 +129,7 @@ export class SceneManager {
     // Drawing group (DXF)
     drawingGroup: Group | null;
     flightPathGroup: Group | null;
+    colmapGroup: Group | null;
 
     // FPS tracking
     frameCount: number;
@@ -204,6 +205,7 @@ export class SceneManager {
         // Drawing group (DXF)
         this.drawingGroup = null;
         this.flightPathGroup = null;
+        this.colmapGroup = null;
 
         // FPS tracking
         this.frameCount = 0;
@@ -452,6 +454,10 @@ export class SceneManager {
         this.flightPathGroup = new Group();
         this.flightPathGroup.name = 'flightPathGroup';
         this.scene.add(this.flightPathGroup);
+
+        this.colmapGroup = new Group();
+        this.colmapGroup.name = 'colmapGroup';
+        this.scene.add(this.colmapGroup);
 
         log.info('Scene initialization complete');
         return true;
