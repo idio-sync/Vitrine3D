@@ -31,6 +31,7 @@ const crypto = require('crypto');
 const url = require('url');
 const { execFileSync, execFile } = require('child_process');
 const busboy = require('busboy');
+const sharp = require('sharp');
 const Database = require('/opt/node_modules/better-sqlite3');
 
 // --- Configuration from environment ---
@@ -531,6 +532,92 @@ function extractArchiveParam(viewerUrl) {
         return parsed.searchParams.get('archive') || '';
     } catch {
         return '';
+    }
+}
+
+/**
+ * Generate a mosaic thumbnail for a collection from its archive thumbnails.
+ * Layout: 2x2 grid for 4+, 2x1 for 2-3, single for 1, branded placeholder for 0.
+ * Output: 640x360 JPEG at 85% quality saved to THUMBS_DIR as collection-{slug}-auto.jpg.
+ * Returns the URL path string or null on error.
+ */
+async function generateCollectionMosaic(collectionId, slug) {
+    const WIDTH = 640, HEIGHT = 360;
+    const NAVY = { r: 8, g: 24, b: 42 };
+    const autoPath = path.join(THUMBS_DIR, `collection-${slug}-auto.jpg`);
+
+    const rows = db.prepare(`
+        SELECT a.thumbnail FROM archives a
+        JOIN collection_archives ca ON ca.archive_id = a.id
+        WHERE ca.collection_id = ?
+        ORDER BY ca.sort_order ASC
+    `).all(collectionId);
+
+    const thumbPaths = [];
+    for (const row of rows) {
+        if (!row.thumbnail) continue;
+        const p = path.join(HTML_ROOT, row.thumbnail);
+        if (fs.existsSync(p)) thumbPaths.push(p);
+        if (thumbPaths.length >= 4) break;
+    }
+
+    try {
+        if (thumbPaths.length === 0) {
+            const name = db.prepare('SELECT name FROM collections WHERE id = ?').get(collectionId)?.name || '';
+            const escapedName = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+            const svg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+                <rect width="100%" height="100%" fill="#08182a"/>
+                <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central"
+                    font-family="sans-serif" font-size="28" fill="#FEC03A">${escapedName}</text>
+            </svg>`;
+            await sharp(Buffer.from(svg)).jpeg({ quality: 85 }).toFile(autoPath);
+        } else if (thumbPaths.length === 1) {
+            await sharp(thumbPaths[0]).resize(WIDTH, HEIGHT, { fit: 'cover' }).jpeg({ quality: 85 }).toFile(autoPath);
+        } else if (thumbPaths.length <= 3) {
+            const halfW = WIDTH / 2;
+            const tiles = await Promise.all(
+                thumbPaths.slice(0, 2).map(p => sharp(p).resize(Math.round(halfW), HEIGHT, { fit: 'cover' }).toBuffer())
+            );
+            await sharp({ create: { width: WIDTH, height: HEIGHT, channels: 3, background: NAVY } })
+                .composite([
+                    { input: tiles[0], left: 0, top: 0 },
+                    { input: tiles[1], left: Math.round(halfW), top: 0 },
+                ]).jpeg({ quality: 85 }).toFile(autoPath);
+        } else {
+            const halfW = Math.round(WIDTH / 2);
+            const halfH = Math.round(HEIGHT / 2);
+            const tiles = await Promise.all(
+                thumbPaths.slice(0, 4).map(p => sharp(p).resize(halfW, halfH, { fit: 'cover' }).toBuffer())
+            );
+            await sharp({ create: { width: WIDTH, height: HEIGHT, channels: 3, background: NAVY } })
+                .composite([
+                    { input: tiles[0], left: 0, top: 0 },
+                    { input: tiles[1], left: halfW, top: 0 },
+                    { input: tiles[2], left: 0, top: halfH },
+                    { input: tiles[3], left: halfW, top: halfH },
+                ]).jpeg({ quality: 85 }).toFile(autoPath);
+        }
+        log.info(`Generated mosaic for collection "${slug}" at ${autoPath}`);
+        return `/thumbs/collection-${slug}-auto.jpg`;
+    } catch (err) {
+        log.error(`Failed to generate mosaic for collection "${slug}":`, err);
+        return null;
+    }
+}
+
+/**
+ * Regenerate the auto mosaic for a collection unless a manual thumbnail is set.
+ * Updates the DB thumbnail field if a new mosaic is generated.
+ */
+async function maybeRegenerateMosaic(collectionId, slug) {
+    const row = db.prepare('SELECT thumbnail FROM collections WHERE id = ?').get(collectionId);
+    if (!row) return;
+    const isManual = row.thumbnail && row.thumbnail.includes(`collection-${slug}.jpg`) && !row.thumbnail.includes('-auto');
+    if (isManual) return;
+    const autoPath = await generateCollectionMosaic(collectionId, slug);
+    if (autoPath) {
+        db.prepare('UPDATE collections SET thumbnail = ?, updated_at = datetime(\'now\') WHERE id = ?').run(autoPath, collectionId);
     }
 }
 
@@ -1484,10 +1571,6 @@ function handleGetCollection(req, res, slug) {
         const collection = buildCollectionObject(row);
         collection.archives = archiveRows.map(buildArchiveObjectFromRow);
 
-        if (!collection.thumbnail && collection.archives.length > 0) {
-            collection.thumbnail = collection.archives[0].thumbnail;
-        }
-
         sendJson(res, 200, collection);
     } catch (err) {
         sendJson(res, 500, { error: err.message });
@@ -1679,6 +1762,9 @@ function handleAddCollectionArchives(req, res, slug) {
                 .run(actor, 'add_to_collection', slug, JSON.stringify({ hashes, added }), req.headers['x-real-ip'] || req.socket.remoteAddress);
 
             sendJson(res, 200, { ok: true, added });
+            maybeRegenerateMosaic(coll.id, slug).catch(err =>
+                log.error('Auto-mosaic regeneration failed after adding archives:', err)
+            );
         } catch (err) {
             sendJson(res, 500, { error: err.message });
         }
@@ -1709,6 +1795,9 @@ function handleRemoveCollectionArchive(req, res, slug, archiveHash) {
             .run(actor, 'remove_from_collection', slug, archiveHash, req.headers['x-real-ip'] || req.socket.remoteAddress);
 
         sendJson(res, 200, { ok: true });
+        maybeRegenerateMosaic(coll.id, slug).catch(err =>
+            log.error('Auto-mosaic regeneration failed after removing archive:', err)
+        );
     } catch (err) {
         sendJson(res, 500, { error: err.message });
     }
@@ -1751,6 +1840,111 @@ function handleReorderCollection(req, res, slug) {
             sendJson(res, 500, { error: err.message });
         }
     });
+}
+
+/**
+ * POST /api/collections/:slug/thumbnail — upload a manual thumbnail image.
+ * Accepts .jpg/.jpeg/.png/.webp, converts to 640x360 JPEG, saves as collection-{slug}.jpg.
+ */
+async function handleUploadCollectionThumbnail(req, res, slug) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    let tmpPath;
+    try {
+        const upload = await parseMultipartUpload(req);
+        tmpPath = upload.tmpPath;
+        const ext = path.extname(upload.filename).toLowerCase();
+        if (!['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
+            try { fs.unlinkSync(tmpPath); } catch {}
+            return sendJson(res, 400, { error: 'Invalid image type. Allowed: jpg, jpeg, png, webp' });
+        }
+
+        const coll = db.prepare('SELECT id FROM collections WHERE slug = ?').get(slug);
+        if (!coll) {
+            try { fs.unlinkSync(tmpPath); } catch {}
+            return sendJson(res, 404, { error: 'Collection not found' });
+        }
+
+        const destPath = path.join(THUMBS_DIR, `collection-${slug}.jpg`);
+        await sharp(tmpPath).resize(640, 360, { fit: 'cover' }).jpeg({ quality: 85 }).toFile(destPath);
+        try { fs.unlinkSync(tmpPath); } catch {}
+
+        const thumbUrl = `/thumbs/collection-${slug}.jpg`;
+        db.prepare("UPDATE collections SET thumbnail = ?, updated_at = datetime('now') WHERE id = ?").run(thumbUrl, coll.id);
+
+        db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
+            .run(actor, 'upload_collection_thumbnail', slug, thumbUrl, req.headers['x-real-ip'] || req.socket.remoteAddress);
+
+        log.info(`Collection thumbnail uploaded for "${slug}" by ${actor}`);
+        sendJson(res, 200, { ok: true, thumbnail: thumbUrl });
+    } catch (err) {
+        if (tmpPath) { try { fs.unlinkSync(tmpPath); } catch {} }
+        log.error('handleUploadCollectionThumbnail error:', err);
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * DELETE /api/collections/:slug/thumbnail — delete the manual thumbnail and regenerate auto mosaic.
+ */
+async function handleDeleteCollectionThumbnail(req, res, slug) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    try {
+        const coll = db.prepare('SELECT id FROM collections WHERE slug = ?').get(slug);
+        if (!coll) return sendJson(res, 404, { error: 'Collection not found' });
+
+        const manualPath = path.join(THUMBS_DIR, `collection-${slug}.jpg`);
+        try { fs.unlinkSync(manualPath); } catch {}
+
+        db.prepare("UPDATE collections SET thumbnail = NULL, updated_at = datetime('now') WHERE id = ?").run(coll.id);
+
+        const autoThumb = await generateCollectionMosaic(coll.id, slug);
+        if (autoThumb) {
+            db.prepare("UPDATE collections SET thumbnail = ?, updated_at = datetime('now') WHERE id = ?").run(autoThumb, coll.id);
+        }
+
+        db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
+            .run(actor, 'delete_collection_thumbnail', slug, '', req.headers['x-real-ip'] || req.socket.remoteAddress);
+
+        log.info(`Collection thumbnail deleted for "${slug}" by ${actor}`);
+        sendJson(res, 200, { ok: true, thumbnail: autoThumb });
+    } catch (err) {
+        log.error('handleDeleteCollectionThumbnail error:', err);
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * POST /api/collections/:slug/generate-thumbnail — force-regenerate the auto mosaic.
+ */
+async function handleGenerateCollectionThumbnail(req, res, slug) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    try {
+        const coll = db.prepare('SELECT id FROM collections WHERE slug = ?').get(slug);
+        if (!coll) return sendJson(res, 404, { error: 'Collection not found' });
+
+        const autoThumb = await generateCollectionMosaic(coll.id, slug);
+        if (autoThumb) {
+            db.prepare("UPDATE collections SET thumbnail = ?, updated_at = datetime('now') WHERE id = ?").run(autoThumb, coll.id);
+        }
+
+        db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
+            .run(actor, 'generate_collection_thumbnail', slug, autoThumb || '', req.headers['x-real-ip'] || req.socket.remoteAddress);
+
+        log.info(`Collection thumbnail regenerated for "${slug}" by ${actor}`);
+        sendJson(res, 200, { ok: true, thumbnail: autoThumb });
+    } catch (err) {
+        log.error('handleGenerateCollectionThumbnail error:', err);
+        sendJson(res, 500, { error: err.message });
+    }
 }
 
 // Share page HTML (lazy-loaded)
@@ -2655,6 +2849,17 @@ const server = http.createServer((req, res) => {
         const collOrderMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})\/order$/);
         if (collOrderMatch && req.method === 'PATCH') {
             return handleReorderCollection(req, res, collOrderMatch[1]);
+        }
+
+        const collThumbMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})\/thumbnail$/);
+        if (collThumbMatch) {
+            if (req.method === 'POST') return handleUploadCollectionThumbnail(req, res, collThumbMatch[1]);
+            if (req.method === 'DELETE') return handleDeleteCollectionThumbnail(req, res, collThumbMatch[1]);
+        }
+
+        const collGenThumbMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})\/generate-thumbnail$/);
+        if (collGenThumbMatch && req.method === 'POST') {
+            return handleGenerateCollectionThumbnail(req, res, collGenThumbMatch[1]);
         }
 
         if (req.method === 'GET' && pathname === '/api/auth-callback') {
