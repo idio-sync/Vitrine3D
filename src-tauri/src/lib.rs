@@ -268,7 +268,7 @@ pub fn run() {
         // Inject the startup file path into the webview once the page is ready.
         // on_page_load is only available on plugin::Builder (not on WebviewWindow directly).
         .plugin(
-            tauri::plugin::Builder::new("startup-file")
+            tauri::plugin::Builder::<_, ()>::new("startup-file")
                 .on_page_load(|webview, payload| {
                     if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
                         let state = webview.app_handle().state::<StartupFile>();
