@@ -164,6 +164,11 @@ export class ColmapManager {
     private _displayMode: ColmapDisplayMode = 'frustums';
     private _frustumScale = 1.0;
     private _visible = true;
+    private _points3D: Float64Array | null = null;
+    private _points3DCount = 0;
+
+    /** Raw buffer for archive export (set externally). */
+    points3DBuffer: ArrayBuffer | null = null;
 
     constructor(group: THREE.Group) {
         this.group = group;
@@ -172,6 +177,9 @@ export class ColmapManager {
     get hasData(): boolean { return this.cameras.length > 0; }
     get cameraCount(): number { return this.cameras.length; }
     get colmapCameras(): ColmapCamera[] { return this.cameras; }
+    get points3D(): Float64Array | null { return this._points3D; }
+    get points3DCount(): number { return this._points3DCount; }
+    get hasPoints3D(): boolean { return this._points3D !== null && this._points3DCount > 0; }
 
     /** Load from parsed binary data. */
     load(intrinsics: ColmapIntrinsics[], cameras: ColmapCamera[]): void {
@@ -186,6 +194,13 @@ export class ColmapManager {
         const intrinsics = parseCamerasBin(camerasBuffer);
         const cameras = parseImagesBin(imagesBuffer, intrinsics);
         this.load(intrinsics, cameras);
+    }
+
+    /** Store parsed points3D positions (already coordinate-converted). */
+    loadPoints3D(positions: Float64Array, count: number): void {
+        this._points3D = positions;
+        this._points3DCount = count;
+        log.info(`Stored ${count} points3D positions`);
     }
 
     private render(): void {
@@ -321,6 +336,9 @@ export class ColmapManager {
 
     dispose(): void {
         this.clearMeshes();
+        this._points3D = null;
+        this._points3DCount = 0;
+        this.points3DBuffer = null;
         this.cameras = [];
         this.intrinsics = [];
     }
