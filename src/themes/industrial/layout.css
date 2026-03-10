@@ -982,6 +982,140 @@ body.kiosk-mode.kiosk-industrial #annotation-info-popup .popup-close:hover {
     background: rgba(var(--kiosk-accent-rgb), 0.08) !important;
 }
 
+/* =============================================================================
+   MEASUREMENT LIST — in info panel Measurements section
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-measure-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 10px;
+    font-size: 0.68rem;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-measure-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    background: rgba(var(--kiosk-accent-rgb), 0.15);
+    border: 1px solid rgba(var(--kiosk-accent-rgb), 0.4);
+    border-radius: 2px;
+    font-size: 0.58rem;
+    font-weight: 700;
+    color: var(--kiosk-accent);
+    flex-shrink: 0;
+    font-family: var(--kiosk-font-mono);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-measure-value {
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.67rem;
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-bright-rgb), 0.9);
+}
+
+/* =============================================================================
+   SPLAT BUDGET SLIDER — in layers panel for splat assets
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-layer-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+    padding: 2px 0 3px 21px;
+    margin-top: -1px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-budget-label {
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.75);
+    min-width: 38px;
+    white-space: nowrap;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-budget-slider {
+    flex: 1;
+    height: 3px;
+    accent-color: var(--kiosk-accent);
+    cursor: pointer;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-budget-val {
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.58rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.8);
+    min-width: 30px;
+    text-align: right;
+}
+
+/* =============================================================================
+   DROP ZONE OVERLAY — shown when no asset is loaded (P2 empty state)
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-drop-zone {
+    position: fixed;
+    top: 58px;
+    left: 0;
+    right: 0;
+    bottom: 22px;
+    z-index: 88;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition: background 0.15s;
+}
+
+body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-drop-zone {
+    right: 220px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-drop-zone.drag-active {
+    background: rgba(var(--kiosk-accent-rgb), 0.08);
+    pointer-events: auto;
+    outline: 2px dashed rgba(var(--kiosk-accent-rgb), 0.5);
+    outline-offset: -8px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-drop-zone-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.4);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-drop-zone-inner svg {
+    width: 36px;
+    height: 36px;
+    opacity: 0.35;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-drop-zone-text {
+    font-size: 0.80rem;
+    font-weight: 500;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.5);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-drop-zone-hint {
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.60rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.35);
+    letter-spacing: 0.04em;
+}
+
+/* Whole viewport becomes a drop target when drag enters */
+body.kiosk-mode.kiosk-industrial #viewer-container.drag-over ~ .ind-drop-zone,
+body.kiosk-mode.kiosk-industrial .ind-drop-zone.drag-active {
+    pointer-events: auto;
+}
+
 /* ============================================================
    ABOUT OVERLAY
    ============================================================ */
