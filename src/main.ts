@@ -509,6 +509,15 @@ function createFileHandlerDeps(): any {
                     }
                 }
                 showQualityToggleIfNeeded();
+                // Show web optimization section
+                const webOptSection = document.getElementById('web-opt-section');
+                if (webOptSection) {
+                    webOptSection.classList.remove('hidden');
+                }
+                const webOptFaces = document.getElementById('web-opt-current-faces');
+                if (webOptFaces) {
+                    webOptFaces.textContent = `Current faces: ${state.meshFaceCount.toLocaleString()}`;
+                }
                 enableRemoveBtn('btn-remove-model', true);
                 // Advisory face count warnings
                 if (faceCount > MESH_LOD.DESKTOP_WARNING_FACES) {
@@ -1223,6 +1232,176 @@ function setupDecimationPanel(): void {
         statusDiv?.classList.add('hidden');
         showQualityToggleIfNeeded();
         notify.info('SD proxy removed');
+    });
+
+    // ── HD Web Optimization ──
+    addListener('btn-web-opt-generate', 'click', async () => {
+        const assets = getStore();
+        if (!modelGroup || !assets.meshBlob) {
+            notify.warning('No mesh loaded');
+            return;
+        }
+
+        const targetFacesEl = document.getElementById('web-opt-target-faces') as HTMLInputElement;
+        const dracoEl = document.getElementById('web-opt-draco') as HTMLInputElement;
+        const targetFaces = parseInt(targetFacesEl?.value || '1000000', 10);
+        const dracoEnabled = dracoEl?.checked ?? true;
+
+        if (targetFaces >= state.meshFaceCount) {
+            notify.warning('Target face count must be less than current faces');
+            return;
+        }
+
+        // Save originals for revert (only if not already optimized)
+        if (!state.meshOptimized) {
+            state.originalMeshBlob = assets.meshBlob;
+            state.originalMeshGroup = modelGroup.clone(true);
+        }
+
+        // Show progress
+        const progressEl = document.getElementById('web-opt-progress');
+        const progressFill = document.getElementById('web-opt-progress-fill') as HTMLElement;
+        const progressText = document.getElementById('web-opt-progress-text');
+        if (progressEl) progressEl.classList.remove('hidden');
+
+        const btnGenerate = document.getElementById('btn-web-opt-generate') as HTMLButtonElement;
+        if (btnGenerate) btnGenerate.disabled = true;
+
+        try {
+            showLoading('Optimizing mesh...');
+
+            const { decimateScene, exportAsGLB, dracoCompressGLB } = await import('./modules/mesh-decimator.js');
+
+            // Decimation options — use target face count, no texture downscaling
+            const targetRatio = targetFaces / state.meshFaceCount;
+            const result = await decimateScene(modelGroup, {
+                targetRatio: Math.min(targetRatio, 1),
+                targetFaceCount: targetFaces,
+                errorThreshold: 0.1,
+                lockBorder: true,
+                preserveUVSeams: true,
+                textureMaxRes: 4096,
+                textureFormat: 'keep',
+                textureQuality: 1.0,
+                dracoCompress: false,
+                preset: 'custom',
+            }, (stage: string, pct: number) => {
+                if (progressFill) progressFill.style.width = `${pct * 100}%`;
+                if (progressText) progressText.textContent = stage;
+            });
+
+            // Export as GLB blob (with or without Draco)
+            let blob = await exportAsGLB(result.group, false);
+            if (dracoEnabled) {
+                if (progressText) progressText.textContent = 'Applying Draco compression...';
+                blob = await dracoCompressGLB(blob);
+            }
+
+            // Replace the displayed mesh
+            while (modelGroup.children.length > 0) {
+                const child = modelGroup.children[0];
+                modelGroup.remove(child);
+                if ((child as any).geometry) (child as any).geometry.dispose();
+                if ((child as any).material) {
+                    const mat = (child as any).material;
+                    if (Array.isArray(mat)) mat.forEach((m: any) => m.dispose());
+                    else mat.dispose();
+                }
+            }
+            for (const child of result.group.children) {
+                modelGroup.add(child.clone(true));
+            }
+
+            // Update blob reference for export
+            assets.meshBlob = blob;
+
+            // Update state
+            state.meshOptimized = true;
+            state.meshOptimizationSettings = {
+                targetFaces,
+                dracoEnabled,
+                originalFaces: result.totalOriginalFaces || state.meshFaceCount,
+                resultFaces: result.totalNewFaces,
+            };
+            state.meshFaceCount = result.totalNewFaces;
+
+            // Update UI
+            const statusEl = document.getElementById('web-opt-status');
+            if (statusEl) {
+                statusEl.textContent = `Optimized: ${result.totalNewFaces.toLocaleString()} faces`;
+                statusEl.classList.remove('hidden');
+            }
+            const revertBtn = document.getElementById('btn-web-opt-revert');
+            if (revertBtn) revertBtn.classList.remove('hidden');
+
+            const webOptFaces = document.getElementById('web-opt-current-faces');
+            if (webOptFaces) {
+                webOptFaces.textContent = `Original: ${state.meshOptimizationSettings.originalFaces.toLocaleString()} faces`;
+            }
+
+            // Also update the SD proxy HD face count display
+            const hdFacesEl = document.getElementById('decimation-hd-faces');
+            if (hdFacesEl) hdFacesEl.textContent = result.totalNewFaces.toLocaleString();
+
+            notify.success(`Mesh optimized to ${result.totalNewFaces.toLocaleString()} faces`);
+        } catch (err) {
+            log.error('Web optimization failed:', err);
+            notify.error('Mesh optimization failed: ' + (err as Error).message);
+        } finally {
+            hideLoading();
+            if (progressEl) progressEl.classList.add('hidden');
+            if (btnGenerate) btnGenerate.disabled = false;
+        }
+    });
+
+    addListener('btn-web-opt-revert', 'click', async () => {
+        const assets = getStore();
+        if (!state.originalMeshBlob || !state.originalMeshGroup) {
+            notify.warning('No original mesh to revert to');
+            return;
+        }
+
+        // Restore original mesh in scene
+        while (modelGroup.children.length > 0) {
+            const child = modelGroup.children[0];
+            modelGroup.remove(child);
+            if ((child as any).geometry) (child as any).geometry.dispose();
+            if ((child as any).material) {
+                const mat = (child as any).material;
+                if (Array.isArray(mat)) mat.forEach((m: any) => m.dispose());
+                else mat.dispose();
+            }
+        }
+        for (const child of state.originalMeshGroup.children) {
+            modelGroup.add(child.clone(true));
+        }
+
+        // Restore blob
+        assets.meshBlob = state.originalMeshBlob;
+
+        // Restore face count
+        const originalFaces = state.meshOptimizationSettings?.originalFaces ?? 0;
+        state.meshFaceCount = originalFaces;
+
+        // Clear optimization state
+        state.meshOptimized = false;
+        state.meshOptimizationSettings = null;
+        state.originalMeshBlob = null;
+        state.originalMeshGroup = null;
+
+        // Update UI
+        const statusEl = document.getElementById('web-opt-status');
+        if (statusEl) statusEl.classList.add('hidden');
+        const revertBtn = document.getElementById('btn-web-opt-revert');
+        if (revertBtn) revertBtn.classList.add('hidden');
+        const webOptFaces = document.getElementById('web-opt-current-faces');
+        if (webOptFaces) webOptFaces.textContent = `Current faces: ${originalFaces.toLocaleString()}`;
+
+        // Update SD proxy face count display
+        const hdFacesEl = document.getElementById('decimation-hd-faces');
+        if (hdFacesEl) hdFacesEl.textContent = originalFaces.toLocaleString();
+
+        notify.success('Reverted to original mesh');
     });
 }
 
