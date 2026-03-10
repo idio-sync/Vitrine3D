@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State};
 use uuid::Uuid;
@@ -220,6 +220,40 @@ async fn api_fetch_json(url: String) -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Download a remote URL to a temp file using Rust-side reqwest, bypassing
+/// the webview's CORS / CF Access restrictions. Returns (handle_id, file_size)
+/// registered in FileHandleStore — use with ipc_read_bytes / ipc_close_file.
+/// The temp file is deleted automatically when ipc_close_file is called.
+#[tauri::command]
+async fn api_download_to_temp(url: String, store: State<'_, FileHandleStore>) -> Result<(String, u64), String> {
+    let response = reqwest::get(&url)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status()));
+    }
+
+    let bytes = response.bytes()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let temp_path = std::env::temp_dir().join(format!("vitrine_{}.tmp", Uuid::new_v4()));
+    let temp_path_str = temp_path.to_str().unwrap_or("").to_string();
+
+    {
+        let mut f = File::create(&temp_path).map_err(|e| format!("create temp: {e}"))?;
+        f.write_all(&bytes).map_err(|e| format!("write temp: {e}"))?;
+    }
+
+    let file = File::open(&temp_path).map_err(|e| format!("open temp: {e}"))?;
+    let size = file.metadata().map_err(|e| e.to_string())?.len();
+    let id = Uuid::new_v4().to_string();
+    store.handles.lock().unwrap().insert(id.clone(), FileHandle { file, size, temp_path: Some(temp_path_str) });
+
+    Ok((id, size))
+}
+
 // =============================================================================
 // APP ENTRY
 // =============================================================================
@@ -233,7 +267,8 @@ pub fn run() {
             ipc_open_file,
             ipc_read_bytes,
             ipc_close_file,
-            api_fetch_json
+            api_fetch_json,
+            api_download_to_temp
         ]);
 
     // Single-instance plugin is desktop-only (not available on Android/iOS).

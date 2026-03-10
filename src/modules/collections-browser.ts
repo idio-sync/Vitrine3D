@@ -81,59 +81,92 @@ function injectCollectionCardStyles(): void {
     z-index: 10;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 48px;
-    background: rgba(8, 24, 42, 0.9);
-    backdrop-filter: blur(8px);
-    border-bottom: 1px solid rgba(254, 192, 58, 0.08);
+    height: 52px;
+    padding: 0 48px 0 44px; /* 44px = 48px - 4px optical balance for chevron */
+    background: rgba(8, 24, 42, 0.93);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(254, 192, 58, 0.1);
+    /* Gold left accent matches .cp-spine width */
+    box-shadow: -3px 0 0 0 rgba(254, 192, 58, 0.55) inset;
 }
 
+/* Back button: chevron icon + label as a group */
 .cb-nav-back {
+    display: flex;
+    align-items: center;
+    gap: 5px;
     background: none;
     border: none;
-    color: rgba(140, 160, 180, 0.8);
+    color: rgba(150, 168, 188, 0.72);
     font-family: inherit;
-    font-size: 0.72rem;
+    font-size: 0.65rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
     cursor: pointer;
-    padding: 6px 0;
-    transition: color 0.2s ease;
+    padding: 0 14px 0 0;
+    height: 100%;
+    transition: color 0.18s ease;
     outline: none;
     white-space: nowrap;
+    flex-shrink: 0;
+    border-right: 1px solid rgba(254, 192, 58, 0.1);
 }
 
-.cb-nav-back:hover { color: rgba(232, 236, 240, 0.95); }
+.cb-nav-back svg {
+    transition: transform 0.18s ease;
+    flex-shrink: 0;
+    opacity: 0.7;
+}
 
+.cb-nav-back:hover { color: rgba(254, 192, 58, 0.9); }
+.cb-nav-back:hover svg { transform: translateX(-2px); opacity: 1; }
+
+/* Breadcrumb chevron separator */
 .cb-nav-sep {
-    color: rgba(140, 160, 180, 0.3);
-    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    color: rgba(254, 192, 58, 0.22);
+    flex-shrink: 0;
+    line-height: 0;
 }
 
+/* Crumb: current location label */
 .cb-nav-crumb {
-    font-size: 0.72rem;
+    font-size: 0.65rem;
     font-weight: 500;
-    color: rgba(232, 236, 240, 0.55);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(232, 236, 240, 0.38);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
 }
 
+/* Flexible gap between breadcrumb and close */
+.cb-nav-spacer { flex: 1; }
+
+/* Close button: icon only, generous hit area */
 .cb-close {
-    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: none;
-    color: rgba(140, 160, 180, 0.6);
-    font-size: 1.2rem;
+    color: rgba(140, 160, 180, 0.45);
     cursor: pointer;
-    padding: 4px 8px;
-    line-height: 1;
-    transition: color 0.2s ease;
+    padding: 0 0 0 14px;
+    height: 100%;
+    transition: color 0.18s ease;
     outline: none;
+    flex-shrink: 0;
+    border-left: 1px solid rgba(254, 192, 58, 0.08);
 }
 
-.cb-close:hover { color: rgba(232, 236, 240, 0.9); }
+.cb-close:hover { color: rgba(232, 236, 240, 0.85); }
 
 /* Loading / error states */
 .cb-loading, .cb-error {
@@ -254,16 +287,26 @@ function injectCollectionCardStyles(): void {
 }
 
 @media (max-width: 768px) {
-    .cb-nav { padding: 10px 24px; }
+    .cb-nav { padding: 0 24px 0 22px; height: 48px; }
     .cb-coll-grid { padding: 32px 24px; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 }
 
 @media (max-width: 480px) {
-    .cb-nav { padding: 8px 16px; }
+    .cb-nav { padding: 0 16px 0 14px; height: 44px; }
+    .cb-nav-crumb { display: none; } /* hide crumb on small screens — page heading suffices */
+    .cb-nav-sep { display: none; }
     .cb-coll-grid { padding: 24px 16px; grid-template-columns: 1fr; }
 }
 `;
     document.head.appendChild(style);
+}
+
+// ── URL helpers ──
+
+/** Resolve a relative URL from the API against libraryBaseUrl for use in Tauri. */
+function resolveUrl(url: string): string {
+    if (!url || url.startsWith('http')) return url;
+    return (_opts?.libraryBaseUrl || '') + url;
 }
 
 // ── Container helpers ──
@@ -326,6 +369,11 @@ async function fetchCollection(slug: string): Promise<CollectionDetail> {
 
 // ── Render: nav bar ──
 
+// SVG icons used in the nav bar
+const ICON_CHEVRON_LEFT = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2.5 L4.5 7 L9 11.5"/></svg>';
+const ICON_CHEVRON_RIGHT = '<svg width="8" height="12" viewBox="0 0 8 12" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 1.5 L6.5 6 L2 10.5"/></svg>';
+const ICON_CLOSE = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2 2 L12 12 M12 2 L2 12"/></svg>';
+
 function renderNavBar(opts: {
     backLabel?: string;
     onBack?: () => void;
@@ -338,14 +386,15 @@ function renderNavBar(opts: {
     if (opts.backLabel && opts.onBack) {
         const back = document.createElement('button');
         back.className = 'cb-nav-back';
-        back.textContent = '\u2190 ' + opts.backLabel;
+        back.innerHTML = ICON_CHEVRON_LEFT + escapeHtml(opts.backLabel);
+        back.setAttribute('aria-label', 'Back to ' + opts.backLabel);
         back.addEventListener('click', opts.onBack);
         nav.appendChild(back);
 
         if (opts.crumb) {
             const sep = document.createElement('span');
             sep.className = 'cb-nav-sep';
-            sep.textContent = '/';
+            sep.innerHTML = ICON_CHEVRON_RIGHT;
             nav.appendChild(sep);
 
             const crumb = document.createElement('span');
@@ -355,10 +404,15 @@ function renderNavBar(opts: {
         }
     }
 
+    const spacer = document.createElement('div');
+    spacer.className = 'cb-nav-spacer';
+    nav.appendChild(spacer);
+
     const close = document.createElement('button');
     close.className = 'cb-close';
+    close.innerHTML = ICON_CLOSE;
     close.title = 'Return to main menu';
-    close.textContent = '\u00d7';
+    close.setAttribute('aria-label', 'Close library browser');
     close.addEventListener('click', opts.onClose);
     nav.appendChild(close);
 
@@ -377,7 +431,7 @@ function renderCollectionCard(coll: CollectionItem, index: number, onClick: () =
     card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); });
 
     const thumbHtml = coll.thumbnail
-        ? '<img src="' + escapeHtml(coll.thumbnail) + '" alt="" loading="lazy">'
+        ? '<img src="' + escapeHtml(resolveUrl(coll.thumbnail)) + '" alt="" loading="lazy">'
         : '<div class="cb-coll-placeholder"><svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="rgba(254,192,58,0.2)" stroke-width="0.8"><rect x="4" y="8" width="24" height="18" rx="1"/><path d="M8 8V6a1 1 0 011-1h14a1 1 0 011 1v2"/></svg></div>';
 
     const descHtml = coll.description
@@ -517,7 +571,11 @@ function renderCollectionDetailPage(data: CollectionDetail): void {
     const grid = document.createElement('div');
     grid.className = 'cp-grid';
     data.archives.forEach((archive, i) => {
-        const card = renderCard(archive, i, (a) => openArchive(a, data.name));
+        // Resolve relative thumbnail URLs so they load correctly in Tauri
+        const resolvedArchive = archive.thumbnail
+            ? { ...archive, thumbnail: resolveUrl(archive.thumbnail) }
+            : archive;
+        const card = renderCard(resolvedArchive, i, (a) => openArchive(a, data.name));
         grid.appendChild(card);
     });
     container.appendChild(grid);

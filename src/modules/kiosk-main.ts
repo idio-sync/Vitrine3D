@@ -796,6 +796,9 @@ function setupFilePicker(): void {
         return;
     }
 
+    // Layout modules that handle their own empty state (e.g. industrial drop zone) skip the generic picker
+    if (getLayoutModule()?.handlesEmptyState) return;
+
     if (picker) picker.classList.remove('hidden');
 
     const btn = document.getElementById('kiosk-picker-btn');
@@ -1213,6 +1216,36 @@ async function loadArchiveFromUrl(url: string): Promise<void> {
     }
 
     const fileName = url.split('/').pop()?.split('?')[0] || 'archive.ddim';
+
+    // In Tauri, browser fetch is blocked by CF Access (intercepts cross-origin
+    // requests from tauri://localhost before they reach the server). Download
+    // via Rust-side reqwest instead — no CORS restrictions — then load via
+    // IPC byte-serving so only the ZIP central directory is read initially.
+    if (window.__TAURI__) {
+        showLoading('Downloading...', true);
+        try {
+            updateProgress(5, 'Connecting...');
+            const { ipcReadBytes, ipcCloseFile } = await import('./tauri-bridge.js');
+            const [handleId, size] = await window.__TAURI__!.core.invoke<[string, number]>(
+                'api_download_to_temp', { url }
+            );
+            updateProgress(30, 'Loading archive...');
+            const archiveLoader = new ArchiveLoader();
+            // Fake openFn — handle already opened by api_download_to_temp
+            const fakeOpenFn = async (_p: string) => ({ handleId, size });
+            await archiveLoader.loadFromIpc(fakeOpenFn, ipcReadBytes, ipcCloseFile, '');
+            state.archiveSourceUrl = url;
+            await handleArchiveFile(new File([], fileName), archiveLoader);
+            return;
+        } catch (err: any) {
+            log.error('Tauri: failed to download archive from URL:', err);
+            hideLoading();
+            notify.error(`Failed to load archive: ${err.message}`);
+            const picker = document.getElementById('kiosk-file-picker');
+            if (picker) picker.classList.remove('hidden');
+            return;
+        }
+    }
 
     // Try Range-based loading first — only downloads ~64KB central directory,
     // then extracts files on demand via targeted HTTP Range requests.
