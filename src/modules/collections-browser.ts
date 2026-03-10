@@ -297,19 +297,31 @@ function getBackButtonEl(): HTMLElement | null {
 
 // ── Fetch ──
 
+// In the Tauri webview, browser fetch is blocked by CORS (CF Access intercepts
+// before the request reaches the server). Use a Rust-side command instead which
+// has no CORS restrictions.
+const _isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+
+async function apiFetchJson<T>(url: string): Promise<T> {
+    if (_isTauri) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const text = await invoke<string>('api_fetch_json', { url });
+        return JSON.parse(text) as T;
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json() as Promise<T>;
+}
+
 async function fetchCollections(): Promise<CollectionItem[]> {
     const url = (_opts?.libraryBaseUrl || '') + '/api/collections';
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Failed to fetch collections (' + res.status + ')');
-    const data = await res.json() as { collections: CollectionItem[] };
+    const data = await apiFetchJson<{ collections: CollectionItem[] }>(url);
     return data.collections;
 }
 
 async function fetchCollection(slug: string): Promise<CollectionDetail> {
     const url = (_opts?.libraryBaseUrl || '') + '/api/collections/' + encodeURIComponent(slug);
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Collection not found (' + res.status + ')');
-    return res.json() as Promise<CollectionDetail>;
+    return apiFetchJson<CollectionDetail>(url);
 }
 
 // ── Render: nav bar ──

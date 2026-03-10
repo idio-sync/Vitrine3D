@@ -54,6 +54,7 @@
     "@gltf-transform/extensions": "^4.3.0",
     "@gltf-transform/functions": "^4.3.0",
     "@sparkjsdev/spark": "^0.1.10",
+    "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-deep-link": "^2.4.7",
     "@tauri-apps/plugin-shell": "^2.3.5",
     "dji-log-parser-js": "^0.5.7",

@@ -204,6 +204,23 @@ fn ipc_close_file(handle_id: String, store: State<FileHandleStore>) -> Result<()
 }
 
 // =============================================================================
+// PUBLIC API FETCH — bypasses CORS for public endpoints (no browser sandbox)
+// =============================================================================
+
+/// Fetch a public API URL from Rust, bypassing the webview's CORS restrictions.
+/// Used by the collections browser to reach /api/collections without CF Access
+/// intercepting the request as it would for a browser fetch from tauri.localhost.
+#[tauri::command]
+async fn api_fetch_json(url: String) -> Result<String, String> {
+    reqwest::get(&url)
+        .await
+        .map_err(|e| e.to_string())?
+        .text()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// =============================================================================
 // APP ENTRY
 // =============================================================================
 
@@ -215,7 +232,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ipc_open_file,
             ipc_read_bytes,
-            ipc_close_file
+            ipc_close_file,
+            api_fetch_json
         ]);
 
     // Single-instance plugin is desktop-only (not available on Android/iOS).
