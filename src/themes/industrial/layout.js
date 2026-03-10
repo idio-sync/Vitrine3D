@@ -671,7 +671,7 @@ function buildFileMenu(dropdown) {
 
     dropdown.appendChild(ddItem('Open File\u2026', '', function() { fileInput.click(); }));
     dropdown.appendChild(ddSep());
-    dropdown.appendChild(ddItem('Take Screenshot', 'P', function() { doScreenshot(); }));
+    dropdown.appendChild(ddItem('Export Annotations CSV', '', function() { exportAnnotationsCSV(); }));
     dropdown.appendChild(ddSep());
     dropdown.appendChild(ddItem('Reset Scene', '', function() {
         if (window.confirm('Reload and reset the scene?')) window.location.reload();
@@ -754,6 +754,12 @@ function updateViewMenuChecks() {
     if (_viewMenuItems.trackball) _viewMenuItems.trackball.classList.toggle('checked', _toggles.trackball);
 }
 
+function updateViewMenuChecksExtended() {
+    updateViewMenuChecks();
+    if (_viewMenuItems.grid) _viewMenuItems.grid.classList.toggle('checked', _toggles.grid);
+    if (_viewMenuItems.autorotate) _viewMenuItems.autorotate.classList.toggle('checked', _toggles.autorotate);
+}
+
 function buildViewMenu(dropdown) {
     dropdown.appendChild(ddItem('Fit to View', 'F', function() { fitCamera(); }));
     dropdown.appendChild(ddSep());
@@ -768,15 +774,35 @@ function buildViewMenu(dropdown) {
     _viewMenuItems.ortho = orthoItem;
     dropdown.appendChild(orthoItem);
 
-    dropdown.appendChild(ddSep());
-
     var trackballItem = ddItem('Show Orbit Guide', '', function() {
         _toggles.trackball = !_toggles.trackball;
         if (_trackballOverlay) _trackballOverlay.classList.toggle('hidden', !_toggles.trackball);
-        updateViewMenuChecks();
+        updateViewMenuChecksExtended();
     });
     _viewMenuItems.trackball = trackballItem;
     dropdown.appendChild(trackballItem);
+
+    dropdown.appendChild(ddSep());
+
+    var gridItem = ddItem('Show Grid', 'G', function() {
+        _toggles.grid = !_toggles.grid;
+        if (_viewToggles && _viewToggles.grid) _viewToggles.grid.classList.toggle('active', _toggles.grid);
+        if (_deps && _deps.toggleGrid) _deps.toggleGrid(_toggles.grid);
+        updateViewMenuChecksExtended();
+    });
+    gridItem.classList.toggle('checked', _toggles.grid);
+    _viewMenuItems.grid = gridItem;
+    dropdown.appendChild(gridItem);
+
+    var autoRotItem = ddItem('Auto-Rotate', '', function() {
+        _toggles.autorotate = !_toggles.autorotate;
+        if (_viewToggles && _viewToggles.autorotate) _viewToggles.autorotate.classList.toggle('active', _toggles.autorotate);
+        if (_deps && _deps.setAutoRotate) _deps.setAutoRotate(_toggles.autorotate);
+        updateViewMenuChecksExtended();
+    });
+    autoRotItem.classList.toggle('checked', _toggles.autorotate);
+    _viewMenuItems.autorotate = autoRotItem;
+    dropdown.appendChild(autoRotItem);
 
     dropdown.appendChild(ddSep());
 
@@ -848,9 +874,6 @@ function buildRenderMenu(dropdown) {
     dropdown.appendChild(texItem);
 
     dropdown.appendChild(ddSep());
-    dropdown.appendChild(ddItem('Light Direction', 'L', function() { toggleTool('light'); }));
-
-    dropdown.appendChild(ddSep());
     var normalsItem = ddItem('Show Normals', '', function() {
         var active = toggleNormals();
         normalsItem.classList.toggle('checked', active);
@@ -871,6 +894,11 @@ function buildToolsMenu(dropdown) {
     dropdown.appendChild(ddItem('Section Plane', '1', function() { activateTool('slice'); }));
     dropdown.appendChild(ddItem('Measure', '2', function() { activateTool('measure'); }));
     dropdown.appendChild(ddItem('Annotate', '3', function() { activateTool('annotate'); }));
+    dropdown.appendChild(ddSep());
+
+    dropdown.appendChild(ddItem('Light Direction', 'L', function() { toggleTool('light'); }));
+    dropdown.appendChild(ddItem('Take Screenshot', 'P', function() { doScreenshot(); }));
+    dropdown.appendChild(ddItem('Show Bounds', 'B', function() { toggleBoundingBox(); }));
     dropdown.appendChild(ddSep());
 
     var annoItem = ddItem('Show Annotations', '', function() {
@@ -1050,15 +1078,15 @@ function createToolbar() {
     dispGroup.appendChild(createToggleBtn('matcap', 'Clay Material [M]', ICONS.matcap));
     dispGroup.appendChild(createToggleBtn('texture', 'Texture [T]', ICONS.texture));
     dispGroup.appendChild(createToggleBtn('wireframe', 'Wireframe [W]', ICONS.wireframe));
+    dispGroup.appendChild(createToolBtn('light', 'Light Direction [L]', ICONS.light));
     toolbar.appendChild(dispGroup);
 
     toolbar.appendChild(createEl('div', 'ind-toolbar-sep'));
 
     // Utility group
     var utilGroup = createEl('div', 'ind-toolbar-group');
-    utilGroup.appendChild(createToolBtn('light', 'Light Direction [L]', ICONS.light));
-    utilGroup.appendChild(createActionBtn('screenshot', 'Screenshot [P]', ICONS.screenshot));
     utilGroup.appendChild(createActionBtn('fitview', 'Fit to View [F]', ICONS.fitView));
+    utilGroup.appendChild(createActionBtn('screenshot', 'Screenshot [P]', ICONS.screenshot));
     var bboxBtn = createEl('button', 'ind-tool-btn', ICONS.bbox);
     bboxBtn.setAttribute('data-toggle', 'bbox');
     bboxBtn.setAttribute('data-tooltip', 'Show Bounds [B]');
@@ -1623,6 +1651,72 @@ function buildPropertiesSection(body, manifest, selectedAsset) {
         }
     }
 
+    // --- Mesh info (sub-meshes, materials, normals, UVs, draw calls) ---
+    if (showGeometry && meshGroup) {
+        var meshCount = 0;
+        var drawCalls = 0;
+        var hasNormals = false;
+        var uvChannels = 0;
+        var uniqueMats = [];
+        var matTypes = {};
+
+        meshGroup.traverse(function(child) {
+            if (!child.isMesh) return;
+            meshCount++;
+            var geom = child.geometry;
+            if (geom) {
+                drawCalls += (geom.groups && geom.groups.length > 0) ? geom.groups.length : 1;
+                if (geom.attributes.normal) hasNormals = true;
+                // Count UV channels (uv, uv1, uv2, …)
+                var chCount = 0;
+                if (geom.attributes.uv) chCount++;
+                if (geom.attributes.uv1 || geom.attributes.uv2) chCount++;
+                if (chCount > uvChannels) uvChannels = chCount;
+            }
+            var mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach(function(mat) {
+                if (mat && uniqueMats.indexOf(mat) === -1) {
+                    uniqueMats.push(mat);
+                    var typeName = mat.type || 'Unknown';
+                    matTypes[typeName] = (matTypes[typeName] || 0) + 1;
+                }
+            });
+        });
+
+        if (meshCount > 0) {
+            addSection('Mesh');
+            addRow('Objects', String(meshCount));
+            addRow('Draw Calls', String(drawCalls));
+            addRow('Normals', hasNormals ? 'Yes' : 'No');
+            addRow('UV Channels', String(uvChannels));
+        }
+
+        if (uniqueMats.length > 0) {
+            addSection('Materials');
+            addRow('Count', String(uniqueMats.length));
+            // List material types
+            var typeNames = Object.keys(matTypes);
+            typeNames.forEach(function(t) {
+                // Friendly names for common Three.js material types
+                var friendly = t.replace('MeshStandard', 'PBR Standard')
+                    .replace('MeshPhysical', 'PBR Physical')
+                    .replace('MeshPhong', 'Phong')
+                    .replace('MeshLambert', 'Lambert')
+                    .replace('MeshBasic', 'Basic')
+                    .replace('Material', '');
+                addRow(friendly, matTypes[t] > 1 ? '\u00d7' + matTypes[t] : '\u2713');
+            });
+            // Show key PBR properties from first material
+            var firstMat = uniqueMats[0];
+            if (firstMat.roughness !== undefined) addRow('Roughness', firstMat.roughness.toFixed(2));
+            if (firstMat.metalness !== undefined) addRow('Metalness', firstMat.metalness.toFixed(2));
+            if (firstMat.side !== undefined) {
+                var sideNames = { 0: 'Front', 1: 'Back', 2: 'Double' };
+                addRow('Side', sideNames[firstMat.side] || String(firstMat.side));
+            }
+        }
+    }
+
     // --- Texture info ---
     if (showGeometry && meshGroup) {
         var textures = [];
@@ -1641,6 +1735,22 @@ function buildPropertiesSection(body, manifest, selectedAsset) {
         if (textures.length > 0) {
             addSection('Textures');
             addRow('Maps', String(textures.length));
+            // List which texture slots are in use
+            var slotNames = [];
+            meshGroup.traverse(function(child) {
+                if (!child.isMesh || !child.material) return;
+                var mats = Array.isArray(child.material) ? child.material : [child.material];
+                mats.forEach(function(mat) {
+                    var slots = { map: 'Diffuse', normalMap: 'Normal', roughnessMap: 'Roughness',
+                        metalnessMap: 'Metalness', aoMap: 'AO', emissiveMap: 'Emissive' };
+                    Object.keys(slots).forEach(function(s) {
+                        if (mat[s] && mat[s].image && slotNames.indexOf(slots[s]) === -1) {
+                            slotNames.push(slots[s]);
+                        }
+                    });
+                });
+            });
+            if (slotNames.length > 0) addRow('Slots', slotNames.join(', '));
             var firstImg = textures[0].image;
             if (firstImg && firstImg.width) {
                 addRow('Resolution', firstImg.width + ' \u00d7 ' + firstImg.height);

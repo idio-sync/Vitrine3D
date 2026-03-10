@@ -1,7 +1,7 @@
 /*
  * @theme    Industrial
  * @layout   industrial
- * @scene-bg #535353
+ * @scene-bg #707070
  * @description MeshLab-style CAD workbench. Light Qt gray chrome, raised toolbar buttons, trackball overlay.
  */
 
@@ -41,6 +41,6 @@ body.kiosk-mode {
     /* Deep background */
     --kiosk-bg-deep: rgb(var(--kiosk-bg-deep-rgb));
 
-    /* Scene background — MeshLab default viewport gray */
-    --kiosk-scene-bg: #535353;
+    /* Scene background — lighter neutral viewport */
+    --kiosk-scene-bg: #707070;
 }
