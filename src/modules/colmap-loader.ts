@@ -142,3 +142,187 @@ export function parseImagesBin(buffer: ArrayBuffer, intrinsics: ColmapIntrinsics
     log.info(`Parsed ${images.length} images from images.bin`);
     return images;
 }
+
+export type ColmapDisplayMode = 'frustums' | 'markers';
+
+/**
+ * Manages Colmap camera visualization in the scene.
+ * Renders cameras as frustums (wireframe pyramids) or instanced markers.
+ */
+export class ColmapManager {
+    readonly group: THREE.Group;
+    private cameras: ColmapCamera[] = [];
+    private intrinsics: ColmapIntrinsics[] = [];
+    private frustumMesh: THREE.LineSegments | null = null;
+    private markerMesh: THREE.InstancedMesh | null = null;
+    private _displayMode: ColmapDisplayMode = 'frustums';
+    private _frustumScale = 1.0;
+    private _visible = true;
+
+    constructor(group: THREE.Group) {
+        this.group = group;
+    }
+
+    get hasData(): boolean { return this.cameras.length > 0; }
+    get cameraCount(): number { return this.cameras.length; }
+    get colmapCameras(): ColmapCamera[] { return this.cameras; }
+
+    /** Load from parsed binary data. */
+    load(intrinsics: ColmapIntrinsics[], cameras: ColmapCamera[]): void {
+        this.dispose();
+        this.intrinsics = intrinsics;
+        this.cameras = cameras;
+        this.render();
+    }
+
+    /** Load from raw binary buffers. */
+    loadFromBuffers(camerasBuffer: ArrayBuffer, imagesBuffer: ArrayBuffer): void {
+        const intrinsics = parseCamerasBin(camerasBuffer);
+        const cameras = parseImagesBin(imagesBuffer, intrinsics);
+        this.load(intrinsics, cameras);
+    }
+
+    private render(): void {
+        this.clearMeshes();
+        if (this.cameras.length === 0) return;
+
+        if (this._displayMode === 'frustums') {
+            this.renderFrustums();
+        } else {
+            this.renderMarkers();
+        }
+    }
+
+    private renderFrustums(): void {
+        const positions: number[] = [];
+        const colors: number[] = [];
+        const n = this.cameras.length;
+
+        for (let i = 0; i < n; i++) {
+            const cam = this.cameras[i];
+            const t = n > 1 ? i / (n - 1) : 0.5;
+            const color = sequenceColor(t);
+
+            const focalNorm = cam.focalLength > 0 ? cam.focalLength / 3000 : 0.5;
+            const size = this._frustumScale * 0.3 * focalNorm;
+            const aspect = 4 / 3;
+
+            const hw = size * aspect * 0.5;
+            const hh = size * 0.5;
+            const d = size;
+            const corners = [
+                new THREE.Vector3(-hw, -hh, -d),
+                new THREE.Vector3(hw, -hh, -d),
+                new THREE.Vector3(hw, hh, -d),
+                new THREE.Vector3(-hw, hh, -d),
+            ];
+
+            const q = new THREE.Quaternion(...cam.quaternion);
+            const p = new THREE.Vector3(...cam.position);
+            const origin = p.clone();
+
+            for (const c of corners) {
+                c.applyQuaternion(q).add(p);
+            }
+
+            const edges: [THREE.Vector3, THREE.Vector3][] = [
+                [origin, corners[0]], [origin, corners[1]],
+                [origin, corners[2]], [origin, corners[3]],
+                [corners[0], corners[1]], [corners[1], corners[2]],
+                [corners[2], corners[3]], [corners[3], corners[0]],
+            ];
+
+            for (const [a, b] of edges) {
+                positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+                colors.push(color[0], color[1], color[2], color[0], color[1], color[2]);
+            }
+        }
+
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        const mat = new THREE.LineBasicMaterial({
+            vertexColors: true,
+            depthTest: true,
+            transparent: true,
+            opacity: 0.85,
+        });
+        this.frustumMesh = new THREE.LineSegments(geom, mat);
+        this.frustumMesh.name = 'colmap_frustums';
+        this.frustumMesh.visible = this._visible;
+        this.group.add(this.frustumMesh);
+    }
+
+    private renderMarkers(): void {
+        const n = this.cameras.length;
+        const sphereGeom = new THREE.SphereGeometry(0.02 * this._frustumScale, 8, 6);
+        const mat = new THREE.MeshBasicMaterial({ vertexColors: false, color: 0xffffff });
+        this.markerMesh = new THREE.InstancedMesh(sphereGeom, mat, n);
+        this.markerMesh.name = 'colmap_markers';
+
+        const dummy = new THREE.Object3D();
+        const color = new THREE.Color();
+
+        for (let i = 0; i < n; i++) {
+            const cam = this.cameras[i];
+            dummy.position.set(...cam.position);
+            dummy.updateMatrix();
+            this.markerMesh.setMatrixAt(i, dummy.matrix);
+
+            const t = n > 1 ? i / (n - 1) : 0.5;
+            const [r, g, b] = sequenceColor(t);
+            color.setRGB(r, g, b);
+            this.markerMesh.setColorAt(i, color);
+        }
+
+        this.markerMesh.instanceMatrix.needsUpdate = true;
+        if (this.markerMesh.instanceColor) this.markerMesh.instanceColor.needsUpdate = true;
+        this.markerMesh.visible = this._visible;
+        this.group.add(this.markerMesh);
+    }
+
+    setDisplayMode(mode: ColmapDisplayMode): void {
+        if (mode === this._displayMode) return;
+        this._displayMode = mode;
+        this.render();
+    }
+
+    setFrustumScale(scale: number): void {
+        this._frustumScale = scale;
+        this.render();
+    }
+
+    setVisible(visible: boolean): void {
+        this._visible = visible;
+        if (this.frustumMesh) this.frustumMesh.visible = visible;
+        if (this.markerMesh) this.markerMesh.visible = visible;
+    }
+
+    private clearMeshes(): void {
+        if (this.frustumMesh) {
+            this.group.remove(this.frustumMesh);
+            this.frustumMesh.geometry.dispose();
+            (this.frustumMesh.material as THREE.Material).dispose();
+            this.frustumMesh = null;
+        }
+        if (this.markerMesh) {
+            this.group.remove(this.markerMesh);
+            this.markerMesh.geometry.dispose();
+            (this.markerMesh.material as THREE.Material).dispose();
+            this.markerMesh = null;
+        }
+    }
+
+    dispose(): void {
+        this.clearMeshes();
+        this.cameras = [];
+        this.intrinsics = [];
+    }
+}
+
+/** Rainbow sequence color: blue → cyan → green → yellow → red. t in [0, 1]. */
+function sequenceColor(t: number): [number, number, number] {
+    const hue = (1 - t) * 0.66;
+    const c = new THREE.Color().setHSL(hue, 0.9, 0.55);
+    return [c.r, c.g, c.b];
+}
