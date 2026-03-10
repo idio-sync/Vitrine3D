@@ -22,6 +22,11 @@ struct FileHandleStore {
     handles: Mutex<HashMap<String, FileHandle>>,
 }
 
+/// Holds a file path passed via CLI on startup, to be injected into the webview
+/// once the page finishes loading. Cleared after first use.
+#[derive(Default)]
+struct StartupFile(Mutex<Option<String>>);
+
 // =============================================================================
 // ANDROID CONTENT RESOLVER — read content:// URIs via JNI
 // =============================================================================
@@ -206,6 +211,7 @@ fn ipc_close_file(handle_id: String, store: State<FileHandleStore>) -> Result<()
 pub fn run() {
     let mut builder = tauri::Builder::default()
         .manage(FileHandleStore::default())
+        .manage(StartupFile::default())
         .invoke_handler(tauri::generate_handler![
             ipc_open_file,
             ipc_read_bytes,
@@ -259,6 +265,30 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_deep_link::init())
+        // Inject the startup file path into the webview once the page is ready.
+        // on_page_load is only available on plugin::Builder (not on WebviewWindow directly).
+        .plugin(
+            tauri::plugin::Builder::new("startup-file")
+                .on_page_load(|webview, payload| {
+                    if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
+                        let state = webview.app_handle().state::<StartupFile>();
+                        let path = state.0.lock().unwrap().take();
+                        if let Some(file_path) = path {
+                            let escaped = file_path.replace('\\', "\\\\").replace('"', "\\\"");
+                            let js = format!(
+                                concat!(
+                                    "try{{",
+                                    "window.dispatchEvent(new CustomEvent('vitrine3d:file-open',{{detail:\"{0}\"}}));",
+                                    "}}catch(_e){{console.error('file-open eval:',_e)}}"
+                                ),
+                                escaped
+                            );
+                            let _ = webview.eval(&js);
+                        }
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
             // On first launch, check CLI args for file associations.
             // The OS passes the file path as a CLI argument when a .ddim/.a3d/.a3z
@@ -271,24 +301,9 @@ pub fn run() {
                 .collect();
 
             if !file_args.is_empty() {
-                let window = app.get_webview_window("main")
-                    .expect("main window not found");
-                let file_path = file_args[0].clone();
-                // Defer until the webview is ready
-                window.on_page_load(move |window, payload| {
-                    if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
-                        let escaped = file_path.replace('\\', "\\\\").replace('\"', "\\\"");
-                        let js = format!(
-                            concat!(
-                                "try{{",
-                                "window.dispatchEvent(new CustomEvent('vitrine3d:file-open',{{detail:\"{0}\"}}));",
-                                "}}catch(_e){{console.error('file-open eval:',_e)}}"
-                            ),
-                            escaped
-                        );
-                        let _ = window.eval(&js);
-                    }
-                });
+                // Store the path — the startup-file plugin's on_page_load will inject it
+                // into the webview once the page finishes loading.
+                *app.state::<StartupFile>().0.lock().unwrap() = Some(file_args[0].clone());
             }
 
             Ok(())
