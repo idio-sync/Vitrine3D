@@ -252,7 +252,8 @@ input, select, textarea {
     z-index: 50;
 }
 
-#vp-display-pill {
+#vp-display-pill,
+#vp-overlay-pill {
     display: flex;
     background: var(--bg-deep);
     border: 1px solid var(--border-default);

@@ -13,6 +13,7 @@ import { hasAnyProxy } from './quality-tier.js';
 import { ASSET_STATE } from './constants.js';
 import { loadWalkthroughFromArchive } from './walkthrough-controller.js';
 import { Logger, notify, computeMeshFaceCount, computeTextureInfo, disposeObject } from './utilities.js';
+import { updateOverlayPill } from './ui-controller.js';
 import { getStore } from './asset-store.js';
 import {
     loadGLTF,
@@ -520,6 +521,7 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
 
             state.flightPathLoaded = true;
             state.assetStates[assetType] = ASSET_STATE.LOADED;
+            updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
             return true;
         }
 

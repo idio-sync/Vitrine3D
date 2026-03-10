@@ -129,6 +129,31 @@ export function updateDisplayPill(loaded: { splat: boolean; model: boolean; poin
     if (pill) pill.style.display = count > 0 ? '' : 'none';
 }
 
+/**
+ * Show/hide overlay toggle pill buttons based on which overlay types are loaded.
+ * Each button appears individually when its data is present and starts active (visible).
+ */
+export function updateOverlayPill(loaded: { sfm: boolean; flightpath: boolean }): void {
+    const show = (id: string, visible: boolean) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const wasHidden = el.style.display === 'none';
+        el.style.display = visible ? '' : 'none';
+        // Reset to active when a button first appears (new data loaded)
+        if (visible && wasHidden) el.classList.add('active');
+    };
+
+    show('btn-overlay-sfm', loaded.sfm);
+    show('btn-overlay-flightpath', loaded.flightpath);
+
+    // Show container only if at least one overlay type is loaded
+    const pill = document.getElementById('vp-overlay-pill');
+    if (pill) {
+        const anyLoaded = loaded.sfm || loaded.flightpath;
+        pill.classList.toggle('hidden', !anyLoaded);
+    }
+}
+
 // =============================================================================
 // LOADING OVERLAY
 // =============================================================================
@@ -264,6 +289,8 @@ export function activateTool(toolName: string): void {
     if (annotationLines) annotationLines.style.display = isLibrary ? 'none' : '';
     const displayPill = document.getElementById('vp-display-pill');
     if (displayPill) displayPill.style.display = isLibrary ? 'none' : '';
+    const overlayPill = document.getElementById('vp-overlay-pill');
+    if (overlayPill) overlayPill.style.display = isLibrary ? 'none' : '';
 
     log.debug(`Tool activated: ${toolName}`);
 }

@@ -104,6 +104,23 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-split', 'click', () => deps.display.setDisplayMode('split'));
     addListener('btn-stl', 'click', () => deps.display.setDisplayMode('stl'));
 
+    // ─── Overlay toggle pill ────────────────────────────────
+    addListener('btn-overlay-sfm', 'click', () => {
+        const btn = document.getElementById('btn-overlay-sfm');
+        if (!btn) return;
+        const nowActive = !btn.classList.contains('active');
+        btn.classList.toggle('active', nowActive);
+        if (deps.overlay?.toggleSfm) deps.overlay.toggleSfm(nowActive);
+    });
+
+    addListener('btn-overlay-flightpath', 'click', () => {
+        const btn = document.getElementById('btn-overlay-flightpath');
+        if (!btn) return;
+        const nowActive = !btn.classList.contains('active');
+        btn.classList.toggle('active', nowActive);
+        if (deps.overlay?.toggleFlightPath) deps.overlay.toggleFlightPath(nowActive);
+    });
+
     // ─── File inputs ─────────────────────────────────────────
     addListener('splat-input', 'change', deps.files.handleSplatFile);
     addListener('model-input', 'change', deps.files.handleModelFile);

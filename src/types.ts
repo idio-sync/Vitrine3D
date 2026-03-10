@@ -450,6 +450,10 @@ export interface EventWiringDeps {
         setFrustumScale: (scale: number) => void;
         alignFlightPath: () => void;
     };
+    overlay?: {
+        toggleSfm: (visible: boolean) => void;
+        toggleFlightPath: (visible: boolean) => void;
+    };
 }
 
 export interface PostProcessingEffectConfig {

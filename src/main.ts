@@ -57,6 +57,7 @@ import {
     applyViewerModeSettings as applyViewerModeSettingsHandler,
     updateStatusBar,
     updateDisplayPill,
+    updateOverlayPill,
     updateTransformPaneSelection
 } from './modules/ui-controller.js';
 import {
@@ -687,6 +688,7 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
                 updateObjectSelectButtons();
                 updateFlightPathUI();
                 updateColmapUI();
+                updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
             }
         }
     };
@@ -797,6 +799,7 @@ function createEventWiringDeps(): EventWiringDeps {
                 state.colmapLoaded = true;
                 updateObjectSelectButtons();
                 updateColmapUI();
+                updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
             },
             setDisplayMode: (mode: string) => colmapManager?.setDisplayMode(mode as any),
             setFrustumScale: (scale: number) => colmapManager?.setFrustumScale(scale),
@@ -832,6 +835,15 @@ function createEventWiringDeps(): EventWiringDeps {
                 } else {
                     notify.success(`Cameras aligned to flight path (${result.matchCount} matches, RMSE: ${result.rmse.toFixed(3)})`);
                 }
+            },
+        },
+        overlay: {
+            toggleSfm: (visible: boolean) => {
+                const colmapGroup = sceneManager?.colmapGroup;
+                if (colmapGroup) colmapGroup.visible = visible;
+            },
+            toggleFlightPath: (visible: boolean) => {
+                if (flightPathManager) flightPathManager.setVisible(visible);
             },
         },
     };
@@ -1270,6 +1282,7 @@ async function init() {
                     updateObjectSelectButtons();
                     updateFlightPathUI();
                     updateColmapUI();
+                    updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
                     hideLoading();
                     notify.success('Flight path loaded: ' + data.points.length + ' points');
                 } catch (err: any) {
@@ -1295,6 +1308,7 @@ async function init() {
                     updateObjectSelectButtons();
                     updateFlightPathUI();
                     updateColmapUI();
+                    updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
                     hideLoading();
                     notify.success('Flight path loaded: ' + data.points.length + ' points');
                 } catch (err: any) {
@@ -1813,6 +1827,7 @@ function updateVisibility() {
         pointcloud: state.pointcloudLoaded,
         stl: state.stlLoaded
     });
+    updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
     updateObjectSelectButtons();
 }
 
@@ -1917,6 +1932,7 @@ function updateFlightPathUI(): void {
                 state.flightPathLoaded = flightPathManager!.hasData;
                 updateObjectSelectButtons();
                 updateFlightPathUI();
+                updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
             });
 
             row.appendChild(vis);
