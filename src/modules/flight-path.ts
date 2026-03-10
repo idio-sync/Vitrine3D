@@ -824,6 +824,11 @@ export class FlightPathManager {
         return this.paths;
     }
 
+    /** Get all flight points from all paths (flattened). */
+    getAllPoints(): FlightPoint[] {
+        return this.paths.flatMap(p => p.points);
+    }
+
     /** Toggle visibility of all flight paths. */
     setVisible(visible: boolean): void {
         this.group.visible = visible;

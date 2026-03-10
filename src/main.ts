@@ -7,6 +7,8 @@ import { AnnotationSystem } from './modules/annotation-system.js';
 import { CrossSectionTool } from './modules/cross-section.js';
 import { MeasurementSystem } from './modules/measurement-system.js';
 import { FlightPathManager } from './modules/flight-path.js';
+import { ColmapManager } from './modules/colmap-loader.js';
+import { alignFlightPathToColmap } from './modules/colmap-alignment.js';
 import { ArchiveCreator, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
 import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS, DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET } from './modules/constants.js';
 import { getLodBudget } from './modules/quality-tier.js';
@@ -274,6 +276,7 @@ const state: AppState = {
     currentCadUrl: null,
     drawingLoaded: false,
     flightPathLoaded: false,
+    colmapLoaded: false,
     currentDrawingUrl: null,
     modelOpacity: 1,
     modelWireframe: false,
@@ -351,6 +354,7 @@ let landmarkAlignment: any = null;
 let archiveCreator: any = null;
 let crossSection: CrossSectionTool | null = null;
 let flightPathManager: FlightPathManager | null = null;
+let colmapManager: ColmapManager | null = null;
 let _dragBeforeMatrices: MatrixSnapshot | null = null;
 let _numericEditBefore: MatrixSnapshot | null = null;
 let undoManager: UndoManager;
@@ -374,6 +378,7 @@ const sceneRefs: SceneRefs = {
     get cadGroup() { return cadGroup; },
     get drawingGroup() { return drawingGroup; },
     get flightPathGroup() { return flightPathManager ? sceneManager?.flightPathGroup : null; },
+    get colmapGroup() { return sceneManager?.colmapGroup || null; },
     get flyControls() { return flyControls; },
     get annotationSystem() { return annotationSystem; },
     get archiveCreator() { return archiveCreator; },
@@ -783,6 +788,46 @@ function createEventWiringDeps(): EventWiringDeps {
                         afterMatrices: after,
                     });
                     _numericEditBefore = null;
+                }
+            },
+        },
+        colmap: {
+            loadFromBuffers: (camerasBuffer: ArrayBuffer, imagesBuffer: ArrayBuffer) => {
+                if (!colmapManager) return;
+                colmapManager.loadFromBuffers(camerasBuffer, imagesBuffer);
+                state.colmapLoaded = true;
+                updateObjectSelectButtons();
+                updateColmapUI();
+            },
+            setDisplayMode: (mode: string) => colmapManager?.setDisplayMode(mode as any),
+            setFrustumScale: (scale: number) => colmapManager?.setFrustumScale(scale),
+            alignFlightPath: () => {
+                if (!colmapManager?.hasData || !flightPathManager?.hasData) return;
+                const result = alignFlightPathToColmap(
+                    colmapManager.colmapCameras,
+                    flightPathManager.getAllPoints(),
+                );
+                if (!result) {
+                    notify.error('Could not align: insufficient matches (need >= 3)');
+                    return;
+                }
+                const group = sceneManager?.flightPathGroup;
+                if (group) {
+                    group.position.copy(result.position);
+                    group.rotation.copy(result.rotation);
+                    group.scale.setScalar(result.scale);
+                    updateTransformInputs();
+                    storeLastPositions();
+                }
+                const el = document.getElementById('align-result');
+                if (el) {
+                    el.style.display = '';
+                    el.textContent = `Aligned: ${result.matchCount} matches, RMSE ${result.rmse.toFixed(3)}`;
+                }
+                if (result.rmse > 1.0) {
+                    notify.warning(`Alignment RMSE is high (${result.rmse.toFixed(2)}). Verify match quality.`);
+                } else {
+                    notify.success(`Flight path aligned (${result.matchCount} matches, RMSE: ${result.rmse.toFixed(3)})`);
                 }
             },
         },
@@ -1196,8 +1241,16 @@ async function init() {
         const flightTooltip = document.getElementById('flight-tooltip');
         if (flightTooltip) flightPathManager.setupTooltip(flightTooltip);
         log.info(' FlightPathManager initialized');
+    }
 
-        // Wire flight path file input
+    // Initialize colmap manager
+    if (sceneManager.colmapGroup) {
+        colmapManager = new ColmapManager(sceneManager.colmapGroup);
+        log.info(' ColmapManager initialized');
+    }
+
+    // Wire flight path file input
+    if (sceneManager.flightPathGroup) {
         const flightInput = document.getElementById('flightpath-input') as HTMLInputElement | null;
         if (flightInput) {
             flightInput.addEventListener('change', async (e) => {
@@ -1544,28 +1597,33 @@ function setBackgroundColor(hexColor: string) {
 // Transform controls (delegated to transform-controller.js)
 function setSelectedObject(selection: SelectedObject) {
     const flightpathGroup = sceneManager?.flightPathGroup || null;
-    setSelectedObjectHandler(selection, { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state });
-    updateTransformPaneSelection(selection as string, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup);
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    setSelectedObjectHandler(selection, { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup, state });
+    updateTransformPaneSelection(selection as string, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup);
 }
 
 function syncBothObjects() {
     const flightpathGroup = sceneManager?.flightPathGroup || null;
-    syncBothObjectsHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup });
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    syncBothObjectsHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup });
 }
 
 function applyPivotRotation() {
     const flightpathGroup = sceneManager?.flightPathGroup || null;
-    applyPivotRotationHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state });
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    applyPivotRotationHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup, state });
 }
 
 function applyUniformScale() {
     const flightpathGroup = sceneManager?.flightPathGroup || null;
-    applyUniformScaleHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state });
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    applyUniformScaleHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup, state });
 }
 
 function captureTransformMatrices(): MatrixSnapshot {
     const result: MatrixSnapshot = {};
     const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const colmapGroup = sceneManager?.colmapGroup || null;
     const objects: [any, string][] = [
         [splatMesh, 'splat'],
         [modelGroup, 'model'],
@@ -1574,6 +1632,7 @@ function captureTransformMatrices(): MatrixSnapshot {
         [cadGroup, 'cad'],
         [drawingGroup, 'drawing'],
         [flightpathGroup, 'flightpath'],
+        [colmapGroup, 'colmap'],
     ];
     for (const [obj, key] of objects) {
         if (obj) {
@@ -1586,6 +1645,7 @@ function captureTransformMatrices(): MatrixSnapshot {
 
 function applyTransformMatrices(snapshot: MatrixSnapshot): void {
     const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const colmapGroup = sceneManager?.colmapGroup || null;
     const objects: [any, string][] = [
         [splatMesh, 'splat'],
         [modelGroup, 'model'],
@@ -1594,6 +1654,7 @@ function applyTransformMatrices(snapshot: MatrixSnapshot): void {
         [cadGroup, 'cad'],
         [drawingGroup, 'drawing'],
         [flightpathGroup, 'flightpath'],
+        [colmapGroup, 'colmap'],
     ];
     for (const [obj, key] of objects) {
         const mat = snapshot[key];
@@ -1623,23 +1684,27 @@ function performRedo(): void {
 
 function storeLastPositions() {
     const flightpathGroup = sceneManager?.flightPathGroup || null;
-    storeLastPositionsHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup });
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    storeLastPositionsHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup });
 }
 
 function setTransformMode(mode: TransformMode) {
     const flightpathGroup = sceneManager?.flightPathGroup || null;
-    setTransformModeHandler(mode, { transformControls, state, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup });
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    setTransformModeHandler(mode, { transformControls, state, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup });
 }
 
 function centerAtOrigin() {
     const flightpathGroup = sceneManager?.flightPathGroup || null;
-    centerAtOriginHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, camera, controls, state });
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    centerAtOriginHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup, camera, controls, state });
     updateTransformInputs();
 }
 
 function resetTransform() {
     const flightpathGroup = sceneManager?.flightPathGroup || null;
-    resetTransformHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, state });
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    resetTransformHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup, state });
     updateTransformInputs();
 }
 
@@ -1656,7 +1721,8 @@ function updateVisibility() {
 
 function updateTransformInputs() {
     const flightpathGroup = sceneManager?.flightPathGroup || null;
-    updateTransformInputsHandler(splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup);
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    updateTransformInputsHandler(splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup);
 }
 
 /** Show/hide the object-select buttons in the Transform pane based on what is loaded. */
@@ -1672,8 +1738,9 @@ function updateObjectSelectButtons() {
     show('btn-select-cad', state.cadLoaded);
     show('btn-select-drawing', state.drawingLoaded);
     show('btn-select-flightpath', state.flightPathLoaded);
+    show('btn-select-colmap', state.colmapLoaded);
     // "All" only when 2+ types are loaded
-    const loadedCount = [state.splatLoaded, state.modelLoaded, state.pointcloudLoaded, state.stlLoaded, state.cadLoaded, state.drawingLoaded, state.flightPathLoaded].filter(Boolean).length;
+    const loadedCount = [state.splatLoaded, state.modelLoaded, state.pointcloudLoaded, state.stlLoaded, state.cadLoaded, state.drawingLoaded, state.flightPathLoaded, state.colmapLoaded].filter(Boolean).length;
     show('btn-select-both', loadedCount >= 2);
 
     // Show/hide flight path tool button and drone flight settings section
@@ -1763,6 +1830,18 @@ function updateFlightPathUI(): void {
         const s = totalS % 60;
         timeTotal.textContent = `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
     }
+}
+
+/** Update the colmap pane UI: camera count, button visibility. */
+function updateColmapUI(): void {
+    const info = document.getElementById('colmap-info');
+    const count = document.getElementById('colmap-camera-count');
+    const selectBtn = document.getElementById('btn-select-colmap');
+    const alignBtn = document.getElementById('btn-align-flightpath');
+    if (info) info.style.display = state.colmapLoaded ? '' : 'none';
+    if (count && colmapManager) count.textContent = String(colmapManager.cameraCount);
+    if (selectBtn) selectBtn.style.display = state.colmapLoaded ? '' : 'none';
+    if (alignBtn) alignBtn.style.display = (state.colmapLoaded && state.flightPathLoaded) ? '' : 'none';
 }
 
 // Handle loading splat from URL via prompt
