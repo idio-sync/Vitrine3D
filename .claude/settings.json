@@ -15,7 +15,13 @@
       "WebFetch(domain:dronelions.academy)",
       "WebFetch(domain:mavicpilots.com)",
       "WebFetch(domain:registry.npmjs.org)",
-      "WebFetch(domain:unpkg.com)"
+      "WebFetch(domain:unpkg.com)",
+      "Bash(git reset --soft 7c787a6~1)",
+      "Bash(git reset HEAD -- .)",
+      "Bash(git checkout 7c787a6 -- src-tauri/Cargo.lock src-tauri/Cargo.toml src-tauri/src/lib.rs src/modules/archive-loader.ts src/modules/collections-browser.ts src/modules/file-handlers.ts src/modules/kiosk-main.ts src/themes/industrial/layout.js)",
+      "Bash(git checkout 86b443a -- src/modules/archive-loader.ts src/modules/kiosk-main.ts)",
+      "Bash(git stash pop)",
+      "Bash(git stash drop)"
     ],
     "additionalDirectories": [
       "\\tmp"

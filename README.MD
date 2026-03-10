@@ -33,7 +33,7 @@ The application is built as two separate bundles: a **kiosk viewer** (`/`) for c
 - **Share dialog** — generate customized share links, embed codes, and QR codes with preset modes (kiosk, minimal, editor) and theme selection
 - **Social link previews** — Open Graph, Twitter Card, and oEmbed support for rich previews when sharing viewer URLs on Slack, Discord, Twitter, WordPress, etc.
 - **Flight path import** — import DJI drone flight logs (CSV, KML/KMZ, SRT) as 3D path overlays with telemetry tooltips; multiple logs per archive; manual alignment via transform gizmo; displayed in both editor and kiosk viewer
-- **SfM camera visualization** — import Colmap `cameras.bin` + `images.bin` to display camera positions as frustum wireframes or instanced markers; auto-align flight paths to splats via Umeyama similarity transform using timestamp-matched camera↔GPS point pairs; full archive support and kiosk toggle
+- **SfM camera visualization** — import Colmap `cameras.bin` + `images.bin` to display camera positions as frustum wireframes or instanced markers; align cameras to a manually positioned flight path via Umeyama similarity transform; full archive support and kiosk toggle
 - **Collections** — organize archives into named collections; editorial-themed collection browser in kiosk mode; collection management in the library panel
 - **Library browser** — full-page themed archive and collection browser at `/library`
 - **Camera constraints** — lock orbit, pan, zoom, and height limits per-archive; applied automatically in kiosk mode

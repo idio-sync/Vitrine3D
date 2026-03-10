@@ -454,7 +454,10 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
             const position = flightPathGroup ? [flightPathGroup.position.x, flightPathGroup.position.y, flightPathGroup.position.z] : [0, 0, 0];
             const rotation = flightPathGroup ? [flightPathGroup.rotation.x, flightPathGroup.rotation.y, flightPathGroup.rotation.z] : [0, 0, 0];
             const scale = flightPathGroup ? flightPathGroup.scale.x : 1;
-            archiveCreator.addFlightPath(fp.blob, fp.fileName, { position, rotation, scale });
+            const flightMeta: Record<string, unknown> = {};
+            if (fp.trimStart !== undefined) flightMeta.trim_start = fp.trimStart;
+            if (fp.trimEnd !== undefined) flightMeta.trim_end = fp.trimEnd;
+            archiveCreator.addFlightPath(fp.blob, fp.fileName, { position, rotation, scale, flightMeta });
         }
     }
 
