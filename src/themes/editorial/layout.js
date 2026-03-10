@@ -708,7 +708,7 @@ export function setup(manifest, deps) {
     const {
         Logger, escapeHtml,
         updateModelTextures, updateModelWireframe, updateModelMatcap, updateModelNormals,
-        updateModelRoughness, updateModelMetalness, updateModelSpecularF0,
+        updateModelRoughness, updateModelMetalness,
         sceneManager, state, annotationSystem, modelGroup,
         setDisplayMode, createDisplayModeDeps, triggerLazyLoad,
         showAnnotationPopup, hideAnnotationPopup, hideAnnotationLine,
@@ -917,7 +917,6 @@ export function setup(manifest, deps) {
             e.stopPropagation();
             const isActive = !deps.measurementSystem.isActive;
             deps.measurementSystem.setMeasureMode(isActive);
-            if (!isActive) deps.measurementSystem.clearAll();
             measureBtn.classList.toggle('active', isActive);
             measureDropdown.classList.toggle('open', isActive);
         });
@@ -1150,6 +1149,28 @@ export function setup(manifest, deps) {
         }
     };
 
+    const createOrbitResetBtn = () => {
+        const btn = document.createElement('button');
+        btn.className = 'editorial-marker-toggle';
+        btn.title = 'Reset rotation center';
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', '14'); svg.setAttribute('height', '14');
+        svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2');
+        ['circle', 'line', 'line', 'line', 'line'].forEach((tag, idx) => {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            if (idx === 0) { el.setAttribute('cx','12'); el.setAttribute('cy','12'); el.setAttribute('r','10'); }
+            if (idx === 1) { el.setAttribute('x1','12'); el.setAttribute('y1','2'); el.setAttribute('x2','12'); el.setAttribute('y2','6'); }
+            if (idx === 2) { el.setAttribute('x1','12'); el.setAttribute('y1','18'); el.setAttribute('x2','12'); el.setAttribute('y2','22'); }
+            if (idx === 3) { el.setAttribute('x1','2'); el.setAttribute('y1','12'); el.setAttribute('x2','6'); el.setAttribute('y2','12'); }
+            if (idx === 4) { el.setAttribute('x1','18'); el.setAttribute('y1','12'); el.setAttribute('x2','22'); el.setAttribute('y2','12'); }
+            svg.appendChild(el);
+        });
+        btn.appendChild(svg);
+        btn.addEventListener('click', () => { if (resetOrbitCenter) resetOrbitCenter(); });
+        return btn;
+    };
+
     if (annotations.length > 0) {
         annoWrapper = document.createElement('div');
         annoWrapper.className = 'editorial-anno-wrapper';
@@ -1254,55 +1275,13 @@ export function setup(manifest, deps) {
         toolsGroup.appendChild(annoRule);
 
         // Reset orbit center
-        const orbitResetBtn = document.createElement('button');
-        orbitResetBtn.className = 'editorial-marker-toggle';
-        orbitResetBtn.title = 'Reset rotation center';
-        const orbitSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        orbitSvg.setAttribute('width', '14');
-        orbitSvg.setAttribute('height', '14');
-        orbitSvg.setAttribute('viewBox', '0 0 24 24');
-        orbitSvg.setAttribute('fill', 'none');
-        orbitSvg.setAttribute('stroke', 'currentColor');
-        orbitSvg.setAttribute('stroke-width', '2');
-        ['circle', 'line', 'line', 'line', 'line'].forEach((tag, idx) => {
-            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
-            if (idx === 0) { el.setAttribute('cx','12'); el.setAttribute('cy','12'); el.setAttribute('r','10'); }
-            if (idx === 1) { el.setAttribute('x1','12'); el.setAttribute('y1','2'); el.setAttribute('x2','12'); el.setAttribute('y2','6'); }
-            if (idx === 2) { el.setAttribute('x1','12'); el.setAttribute('y1','18'); el.setAttribute('x2','12'); el.setAttribute('y2','22'); }
-            if (idx === 3) { el.setAttribute('x1','2'); el.setAttribute('y1','12'); el.setAttribute('x2','6'); el.setAttribute('y2','12'); }
-            if (idx === 4) { el.setAttribute('x1','18'); el.setAttribute('y1','12'); el.setAttribute('x2','22'); el.setAttribute('y2','12'); }
-            orbitSvg.appendChild(el);
-        });
-        orbitResetBtn.appendChild(orbitSvg);
-        orbitResetBtn.addEventListener('click', () => { if (resetOrbitCenter) resetOrbitCenter(); });
-        toolsGroup.appendChild(orbitResetBtn);
+        toolsGroup.appendChild(createOrbitResetBtn());
 
         if (measureWrapper) toolsGroup.appendChild(measureWrapper);
         if (sliceWrapper) toolsGroup.appendChild(sliceWrapper);
     } else {
         // No annotations — still show orbit reset and measure
-        const orbitResetBtn = document.createElement('button');
-        orbitResetBtn.className = 'editorial-marker-toggle';
-        orbitResetBtn.title = 'Reset rotation center';
-        const orbitSvg2 = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        orbitSvg2.setAttribute('width', '14');
-        orbitSvg2.setAttribute('height', '14');
-        orbitSvg2.setAttribute('viewBox', '0 0 24 24');
-        orbitSvg2.setAttribute('fill', 'none');
-        orbitSvg2.setAttribute('stroke', 'currentColor');
-        orbitSvg2.setAttribute('stroke-width', '2');
-        ['circle', 'line', 'line', 'line', 'line'].forEach((tag, idx) => {
-            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
-            if (idx === 0) { el.setAttribute('cx','12'); el.setAttribute('cy','12'); el.setAttribute('r','10'); }
-            if (idx === 1) { el.setAttribute('x1','12'); el.setAttribute('y1','2'); el.setAttribute('x2','12'); el.setAttribute('y2','6'); }
-            if (idx === 2) { el.setAttribute('x1','12'); el.setAttribute('y1','18'); el.setAttribute('x2','12'); el.setAttribute('y2','22'); }
-            if (idx === 3) { el.setAttribute('x1','2'); el.setAttribute('y1','12'); el.setAttribute('x2','6'); el.setAttribute('y2','12'); }
-            if (idx === 4) { el.setAttribute('x1','18'); el.setAttribute('y1','12'); el.setAttribute('x2','22'); el.setAttribute('y2','12'); }
-            orbitSvg2.appendChild(el);
-        });
-        orbitResetBtn.appendChild(orbitSvg2);
-        orbitResetBtn.addEventListener('click', () => { if (resetOrbitCenter) resetOrbitCenter(); });
-        toolsGroup.appendChild(orbitResetBtn);
+        toolsGroup.appendChild(createOrbitResetBtn());
         if (measureWrapper) toolsGroup.appendChild(measureWrapper);
         if (sliceWrapper) toolsGroup.appendChild(sliceWrapper);
     }
@@ -1339,10 +1318,12 @@ export function setup(manifest, deps) {
     textureToggle.title = 'Toggle textures';
     textureToggle.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>';
     let texturesVisible = true;
+    let barTexBtn = null; // late-bound: set after mobile pill is created
     textureToggle.addEventListener('click', () => {
         texturesVisible = !texturesVisible;
         updateModelTextures(modelGroup, texturesVisible);
         textureToggle.classList.toggle('off', !texturesVisible);
+        if (barTexBtn) barTexBtn.classList.toggle('off', !texturesVisible);
     });
     toolsGroup.appendChild(textureToggle);
 
@@ -1350,6 +1331,8 @@ export function setup(manifest, deps) {
     const matcapPresets = ['clay', 'chrome', 'pearl', 'jade', 'copper', 'bronze'];
     const matcapLabels = ['Clay', 'Chrome', 'Pearl', 'Jade', 'Copper', 'Bronze'];
     let activeView = null; // null or: 'wireframe','normals','roughness','metalness','specularF0','matcap:clay', etc.
+
+    let syncMobileView = null; // late-bound: set after mobile pill is created
 
     const materialWrapper = document.createElement('div');
     materialWrapper.className = 'editorial-matcap-wrapper';
@@ -1364,7 +1347,7 @@ export function setup(manifest, deps) {
 
     const viewLabels = {
         wireframe: 'Wireframe', normals: 'Normals',
-        roughness: 'Roughness', metalness: 'Metalness', specularF0: 'Specular F0'
+        roughness: 'Roughness', metalness: 'Metalness'
     };
 
     const setMaterialView = (view) => {
@@ -1375,7 +1358,6 @@ export function setup(manifest, deps) {
             else if (activeView === 'normals') updateModelNormals(modelGroup, false);
             else if (activeView === 'roughness') updateModelRoughness(modelGroup, false);
             else if (activeView === 'metalness') updateModelMetalness(modelGroup, false);
-            else if (activeView === 'specularF0') updateModelSpecularF0(modelGroup, false);
             else if (activeView.startsWith('matcap:')) updateModelMatcap(modelGroup, false);
         }
         activeView = view;
@@ -1385,7 +1367,6 @@ export function setup(manifest, deps) {
             else if (activeView === 'normals') updateModelNormals(modelGroup, true);
             else if (activeView === 'roughness') updateModelRoughness(modelGroup, true);
             else if (activeView === 'metalness') updateModelMetalness(modelGroup, true);
-            else if (activeView === 'specularF0') updateModelSpecularF0(modelGroup, true);
             else if (activeView.startsWith('matcap:')) updateModelMatcap(modelGroup, true, activeView.split(':')[1]);
         }
         // Update button — highlight when a view is active, but never dim to .off
@@ -1398,6 +1379,7 @@ export function setup(manifest, deps) {
             el.classList.toggle('active', el.dataset.view === activeView);
         });
         materialDropdown.classList.remove('open');
+        if (syncMobileView) syncMobileView(activeView);
     };
 
     const addMaterialItem = (label, viewKey) => {
@@ -1419,7 +1401,6 @@ export function setup(manifest, deps) {
     addMaterialItem('Normals', 'normals');
     addMaterialItem('Roughness', 'roughness');
     addMaterialItem('Metalness', 'metalness');
-    addMaterialItem('Specular F0', 'specularF0');
     addDivider();
     matcapPresets.forEach((style, i) => addMaterialItem(matcapLabels[i], 'matcap:' + style));
     addDivider();
@@ -1435,50 +1416,6 @@ export function setup(manifest, deps) {
     materialWrapper.appendChild(materialBtn);
     materialWrapper.appendChild(materialDropdown);
     toolsGroup.appendChild(materialWrapper);
-
-    // FOV — camera icon with popover (same pattern as material dropdown)
-    const fovWrapper = document.createElement('div');
-    fovWrapper.className = 'editorial-fov-wrapper';
-
-    const fovBtn = document.createElement('button');
-    fovBtn.className = 'editorial-marker-toggle';
-    fovBtn.title = 'Field of view';
-    fovBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
-
-    const fovDropdown = document.createElement('div');
-    fovDropdown.className = 'editorial-fov-dropdown';
-
-    const fovLabel = document.createElement('span');
-    fovLabel.className = 'editorial-fov-label';
-    fovLabel.textContent = '60°';
-
-    const fovSlider = document.createElement('input');
-    fovSlider.type = 'range';
-    fovSlider.min = '10';
-    fovSlider.max = '120';
-    fovSlider.step = '1';
-    fovSlider.value = '60';
-    fovSlider.className = 'editorial-fov-slider';
-
-    fovSlider.addEventListener('input', () => {
-        const fov = parseInt(fovSlider.value, 10);
-        fovLabel.textContent = fov + '°';
-        if (sceneManager && sceneManager.camera) {
-            sceneManager.camera.fov = fov;
-            sceneManager.camera.updateProjectionMatrix();
-        }
-    });
-
-    fovDropdown.appendChild(fovLabel);
-    fovDropdown.appendChild(fovSlider);
-
-    fovBtn.addEventListener('click', (e) => { e.stopPropagation(); fovDropdown.classList.toggle('open'); });
-    document.addEventListener('click', () => { fovDropdown.classList.remove('open'); });
-    fovDropdown.addEventListener('click', (e) => { e.stopPropagation(); });
-
-    fovWrapper.appendChild(fovBtn);
-    fovWrapper.appendChild(fovDropdown);
-    toolsGroup.appendChild(fovWrapper);
 
     // --- Overflow menu for compact viewports ---
     // At full width: panel uses display:contents so tools render inline in toolsGroup.
@@ -1497,7 +1434,6 @@ export function setup(manifest, deps) {
     overflowPanel.appendChild(vizRule);
     overflowPanel.appendChild(textureToggle);
     overflowPanel.appendChild(materialWrapper);
-    overflowPanel.appendChild(fovWrapper);
 
     overflowBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1561,7 +1497,7 @@ export function setup(manifest, deps) {
     // --- Details button: chevron-up + label, opens/collapses the info sheet ---
     const barDetailsBtn = document.createElement('button');
     barDetailsBtn.className = 'editorial-bar-btn editorial-bar-details-btn';
-    barDetailsBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg><span class="editorial-bar-label">Details</span>';
+    barDetailsBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg><span class="editorial-bar-label">Info</span>';
     if (annotations.length > 0) {
         const barAnnoBadge = document.createElement('span');
         barAnnoBadge.className = 'editorial-bar-anno-badge';
@@ -1589,23 +1525,21 @@ export function setup(manifest, deps) {
         barDivider.className = 'editorial-bar-divider';
         mobilePill.appendChild(barDivider);
 
-        // Texture toggle button
-        let barTexturesVisible = true;
-        const barTexBtn = document.createElement('button');
+        // Texture toggle button (assign to outer barTexBtn for cross-sync with desktop ribbon)
+        barTexBtn = document.createElement('button');
         barTexBtn.className = 'editorial-bar-btn';
         barTexBtn.title = 'Toggle textures';
         barTexBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span class="editorial-bar-label">Texture</span>';
         barTexBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            barTexturesVisible = !barTexturesVisible;
-            updateModelTextures(modelGroup, barTexturesVisible);
-            barTexBtn.classList.toggle('off', !barTexturesVisible);
-            textureToggle.classList.toggle('off', !barTexturesVisible);
+            texturesVisible = !texturesVisible;
+            updateModelTextures(modelGroup, texturesVisible);
+            barTexBtn.classList.toggle('off', !texturesVisible);
+            textureToggle.classList.toggle('off', !texturesVisible);
         });
         mobilePill.appendChild(barTexBtn);
 
         // View mode button + upward popover
-        let barActiveView = null;
         const barViewBtn = document.createElement('button');
         barViewBtn.className = 'editorial-bar-btn';
         barViewBtn.title = 'View mode';
@@ -1615,34 +1549,14 @@ export function setup(manifest, deps) {
         barViewPopover.className = 'editorial-bar-popover';
 
         const barSetView = (view) => {
-            if (view === barActiveView) view = null;
-            if (barActiveView) {
-                if (barActiveView === 'wireframe') updateModelWireframe(modelGroup, false);
-                else if (barActiveView === 'normals') updateModelNormals(modelGroup, false);
-                else if (barActiveView === 'roughness') updateModelRoughness(modelGroup, false);
-                else if (barActiveView === 'metalness') updateModelMetalness(modelGroup, false);
-                else if (barActiveView === 'specularF0') updateModelSpecularF0(modelGroup, false);
-                else if (barActiveView.startsWith('matcap:')) updateModelMatcap(modelGroup, false);
-            }
-            barActiveView = view;
-            if (barActiveView) {
-                if (barActiveView === 'wireframe') updateModelWireframe(modelGroup, true);
-                else if (barActiveView === 'normals') updateModelNormals(modelGroup, true);
-                else if (barActiveView === 'roughness') updateModelRoughness(modelGroup, true);
-                else if (barActiveView === 'metalness') updateModelMetalness(modelGroup, true);
-                else if (barActiveView === 'specularF0') updateModelSpecularF0(modelGroup, true);
-                else if (barActiveView.startsWith('matcap:')) updateModelMatcap(modelGroup, true, barActiveView.split(':')[1]);
-            }
-            barViewBtn.classList.toggle('active', !!barActiveView);
-            barViewPopover.querySelectorAll('.editorial-bar-popover-item').forEach(el => {
-                el.classList.toggle('active', el.dataset.view === barActiveView);
-            });
-            // Sync desktop ribbon material dropdown
-            materialDropdown.querySelectorAll('.editorial-matcap-item').forEach(el => {
-                el.classList.toggle('active', el.dataset.view === barActiveView);
-            });
-            materialBtn.classList.toggle('active', !!barActiveView);
+            setMaterialView(view);
             barViewPopover.classList.remove('open');
+        };
+        syncMobileView = (view) => {
+            barViewBtn.classList.toggle('active', !!view);
+            barViewPopover.querySelectorAll('.editorial-bar-popover-item').forEach(el => {
+                el.classList.toggle('active', el.dataset.view === view);
+            });
         };
 
         [['Wireframe', 'wireframe'], ['Normals', 'normals'], ['Roughness', 'roughness'], ['Metalness', 'metalness']].forEach(([label, key]) => {

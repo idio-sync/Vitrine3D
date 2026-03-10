@@ -1631,5 +1631,6 @@ window.__KIOSK_LAYOUTS__['industrial'] = {
     onAssetLoaded: onAssetLoaded,
     onMeasurementChanged: onMeasurementChanged,
     hasOwnInfoPanel: true,
-    hasOwnQualityToggle: true
+    hasOwnQualityToggle: true,
+    handlesEmptyState: true
 };

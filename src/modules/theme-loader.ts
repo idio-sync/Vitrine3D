@@ -46,6 +46,8 @@ export interface LayoutModule {
     hasOwnInfoPanel?: boolean;
     /** If true, the layout creates its own SD/HD quality toggle. */
     hasOwnQualityToggle?: boolean;
+    /** If true, the layout handles its own empty state (no-asset overlay) and the generic kiosk-file-picker is not shown. */
+    handlesEmptyState?: boolean;
 
     /** Called when a walkthrough is about to start (player bar created, autoplay pending). */
     onWalkthroughStart?(walkthrough: import('../types.js').Walkthrough): void;
