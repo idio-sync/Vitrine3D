@@ -1,7 +1,7 @@
 // ===== Union Types =====
 
 export type DisplayMode = 'splat' | 'model' | 'pointcloud' | 'both' | 'split' | 'stl';
-export type SelectedObject = 'splat' | 'model' | 'pointcloud' | 'stl' | 'cad' | 'drawing' | 'flightpath' | 'both' | 'none';
+export type SelectedObject = 'splat' | 'model' | 'pointcloud' | 'stl' | 'cad' | 'drawing' | 'flightpath' | 'colmap' | 'both' | 'none';
 export type TransformMode = 'translate' | 'rotate' | 'scale';
 export type RotationPivot = 'object' | 'origin';
 export type QualityTier = 'sd' | 'hd';
@@ -44,6 +44,7 @@ export interface AppState {
     cadLoaded: boolean;
     drawingLoaded: boolean;
     flightPathLoaded: boolean;
+    colmapLoaded: boolean;
     currentDrawingUrl: string | null;
     currentCadUrl: string | null;
     modelOpacity: number;
@@ -105,6 +106,7 @@ export interface SceneRefs {
     readonly cadGroup: any;           // THREE.Group
     readonly drawingGroup: any;       // THREE.Group
     readonly flightPathGroup: any;    // THREE.Group
+    readonly colmapGroup: any;        // THREE.Group
     readonly flyControls: any;        // FlyControls | null
     readonly annotationSystem: any;   // AnnotationSystem | null
     readonly archiveCreator: any;     // ArchiveCreator | null
@@ -212,6 +214,29 @@ export interface FlightPathData {
     maxAltM: number;         // max altitude in meters
 }
 
+// ===== Colmap =====
+
+/** Parsed Colmap camera intrinsics */
+export interface ColmapIntrinsics {
+    cameraId: number;
+    modelId: number;
+    width: number;
+    height: number;
+    focalLength: number; // fx (or f for simple models)
+    cx: number;
+    cy: number;
+}
+
+/** Parsed Colmap image (camera extrinsics + filename) */
+export interface ColmapCamera {
+    imageId: number;
+    quaternion: [number, number, number, number]; // [x, y, z, w] (Three.js order)
+    position: [number, number, number]; // world-space camera position
+    cameraId: number; // references ColmapIntrinsics
+    name: string; // image filename
+    focalLength: number; // resolved from intrinsics
+}
+
 // ===== Asset Store =====
 
 export interface AssetStore {
@@ -223,6 +248,7 @@ export interface AssetStore {
     cadBlob: Blob | null;
     cadFileName: string | null;
     flightPathBlobs: Array<{ blob: Blob; fileName: string }>;
+    colmapBlobs: Array<{ camerasBlob: Blob; imagesBlob: Blob }>;
     sourceFiles: Array<{ name: string; blob: Blob }>;
 }
 
@@ -251,7 +277,7 @@ export interface CollectionArchive {
 // ===== Module Dependencies =====
 
 export interface ExportDeps {
-    sceneRefs: Pick<SceneRefs, 'renderer' | 'scene' | 'camera' | 'controls' | 'splatMesh' | 'modelGroup' | 'pointcloudGroup' | 'cadGroup' | 'flightPathGroup' | 'annotationSystem' | 'archiveCreator' | 'measurementSystem'>;
+    sceneRefs: Pick<SceneRefs, 'renderer' | 'scene' | 'camera' | 'controls' | 'splatMesh' | 'modelGroup' | 'pointcloudGroup' | 'cadGroup' | 'flightPathGroup' | 'colmapGroup' | 'annotationSystem' | 'archiveCreator' | 'measurementSystem'>;
     state: AppState;
     tauriBridge: any | null;
     ui: {
@@ -417,6 +443,12 @@ export interface EventWiringDeps {
         performRedo: () => void;
         captureBeforeNumericEdit: () => void;
         pushAfterNumericEdit: () => void;
+    };
+    colmap: {
+        loadFromBuffers: (cameras: ArrayBuffer, images: ArrayBuffer) => void;
+        setDisplayMode: (mode: string) => void;
+        setFrustumScale: (scale: number) => void;
+        alignFlightPath: () => void;
     };
 }
 
