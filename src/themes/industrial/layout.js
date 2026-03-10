@@ -12,6 +12,7 @@
 
 // ---- Module-scope state ----
 
+var THREE = null;           // Set from deps.THREE in setup()
 var _deps = null;
 var _activeTool = null;
 var _toggles = { matcap: false, texture: true, wireframe: false, trackball: false, toolbar: true, annotations: true, grid: false, autorotate: true };
@@ -724,7 +725,6 @@ function toggleOrthographic() {
         var frustW = frustH * aspect;
 
         if (!_orthoCam) {
-            var THREE = (_deps && _deps.THREE) || window.THREE || null;
             if (!THREE || !THREE.OrthographicCamera) {
                 console.warn('[industrial] THREE not available, orthographic not supported');
                 return;
@@ -1220,7 +1220,6 @@ function createActionBtn(action, tooltip, icon) {
 }
 
 function toggleBoundingBox() {
-    var THREE = (_deps && _deps.THREE) || window.THREE;
     if (!THREE) return;
     var scene = _deps && _deps.sceneManager && _deps.sceneManager.scene;
     if (!scene) return;
@@ -2253,6 +2252,7 @@ function onViewModeChange(mode) {
 function setup(manifest, deps) {
     _manifest = manifest;
     _deps = deps;
+    THREE = (deps && deps.THREE) || window.THREE;
 
     // Update window title
     if (manifest && manifest.title) {
