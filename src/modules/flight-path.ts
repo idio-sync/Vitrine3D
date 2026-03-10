@@ -154,6 +154,13 @@ export class FlightPathManager {
         this.raycaster.params.Points = { threshold: 0.05 };
     }
 
+    /** Return the visible slice of a path's points, respecting trim bounds. */
+    private getTrimmedPoints(data: FlightPathData): FlightPoint[] {
+        const start = data.trimStart ?? 0;
+        const end = data.trimEnd ?? (data.points.length - 1);
+        return data.points.slice(start, end + 1);
+    }
+
     // ─── Import ───────────────────────────────────────────────────────
 
     /** Import a flight log file. Returns the parsed FlightPathData. */
@@ -244,7 +251,8 @@ export class FlightPathManager {
 
     /** Render a flight path as line + markers with color-mode-based vertex coloring. */
     private renderPath(data: FlightPathData): void {
-        const renderPoints = subsample(data.points, FLIGHT_LOG.MAX_RENDER_POINTS);
+        const trimmedPoints = this.getTrimmedPoints(data);
+        const renderPoints = subsample(trimmedPoints, FLIGHT_LOG.MAX_RENDER_POINTS);
 
         // Build line + markers
         const { line, markers } = this.buildColoredPath(renderPoints);
@@ -332,6 +340,7 @@ export class FlightPathManager {
         }
         markers.instanceMatrix.needsUpdate = true;
         if (markers.instanceColor) markers.instanceColor.needsUpdate = true;
+        markers.userData.totalCount = markers.count;
 
         return { line, markers };
     }
@@ -557,6 +566,70 @@ export class FlightPathManager {
         log.info(`Deleted flight path: ${pathId}`);
     }
 
+    /** Set trim range for a path. Indices are clamped and must leave at least 2 points visible. */
+    setTrim(pathId: string, startIdx: number, endIdx: number): void {
+        const data = this.paths.find(p => p.id === pathId);
+        if (!data) return;
+
+        const maxIdx = data.points.length - 1;
+        const s = Math.max(0, Math.min(startIdx, maxIdx));
+        const e = Math.max(s + 1, Math.min(endIdx, maxIdx));
+
+        data.trimStart = s === 0 ? undefined : s;
+        data.trimEnd = e === maxIdx ? undefined : e;
+
+        this.reRenderPath(pathId);
+        log.info(`Trim set on ${pathId}: [${s}..${e}] of ${data.points.length} points`);
+    }
+
+    /** Reset trim for a path (show all points). */
+    resetTrim(pathId: string): void {
+        const data = this.paths.find(p => p.id === pathId);
+        if (!data) return;
+        data.trimStart = undefined;
+        data.trimEnd = undefined;
+        this.reRenderPath(pathId);
+        log.info(`Trim reset on ${pathId}`);
+    }
+
+    /** Remove and re-render a single path. */
+    private reRenderPath(pathId: string): void {
+        const data = this.paths.find(p => p.id === pathId);
+        const entry = this.meshes.get(pathId);
+        if (!data || !entry) return;
+
+        entry.line.geometry.dispose();
+        (entry.line.material as THREE.Material).dispose();
+        entry.markers.geometry.dispose();
+        (entry.markers.material as THREE.Material).dispose();
+        this.group.remove(entry.line);
+        this.group.remove(entry.markers);
+
+        entry.endpointGroup.traverse((child: THREE.Object3D) => {
+            const mesh = child as THREE.Mesh;
+            if (mesh.geometry) { mesh.geometry.dispose(); (mesh.material as THREE.Material)?.dispose(); }
+        });
+        this.group.remove(entry.endpointGroup);
+
+        entry.directionGroup.traverse((child: THREE.Object3D) => {
+            const mesh = child as THREE.Mesh;
+            if (mesh.geometry) { mesh.geometry.dispose(); (mesh.material as THREE.Material)?.dispose(); }
+        });
+        this.group.remove(entry.directionGroup);
+
+        this.meshes.delete(pathId);
+        this.renderPath(data);
+
+        const visible = this._pathVisibility.get(pathId) !== false;
+        const newEntry = this.meshes.get(pathId);
+        if (newEntry && !visible) {
+            newEntry.line.visible = false;
+            newEntry.markers.visible = false;
+            newEntry.endpointGroup.visible = false;
+            newEntry.directionGroup.visible = false;
+        }
+    }
+
     /** Get visibility state of a path */
     isPathVisible(pathId: string): boolean {
         return this._pathVisibility.get(pathId) !== false;
@@ -575,20 +648,26 @@ export class FlightPathManager {
         let maxSpeed = 0;
         let totalSpeed = 0;
         let speedCount = 0;
-        let totalPoints = 0;
+        let totalOriginalPoints = 0;
+        let totalTrimmedPoints = 0;
 
         for (const p of visible) {
-            totalDuration += p.durationS;
-            totalDistanceM += computeGpsDistanceM(p.points);
-            if (p.maxAltM > maxAlt) maxAlt = p.maxAltM;
-            for (const pt of p.points) {
+            const trimmed = this.getTrimmedPoints(p);
+            const first = trimmed[0];
+            const last = trimmed[trimmed.length - 1];
+            totalDuration += Math.round((last.timestamp - first.timestamp) / 1000);
+            totalDistanceM += computeGpsDistanceM(trimmed);
+            const trimMaxAlt = Math.max(...trimmed.map(pt => pt.alt));
+            if (trimMaxAlt > maxAlt) maxAlt = trimMaxAlt;
+            for (const pt of trimmed) {
                 if (pt.speed !== undefined) {
                     if (pt.speed > maxSpeed) maxSpeed = pt.speed;
                     totalSpeed += pt.speed;
                     speedCount++;
                 }
             }
-            totalPoints += p.points.length;
+            totalOriginalPoints += p.points.length;
+            totalTrimmedPoints += trimmed.length;
         }
 
         const avgSpeed = speedCount > 0 ? totalSpeed / speedCount : 0;
@@ -607,7 +686,9 @@ export class FlightPathManager {
             maxAlt: `${maxAlt.toFixed(1)} m`,
             maxSpeed: `${maxSpeed.toFixed(1)} m/s`,
             avgSpeed: `${avgSpeed.toFixed(1)} m/s`,
-            points: totalPoints.toLocaleString(),
+            points: totalTrimmedPoints < totalOriginalPoints
+                ? `${totalTrimmedPoints.toLocaleString()} (of ${totalOriginalPoints.toLocaleString()})`
+                : totalOriginalPoints.toLocaleString(),
         };
     }
 
@@ -619,9 +700,17 @@ export class FlightPathManager {
         if (!targetId) return;
         const pathData = this.paths.find(p => p.id === targetId);
         if (!pathData || pathData.points.length < 2) return;
+        const trimmed = this.getTrimmedPoints(pathData);
+        if (trimmed.length < 2) return;
 
         this._playbackPathId = targetId;
         this._playing = true;
+
+        // Clamp playback to trimmed time window
+        const trimStartMs = trimmed[0].timestamp;
+        if (this._playbackTime < trimStartMs) {
+            this._playbackTime = trimStartMs;
+        }
 
         // Create playback marker if needed
         if (!this._playbackMarker) {
@@ -700,17 +789,22 @@ export class FlightPathManager {
         const pathData = this.paths.find(p => p.id === this._playbackPathId);
         if (!pathData) return;
 
-        this._playbackTime += deltaTime * 1000 * this._playbackSpeed;
-        const totalMs = pathData.durationS * 1000;
+        const trimmed = this.getTrimmedPoints(pathData);
+        const trimStartMs = trimmed[0].timestamp;
+        const trimEndMs = trimmed[trimmed.length - 1].timestamp;
+        const totalMs = trimEndMs - trimStartMs;
 
-        if (this._playbackTime >= totalMs) {
-            this._playbackTime = totalMs;
+        this._playbackTime += deltaTime * 1000 * this._playbackSpeed;
+        if (this._playbackTime < trimStartMs) this._playbackTime = trimStartMs;
+
+        if (this._playbackTime >= trimEndMs) {
+            this._playbackTime = trimEndMs;
             this._playing = false;
             this._onPlaybackEnd?.();
         }
 
         this.updatePlaybackPosition();
-        this._onPlaybackUpdate?.(this._playbackTime, totalMs);
+        this._onPlaybackUpdate?.(this._playbackTime - trimStartMs, totalMs);
     }
 
     /** Update the playback marker position by interpolating between points. */
@@ -832,6 +926,35 @@ export class FlightPathManager {
     /** Toggle visibility of all flight paths. */
     setVisible(visible: boolean): void {
         this.group.visible = visible;
+    }
+
+    /** Update the line opacity for all flight paths. */
+    setLineOpacity(opacity: number): void {
+        for (const [, entry] of this.meshes) {
+            const mat = entry.line.material as THREE.LineBasicMaterial;
+            mat.opacity = opacity;
+            mat.transparent = opacity < 1;
+            mat.needsUpdate = true;
+        }
+    }
+
+    /** Set marker density: 'off' hides all markers, 'sparse' shows ~200, 'all' shows everything. */
+    setMarkerDensity(density: 'off' | 'sparse' | 'all'): void {
+        for (const [id, entry] of this.meshes) {
+            if (!entry.markers) continue;
+            const total = entry.markers.userData?.totalCount ?? entry.markers.count;
+            if (density === 'off') {
+                entry.markers.visible = false;
+            } else if (density === 'all') {
+                entry.markers.count = total;
+                entry.markers.visible = this._pathVisibility.get(id) !== false;
+            } else {
+                // sparse: show ~200 evenly spaced
+                const target = Math.min(200, total);
+                entry.markers.count = target;
+                entry.markers.visible = this._pathVisibility.get(id) !== false;
+            }
+        }
     }
 
     /** Check if any flight paths are loaded. */

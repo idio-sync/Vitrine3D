@@ -222,6 +222,14 @@ export interface ViewerSettings {
     flightColorMode?: string;
     flightShowEndpoints?: boolean;
     flightShowDirection?: boolean;
+    // View defaults
+    sfmVisible?: boolean;
+    sfmDisplayMode?: string;
+    flightVisible?: boolean;
+    flightLineColor?: string;
+    flightLineOpacity?: number;
+    flightShowMarkers?: boolean;
+    flightMarkerDensity?: string;
 }
 
 export interface VersionHistoryEntry {
@@ -1527,6 +1535,14 @@ export function collectMetadata(): CollectedMetadata {
             flightColorMode: (document.getElementById('flight-color-mode') as HTMLSelectElement)?.value || 'speed',
             flightShowEndpoints: (document.getElementById('flight-show-endpoints') as HTMLInputElement)?.checked ?? true,
             flightShowDirection: (document.getElementById('flight-show-direction') as HTMLInputElement)?.checked ?? true,
+            // View defaults
+            sfmVisible: (document.getElementById('sfm-show-on-load') as HTMLInputElement)?.checked ?? false,
+            sfmDisplayMode: (document.getElementById('sfm-display-mode') as HTMLSelectElement)?.value || 'frustums',
+            flightVisible: (document.getElementById('flight-show-on-load') as HTMLInputElement)?.checked ?? false,
+            flightLineColor: (document.getElementById('flight-line-color') as HTMLInputElement)?.value || '#00ffff',
+            flightLineOpacity: parseInt((document.getElementById('flight-line-opacity') as HTMLInputElement)?.value || '100', 10) / 100,
+            flightShowMarkers: (document.getElementById('flight-show-markers') as HTMLInputElement)?.checked ?? true,
+            flightMarkerDensity: (document.getElementById('flight-marker-density') as HTMLSelectElement)?.value || 'all',
         }
     };
 

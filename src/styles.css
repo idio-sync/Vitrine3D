@@ -691,6 +691,23 @@ input, select, textarea {
 
 .prop-select:focus { border-color: var(--accent); }
 
+/* Color input */
+.prop-color-input {
+    width: 32px;
+    height: 24px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 1px;
+    cursor: pointer;
+    background: transparent;
+}
+
+/* Section divider */
+.prop-divider {
+    border: none;
+    border-top: 1px solid var(--border-default);
+}
+
 /* Text input */
 .prop-input {
     width: 100%;
@@ -1738,6 +1755,49 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 /* Trim timeline */
 .trim-timeline:hover { background: #222; }
+
+/* Flight path trim bar */
+.fp-trim-bar {
+    position: relative;
+    height: 16px;
+    background: #1a1a1a;
+    border-radius: 3px;
+    margin: 4px 0 2px;
+    cursor: pointer;
+    user-select: none;
+}
+.fp-trim-range {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(79, 195, 247, 0.25);
+    border-radius: 2px;
+}
+.fp-trim-handle {
+    position: absolute;
+    top: -1px;
+    bottom: -1px;
+    width: 6px;
+    background: #4FC3F7;
+    border-radius: 2px;
+    cursor: ew-resize;
+    z-index: 1;
+}
+.fp-trim-handle:hover,
+.fp-trim-handle.dragging {
+    background: #81D4FA;
+}
+.fp-trim-handle-start { left: 0; }
+.fp-trim-handle-end { right: 0; }
+.fp-trim-reset {
+    font-size: 9px;
+    color: var(--text-muted);
+    cursor: pointer;
+    margin-left: auto;
+}
+.fp-trim-reset:hover {
+    color: var(--text-secondary);
+}
 
 @keyframes measure-pulse {
     0%, 100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 2px 8px rgba(255, 107, 53, 0.5); }

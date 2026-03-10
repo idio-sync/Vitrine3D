@@ -517,7 +517,15 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
                 if (!fileData) return null;
                 return { blob: fileData.blob, fileName: entry.original_name || entry.file_name.split('/').pop() || entry.file_name };
             }));
-            for (const r of fpResults) { if (r) fpStore.flightPathBlobs.push(r); }
+            for (let i = 0; i < flightEntries.length; i++) {
+                const r = fpResults[i];
+                if (r) {
+                    const meta = (flightEntries[i].entry as any)._flight_meta as Record<string, unknown> | undefined;
+                    if (meta?.trim_start !== undefined) r.trimStart = meta.trim_start as number;
+                    if (meta?.trim_end !== undefined) r.trimEnd = meta.trim_end as number;
+                    fpStore.flightPathBlobs.push(r);
+                }
+            }
 
             state.flightPathLoaded = true;
             state.assetStates[assetType] = ASSET_STATE.LOADED;
@@ -954,6 +962,48 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
                 if (controlsDiv) controlsDiv.style.display = '';
             }
         }
+    }
+
+    // ─── View defaults (overlay visibility on load) ────────
+    const { state } = deps;
+    if (settings.sfm_visible !== undefined) {
+        state.viewDefaults.sfmCameras.visible = settings.sfm_visible;
+        const el = document.getElementById('sfm-show-on-load') as HTMLInputElement | null;
+        if (el) el.checked = settings.sfm_visible;
+    }
+    if (settings.sfm_display_mode !== undefined) {
+        state.viewDefaults.sfmCameras.displayMode = settings.sfm_display_mode;
+        const el = document.getElementById('sfm-display-mode') as HTMLSelectElement | null;
+        if (el) el.value = settings.sfm_display_mode;
+    }
+    if (settings.flight_visible !== undefined) {
+        state.viewDefaults.flightPath.visible = settings.flight_visible;
+        const el = document.getElementById('flight-show-on-load') as HTMLInputElement | null;
+        if (el) el.checked = settings.flight_visible;
+    }
+    if (settings.flight_line_color !== undefined) {
+        state.viewDefaults.flightPath.lineColor = settings.flight_line_color;
+        const el = document.getElementById('flight-line-color') as HTMLInputElement | null;
+        if (el) el.value = settings.flight_line_color;
+    }
+    if (settings.flight_line_opacity !== undefined) {
+        state.viewDefaults.flightPath.lineOpacity = settings.flight_line_opacity;
+        const slider = document.getElementById('flight-line-opacity') as HTMLInputElement | null;
+        const label = document.getElementById('flight-line-opacity-value');
+        if (slider) slider.value = String(Math.round(settings.flight_line_opacity * 100));
+        if (label) label.textContent = `${Math.round(settings.flight_line_opacity * 100)}%`;
+    }
+    if (settings.flight_show_markers !== undefined) {
+        state.viewDefaults.flightPath.showMarkers = settings.flight_show_markers;
+        const el = document.getElementById('flight-show-markers') as HTMLInputElement | null;
+        if (el) el.checked = settings.flight_show_markers;
+        const densitySelect = document.getElementById('flight-marker-density') as HTMLSelectElement | null;
+        if (densitySelect) densitySelect.disabled = !settings.flight_show_markers;
+    }
+    if (settings.flight_marker_density !== undefined) {
+        state.viewDefaults.flightPath.markerDensity = settings.flight_marker_density;
+        const el = document.getElementById('flight-marker-density') as HTMLSelectElement | null;
+        if (el) el.value = settings.flight_marker_density;
     }
 
     log.info('Applied viewer settings:', settings);

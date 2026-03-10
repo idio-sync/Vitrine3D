@@ -140,6 +140,14 @@ export interface ViewerSettings {
     flightColorMode?: string;
     flightShowEndpoints?: boolean;
     flightShowDirection?: boolean;
+    // View defaults (overlay visibility on load)
+    sfmVisible?: boolean;
+    sfmDisplayMode?: string;
+    flightVisible?: boolean;
+    flightLineColor?: string;
+    flightLineOpacity?: number;
+    flightShowMarkers?: boolean;
+    flightMarkerDensity?: string;
 }
 
 export interface MaterialStandard {
@@ -1191,6 +1199,14 @@ export class ArchiveCreator {
         if (settings.flightColorMode !== undefined) this.manifest.viewer_settings.flight_color_mode = settings.flightColorMode;
         if (settings.flightShowEndpoints !== undefined) this.manifest.viewer_settings.flight_show_endpoints = settings.flightShowEndpoints;
         if (settings.flightShowDirection !== undefined) this.manifest.viewer_settings.flight_show_direction = settings.flightShowDirection;
+        // View defaults
+        if (settings.sfmVisible !== undefined) this.manifest.viewer_settings.sfm_visible = settings.sfmVisible;
+        if (settings.sfmDisplayMode !== undefined) this.manifest.viewer_settings.sfm_display_mode = settings.sfmDisplayMode;
+        if (settings.flightVisible !== undefined) this.manifest.viewer_settings.flight_visible = settings.flightVisible;
+        if (settings.flightLineColor !== undefined) this.manifest.viewer_settings.flight_line_color = settings.flightLineColor;
+        if (settings.flightLineOpacity !== undefined) this.manifest.viewer_settings.flight_line_opacity = settings.flightLineOpacity;
+        if (settings.flightShowMarkers !== undefined) this.manifest.viewer_settings.flight_show_markers = settings.flightShowMarkers;
+        if (settings.flightMarkerDensity !== undefined) this.manifest.viewer_settings.flight_marker_density = settings.flightMarkerDensity;
     }
 
     setAlignment(data: {

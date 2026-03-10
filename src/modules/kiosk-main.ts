@@ -1628,12 +1628,28 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                     }
                 }
 
+                // Apply view defaults from manifest
+                const vs = manifest.viewer_settings || {};
+                if (flightPathManager.setLineOpacity && vs.flight_line_opacity !== undefined) {
+                    flightPathManager.setLineOpacity(vs.flight_line_opacity);
+                }
+                if (flightPathManager.setMarkerDensity) {
+                    if (vs.flight_show_markers === false) {
+                        flightPathManager.setMarkerDensity('off');
+                    } else if (vs.flight_marker_density) {
+                        flightPathManager.setMarkerDensity(vs.flight_marker_density);
+                    }
+                }
+
                 // Show toggle button if paths loaded
                 if (flightPathManager.hasData) {
+                    const fpStartVisible = vs.flight_visible !== undefined ? vs.flight_visible : true;
+                    flightPathManager.setVisible(fpStartVisible);
                     const toggleBtn = document.getElementById('btn-toggle-flightpath');
                     if (toggleBtn) {
                         toggleBtn.style.display = '';
-                        let fpVisible = true;
+                        toggleBtn.classList.toggle('active', fpStartVisible);
+                        let fpVisible = fpStartVisible;
                         toggleBtn.addEventListener('click', () => {
                             fpVisible = !fpVisible;
                             flightPathManager.setVisible(fpVisible);
@@ -1672,10 +1688,17 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                     colmapGroup.scale.setScalar(s);
                 }
             }
+            // Apply view defaults
+            const sfmVs = manifest.viewer_settings || {};
+            const sfmStartVisible = sfmVs.sfm_visible !== undefined ? sfmVs.sfm_visible : true;
+            colmapGroup.visible = sfmStartVisible;
+            if (sfmVs.sfm_display_mode) manager.setDisplayMode(sfmVs.sfm_display_mode);
+
             // Show toggle button
             const toggleBtn = document.getElementById('btn-toggle-cameras');
             if (toggleBtn) {
                 toggleBtn.style.display = '';
+                toggleBtn.classList.toggle('active', sfmStartVisible);
                 toggleBtn.addEventListener('click', () => {
                     const visible = colmapGroup.visible;
                     colmapGroup.visible = !visible;

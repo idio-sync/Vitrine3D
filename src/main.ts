@@ -696,11 +696,21 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
                     showEndpoints: endpointsEl?.checked ?? true,
                     showDirection: directionEl?.checked ?? true,
                 });
+                // Apply view defaults: visibility, line styling, marker density
+                flightPathManager.setVisible(state.viewDefaults.flightPath.visible);
+                if (flightPathManager.setLineOpacity) flightPathManager.setLineOpacity(state.viewDefaults.flightPath.lineOpacity);
+                if (flightPathManager.setMarkerDensity) {
+                    const density = state.viewDefaults.flightPath.showMarkers ? state.viewDefaults.flightPath.markerDensity : 'off';
+                    flightPathManager.setMarkerDensity(density);
+                }
                 state.flightPathLoaded = true;
                 updateObjectSelectButtons();
                 updateFlightPathUI();
                 updateColmapUI();
                 updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
+                // Sync overlay pill button to view default
+                const fpPillBtn = document.getElementById('btn-overlay-flightpath');
+                if (fpPillBtn) fpPillBtn.classList.toggle('active', state.viewDefaults.flightPath.visible);
             }
         }
     };
@@ -817,11 +827,18 @@ function createEventWiringDeps(): EventWiringDeps {
                     colmapGrp.scale.copy(splatMesh.scale);
                 }
                 state.colmapLoaded = true;
+                // Apply view defaults: visibility and display mode
+                const colmapGrpVis = sceneManager?.colmapGroup;
+                if (colmapGrpVis) colmapGrpVis.visible = state.viewDefaults.sfmCameras.visible;
+                if (colmapManager) colmapManager.setDisplayMode(state.viewDefaults.sfmCameras.displayMode);
                 updateObjectSelectButtons();
                 updateColmapUI();
                 storeLastPositions();
                 updateTransformInputs();
                 updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
+                // Sync overlay pill button to view default
+                const sfmPillBtn = document.getElementById('btn-overlay-sfm');
+                if (sfmPillBtn) sfmPillBtn.classList.toggle('active', state.viewDefaults.sfmCameras.visible);
             },
             setDisplayMode: (mode: string) => colmapManager?.setDisplayMode(mode as any),
             setFrustumScale: (scale: number) => colmapManager?.setFrustumScale(scale),

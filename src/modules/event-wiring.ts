@@ -121,6 +121,35 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (deps.overlay?.toggleFlightPath) deps.overlay.toggleFlightPath(nowActive);
     });
 
+    // ─── View default settings ──────────────────────────────
+    addListener('sfm-show-on-load', 'change', () => {
+        deps.state.viewDefaults.sfmCameras.visible = (document.getElementById('sfm-show-on-load') as HTMLInputElement)?.checked ?? false;
+    });
+    addListener('sfm-display-mode', 'change', () => {
+        deps.state.viewDefaults.sfmCameras.displayMode = ((document.getElementById('sfm-display-mode') as HTMLSelectElement)?.value as any) ?? 'frustums';
+    });
+    addListener('flight-show-on-load', 'change', () => {
+        deps.state.viewDefaults.flightPath.visible = (document.getElementById('flight-show-on-load') as HTMLInputElement)?.checked ?? false;
+    });
+    addListener('flight-line-color', 'input', () => {
+        deps.state.viewDefaults.flightPath.lineColor = (document.getElementById('flight-line-color') as HTMLInputElement)?.value ?? '#00ffff';
+    });
+    addListener('flight-line-opacity', 'input', () => {
+        const val = parseInt((document.getElementById('flight-line-opacity') as HTMLInputElement)?.value ?? '100', 10);
+        deps.state.viewDefaults.flightPath.lineOpacity = val / 100;
+        const label = document.getElementById('flight-line-opacity-value');
+        if (label) label.textContent = `${val}%`;
+    });
+    addListener('flight-show-markers', 'change', () => {
+        const checked = (document.getElementById('flight-show-markers') as HTMLInputElement)?.checked ?? true;
+        deps.state.viewDefaults.flightPath.showMarkers = checked;
+        const densitySelect = document.getElementById('flight-marker-density') as HTMLSelectElement | null;
+        if (densitySelect) densitySelect.disabled = !checked;
+    });
+    addListener('flight-marker-density', 'change', () => {
+        deps.state.viewDefaults.flightPath.markerDensity = ((document.getElementById('flight-marker-density') as HTMLSelectElement)?.value as any) ?? 'all';
+    });
+
     // ─── File inputs ─────────────────────────────────────────
     addListener('splat-input', 'change', deps.files.handleSplatFile);
     addListener('model-input', 'change', deps.files.handleModelFile);
