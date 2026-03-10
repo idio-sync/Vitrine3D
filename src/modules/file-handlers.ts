@@ -1785,10 +1785,9 @@ export async function loadArchiveFullResMesh(archiveLoader: ArchiveLoader, deps:
         const buffer = await archiveLoader.extractFileBuffer(meshEntry.file_name);
         if (buffer) {
             parsed = await parseMeshOffScene(buffer, meshEntry.file_name);
-            if (parsed) {
-                // Create a Blob from the buffer so callers (e.g. editor export) can re-use it
-                meshBlob = new Blob([buffer]);
-            }
+            // No Blob copy — Three.js holds parsed geometry, and the editor's export
+            // fallback (export-controller.ts) re-extracts from archive on demand.
+            // Skipping the Blob saves ~160 MB for large HD meshes.
         }
     }
 
@@ -1836,7 +1835,7 @@ export async function loadArchiveFullResMesh(archiveLoader: ArchiveLoader, deps:
 async function swapSplatAsset(
     blobUrl: string, fileName: string,
     deps: LoadFullResDeps,
-    transformEntry: any
+    fallbackTransform: any
 ): Promise<void> {
     const { state, scene, getSplatMesh, setSplatMesh, callbacks = {} } = deps;
 
@@ -1869,10 +1868,8 @@ async function swapSplatAsset(
     setSplatMesh(newSplat);
     state.splatLoaded = true;
 
-    // Re-apply the captured transform, falling back to manifest
-    const transform = currentTransform || (transformEntry
-        ? deps.archiveLoader?.getEntryTransform?.(transformEntry) ?? null
-        : null);
+    // Re-apply the captured transform, falling back to caller-provided manifest transform
+    const transform = currentTransform || fallbackTransform;
     if (transform && callbacks.onApplySplatTransform) {
         callbacks.onApplySplatTransform(transform);
     }
@@ -1893,7 +1890,7 @@ export async function loadArchiveFullResSplat(archiveLoader: ArchiveLoader, deps
         return { loaded: false, blob: null, error: 'Failed to extract full-resolution splat' };
     }
 
-    await swapSplatAsset(splatData.url, sceneEntry.file_name, deps, sceneEntry);
+    await swapSplatAsset(splatData.url, sceneEntry.file_name, deps, archiveLoader.getEntryTransform(sceneEntry));
 
     deps.state.assetStates.splat = ASSET_STATE.LOADED;
     return { loaded: true, blob: splatData.blob, error: null };
@@ -1915,7 +1912,7 @@ export async function loadArchiveProxySplat(archiveLoader: ArchiveLoader, deps: 
     }
 
     const sceneEntry = archiveLoader.getSceneEntry();
-    await swapSplatAsset(splatData.url, proxyEntry.file_name, deps, sceneEntry || proxyEntry);
+    await swapSplatAsset(splatData.url, proxyEntry.file_name, deps, archiveLoader.getEntryTransform(sceneEntry || proxyEntry));
 
     deps.state.assetStates.splat = ASSET_STATE.LOADED;
     return { loaded: true, blob: splatData.blob, error: null };
@@ -1951,9 +1948,7 @@ export async function loadArchiveProxyMesh(archiveLoader: ArchiveLoader, deps: L
         const buffer = await archiveLoader.extractFileBuffer(proxyEntry.file_name);
         if (buffer) {
             parsed = await parseMeshOffScene(buffer, proxyEntry.file_name);
-            if (parsed) {
-                meshBlob = new Blob([buffer]);
-            }
+            // No Blob copy — export fallback re-extracts from archive on demand
         }
     }
 
