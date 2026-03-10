@@ -6,6 +6,22 @@ export type TransformMode = 'translate' | 'rotate' | 'scale';
 export type RotationPivot = 'object' | 'origin';
 export type QualityTier = 'sd' | 'hd';
 export type AssetStateValue = 'unloaded' | 'loading' | 'loaded' | 'error';
+export type MarkerDensity = 'off' | 'sparse' | 'all';
+export type SfmDisplayMode = 'frustums' | 'markers';
+
+export interface ViewDefaults {
+    sfmCameras: {
+        visible: boolean;
+        displayMode: SfmDisplayMode;
+    };
+    flightPath: {
+        visible: boolean;
+        lineColor: string;
+        lineOpacity: number;
+        showMarkers: boolean;
+        markerDensity: MarkerDensity;
+    };
+}
 
 export interface DecimationOptions {
     preset: string;
@@ -85,6 +101,7 @@ export interface AppState {
     pointcloudFormat: string | null;
     splatFormat: string | null;
     splatLodEnabled: boolean;             // "Generate Splat LOD at archive export" checkbox
+    viewDefaults: ViewDefaults;           // Archive-embeddable overlay display defaults
     meshVertexCount?: number;              // Dynamically set by file-handlers.js after mesh load
     meshTextureInfo?: import('./modules/utilities.js').TextureInfo;  // Dynamically set after mesh load
     // Allow additional dynamic properties set by JS modules
@@ -212,6 +229,8 @@ export interface FlightPathData {
     originGps: [number, number]; // [lat, lon] of first point
     durationS: number;       // total flight duration in seconds
     maxAltM: number;         // max altitude in meters
+    trimStart?: number;      // index into points[] — first visible point
+    trimEnd?: number;        // index into points[] — last visible point (inclusive)
 }
 
 // ===== Colmap =====
@@ -247,7 +266,7 @@ export interface AssetStore {
     pointcloudBlob: Blob | null;
     cadBlob: Blob | null;
     cadFileName: string | null;
-    flightPathBlobs: Array<{ blob: Blob; fileName: string }>;
+    flightPathBlobs: Array<{ blob: Blob; fileName: string; trimStart?: number; trimEnd?: number }>;
     colmapBlobs: Array<{ camerasBlob: Blob; imagesBlob: Blob }>;
     sourceFiles: Array<{ name: string; blob: Blob }>;
 }
@@ -355,6 +374,7 @@ export interface EventWiringDeps {
         removeSTL: () => void;
         removeCAD: () => void;
         removeDrawing: () => void;
+        removeFlightPath: () => void;
     };
     display: {
         setDisplayMode: (mode: string) => void;

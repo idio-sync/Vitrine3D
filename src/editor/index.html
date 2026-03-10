@@ -706,6 +706,27 @@
                     </div>
                 </div>
 
+                <!-- SfM Camera Defaults -->
+                <div class="prop-section archived" id="sfm-camera-section" style="display:none;">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">SfM Cameras</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="cb-row">
+                            <input type="checkbox" id="sfm-show-on-load">
+                            <label for="sfm-show-on-load">Show on Load</label>
+                        </div>
+
+                        <label class="prop-label mt6">Display Mode</label>
+                        <select class="prop-select mb4" id="sfm-display-mode">
+                            <option value="frustums">Frustums</option>
+                            <option value="markers">Markers</option>
+                        </select>
+                    </div>
+                </div>
+
                 <!-- Drone Flight -->
                 <div class="prop-section archived" id="drone-flight-section" style="display:none;">
                     <div class="prop-section-hd">
@@ -731,6 +752,36 @@
                             <input type="checkbox" id="flight-show-direction" checked>
                             <label for="flight-show-direction">Show Direction Indicators</label>
                         </div>
+
+                        <hr class="prop-divider mt6 mb6">
+
+                        <div class="cb-row">
+                            <input type="checkbox" id="flight-show-on-load">
+                            <label for="flight-show-on-load">Show on Load</label>
+                        </div>
+
+                        <label class="prop-label mt6">Line Color</label>
+                        <input type="color" class="prop-color-input" id="flight-line-color" value="#00ffff">
+
+                        <div class="sl-row mt6">
+                            <div class="sl-hd">
+                                <span class="sl-label">Line Opacity</span>
+                                <span class="sl-val" id="flight-line-opacity-value">100%</span>
+                            </div>
+                            <input type="range" id="flight-line-opacity" min="0" max="100" step="1" value="100">
+                        </div>
+
+                        <div class="cb-row mt6">
+                            <input type="checkbox" id="flight-show-markers" checked>
+                            <label for="flight-show-markers">Show Markers</label>
+                        </div>
+
+                        <label class="prop-label mt6">Marker Density</label>
+                        <select class="prop-select mb4" id="flight-marker-density">
+                            <option value="off">Off</option>
+                            <option value="sparse">Sparse (~200)</option>
+                            <option value="all" selected>All</option>
+                        </select>
                     </div>
                 </div>
 
@@ -1180,6 +1231,7 @@
                         <span class="prop-label mt4">Flight Path</span>
                         <div class="prop-btn-row">
                             <label for="flightpath-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#4FC3F7;">+</span> File</label>
+                            <button class="prop-btn danger" id="btn-remove-flightpath" disabled>Remove</button>
                         </div>
                         <input type="file" id="flightpath-input" accept=".csv,.kml,.kmz,.srt,.txt" style="display:none" />
                         <span id="flightpath-filename" class="prop-hint">.csv, .kml, .kmz, .srt, .txt</span>

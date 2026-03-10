@@ -145,6 +145,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-remove-stl', 'click', deps.files.removeSTL);
     addListener('btn-remove-cad', 'click', deps.files.removeCAD);
     addListener('btn-remove-drawing', 'click', deps.files.removeDrawing);
+    addListener('btn-remove-flightpath', 'click', deps.files.removeFlightPath);
 
     // ─── Tauri native file dialogs ───────────────────────────
     deps.tauri.wireNativeDialogsIfAvailable();

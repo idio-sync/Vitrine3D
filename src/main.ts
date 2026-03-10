@@ -318,6 +318,10 @@ const state: AppState = {
     pointcloudFormat: null,
     splatFormat: null,
     splatLodEnabled: true,
+    viewDefaults: {
+        sfmCameras: { visible: false, displayMode: 'frustums' },
+        flightPath: { visible: false, lineColor: '#00ffff', lineOpacity: 1.0, showMarkers: true, markerDensity: 'all' },
+    },
 };
 
 // Scene manager instance (handles scene, camera, renderer, controls, lighting)
@@ -663,12 +667,20 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
             for (const fp of fpStore.flightPathBlobs) {
                 try {
                     const ext = fp.fileName.split('.').pop()?.toLowerCase() || '';
+                    let data;
                     if (ext === 'txt') {
                         const buffer = await fp.blob.arrayBuffer();
-                        await flightPathManager.importBinary(buffer, fp.fileName, 'dji-txt');
+                        data = await flightPathManager.importBinary(buffer, fp.fileName, 'dji-txt');
                     } else {
                         const text = await fp.blob.text();
-                        flightPathManager.importFromText(text, fp.fileName);
+                        data = flightPathManager.importFromText(text, fp.fileName);
+                    }
+                    // Restore trim from blob store
+                    if (data && (fp.trimStart !== undefined || fp.trimEnd !== undefined)) {
+                        flightPathManager.setTrim(data.id,
+                            fp.trimStart ?? 0,
+                            fp.trimEnd ?? (data.points.length - 1)
+                        );
                     }
                 } catch (err) {
                     console.warn('[main] Failed to parse flight path:', fp.fileName, err);
@@ -732,7 +744,7 @@ function createEventWiringDeps(): EventWiringDeps {
             handleSTLFile, handleCADFile, handleDrawingFile, handleSourceFilesInput,
             handleLoadArchiveFromUrlPrompt,
             handleLoadFullResMesh, switchQualityTier,
-            removeSplat, removeModel, removePointcloud, removeSTL, removeCAD, removeDrawing
+            removeSplat, removeModel, removePointcloud, removeSTL, removeCAD, removeDrawing, removeFlightPath
         },
         display: {
             setDisplayMode, updateModelOpacity, updateModelWireframe,
@@ -796,9 +808,19 @@ function createEventWiringDeps(): EventWiringDeps {
             loadFromBuffers: (camerasBuffer: ArrayBuffer, imagesBuffer: ArrayBuffer) => {
                 if (!colmapManager) return;
                 colmapManager.loadFromBuffers(camerasBuffer, imagesBuffer);
+                // Cameras are in Colmap space (same as the splat). Copy the splat's
+                // current transform so cameras align with the splat in the scene.
+                const colmapGrp = sceneManager?.colmapGroup;
+                if (colmapGrp && splatMesh) {
+                    colmapGrp.position.copy(splatMesh.position);
+                    colmapGrp.rotation.copy(splatMesh.rotation);
+                    colmapGrp.scale.copy(splatMesh.scale);
+                }
                 state.colmapLoaded = true;
                 updateObjectSelectButtons();
                 updateColmapUI();
+                storeLastPositions();
+                updateTransformInputs();
                 updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
             },
             setDisplayMode: (mode: string) => colmapManager?.setDisplayMode(mode as any),
@@ -1819,6 +1841,20 @@ function removeDrawing() {
     enableRemoveBtn('btn-remove-drawing', false);
 }
 
+function removeFlightPath() {
+    if (!state.flightPathLoaded) return;
+    flightPathManager?.dispose();
+    const store = getStore();
+    store.flightPathBlobs = [];
+    state.flightPathLoaded = false;
+    const filenameEl = document.getElementById('flightpath-filename');
+    if (filenameEl) filenameEl.textContent = '.csv, .kml, .kmz, .srt, .txt';
+    enableRemoveBtn('btn-remove-flightpath', false);
+    updateObjectSelectButtons();
+    updateFlightPathUI();
+    updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
+}
+
 function updateVisibility() {
     updateVisibilityHandler(state.displayMode, splatMesh, modelGroup, pointcloudGroup, stlGroup);
     updateDisplayPill({
@@ -1858,6 +1894,7 @@ function updateObjectSelectButtons() {
     enableRemoveBtn('btn-remove-stl', state.stlLoaded);
     enableRemoveBtn('btn-remove-cad', state.cadLoaded);
     enableRemoveBtn('btn-remove-drawing', state.drawingLoaded);
+    enableRemoveBtn('btn-remove-flightpath', state.flightPathLoaded);
     // "All" only when 2+ types are loaded
     const loadedCount = [state.splatLoaded, state.modelLoaded, state.pointcloudLoaded, state.stlLoaded, state.cadLoaded, state.drawingLoaded, state.flightPathLoaded, state.colmapLoaded].filter(Boolean).length;
     show('btn-select-both', loadedCount >= 2);
@@ -1867,6 +1904,19 @@ function updateObjectSelectButtons() {
     if (fpToolBtn) fpToolBtn.style.display = state.flightPathLoaded ? '' : 'none';
     const droneSection = document.getElementById('drone-flight-section');
     if (droneSection) droneSection.style.display = state.flightPathLoaded ? '' : 'none';
+}
+
+/** Sync trim values from FlightPathManager to the blob store. */
+function syncTrimToStore(pathId: string): void {
+    if (!flightPathManager) return;
+    const pathData = flightPathManager.getPaths().find(p => p.id === pathId);
+    if (!pathData) return;
+    const fpStore = getStore();
+    const blobEntry = fpStore.flightPathBlobs.find((b: { fileName: string }) => b.fileName === pathData.fileName);
+    if (blobEntry) {
+        blobEntry.trimStart = pathData.trimStart;
+        blobEntry.trimEnd = pathData.trimEnd;
+    }
 }
 
 /** Update the flight path pane UI: stats, path list. */
@@ -1900,6 +1950,7 @@ function updateFlightPathUI(): void {
     if (listEl) {
         listEl.innerHTML = '';
         for (const p of paths) {
+            // --- Path row (visibility checkbox + name + reset + delete) ---
             const row = document.createElement('div');
             row.style.cssText = 'display:flex; align-items:center; gap:6px; padding:3px 0; font-size:11px;';
 
@@ -1916,6 +1967,19 @@ function updateFlightPathUI(): void {
             name.textContent = p.fileName;
             name.style.cssText = 'flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary);';
             name.title = `${p.fileName} — ${p.points.length} pts, ${p.durationS}s`;
+
+            // Reset trim link (shown only when trim is active)
+            const isTrimmed = p.trimStart !== undefined || p.trimEnd !== undefined;
+            const resetLink = document.createElement('span');
+            resetLink.className = 'fp-trim-reset';
+            resetLink.textContent = 'reset';
+            resetLink.title = 'Reset trim to full path';
+            resetLink.style.display = isTrimmed ? '' : 'none';
+            resetLink.addEventListener('click', () => {
+                flightPathManager!.resetTrim(p.id);
+                syncTrimToStore(p.id);
+                updateFlightPathUI();
+            });
 
             const del = document.createElement('button');
             del.textContent = '\u00D7';
@@ -1937,8 +2001,82 @@ function updateFlightPathUI(): void {
 
             row.appendChild(vis);
             row.appendChild(name);
+            row.appendChild(resetLink);
             row.appendChild(del);
             listEl.appendChild(row);
+
+            // --- Trim bar ---
+            const totalPts = p.points.length;
+            if (totalPts > 2) {
+                const trimStart = p.trimStart ?? 0;
+                const trimEnd = p.trimEnd ?? (totalPts - 1);
+
+                const bar = document.createElement('div');
+                bar.className = 'fp-trim-bar';
+
+                const range = document.createElement('div');
+                range.className = 'fp-trim-range';
+
+                const handleStart = document.createElement('div');
+                handleStart.className = 'fp-trim-handle fp-trim-handle-start';
+
+                const handleEnd = document.createElement('div');
+                handleEnd.className = 'fp-trim-handle fp-trim-handle-end';
+
+                const startPct = (trimStart / (totalPts - 1)) * 100;
+                const endPct = (trimEnd / (totalPts - 1)) * 100;
+                range.style.left = `${startPct}%`;
+                range.style.width = `${endPct - startPct}%`;
+                handleStart.style.left = `${startPct}%`;
+                handleEnd.style.left = `${endPct}%`;
+
+                bar.appendChild(range);
+                bar.appendChild(handleStart);
+                bar.appendChild(handleEnd);
+
+                // Drag logic
+                const setupDrag = (handle: HTMLElement, isStart: boolean) => {
+                    let dragging = false;
+
+                    const onMove = (e: MouseEvent) => {
+                        if (!dragging) return;
+                        const rect = bar.getBoundingClientRect();
+                        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                        const idx = Math.round(pct * (totalPts - 1));
+
+                        if (isStart) {
+                            const newStart = Math.min(idx, trimEnd - 1);
+                            flightPathManager!.setTrim(p.id, newStart, trimEnd);
+                        } else {
+                            const newEnd = Math.max(idx, trimStart + 1);
+                            flightPathManager!.setTrim(p.id, trimStart, newEnd);
+                        }
+                        syncTrimToStore(p.id);
+                        updateFlightPathUI();
+                    };
+
+                    const onUp = () => {
+                        dragging = false;
+                        handle.classList.remove('dragging');
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    };
+
+                    handle.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dragging = true;
+                        handle.classList.add('dragging');
+                        document.addEventListener('mousemove', onMove);
+                        document.addEventListener('mouseup', onUp);
+                    });
+                };
+
+                setupDrag(handleStart, true);
+                setupDrag(handleEnd, false);
+
+                listEl.appendChild(bar);
+            }
         }
     }
 
@@ -1962,6 +2100,8 @@ function updateColmapUI(): void {
     if (count && colmapManager) count.textContent = String(colmapManager.cameraCount);
     if (selectBtn) selectBtn.style.display = state.colmapLoaded ? '' : 'none';
     if (alignBtn) alignBtn.style.display = (state.colmapLoaded && state.flightPathLoaded) ? '' : 'none';
+    const sfmSection = document.getElementById('sfm-camera-section');
+    if (sfmSection) sfmSection.style.display = state.colmapLoaded ? '' : 'none';
 }
 
 // Handle loading archive from URL via prompt
