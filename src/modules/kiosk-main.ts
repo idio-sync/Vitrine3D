@@ -797,8 +797,16 @@ function setupFilePicker(): void {
         return;
     }
 
-    // Layout modules that handle their own empty state (e.g. industrial drop zone) skip the generic picker
-    if (getLayoutModule()?.handlesEmptyState) return;
+    // Layout modules that handle their own empty state (e.g. industrial with File > Open menu)
+    // initialise their full UI immediately instead of showing the generic file picker
+    const layoutModule = getLayoutModule();
+    if (layoutModule?.handlesEmptyState) {
+        layoutModule.setup(null, createLayoutDeps());
+        setupSidebarTransitionObserver();
+        createViewSwitcher();
+        syncQualityButtons();
+        return;
+    }
 
     if (picker) picker.classList.remove('hidden');
 

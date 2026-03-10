@@ -21,13 +21,13 @@ body.kiosk-mode.kiosk-industrial .ind-menubar {
     background: rgb(var(--kiosk-surface-rgb));
     border-bottom: 1px solid var(--kiosk-border-dark);
     font-family: var(--kiosk-font-body);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     color: rgba(var(--kiosk-text-body-rgb), 0.95);
     user-select: none;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-menu-item {
-    padding: 2px 8px;
+    padding: 2px 10px;
     cursor: pointer;
     border-radius: 0;
     white-space: nowrap;
@@ -64,9 +64,9 @@ body.kiosk-mode.kiosk-industrial .ind-toolbar-group {
 }
 
 body.kiosk-mode.kiosk-industrial .ind-toolbar-sep {
-    width: 1px;
-    height: 24px;
-    margin: 0 4px;
+    width: 2px;
+    height: 22px;
+    margin: 0 6px;
     flex-shrink: 0;
     border-left: 1px solid var(--kiosk-border-dark);
     border-right: 1px solid var(--kiosk-border-light);
@@ -136,7 +136,7 @@ body.kiosk-mode.kiosk-industrial .ind-tool-btn::after {
     background: #ffffe1;
     border: 1px solid #000;
     font-family: var(--kiosk-font-body);
-    font-size: 0.65rem;
+    font-size: 0.72rem;
     font-weight: 400;
     color: #000;
     white-space: nowrap;
@@ -159,7 +159,7 @@ body.kiosk-mode.kiosk-industrial .ind-status-bar {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 22px;
+    height: 24px;
     z-index: 100;
     display: flex;
     align-items: center;
@@ -167,7 +167,7 @@ body.kiosk-mode.kiosk-industrial .ind-status-bar {
     background: rgb(var(--kiosk-surface-rgb));
     border-top: 1px solid var(--kiosk-border-dark);
     font-family: var(--kiosk-font-body);
-    font-size: 0.65rem;
+    font-size: 0.72rem;
     color: rgba(var(--kiosk-text-body-rgb), 0.85);
 }
 
@@ -200,7 +200,7 @@ body.kiosk-mode.kiosk-industrial .ind-status-right {
 
 body.kiosk-mode.kiosk-industrial #viewer-container {
     top: 58px !important;   /* 24px menu + 34px toolbar */
-    bottom: 22px !important;
+    bottom: 24px !important;
     /* MeshLab inset viewport border */
     border: 2px inset #a0a0a0;
 }
@@ -217,7 +217,7 @@ body.kiosk-mode.kiosk-industrial .ind-trackball-overlay {
     top: 58px;
     left: 0;
     right: 0;
-    bottom: 22px;
+    bottom: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -311,7 +311,7 @@ body.kiosk-mode.kiosk-industrial .ind-section-axis-btn {
     border-radius: 0;
     cursor: pointer;
     font-family: var(--kiosk-font-body);
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     font-weight: 700;
     color: rgba(var(--kiosk-text-dim-rgb), 0.85);
     transition: none;
@@ -383,7 +383,7 @@ body.kiosk-mode.kiosk-industrial .ind-loading-center {
 
 body.kiosk-mode.kiosk-industrial #loading-overlay #loading-text {
     font-family: var(--kiosk-font-body);
-    font-size: 0.78rem;
+    font-size: 0.82rem;
     font-weight: 400;
     color: rgba(var(--kiosk-text-dim-rgb), 0.75);
     letter-spacing: 0.01em;
@@ -392,7 +392,7 @@ body.kiosk-mode.kiosk-industrial #loading-overlay #loading-text {
 
 body.kiosk-mode.kiosk-industrial .ind-loading-bottom {
     position: absolute;
-    bottom: 22px;
+    bottom: 24px;
     left: 0;
     right: 0;
     text-align: center;
@@ -415,7 +415,7 @@ body.kiosk-mode.kiosk-industrial .ind-loading-bottom #loading-progress-bar {
 
 body.kiosk-mode.kiosk-industrial .ind-loading-bottom #loading-progress-text {
     font-family: var(--kiosk-font-mono);
-    font-size: 0.6rem;
+    font-size: 0.67rem;
     font-weight: 400;
     color: rgba(var(--kiosk-text-dim-rgb), 0.6);
     letter-spacing: 0.02em;
@@ -429,7 +429,7 @@ body.kiosk-mode.kiosk-industrial .ind-loading-bottom #loading-progress-text {
 body.kiosk-mode.kiosk-industrial .annotation-marker {
     width: 24px;
     height: 24px;
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     font-weight: 700;
     background: var(--kiosk-accent);
     border: 1px solid #1a4a8a;
@@ -487,9 +487,9 @@ body.kiosk-mode.kiosk-industrial .ind-menu-item.open .ind-dropdown {
 body.kiosk-mode.kiosk-industrial .ind-dd-item {
     display: flex;
     align-items: center;
-    height: 22px;
+    height: 24px;
     padding: 0 20px 0 26px;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: var(--kiosk-text-primary, #1a1a1a);
     cursor: pointer;
     white-space: nowrap;
@@ -510,8 +510,8 @@ body.kiosk-mode.kiosk-industrial .ind-dd-item::before {
     content: '';
     position: absolute;
     left: 8px;
-    font-size: 0.72rem;
-    line-height: 22px;
+    font-size: 0.75rem;
+    line-height: 24px;
     color: var(--kiosk-accent);
 }
 
@@ -522,13 +522,13 @@ body.kiosk-mode.kiosk-industrial .ind-dd-item.checked::before {
 body.kiosk-mode.kiosk-industrial .ind-dd-item.radio-active::before {
     content: '•';
     font-size: 1.1rem;
-    line-height: 20px;
+    line-height: 22px;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-dd-hint {
     margin-left: auto;
     padding-left: 16px;
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     color: var(--kiosk-text-muted, #888);
     opacity: 0.7;
 }
@@ -567,7 +567,7 @@ body.kiosk-mode.kiosk-industrial .ind-shortcuts-panel {
 }
 
 body.kiosk-mode.kiosk-industrial .ind-shortcuts-title {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 600;
     padding: 6px 12px;
     border-bottom: 1px solid var(--kiosk-border-dark);
@@ -581,16 +581,16 @@ body.kiosk-mode.kiosk-industrial .ind-shortcuts-table {
 body.kiosk-mode.kiosk-industrial .ind-shortcuts-row {
     display: flex;
     align-items: center;
-    height: 20px;
+    height: 22px;
     padding: 0 12px;
-    font-size: 0.70rem;
+    font-size: 0.75rem;
     gap: 8px;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-shortcuts-key {
     min-width: 80px;
     font-family: monospace;
-    font-size: 0.69rem;
+    font-size: 0.73rem;
     color: var(--kiosk-accent);
     font-weight: 600;
 }
@@ -603,7 +603,7 @@ body.kiosk-mode.kiosk-industrial .ind-shortcuts-close {
     display: block;
     width: 100%;
     padding: 5px;
-    font-size: 0.70rem;
+    font-size: 0.75rem;
     text-align: center;
     border: none;
     border-top: 1px solid var(--kiosk-border-dark);
@@ -636,7 +636,7 @@ body.kiosk-mode.kiosk-industrial .ind-mode-btn {
     display: flex;
     align-items: center;
     font-family: var(--kiosk-font-body);
-    font-size: 0.65rem;
+    font-size: 0.70rem;
     font-weight: 500;
     letter-spacing: 0.01em;
     color: rgba(var(--kiosk-text-body-rgb), 0.85);
@@ -669,7 +669,7 @@ body.kiosk-mode.kiosk-industrial .ind-quality-btn {
     width: auto;
     padding: 0 8px;
     font-family: var(--kiosk-font-mono);
-    font-size: 0.62rem;
+    font-size: 0.67rem;
     font-weight: 700;
     letter-spacing: 0.04em;
     color: rgba(var(--kiosk-text-dim-rgb), 0.85);
@@ -692,8 +692,8 @@ body.kiosk-mode.kiosk-industrial .ind-panel {
     position: fixed;
     top: 58px;      /* below menubar + toolbar */
     right: 0;
-    bottom: 22px;   /* above status bar */
-    width: 220px;
+    bottom: 24px;   /* above status bar */
+    width: 260px;
     z-index: 92;
     background: rgb(var(--kiosk-surface-rgb));
     border-left: 1px solid var(--kiosk-border-dark);
@@ -702,7 +702,7 @@ body.kiosk-mode.kiosk-industrial .ind-panel {
     overflow-y: auto;
     overflow-x: hidden;
     font-family: var(--kiosk-font-body);
-    font-size: 0.70rem;
+    font-size: 0.75rem;
     color: rgba(var(--kiosk-text-body-rgb), 0.95);
 }
 
@@ -712,15 +712,15 @@ body.kiosk-mode.kiosk-industrial .ind-panel.hidden {
 
 /* Viewport, overlay, and floating widgets shrink when panel is open */
 body.kiosk-mode.kiosk-industrial.ind-panel-open #viewer-container {
-    right: 220px !important;
+    right: 260px !important;
 }
 
 body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-trackball-overlay {
-    right: 220px;
+    right: 260px;
 }
 
 body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-light-widget {
-    right: 232px; /* 12px gap + 220px panel */
+    right: 272px; /* 12px gap + 260px panel */
 }
 
 /* ---- Panel section header ---- */
@@ -734,17 +734,16 @@ body.kiosk-mode.kiosk-industrial .ind-panel-section-header {
     display: flex;
     align-items: center;
     gap: 5px;
-    height: 20px;
-    padding: 0 6px;
+    height: 22px;
+    padding: 0 8px;
     background: rgb(var(--kiosk-elevated-rgb));
     border-bottom: 1px solid var(--kiosk-border-dark);
     cursor: pointer;
     user-select: none;
-    font-size: 0.67rem;
+    font-size: 0.72rem;
     font-weight: 600;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
     color: rgba(var(--kiosk-text-heading-rgb), 0.9);
-    text-transform: uppercase;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-panel-section-header:hover {
@@ -752,7 +751,7 @@ body.kiosk-mode.kiosk-industrial .ind-panel-section-header:hover {
 }
 
 body.kiosk-mode.kiosk-industrial .ind-panel-arrow {
-    font-size: 0.55rem;
+    font-size: 0.62rem;
     color: rgba(var(--kiosk-text-dim-rgb), 0.7);
     width: 10px;
     text-align: center;
@@ -775,7 +774,7 @@ body.kiosk-mode.kiosk-industrial .ind-panel-section-body.collapsed {
 
 body.kiosk-mode.kiosk-industrial .ind-panel-empty {
     padding: 6px 10px;
-    font-size: 0.65rem;
+    font-size: 0.72rem;
     color: rgba(var(--kiosk-text-dim-rgb), 0.6);
     font-style: italic;
 }
@@ -803,7 +802,7 @@ body.kiosk-mode.kiosk-industrial .ind-layer-badge {
     justify-content: center;
     width: 16px;
     height: 16px;
-    font-size: 0.55rem;
+    font-size: 0.60rem;
     font-weight: 700;
     border-radius: 2px;
     flex-shrink: 0;
@@ -816,7 +815,7 @@ body.kiosk-mode.kiosk-industrial .ind-badge-cloud   { background: #7a5aaa; }
 body.kiosk-mode.kiosk-industrial .ind-badge-flight  { background: #c06020; }
 
 body.kiosk-mode.kiosk-industrial .ind-layer-name {
-    font-size: 0.68rem;
+    font-size: 0.73rem;
     font-weight: 500;
     color: rgba(var(--kiosk-text-bright-rgb), 0.95);
     flex: 1;
@@ -828,7 +827,7 @@ body.kiosk-mode.kiosk-industrial .ind-layer-name {
 body.kiosk-mode.kiosk-industrial .ind-layer-stats {
     width: 100%;
     padding-left: 21px;
-    font-size: 0.60rem;
+    font-size: 0.67rem;
     font-family: var(--kiosk-font-mono);
     color: rgba(var(--kiosk-text-dim-rgb), 0.75);
     margin-top: -2px;
@@ -845,7 +844,7 @@ body.kiosk-mode.kiosk-industrial .ind-prop-row {
 }
 
 body.kiosk-mode.kiosk-industrial .ind-prop-label {
-    font-size: 0.62rem;
+    font-size: 0.70rem;
     font-weight: 600;
     color: rgba(var(--kiosk-text-dim-rgb), 0.85);
     min-width: 52px;
@@ -853,7 +852,7 @@ body.kiosk-mode.kiosk-industrial .ind-prop-label {
 }
 
 body.kiosk-mode.kiosk-industrial .ind-prop-value {
-    font-size: 0.67rem;
+    font-size: 0.73rem;
     color: rgba(var(--kiosk-text-bright-rgb), 0.9);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -868,7 +867,7 @@ body.kiosk-mode.kiosk-industrial .ind-prop-sep {
 
 body.kiosk-mode.kiosk-industrial .ind-prop-desc {
     padding: 3px 10px 5px 10px;
-    font-size: 0.65rem;
+    font-size: 0.72rem;
     line-height: 1.5;
     color: rgba(var(--kiosk-text-body-rgb), 0.85);
     white-space: pre-line;
@@ -887,7 +886,7 @@ body.kiosk-mode.kiosk-industrial .ind-tag {
     background: rgba(var(--kiosk-accent-rgb), 0.12);
     border: 1px solid rgba(var(--kiosk-accent-rgb), 0.3);
     border-radius: 2px;
-    font-size: 0.60rem;
+    font-size: 0.67rem;
     color: var(--kiosk-accent);
     font-weight: 500;
 }
@@ -921,7 +920,7 @@ body.kiosk-mode.kiosk-industrial .ind-anno-num {
     height: 18px;
     background: var(--kiosk-accent);
     border-radius: 50%;
-    font-size: 0.60rem;
+    font-size: 0.65rem;
     font-weight: 700;
     color: #fff;
     flex-shrink: 0;
@@ -932,7 +931,7 @@ body.kiosk-mode.kiosk-industrial .ind-anno-item.selected .ind-anno-num {
 }
 
 body.kiosk-mode.kiosk-industrial .ind-anno-title {
-    font-size: 0.68rem;
+    font-size: 0.73rem;
     color: rgba(var(--kiosk-text-bright-rgb), 0.9);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -943,7 +942,7 @@ body.kiosk-mode.kiosk-industrial .ind-anno-title {
 
 body.kiosk-mode.kiosk-industrial .ind-status-fps-field {
     font-family: var(--kiosk-font-mono);
-    font-size: 0.60rem;
+    font-size: 0.67rem;
     color: rgba(var(--kiosk-text-dim-rgb), 0.7);
     min-width: 44px;
     text-align: right;
@@ -991,7 +990,7 @@ body.kiosk-mode.kiosk-industrial .ind-measure-item {
     align-items: center;
     gap: 7px;
     padding: 3px 10px;
-    font-size: 0.68rem;
+    font-size: 0.73rem;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-measure-num {
@@ -1003,7 +1002,7 @@ body.kiosk-mode.kiosk-industrial .ind-measure-num {
     background: rgba(var(--kiosk-accent-rgb), 0.15);
     border: 1px solid rgba(var(--kiosk-accent-rgb), 0.4);
     border-radius: 2px;
-    font-size: 0.58rem;
+    font-size: 0.65rem;
     font-weight: 700;
     color: var(--kiosk-accent);
     flex-shrink: 0;
@@ -1012,9 +1011,107 @@ body.kiosk-mode.kiosk-industrial .ind-measure-num {
 
 body.kiosk-mode.kiosk-industrial .ind-measure-value {
     font-family: var(--kiosk-font-mono);
-    font-size: 0.67rem;
+    font-size: 0.73rem;
     font-weight: 600;
     color: rgba(var(--kiosk-text-bright-rgb), 0.9);
+}
+
+/* =============================================================================
+   CROSS-SECTION PANEL — axis buttons, position slider, flip in side panel
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-axis-row {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-label {
+    font-size: 0.70rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.75);
+    min-width: 44px;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-axis-btn {
+    width: 26px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid transparent;
+    border-radius: 0;
+    cursor: pointer;
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
+    transition: none;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-axis-btn:hover {
+    border-top-color: var(--kiosk-border-light);
+    border-left-color: var(--kiosk-border-light);
+    border-bottom-color: var(--kiosk-border-dark);
+    border-right-color: var(--kiosk-border-dark);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-axis-btn.active {
+    border-top-color: var(--kiosk-border-dark);
+    border-left-color: var(--kiosk-border-dark);
+    border-bottom-color: var(--kiosk-border-light);
+    border-right-color: var(--kiosk-border-light);
+    background: rgb(var(--kiosk-bg-deep-rgb));
+    color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-flip-btn {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid transparent;
+    border-radius: 0;
+    cursor: pointer;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
+    transition: none;
+    margin-left: auto;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-flip-btn:hover {
+    border-top-color: var(--kiosk-border-light);
+    border-left-color: var(--kiosk-border-light);
+    border-bottom-color: var(--kiosk-border-dark);
+    border-right-color: var(--kiosk-border-dark);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-flip-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 0 4px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-slider {
+    flex: 1;
+    height: 4px;
+    accent-color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-hint {
+    font-size: 0.62rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.45);
+    padding: 2px 0 0;
+    font-style: italic;
 }
 
 /* =============================================================================
@@ -1031,7 +1128,7 @@ body.kiosk-mode.kiosk-industrial .ind-layer-slider-row {
 }
 
 body.kiosk-mode.kiosk-industrial .ind-budget-label {
-    font-size: 0.58rem;
+    font-size: 0.67rem;
     font-weight: 600;
     color: rgba(var(--kiosk-text-dim-rgb), 0.75);
     min-width: 38px;
@@ -1047,7 +1144,7 @@ body.kiosk-mode.kiosk-industrial .ind-budget-slider {
 
 body.kiosk-mode.kiosk-industrial .ind-budget-val {
     font-family: var(--kiosk-font-mono);
-    font-size: 0.58rem;
+    font-size: 0.67rem;
     color: rgba(var(--kiosk-text-dim-rgb), 0.8);
     min-width: 30px;
     text-align: right;
@@ -1062,7 +1159,7 @@ body.kiosk-mode.kiosk-industrial .ind-drop-zone {
     top: 58px;
     left: 0;
     right: 0;
-    bottom: 22px;
+    bottom: 24px;
     z-index: 88;
     display: flex;
     align-items: center;
@@ -1072,7 +1169,7 @@ body.kiosk-mode.kiosk-industrial .ind-drop-zone {
 }
 
 body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-drop-zone {
-    right: 220px;
+    right: 260px;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-drop-zone.drag-active {
@@ -1088,25 +1185,25 @@ body.kiosk-mode.kiosk-industrial .ind-drop-zone-inner {
     align-items: center;
     gap: 6px;
     pointer-events: none;
-    color: rgba(var(--kiosk-text-dim-rgb), 0.4);
+    color: rgba(var(--kiosk-text-dim-rgb), 0.5);
 }
 
 body.kiosk-mode.kiosk-industrial .ind-drop-zone-inner svg {
     width: 36px;
     height: 36px;
-    opacity: 0.35;
+    opacity: 0.5;
 }
 
 body.kiosk-mode.kiosk-industrial .ind-drop-zone-text {
-    font-size: 0.80rem;
+    font-size: 0.85rem;
     font-weight: 500;
-    color: rgba(var(--kiosk-text-dim-rgb), 0.5);
+    color: rgba(var(--kiosk-text-dim-rgb), 0.62);
 }
 
 body.kiosk-mode.kiosk-industrial .ind-drop-zone-hint {
     font-family: var(--kiosk-font-mono);
-    font-size: 0.60rem;
-    color: rgba(var(--kiosk-text-dim-rgb), 0.35);
+    font-size: 0.67rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.48);
     letter-spacing: 0.04em;
 }
 
@@ -1138,7 +1235,7 @@ body.kiosk-mode.kiosk-industrial .ind-about-panel {
 }
 
 body.kiosk-mode.kiosk-industrial .ind-about-title {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 600;
     padding: 6px 12px;
     border-bottom: 1px solid var(--kiosk-border-dark);
@@ -1147,7 +1244,7 @@ body.kiosk-mode.kiosk-industrial .ind-about-title {
 
 body.kiosk-mode.kiosk-industrial .ind-about-body {
     padding: 10px 12px;
-    font-size: 0.70rem;
+    font-size: 0.75rem;
     line-height: 1.7;
     color: var(--kiosk-text-primary, #1a1a1a);
 }
@@ -1156,7 +1253,7 @@ body.kiosk-mode.kiosk-industrial .ind-about-close {
     display: block;
     width: 100%;
     padding: 5px;
-    font-size: 0.70rem;
+    font-size: 0.75rem;
     text-align: center;
     border: none;
     border-top: 1px solid var(--kiosk-border-dark);

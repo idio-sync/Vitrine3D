@@ -14,7 +14,7 @@
 
 var _deps = null;
 var _activeTool = null;
-var _toggles = { matcap: false, texture: true, wireframe: false, trackball: true, toolbar: true, annotations: true, grid: false, autorotate: true };
+var _toggles = { matcap: false, texture: true, wireframe: false, trackball: false, toolbar: true, annotations: true, grid: false, autorotate: true };
 
 // Light widget drag state
 var _lightDragging = false;
@@ -25,7 +25,7 @@ var _lightElevation = Math.PI / 4;
 var _menubar = null;
 var _toolbar = null;
 var _statusBar = null;
-var _sectionControls = null;
+// _sectionControls removed — cross-section controls are now in the info panel
 var _lightWidget = null;
 var _trackballOverlay = null;
 
@@ -187,7 +187,7 @@ function activateTool(name) {
             }
             _deps.crossSection.start(center);
         }
-        if (_sectionControls) _sectionControls.classList.add('visible');
+        if (_panel && _panel._crossSectionEl) _panel._crossSectionEl.style.display = '';
     } else if (name === 'measure') {
         if (_deps.measurementSystem) _deps.measurementSystem.setMeasureMode(true);
     } else if (name === 'annotate') {
@@ -205,7 +205,7 @@ function deactivateTool(name) {
 
     if (name === 'slice') {
         if (_deps.crossSection) _deps.crossSection.stop();
-        if (_sectionControls) _sectionControls.classList.remove('visible');
+        if (_panel && _panel._crossSectionEl) _panel._crossSectionEl.style.display = 'none';
     } else if (name === 'measure') {
         if (_deps.measurementSystem) _deps.measurementSystem.setMeasureMode(false);
     } else if (name === 'annotate') {
@@ -309,8 +309,13 @@ function toggleDisplay(name) {
 // ---- Screenshot ----
 
 function doScreenshot() {
-    var renderer = _deps && _deps.sceneManager ? _deps.sceneManager.renderer : null;
-    if (!renderer) return;
+    var sm = _deps && _deps.sceneManager;
+    if (!sm || !sm.renderer) return;
+    var renderer = sm.renderer;
+    // Force a render so the drawing buffer has content (Three.js clears it after each frame).
+    // Use sceneManager.render() which handles Spark splats and display-mode visibility.
+    var mode = (_deps.state && _deps.state.displayMode) || 'model';
+    sm.render(mode, _deps.sparkRenderer || null, _deps.modelGroup || null, _deps.pointcloudGroup || null, null);
     renderer.domElement.toBlob(function (blob) {
         if (!blob) return;
         var url = URL.createObjectURL(blob);
@@ -372,43 +377,7 @@ function onLightMouseUp() {
     document.removeEventListener('mouseup', onLightMouseUp);
 }
 
-// ---- Section controls ----
-
-function wireSliceControls() {
-    if (!_sectionControls) return;
-
-    var axisButtons = _sectionControls.querySelectorAll('.ind-section-axis-btn');
-    var slider = _sectionControls.querySelector('.ind-section-slider');
-    var flipBtn = _sectionControls.querySelector('.ind-section-flip-btn');
-
-    axisButtons.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            axisButtons.forEach(function (b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            var axis = btn.getAttribute('data-axis');
-            if (_deps.crossSection) {
-                _deps.crossSection.setAxis(axis);
-                if (slider) slider.value = 50;
-            }
-        });
-    });
-
-    if (slider) {
-        slider.addEventListener('input', function () {
-            if (!_deps.crossSection) return;
-            var activeAxis = _sectionControls.querySelector('.ind-section-axis-btn.active');
-            var axis = activeAxis ? activeAxis.getAttribute('data-axis') : 'y';
-            var t = parseFloat(slider.value) / 100;
-            _deps.crossSection.setPositionAlongAxis(axis, t);
-        });
-    }
-
-    if (flipBtn) {
-        flipBtn.addEventListener('click', function () {
-            if (_deps.crossSection) _deps.crossSection.flip();
-        });
-    }
-}
+// (Section controls are now built inside the info panel — see buildCrossSectionPanel)
 
 // ---- Menu builders ----
 
@@ -429,7 +398,6 @@ function buildFileMenu(dropdown) {
     dropdown.appendChild(ddItem('Open File\u2026', '', function() { fileInput.click(); }));
     dropdown.appendChild(ddSep());
     dropdown.appendChild(ddItem('Take Screenshot', 'P', function() { doScreenshot(); }));
-    dropdown.appendChild(ddItem('Reset View', '', function() { fitCamera(); }));
     dropdown.appendChild(ddSep());
     dropdown.appendChild(ddItem('Reset Scene', '', function() {
         if (window.confirm('Reload and reset the scene?')) window.location.reload();
@@ -524,18 +492,17 @@ function buildViewMenu(dropdown) {
 
     dropdown.appendChild(ddSep());
 
-    var orthoItem = ddItem('Perspective / Orthographic', '', function() { toggleOrthographic(); });
+    var orthoItem = ddItem('Toggle Orthographic', '', function() { toggleOrthographic(); });
     _viewMenuItems.ortho = orthoItem;
     dropdown.appendChild(orthoItem);
 
     dropdown.appendChild(ddSep());
 
-    var trackballItem = ddItem('Show Trackball', '', function() {
+    var trackballItem = ddItem('Show Orbit Guide', '', function() {
         _toggles.trackball = !_toggles.trackball;
         if (_trackballOverlay) _trackballOverlay.classList.toggle('hidden', !_toggles.trackball);
         updateViewMenuChecks();
     });
-    trackballItem.classList.add('checked');
     _viewMenuItems.trackball = trackballItem;
     dropdown.appendChild(trackballItem);
 
@@ -588,7 +555,7 @@ function buildRenderMenu(dropdown) {
     var wireItem = ddItem('Wireframe', 'W', function() { setRenderMode('wireframe'); });
     _renderMenuItems.wireframe = wireItem;
 
-    var matcapItem = ddItem('Matcap', 'M', function() { setRenderMode('matcap'); });
+    var matcapItem = ddItem('Clay Material', 'M', function() { setRenderMode('matcap'); });
     _renderMenuItems.matcap = matcapItem;
 
     dropdown.appendChild(solidItem);
@@ -596,7 +563,7 @@ function buildRenderMenu(dropdown) {
     dropdown.appendChild(matcapItem);
     dropdown.appendChild(ddSep());
 
-    var texItem = ddItem('Texture On/Off', 'T', function() {
+    var texItem = ddItem('Toggle Texture', 'T', function() {
         _toggles.texture = !_toggles.texture;
         if (_deps && _deps.updateModelTextures) _deps.updateModelTextures(_deps.modelGroup, _toggles.texture);
         updateRenderMenuChecks();
@@ -607,7 +574,7 @@ function buildRenderMenu(dropdown) {
     dropdown.appendChild(texItem);
 
     dropdown.appendChild(ddSep());
-    dropdown.appendChild(ddItem('Lighting', 'L', function() { toggleTool('light'); }));
+    dropdown.appendChild(ddItem('Light Direction', 'L', function() { toggleTool('light'); }));
 }
 
 // -- Tools Menu --
@@ -648,10 +615,11 @@ var SHORTCUTS = [
     { key: '3',      desc: 'Annotate' },
     { key: 'T',      desc: 'Toggle Texture' },
     { key: 'W',      desc: 'Toggle Wireframe' },
-    { key: 'M',      desc: 'Toggle Matcap' },
-    { key: 'L',      desc: 'Lighting Widget' },
+    { key: 'M',      desc: 'Toggle Clay Material' },
+    { key: 'L',      desc: 'Light Direction' },
+    { key: 'G',      desc: 'Toggle Grid' },
     { key: 'P',      desc: 'Take Screenshot' },
-    { key: 'B',      desc: 'Toggle Bounding Box' },
+    { key: 'B',      desc: 'Toggle Bounds' },
     { key: 'F',      desc: 'Fit to View' },
     { key: 'Escape', desc: 'Deactivate Tool / Close Menu' }
 ];
@@ -783,16 +751,16 @@ function createToolbar() {
 
     // Inspection tools group
     var inspGroup = createEl('div', 'ind-toolbar-group');
-    inspGroup.appendChild(createToolBtn('slice', 'Section Plane [1]', ICONS.slice));
-    inspGroup.appendChild(createToolBtn('measure', 'Measure [2]', ICONS.measure));
-    inspGroup.appendChild(createToolBtn('annotate', 'Annotate [3]', ICONS.annotate));
+    inspGroup.appendChild(createToolBtn('slice', 'Cross-Section [1]', ICONS.slice));
+    inspGroup.appendChild(createToolBtn('measure', 'Measure Distance [2]', ICONS.measure));
+    inspGroup.appendChild(createToolBtn('annotate', 'Add Annotation [3]', ICONS.annotate));
     toolbar.appendChild(inspGroup);
 
     toolbar.appendChild(createEl('div', 'ind-toolbar-sep'));
 
     // Render toggles group
     var dispGroup = createEl('div', 'ind-toolbar-group');
-    dispGroup.appendChild(createToggleBtn('matcap', 'Matcap [M]', ICONS.matcap));
+    dispGroup.appendChild(createToggleBtn('matcap', 'Clay Material [M]', ICONS.matcap));
     dispGroup.appendChild(createToggleBtn('texture', 'Texture [T]', ICONS.texture));
     dispGroup.appendChild(createToggleBtn('wireframe', 'Wireframe [W]', ICONS.wireframe));
     toolbar.appendChild(dispGroup);
@@ -806,7 +774,7 @@ function createToolbar() {
     utilGroup.appendChild(createActionBtn('fitview', 'Fit to View [F]', ICONS.fitView));
     var bboxBtn = createEl('button', 'ind-tool-btn', ICONS.bbox);
     bboxBtn.setAttribute('data-toggle', 'bbox');
-    bboxBtn.setAttribute('data-tooltip', 'Bounding Box [B]');
+    bboxBtn.setAttribute('data-tooltip', 'Show Bounds [B]');
     bboxBtn.addEventListener('click', toggleBoundingBox);
     _bboxBtn = bboxBtn;
     utilGroup.appendChild(bboxBtn);
@@ -818,13 +786,13 @@ function createToolbar() {
     var modeGroup = createEl('div', 'ind-toolbar-group');
     var meshBtn = createEl('button', 'ind-tool-btn ind-mode-btn', ICONS.mesh + '<span>Mesh</span>');
     meshBtn.setAttribute('data-mode', 'model');
-    meshBtn.setAttribute('data-tooltip', 'Mesh view [1]');
+    meshBtn.setAttribute('data-tooltip', 'Show mesh');
     var splatBtn = createEl('button', 'ind-tool-btn ind-mode-btn', ICONS.splat + '<span>Splat</span>');
     splatBtn.setAttribute('data-mode', 'splat');
-    splatBtn.setAttribute('data-tooltip', 'Gaussian splat view [2]');
+    splatBtn.setAttribute('data-tooltip', 'Show splat');
     var cloudBtn = createEl('button', 'ind-tool-btn ind-mode-btn', ICONS.cloud + '<span>Cloud</span>');
     cloudBtn.setAttribute('data-mode', 'pointcloud');
-    cloudBtn.setAttribute('data-tooltip', 'Point cloud view [3]');
+    cloudBtn.setAttribute('data-tooltip', 'Show point cloud');
     [meshBtn, splatBtn, cloudBtn].forEach(function(btn) {
         btn.addEventListener('click', function() {
             if (_deps && _deps.setDisplayMode) {
@@ -858,7 +826,7 @@ function createToolbar() {
     });
     var flyBtn = createEl('button', 'ind-tool-btn', ICONS.fly);
     flyBtn.setAttribute('data-toggle', 'fly');
-    flyBtn.setAttribute('data-tooltip', 'Fly Mode [F]');
+    flyBtn.setAttribute('data-tooltip', 'Fly Mode');
     flyBtn.addEventListener('click', function() {
         if (_deps && _deps.toggleFlyMode) _deps.toggleFlyMode();
         // State is read from deps.getFlyModeActive after the toggle
@@ -1047,34 +1015,7 @@ function createStatusField(id, value) {
     return el;
 }
 
-function createSectionControls() {
-    var panel = createEl('div', 'ind-section-controls');
-
-    var yBtn = createEl('button', 'ind-section-axis-btn active', 'Y');
-    yBtn.setAttribute('data-axis', 'y');
-    var xBtn = createEl('button', 'ind-section-axis-btn', 'X');
-    xBtn.setAttribute('data-axis', 'x');
-    var zBtn = createEl('button', 'ind-section-axis-btn', 'Z');
-    zBtn.setAttribute('data-axis', 'z');
-
-    panel.appendChild(yBtn);
-    panel.appendChild(xBtn);
-    panel.appendChild(zBtn);
-
-    var slider = document.createElement('input');
-    slider.type = 'range';
-    slider.className = 'ind-section-slider';
-    slider.min = '0';
-    slider.max = '100';
-    slider.value = '50';
-    panel.appendChild(slider);
-
-    var flipBtn = createEl('button', 'ind-section-flip-btn', ICONS.flip);
-    flipBtn.setAttribute('data-tooltip', 'Flip');
-    panel.appendChild(flipBtn);
-
-    return panel;
-}
+// (Old floating createSectionControls removed — now in side panel)
 
 // ---- Drop Zone Overlay (P2) ----
 
@@ -1210,7 +1151,7 @@ function buildLayersSection(body, manifest) {
 function buildPropertiesSection(body, manifest) {
     body.innerHTML = '';
     if (!manifest) {
-        body.appendChild(createEl('div', 'ind-panel-empty', 'No archive loaded'));
+        body.appendChild(createEl('div', 'ind-panel-empty', 'No project loaded'));
         return;
     }
 
@@ -1273,6 +1214,59 @@ function buildAnnotationsSection(body, manifest) {
     });
 }
 
+function buildCrossSectionPanel(body) {
+    body.innerHTML = '';
+
+    // Axis buttons row
+    var axisRow = createEl('div', 'ind-xsec-axis-row');
+    var axisLabel = createEl('span', 'ind-xsec-label', 'Axis');
+    axisRow.appendChild(axisLabel);
+
+    ['X', 'Y', 'Z'].forEach(function(axis) {
+        var btn = createEl('button', 'ind-xsec-axis-btn' + (axis === 'Y' ? ' active' : ''), axis);
+        btn.setAttribute('data-axis', axis.toLowerCase());
+        btn.addEventListener('click', function() {
+            axisRow.querySelectorAll('.ind-xsec-axis-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            if (_deps.crossSection) _deps.crossSection.setAxis(axis.toLowerCase());
+        });
+        axisRow.appendChild(btn);
+    });
+
+    var flipBtn = createEl('button', 'ind-xsec-flip-btn', ICONS.flip);
+    flipBtn.setAttribute('data-tooltip', 'Flip direction');
+    flipBtn.addEventListener('click', function() {
+        if (_deps.crossSection) _deps.crossSection.flip();
+    });
+    axisRow.appendChild(flipBtn);
+    body.appendChild(axisRow);
+
+    // Position slider
+    var sliderRow = createEl('div', 'ind-xsec-slider-row');
+    var sliderLabel = createEl('span', 'ind-xsec-label', 'Position');
+    sliderRow.appendChild(sliderLabel);
+
+    var slider = document.createElement('input');
+    slider.type = 'range';
+    slider.className = 'ind-xsec-slider';
+    slider.min = '0';
+    slider.max = '100';
+    slider.value = '50';
+    slider.addEventListener('input', function() {
+        if (!_deps.crossSection) return;
+        var activeBtn = body.querySelector('.ind-xsec-axis-btn.active');
+        var axis = activeBtn ? activeBtn.getAttribute('data-axis') : 'y';
+        var t = parseFloat(slider.value) / 100;
+        _deps.crossSection.setPositionAlongAxis(axis, t);
+    });
+    sliderRow.appendChild(slider);
+    body.appendChild(sliderRow);
+
+    // Hint text
+    var hint = createEl('div', 'ind-xsec-hint', 'Press 1 or use the toolbar to toggle');
+    body.appendChild(hint);
+}
+
 function buildMeasuresSection(body) {
     body.innerHTML = '';
     if (!_deps || !_deps.measurementSystem) {
@@ -1323,6 +1317,12 @@ function createInfoPanel(manifest) {
     updateAnnotationSectionHeader(annos.label);
     panel.appendChild(annos.section);
 
+    // Cross-Section section (hidden until slice tool activated)
+    var xsec = createPanelSection('ind-panel-crosssection', 'Cross-Section', true);
+    buildCrossSectionPanel(xsec.body);
+    xsec.section.style.display = 'none';
+    panel.appendChild(xsec.section);
+
     // Measurements section
     var measures = createPanelSection('ind-panel-measures', 'Measurements', false);
     buildMeasuresSection(measures.body);
@@ -1335,6 +1335,7 @@ function createInfoPanel(manifest) {
     panel._layersBody = layers.body;
     panel._measuresBody = measures.body;
     panel._measuresLabel = measures.label;
+    panel._crossSectionEl = xsec.section;
 
     return panel;
 }
@@ -1466,17 +1467,13 @@ function setup(manifest, deps) {
     _statusBar = createStatusBar(manifest);
     document.body.appendChild(_statusBar);
 
-    // Create section controls
-    _sectionControls = createSectionControls();
-    document.body.appendChild(_sectionControls);
-    wireSliceControls();
-
     // Create light widget
     _lightWidget = createLightWidget();
     document.body.appendChild(_lightWidget);
 
-    // Create trackball overlay
+    // Create trackball overlay (hidden by default, toggle via View > Show Orbit Guide)
     _trackballOverlay = createTrackballOverlay();
+    _trackballOverlay.classList.add('hidden');
     document.body.appendChild(_trackballOverlay);
 
     // Create info panel
@@ -1573,6 +1570,12 @@ function setup(manifest, deps) {
             case 'l': toggleTool('light'); handled = true; break;
             case 'p': doScreenshot(); handled = true; break;
             case 'f': fitCamera(); handled = true; break;
+            case 'g':
+                _toggles.grid = !_toggles.grid;
+                if (_viewToggles && _viewToggles.grid) _viewToggles.grid.classList.toggle('active', _toggles.grid);
+                if (_deps && _deps.toggleGrid) _deps.toggleGrid(_toggles.grid);
+                handled = true;
+                break;
         }
 
         if (handled) {
@@ -1593,7 +1596,7 @@ function initLoadingScreen(container) {
 
     var text = document.createElement('div');
     text.id = 'loading-text';
-    text.textContent = 'Loading mesh\u2026';
+    text.textContent = 'Loading\u2026';
     center.appendChild(text);
     inner.appendChild(center);
 
@@ -1622,6 +1625,11 @@ function onKeyboardShortcut(key) {
         case 'p': doScreenshot(); return true;
         case 'escape': deactivateAllTools(); return true;
         case 'f': fitCamera(); return true;
+        case 'g':
+            _toggles.grid = !_toggles.grid;
+            if (_viewToggles && _viewToggles.grid) _viewToggles.grid.classList.toggle('active', _toggles.grid);
+            if (_deps && _deps.toggleGrid) _deps.toggleGrid(_toggles.grid);
+            return true;
         default: return false;
     }
 }
