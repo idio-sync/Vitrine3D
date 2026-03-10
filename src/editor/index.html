@@ -1179,6 +1179,25 @@
                         </div>
                         <input type="file" id="flightpath-input" accept=".csv,.kml,.kmz,.srt,.txt" style="display:none" />
                         <span id="flightpath-filename" class="prop-hint">.csv, .kml, .kmz, .srt, .txt</span>
+                        <span class="prop-label mt4">SfM Cameras</span>
+                        <div class="prop-btn-row">
+                            <label for="colmap-cameras-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#CE93D8;">+</span> cameras.bin</label>
+                            <label for="colmap-images-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#CE93D8;">+</span> images.bin</label>
+                        </div>
+                        <input type="file" id="colmap-cameras-input" accept=".bin" style="display:none" />
+                        <input type="file" id="colmap-images-input" accept=".bin" style="display:none" />
+                        <span id="colmap-filename" class="prop-hint">.bin (Colmap sparse)</span>
+                        <div id="colmap-info" style="display:none;">
+                            <span class="prop-hint">Cameras: <span id="colmap-camera-count">0</span></span>
+                            <div class="prop-btn-row mt4">
+                                <button class="prop-btn" id="btn-colmap-frustums">Frustums</button>
+                                <button class="prop-btn" id="btn-colmap-markers">Markers</button>
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Scale</span><span class="sl-val" id="colmap-scale-value">1.0</span></div>
+                                <input type="range" id="colmap-scale" min="0.1" max="10" step="0.1" value="1">
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1360,6 +1379,7 @@
                             <button class="seg-btn" id="btn-select-cad" style="display:none;">CAD</button>
                             <button class="seg-btn" id="btn-select-drawing" style="display:none;">Drawing</button>
                             <button class="seg-btn" id="btn-select-flightpath" style="display:none;">Flight Path</button>
+                            <button class="seg-btn" id="btn-select-colmap" style="display:none;">SfM Cameras</button>
                             <button class="seg-btn" id="btn-select-both" style="display:none;">All</button>
                         </div>
                         <span id="transform-object-label" class="prop-hint mt4" style="display:block; font-style:italic;">No object selected</span>
@@ -1657,6 +1677,8 @@
                             <label for="flightpath-input-pane" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#4FC3F7;">+</span> Import</label>
                         </div>
                         <input type="file" id="flightpath-input-pane" accept=".csv,.kml,.kmz,.srt,.txt" style="display:none" />
+                        <button class="prop-btn" id="btn-align-flightpath" style="display:none;" title="Align flight path to SfM cameras">Align to Cameras</button>
+                        <span id="align-result" class="prop-hint" style="display:none;"></span>
                     </div>
                 </div>
 
