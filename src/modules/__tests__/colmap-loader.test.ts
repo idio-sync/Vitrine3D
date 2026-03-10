@@ -19,7 +19,7 @@ function buildCamerasBin(): ArrayBuffer {
     view.setFloat64(off, 2800, true); off += 8;
     view.setFloat64(off, 2800, true); off += 8;
     view.setFloat64(off, 2000, true); off += 8;
-    view.setFloat64(off, 1500, true); off += 8;
+    view.setFloat64(off, 1500, true);
     return buf;
 }
 
@@ -47,7 +47,7 @@ function buildImagesBin(): ArrayBuffer {
     }
     view.setUint8(off++, 0);
     view.setUint32(off, 0, true); off += 4;
-    view.setUint32(off, 0, true); off += 4;
+    view.setUint32(off, 0, true);
     return buf;
 }
 

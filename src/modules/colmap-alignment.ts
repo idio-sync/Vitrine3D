@@ -164,7 +164,7 @@ export function computeSimilarityTransform(
     );
 
     // Power iteration for largest eigenvector
-    let v = new THREE.Vector4(1, 0, 0, 0);
+    const v = new THREE.Vector4(1, 0, 0, 0);
     const temp = new THREE.Vector4();
     for (let iter = 0; iter < 50; iter++) {
         temp.copy(v).applyMatrix4(N);
