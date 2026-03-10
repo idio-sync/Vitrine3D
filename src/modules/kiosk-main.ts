@@ -1636,6 +1636,46 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             }
         }
 
+        // Load colmap SfM cameras
+        const colmapEntries = Object.entries(manifest.data_entries || {})
+            .filter(([, entry]) => (entry as any).role === 'colmap_sfm');
+        if (colmapEntries.length > 0 && sceneManager.colmapGroup) {
+            const { ColmapManager } = await import('./colmap-loader.js');
+            const colmapGroup = sceneManager.colmapGroup;
+            const manager = new ColmapManager(colmapGroup);
+            for (const [key, entry] of colmapEntries) {
+                const basePath = (entry as any).file_name || `assets/${key}/`;
+                const camerasRaw = await archiveLoader.extractFileRaw(`${basePath}cameras.bin`);
+                const imagesRaw = await archiveLoader.extractFileRaw(`${basePath}images.bin`);
+                if (camerasRaw && imagesRaw) {
+                    manager.loadFromBuffers(camerasRaw.buffer, imagesRaw.buffer);
+                } else {
+                    log.warn(`Failed to extract colmap files for ${key}`);
+                }
+            }
+            // Apply stored transform from first entry
+            const entryData = colmapEntries[0][1] as any;
+            if (entryData._parameters) {
+                const p = entryData._parameters;
+                if (p.position) colmapGroup.position.set(...(p.position as [number, number, number]));
+                if (p.rotation) colmapGroup.rotation.set(...(p.rotation as [number, number, number]));
+                if (p.scale != null) {
+                    const s = typeof p.scale === 'number' ? p.scale : 1;
+                    colmapGroup.scale.setScalar(s);
+                }
+            }
+            // Show toggle button
+            const toggleBtn = document.getElementById('btn-toggle-cameras');
+            if (toggleBtn) {
+                toggleBtn.style.display = '';
+                toggleBtn.addEventListener('click', () => {
+                    const visible = colmapGroup.visible;
+                    colmapGroup.visible = !visible;
+                    toggleBtn.classList.toggle('active', !visible);
+                });
+            }
+        }
+
         // Apply global alignment if present
         const globalAlignment = archiveLoader.getGlobalAlignment();
         if (globalAlignment) {
