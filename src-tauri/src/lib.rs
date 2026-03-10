@@ -221,6 +221,21 @@ async fn api_fetch_json(url: String) -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Fetch a remote image URL and return raw bytes via IPC Response.
+/// Used by the collections browser to load thumbnail images that the webview
+/// cannot fetch directly due to CF Access / CORS restrictions.
+#[tauri::command]
+async fn api_fetch_image(url: String) -> Result<tauri::ipc::Response, String> {
+    let response = reqwest::get(&url)
+        .await
+        .map_err(|e| e.to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status()));
+    }
+    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+    Ok(tauri::ipc::Response::new(bytes.to_vec()))
+}
+
 /// Download a remote URL to a temp file using Rust-side reqwest, bypassing
 /// the webview's CORS / CF Access restrictions. Returns (handle_id, file_size)
 /// registered in FileHandleStore — use with ipc_read_bytes / ipc_close_file.
@@ -271,6 +286,7 @@ pub fn run() {
             ipc_read_bytes,
             ipc_close_file,
             api_fetch_json,
+            api_fetch_image,
             api_download_to_temp
         ]);
 

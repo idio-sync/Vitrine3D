@@ -2100,3 +2100,12 @@ body.kiosk-mode .kiosk-wt-player {
     border-color: rgba(254, 192, 58, 0.4);
     background: rgba(8, 24, 42, 0.95);
 }
+
+/* Shift the editorial title block right when the back-to-library button is visible,
+   so the title sits beside the button instead of underneath it.
+   --back-nav-offset is set dynamically in JS based on actual button width. */
+body.has-back-nav .editorial-title-block {
+    left: var(--back-nav-offset, 200px);
+    transition: left 0.3s ease, opacity 0.6s ease;
+}
+

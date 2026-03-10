@@ -280,93 +280,6 @@ body.kiosk-mode.kiosk-industrial .ind-light-indicator {
 }
 
 /* =============================================================================
-   CROSS-SECTION AXIS PICKER — small floating widget
-   ============================================================================= */
-
-body.kiosk-mode.kiosk-industrial .ind-section-controls {
-    position: fixed;
-    top: 70px;
-    left: 8px;
-    z-index: 95;
-    display: none;
-    align-items: center;
-    gap: 1px;
-    padding: 3px;
-    background: rgb(var(--kiosk-surface-rgb));
-    border: 1px solid var(--kiosk-border-dark);
-}
-
-body.kiosk-mode.kiosk-industrial .ind-section-controls.visible {
-    display: flex;
-}
-
-body.kiosk-mode.kiosk-industrial .ind-section-axis-btn {
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgb(var(--kiosk-surface-rgb));
-    border: 1px solid transparent;
-    border-radius: 0;
-    cursor: pointer;
-    font-family: var(--kiosk-font-body);
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
-    transition: none;
-}
-
-body.kiosk-mode.kiosk-industrial .ind-section-axis-btn:hover {
-    border-top-color: var(--kiosk-border-light);
-    border-left-color: var(--kiosk-border-light);
-    border-bottom-color: var(--kiosk-border-dark);
-    border-right-color: var(--kiosk-border-dark);
-}
-
-body.kiosk-mode.kiosk-industrial .ind-section-axis-btn.active {
-    border-top-color: var(--kiosk-border-dark);
-    border-left-color: var(--kiosk-border-dark);
-    border-bottom-color: var(--kiosk-border-light);
-    border-right-color: var(--kiosk-border-light);
-    background: rgb(var(--kiosk-bg-deep-rgb));
-    color: var(--kiosk-accent);
-}
-
-body.kiosk-mode.kiosk-industrial .ind-section-slider {
-    width: 110px;
-    height: 4px;
-    margin: 0 6px;
-    accent-color: var(--kiosk-accent);
-}
-
-body.kiosk-mode.kiosk-industrial .ind-section-flip-btn {
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgb(var(--kiosk-surface-rgb));
-    border: 1px solid transparent;
-    border-radius: 0;
-    cursor: pointer;
-    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
-    transition: none;
-}
-
-body.kiosk-mode.kiosk-industrial .ind-section-flip-btn:hover {
-    border-top-color: var(--kiosk-border-light);
-    border-left-color: var(--kiosk-border-light);
-    border-bottom-color: var(--kiosk-border-dark);
-    border-right-color: var(--kiosk-border-dark);
-}
-
-body.kiosk-mode.kiosk-industrial .ind-section-flip-btn svg {
-    width: 14px;
-    height: 14px;
-}
-
-/* =============================================================================
    LOADING OVERLAY — MeshLab-style minimal, centered text + thin progress
    ============================================================================= */
 
@@ -1265,4 +1178,259 @@ body.kiosk-mode.kiosk-industrial .ind-about-close {
 body.kiosk-mode.kiosk-industrial .ind-about-close:hover {
     background: var(--kiosk-accent);
     color: #fff;
+}
+
+/* =============================================================================
+   WALKTHROUGH UI — progress bar in status bar during guided tours
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-wt-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 12px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-btn {
+    width: 20px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid transparent;
+    border-radius: 0;
+    cursor: pointer;
+    color: rgba(var(--kiosk-text-body-rgb), 0.85);
+    font-size: 0.65rem;
+    padding: 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-btn:hover {
+    border-top-color: var(--kiosk-border-light);
+    border-left-color: var(--kiosk-border-light);
+    border-bottom-color: var(--kiosk-border-dark);
+    border-right-color: var(--kiosk-border-dark);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-btn svg {
+    width: 12px;
+    height: 12px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-dots {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin: 0 4px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(var(--kiosk-text-dim-rgb), 0.3);
+    cursor: pointer;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-dot:hover {
+    background: rgba(var(--kiosk-text-dim-rgb), 0.6);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-dot.visited {
+    background: rgba(var(--kiosk-accent-rgb), 0.4);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-dot.active {
+    background: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-title {
+    font-size: 0.70rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+    margin-left: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+}
+
+/* =============================================================================
+   RESPONSIVE — Touch devices (pointer: coarse)
+   ============================================================================= */
+
+@media (pointer: coarse) {
+    /* Larger touch targets for toolbar buttons */
+    body.kiosk-mode.kiosk-industrial .ind-tool-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-toolbar {
+        height: 42px;
+    }
+
+    /* Adjust viewport offset for taller toolbar */
+    body.kiosk-mode.kiosk-industrial #viewer-container {
+        top: 66px !important;  /* 24px menu + 42px toolbar */
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-trackball-overlay {
+        top: 66px;
+    }
+
+    /* Menu items — taller for touch */
+    body.kiosk-mode.kiosk-industrial .ind-menu-item {
+        padding: 4px 12px;
+        line-height: 24px;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-dd-item {
+        height: 32px;
+        padding: 0 20px 0 26px;
+    }
+
+    /* Annotation items — taller tap targets */
+    body.kiosk-mode.kiosk-industrial .ind-anno-item {
+        padding: 7px 10px;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-layer-item {
+        padding: 6px 8px 6px 10px;
+    }
+
+    /* Cross-section buttons */
+    body.kiosk-mode.kiosk-industrial .ind-xsec-axis-btn {
+        width: 34px;
+        height: 30px;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-xsec-flip-btn {
+        width: 30px;
+        height: 30px;
+    }
+
+    /* Disable CSS tooltips on touch (they're sticky) */
+    body.kiosk-mode.kiosk-industrial .ind-tool-btn::after {
+        display: none;
+    }
+}
+
+/* =============================================================================
+   RESPONSIVE — Compact (700–1023px): narrower panel
+   ============================================================================= */
+
+@media (max-width: 1023px) {
+    body.kiosk-mode.kiosk-industrial .ind-panel {
+        width: 220px;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open #viewer-container {
+        right: 220px !important;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-trackball-overlay {
+        right: 220px;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-light-widget {
+        right: 232px;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-drop-zone {
+        right: 220px;
+    }
+
+    /* Compact mode labels */
+    body.kiosk-mode.kiosk-industrial .ind-mode-btn span {
+        display: none;
+    }
+}
+
+/* =============================================================================
+   RESPONSIVE — Narrow (<700px): panel hidden by default, compact toolbar
+   ============================================================================= */
+
+@media (max-width: 699px) {
+    /* Hide info panel by default on narrow screens */
+    body.kiosk-mode.kiosk-industrial .ind-panel {
+        width: 260px;
+        transform: translateX(100%);
+        transition: transform 0.2s ease-out;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-panel {
+        transform: translateX(0);
+    }
+
+    /* Viewport goes full width even when panel is "open" (it overlays) */
+    body.kiosk-mode.kiosk-industrial.ind-panel-open #viewer-container {
+        right: 0 !important;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-trackball-overlay {
+        right: 0;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-light-widget {
+        right: 12px;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-drop-zone {
+        right: 0;
+    }
+
+    /* Hide mode button labels */
+    body.kiosk-mode.kiosk-industrial .ind-mode-btn span {
+        display: none;
+    }
+
+    /* Compact status bar */
+    body.kiosk-mode.kiosk-industrial .ind-status-bar {
+        font-size: 0.65rem;
+        padding: 0 4px;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-status-sep {
+        margin: 0 4px;
+    }
+
+    /* Walkthrough title — shorter */
+    body.kiosk-mode.kiosk-industrial .ind-wt-title {
+        max-width: 100px;
+    }
+}
+
+/* =============================================================================
+   RESPONSIVE — Micro (<480px): minimal chrome
+   ============================================================================= */
+
+@media (max-width: 479px) {
+    /* Hide quality buttons */
+    body.kiosk-mode.kiosk-industrial .ind-quality-btn {
+        display: none;
+    }
+
+    /* Single-row status bar — hide some fields */
+    body.kiosk-mode.kiosk-industrial .ind-status-fps-field {
+        display: none;
+    }
+}
+
+/* =============================================================================
+   REDUCED MOTION — disable transitions for accessibility
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+    body.kiosk-mode.kiosk-industrial .ind-panel {
+        transition: none;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-drop-zone {
+        transition: none;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-tool-btn::after {
+        transition: none;
+    }
 }

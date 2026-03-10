@@ -311,6 +311,34 @@ function resolveUrl(url: string): string {
     return (_opts?.libraryBaseUrl || '') + url;
 }
 
+// ── Tauri image proxy ──
+
+/**
+ * In Tauri, the webview cannot load remote images directly because CF Access
+ * blocks requests from the tauri:// origin. This function finds all <img>
+ * elements with remote src URLs inside a container, fetches the image bytes
+ * through Rust's reqwest (which bypasses CF Access), and replaces src with
+ * a local blob URL.
+ */
+async function proxyTauriImages(container: HTMLElement): Promise<void> {
+    if (!_isTauri) return;
+    const imgs = container.querySelectorAll<HTMLImageElement>('img[src^="http"]');
+    if (imgs.length === 0) return;
+    const { invoke } = await import('@tauri-apps/api/core');
+    await Promise.allSettled(Array.from(imgs).map(async (img) => {
+        const url = img.src;
+        try {
+            const bytes = await invoke<ArrayBuffer>('api_fetch_image', { url });
+            const ext = url.split('.').pop()?.toLowerCase() || 'jpg';
+            const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+            const blob = new Blob([bytes], { type: mime });
+            img.src = URL.createObjectURL(blob);
+        } catch (e) {
+            log.warn('Failed to proxy thumbnail:', url, e);
+        }
+    }));
+}
+
 // ── Container helpers ──
 
 function getContainer(): HTMLElement {
@@ -495,6 +523,9 @@ function renderCollectionsPage(collections: CollectionItem[]): void {
         grid.appendChild(renderCollectionCard(coll, i, () => navigateToCollection(coll.slug, coll.name)));
     });
     container.appendChild(grid);
+
+    // Proxy remote thumbnail images through Rust in Tauri (CF Access blocks webview requests)
+    void proxyTauriImages(container);
 }
 
 // ── Navigation ──
@@ -582,6 +613,9 @@ function renderCollectionDetailPage(data: CollectionDetail): void {
     });
     container.appendChild(grid);
 
+    // Proxy remote thumbnail images through Rust in Tauri (CF Access blocks webview requests)
+    void proxyTauriImages(container);
+
     // Cache for return-from-viewer navigation
     _cachedCollection = data;
 }
@@ -630,11 +664,19 @@ function openArchive(archive: CollectionArchive, collectionName: string): void {
     const app = document.getElementById('app');
     if (app) app.style.display = '';
 
-    // Relabel the kiosk-back-library button and show it
+    // Relabel the kiosk-back-library button and show it;
+    // shift the title block right so it sits beside the button, not underneath.
     const backBtn = getBackButtonEl();
     if (backBtn) {
         backBtn.textContent = '\u2190 ' + collectionName;
         backBtn.classList.remove('hidden');
+        document.body.classList.add('has-back-nav');
+
+        // Measure button width after render and set a CSS var for the title offset
+        requestAnimationFrame(() => {
+            const btnRight = backBtn.offsetLeft + backBtn.offsetWidth + 12; // 12px gap
+            document.documentElement.style.setProperty('--back-nav-offset', btnRight + 'px');
+        });
     }
 
     // Hide file picker (may be visible if no archive was loaded yet)
@@ -657,6 +699,8 @@ export function handleViewerBack(): void {
 
     const backBtn = getBackButtonEl();
     if (backBtn) backBtn.classList.add('hidden');
+    document.body.classList.remove('has-back-nav');
+    document.documentElement.style.removeProperty('--back-nav-offset');
 
     const app = document.getElementById('app');
     if (app) app.style.display = 'none';

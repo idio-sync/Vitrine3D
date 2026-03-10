@@ -25,9 +25,20 @@ var _lightElevation = Math.PI / 4;
 var _menubar = null;
 var _toolbar = null;
 var _statusBar = null;
-// _sectionControls removed — cross-section controls are now in the info panel
 var _lightWidget = null;
 var _trackballOverlay = null;
+
+// Walkthrough state
+var _wtControls = null;         // walkthrough controls container in status bar
+var _wtDots = null;             // dot container
+var _wtTitleEl = null;          // stop title element
+var _wtTotalStops = 0;
+
+// Event listener refs for teardown
+var _keydownHandler = null;
+var _dropDragoverHandler = null;
+var _dropDragleaveHandler = null;
+var _dropDropHandler = null;
 
 // Menu system state
 var _openMenu = null;            // 'file' | 'view' | 'render' | 'tools' | 'help' | null
@@ -282,11 +293,8 @@ function toggleDisplay(name) {
 
     var btn = _toolbar ? _toolbar.querySelector('[data-toggle="' + name + '"]') : null;
     if (btn) {
-        if (_toggles[name]) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
+        btn.classList.toggle('active', _toggles[name]);
+        btn.setAttribute('aria-pressed', String(_toggles[name]));
     }
 
     if (name === 'matcap' && _deps.updateModelMatcap) {
@@ -696,6 +704,7 @@ function buildHelpMenu(dropdown) {
 
 function createMenuBar() {
     var bar = createEl('div', 'ind-menubar');
+    bar.setAttribute('role', 'menubar');
 
     var menuDefs = [
         { id: 'file',   label: 'File' },
@@ -708,9 +717,13 @@ function createMenuBar() {
     menuDefs.forEach(function(def) {
         var item = createEl('div', 'ind-menu-item', def.label);
         item.dataset.menu = def.id;
+        item.setAttribute('role', 'menuitem');
+        item.setAttribute('aria-haspopup', 'true');
+        item.setAttribute('tabindex', '0');
 
         var dropdown = createEl('div', 'ind-dropdown');
         dropdown.dataset.menuFor = def.id;
+        dropdown.setAttribute('role', 'menu');
         item.appendChild(dropdown);
 
         if (def.id === 'file')   buildFileMenu(dropdown);
@@ -775,6 +788,7 @@ function createToolbar() {
     var bboxBtn = createEl('button', 'ind-tool-btn', ICONS.bbox);
     bboxBtn.setAttribute('data-toggle', 'bbox');
     bboxBtn.setAttribute('data-tooltip', 'Show Bounds [B]');
+    bboxBtn.setAttribute('aria-label', 'Show Bounds');
     bboxBtn.addEventListener('click', toggleBoundingBox);
     _bboxBtn = bboxBtn;
     utilGroup.appendChild(bboxBtn);
@@ -787,12 +801,15 @@ function createToolbar() {
     var meshBtn = createEl('button', 'ind-tool-btn ind-mode-btn', ICONS.mesh + '<span>Mesh</span>');
     meshBtn.setAttribute('data-mode', 'model');
     meshBtn.setAttribute('data-tooltip', 'Show mesh');
+    meshBtn.setAttribute('aria-label', 'Show mesh');
     var splatBtn = createEl('button', 'ind-tool-btn ind-mode-btn', ICONS.splat + '<span>Splat</span>');
     splatBtn.setAttribute('data-mode', 'splat');
     splatBtn.setAttribute('data-tooltip', 'Show splat');
+    splatBtn.setAttribute('aria-label', 'Show splat');
     var cloudBtn = createEl('button', 'ind-tool-btn ind-mode-btn', ICONS.cloud + '<span>Cloud</span>');
     cloudBtn.setAttribute('data-mode', 'pointcloud');
     cloudBtn.setAttribute('data-tooltip', 'Show point cloud');
+    cloudBtn.setAttribute('aria-label', 'Show point cloud');
     [meshBtn, splatBtn, cloudBtn].forEach(function(btn) {
         btn.addEventListener('click', function() {
             if (_deps && _deps.setDisplayMode) {
@@ -811,6 +828,8 @@ function createToolbar() {
     var gridBtn = createEl('button', 'ind-tool-btn', ICONS.grid);
     gridBtn.setAttribute('data-toggle', 'grid');
     gridBtn.setAttribute('data-tooltip', 'Toggle Grid [G]');
+    gridBtn.setAttribute('aria-label', 'Toggle Grid');
+    gridBtn.setAttribute('aria-pressed', 'false');
     gridBtn.addEventListener('click', function() {
         _toggles.grid = !_toggles.grid;
         gridBtn.classList.toggle('active', _toggles.grid);
@@ -819,6 +838,8 @@ function createToolbar() {
     var autoRotBtn = createEl('button', 'ind-tool-btn', ICONS.autoRotate);
     autoRotBtn.setAttribute('data-toggle', 'autorotate');
     autoRotBtn.setAttribute('data-tooltip', 'Auto-Rotate');
+    autoRotBtn.setAttribute('aria-label', 'Auto-Rotate');
+    autoRotBtn.setAttribute('aria-pressed', 'true');
     autoRotBtn.addEventListener('click', function() {
         _toggles.autorotate = !_toggles.autorotate;
         autoRotBtn.classList.toggle('active', _toggles.autorotate);
@@ -827,6 +848,8 @@ function createToolbar() {
     var flyBtn = createEl('button', 'ind-tool-btn', ICONS.fly);
     flyBtn.setAttribute('data-toggle', 'fly');
     flyBtn.setAttribute('data-tooltip', 'Fly Mode');
+    flyBtn.setAttribute('aria-label', 'Fly Mode');
+    flyBtn.setAttribute('aria-pressed', 'false');
     flyBtn.addEventListener('click', function() {
         if (_deps && _deps.toggleFlyMode) _deps.toggleFlyMode();
         // State is read from deps.getFlyModeActive after the toggle
@@ -850,9 +873,11 @@ function createToolbar() {
     var sdBtn = createEl('button', 'ind-tool-btn ind-quality-btn', 'SD');
     sdBtn.setAttribute('data-tier', 'sd');
     sdBtn.setAttribute('data-tooltip', 'Standard Definition');
+    sdBtn.setAttribute('aria-label', 'Standard Definition');
     var hdBtn = createEl('button', 'ind-tool-btn ind-quality-btn', 'HD');
     hdBtn.setAttribute('data-tier', 'hd');
     hdBtn.setAttribute('data-tooltip', 'High Definition');
+    hdBtn.setAttribute('aria-label', 'High Definition');
     [sdBtn, hdBtn].forEach(function(btn) {
         btn.addEventListener('click', function() {
             if (_deps && _deps.switchQualityTier) {
@@ -871,6 +896,8 @@ function createToolbar() {
     var panelBtn = createEl('button', 'ind-tool-btn', ICONS.panel);
     panelBtn.setAttribute('data-toggle', 'panel');
     panelBtn.setAttribute('data-tooltip', 'Properties Panel');
+    panelBtn.setAttribute('aria-label', 'Properties Panel');
+    panelBtn.setAttribute('aria-pressed', 'true');
     panelBtn.classList.add('active'); // panel open by default
     panelBtn.addEventListener('click', function() {
         toggleInfoPanel();
@@ -886,6 +913,7 @@ function createToolBtn(tool, tooltip, icon) {
     var btn = createEl('button', 'ind-tool-btn', icon);
     btn.setAttribute('data-tool', tool);
     btn.setAttribute('data-tooltip', tooltip);
+    btn.setAttribute('aria-label', tooltip);
     btn.addEventListener('click', function () { toggleTool(tool); });
     return btn;
 }
@@ -894,6 +922,8 @@ function createToggleBtn(toggle, tooltip, icon) {
     var btn = createEl('button', 'ind-tool-btn', icon);
     btn.setAttribute('data-toggle', toggle);
     btn.setAttribute('data-tooltip', tooltip);
+    btn.setAttribute('aria-label', tooltip);
+    btn.setAttribute('aria-pressed', String(!!_toggles[toggle]));
     if (_toggles[toggle]) btn.classList.add('active');
     btn.addEventListener('click', function () { toggleDisplay(toggle); });
     return btn;
@@ -903,6 +933,7 @@ function createActionBtn(action, tooltip, icon) {
     var btn = createEl('button', 'ind-tool-btn', icon);
     btn.setAttribute('data-action', action);
     btn.setAttribute('data-tooltip', tooltip);
+    btn.setAttribute('aria-label', tooltip);
     btn.addEventListener('click', function () {
         if (action === 'screenshot') doScreenshot();
         else if (action === 'fitview') fitCamera();
@@ -1133,6 +1164,19 @@ function buildLayersSection(body, manifest) {
             }
         }
 
+        // Flight path visibility toggle
+        if (role === 'flightpath' && _deps && _deps.flightPathManager) {
+            var fpCheck = document.createElement('input');
+            fpCheck.type = 'checkbox';
+            fpCheck.checked = true;
+            fpCheck.style.cssText = 'margin-left:auto; cursor:pointer;';
+            fpCheck.setAttribute('aria-label', 'Toggle flight path visibility');
+            fpCheck.addEventListener('change', function() {
+                if (_deps && _deps.flightPathManager) _deps.flightPathManager.setVisible(fpCheck.checked);
+            });
+            item.appendChild(fpCheck);
+        }
+
         // Size sub-line
         if (asset.size) {
             var sizeEl = createEl('div', 'ind-layer-stats', formatFileSize(asset.size));
@@ -1208,6 +1252,11 @@ function buildAnnotationsSection(body, manifest) {
         item.addEventListener('click', function() {
             if (_deps && _deps.annotationSystem) {
                 _deps.annotationSystem.goToAnnotation(anno.id);
+            }
+            // Show annotation detail popup
+            if (_deps && _deps.showAnnotationPopup) {
+                var popupId = _deps.showAnnotationPopup(anno, _deps.state ? _deps.state.imageAssets : undefined);
+                if (_deps.setCurrentPopupId) _deps.setCurrentPopupId(popupId);
             }
         });
         body.appendChild(item);
@@ -1420,6 +1469,15 @@ function onAnnotationSelect(annotationId) {
             if (arrow) arrow.textContent = '▼';
         }
     }
+    // Show annotation popup (3D marker was clicked)
+    if (_deps && _deps.showAnnotationPopup && _deps.annotationSystem) {
+        var annotations = _deps.annotationSystem.getAnnotations();
+        var anno = annotations ? annotations.find(function(a) { return String(a.id) === id; }) : null;
+        if (anno) {
+            var popupId = _deps.showAnnotationPopup(anno, _deps.state ? _deps.state.imageAssets : undefined);
+            if (_deps.setCurrentPopupId) _deps.setCurrentPopupId(popupId);
+        }
+    }
 }
 
 function onAnnotationDeselect() {
@@ -1427,6 +1485,10 @@ function onAnnotationDeselect() {
     _panel.querySelectorAll('.ind-anno-item.selected').forEach(function(el) {
         el.classList.remove('selected');
     });
+    // Hide annotation popup
+    if (_deps && _deps.hideAnnotationPopup) _deps.hideAnnotationPopup();
+    if (_deps && _deps.hideAnnotationLine) _deps.hideAnnotationLine();
+    if (_deps && _deps.setCurrentPopupId) _deps.setCurrentPopupId(null);
 }
 
 function onViewModeChange(mode) {
@@ -1551,7 +1613,7 @@ function setup(manifest, deps) {
     }
 
     // Register keyboard shortcuts in capture phase
-    window.addEventListener('keydown', function (e) {
+    _keydownHandler = function (e) {
         var activeEl = document.activeElement;
         if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) return;
         if (e.ctrlKey || e.metaKey) return;
@@ -1582,7 +1644,8 @@ function setup(manifest, deps) {
             e.preventDefault();
             e.stopImmediatePropagation();
         }
-    }, true);
+    };
+    window.addEventListener('keydown', _keydownHandler, true);
 }
 
 // ---- initLoadingScreen ----
@@ -1634,6 +1697,101 @@ function onKeyboardShortcut(key) {
     }
 }
 
+// ---- Walkthrough callbacks ----
+
+function onWalkthroughStart(walkthrough) {
+    _wtTotalStops = walkthrough.stops.length;
+    if (!_statusBar) return;
+
+    _wtControls = createEl('div', 'ind-wt-controls');
+
+    // Stop dots (visual progress — kiosk-main's player handles prev/next/click)
+    _wtDots = createEl('div', 'ind-wt-dots');
+    walkthrough.stops.forEach(function(_stop, i) {
+        var dot = createEl('div', 'ind-wt-dot');
+        dot.setAttribute('data-stop-index', String(i));
+        _wtDots.appendChild(dot);
+    });
+    _wtControls.appendChild(_wtDots);
+
+    // Stop title
+    _wtTitleEl = createEl('span', 'ind-wt-title');
+    _wtControls.appendChild(_wtTitleEl);
+
+    _statusBar.appendChild(_wtControls);
+}
+
+function onWalkthroughStopChange(stopIndex, stop) {
+    if (_wtDots) {
+        _wtDots.querySelectorAll('.ind-wt-dot').forEach(function(d) {
+            var idx = parseInt(d.getAttribute('data-stop-index'), 10);
+            d.classList.toggle('visited', idx < stopIndex);
+            d.classList.toggle('active', idx === stopIndex);
+        });
+    }
+    if (_wtTitleEl) {
+        _wtTitleEl.textContent = stop.title || ('Stop ' + (stopIndex + 1));
+    }
+}
+
+function onWalkthroughEnd() {
+    if (_wtControls) {
+        _wtControls.remove();
+        _wtControls = null;
+    }
+    _wtDots = null;
+    _wtTitleEl = null;
+    _wtTotalStops = 0;
+}
+
+// ---- Destroy / teardown ----
+
+function destroy() {
+    // Remove document-level keyboard listener
+    if (_keydownHandler) {
+        window.removeEventListener('keydown', _keydownHandler, true);
+        _keydownHandler = null;
+    }
+
+    // Remove menu close listener
+    if (_menuCloseListener) {
+        document.removeEventListener('mousedown', _menuCloseListener);
+        _menuCloseListener = null;
+    }
+
+    // Remove DOM elements created by setup
+    if (_menubar && _menubar.parentNode) _menubar.parentNode.removeChild(_menubar);
+    if (_toolbar && _toolbar.parentNode) _toolbar.parentNode.removeChild(_toolbar);
+    if (_statusBar && _statusBar.parentNode) _statusBar.parentNode.removeChild(_statusBar);
+    if (_lightWidget && _lightWidget.parentNode) _lightWidget.parentNode.removeChild(_lightWidget);
+    if (_trackballOverlay && _trackballOverlay.parentNode) _trackballOverlay.parentNode.removeChild(_trackballOverlay);
+    if (_panel && _panel.parentNode) _panel.parentNode.removeChild(_panel);
+    if (_dropZone && _dropZone.parentNode) _dropZone.parentNode.removeChild(_dropZone);
+
+    // Clean up walkthrough UI
+    onWalkthroughEnd();
+
+    // Remove panel-open body class
+    document.body.classList.remove('ind-panel-open');
+
+    // Reset module state
+    _menubar = null;
+    _toolbar = null;
+    _statusBar = null;
+    _lightWidget = null;
+    _trackballOverlay = null;
+    _panel = null;
+    _dropZone = null;
+    _deps = null;
+    _manifest = null;
+    _activeTool = null;
+    _openMenu = null;
+    _modeBtns = null;
+    _viewToggles = null;
+    _qualityBtns = null;
+    _panelToggleBtn = null;
+}
+
 // ---- Self-register for kiosk discovery ----
 if (!window.__KIOSK_LAYOUTS__) window.__KIOSK_LAYOUTS__ = {};
 window.__KIOSK_LAYOUTS__['industrial'] = {
@@ -1646,6 +1804,10 @@ window.__KIOSK_LAYOUTS__['industrial'] = {
     onAutoRotateChange: onAutoRotateChange,
     onAssetLoaded: onAssetLoaded,
     onMeasurementChanged: onMeasurementChanged,
+    onWalkthroughStart: onWalkthroughStart,
+    onWalkthroughStopChange: onWalkthroughStopChange,
+    onWalkthroughEnd: onWalkthroughEnd,
+    destroy: destroy,
     hasOwnInfoPanel: true,
     hasOwnQualityToggle: true,
     handlesEmptyState: true
