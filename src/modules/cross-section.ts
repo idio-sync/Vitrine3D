@@ -81,6 +81,7 @@ export class CrossSectionTool {
             depthWrite: false,
         });
         this._planeMesh = new THREE.Mesh(geo, mat);
+        this._planeMesh.name = 'crossSectionPlane';
         this._planeMesh.renderOrder = 1;
         this._planeMesh.visible = false;
         this._scene.add(this._planeMesh);
@@ -333,6 +334,7 @@ export class CrossSectionTool {
             });
 
             const capMesh = new THREE.Mesh(mesh.geometry, capMat);
+            capMesh.name = 'crossSectionCap';
             capMesh.applyMatrix4(mesh.matrixWorld);
             this._capGroup.add(capMesh);
             this._capMeshes.push(capMesh);

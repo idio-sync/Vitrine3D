@@ -157,6 +157,8 @@ export class MeasurementSystem {
             while (obj) {
                 if (obj.name === 'annotationMarkers' ||
                     obj.name === 'measurementLine' ||
+                    obj.name === 'crossSectionPlane' ||
+                    obj.name === 'crossSectionCap' ||
                     obj.type === 'GridHelper' ||
                     obj.type === 'AxesHelper') {
                     return false;

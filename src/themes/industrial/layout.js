@@ -182,6 +182,7 @@ function activateTool(name) {
 
     if (name === 'slice') {
         if (_deps.crossSection) {
+            if (_deps.setLocalClippingEnabled) _deps.setLocalClippingEnabled(true);
             var center = { x: 0, y: 0, z: 0 };
             if (_deps.modelGroup && _deps.modelGroup.children.length > 0) {
                 _deps.modelGroup.traverse(function (child) {
@@ -216,6 +217,7 @@ function deactivateTool(name) {
 
     if (name === 'slice') {
         if (_deps.crossSection) _deps.crossSection.stop();
+        if (_deps.setLocalClippingEnabled) _deps.setLocalClippingEnabled(false);
         if (_panel && _panel._crossSectionEl) _panel._crossSectionEl.style.display = 'none';
     } else if (name === 'measure') {
         if (_deps.measurementSystem) _deps.measurementSystem.setMeasureMode(false);
@@ -251,6 +253,28 @@ function updateModeButtons(mode) {
     Object.keys(_modeBtns).forEach(function(k) {
         _modeBtns[k].classList.toggle('active', k === m);
     });
+}
+
+function updateModeButtonVisibility() {
+    if (!_modeBtns || !_deps) return;
+    var hasModel = (_deps.modelGroup && _deps.modelGroup.children.length > 0) || _deps.hasMesh;
+    var hasSplat = _deps.hasSplat || false;
+    var hasPointcloud = (_deps.pointcloudGroup && _deps.pointcloudGroup.children.length > 0);
+
+    if (_modeBtns.model) _modeBtns.model.style.display = hasModel ? '' : 'none';
+    if (_modeBtns.splat) _modeBtns.splat.style.display = hasSplat ? '' : 'none';
+    if (_modeBtns.pointcloud) _modeBtns.pointcloud.style.display = hasPointcloud ? '' : 'none';
+
+    // Hide mode group + preceding separator if no buttons visible
+    var modeGroup = _modeBtns.model ? _modeBtns.model.parentElement : null;
+    if (modeGroup) {
+        var anyVisible = hasModel || hasSplat || hasPointcloud;
+        modeGroup.style.display = anyVisible ? '' : 'none';
+        var prevSep = modeGroup.previousElementSibling;
+        if (prevSep && prevSep.classList.contains('ind-toolbar-sep')) {
+            prevSep.style.display = anyVisible ? '' : 'none';
+        }
+    }
 }
 
 function startFpsCounter() {
@@ -487,7 +511,6 @@ function toggleOrthographic() {
 function updateViewMenuChecks() {
     if (_viewMenuItems.ortho) _viewMenuItems.ortho.classList.toggle('checked', _cameraMode === 'orthographic');
     if (_viewMenuItems.trackball) _viewMenuItems.trackball.classList.toggle('checked', _toggles.trackball);
-    if (_viewMenuItems.toolbar) _viewMenuItems.toolbar.classList.toggle('checked', _toggles.toolbar);
 }
 
 function buildViewMenu(dropdown) {
@@ -514,14 +537,6 @@ function buildViewMenu(dropdown) {
     _viewMenuItems.trackball = trackballItem;
     dropdown.appendChild(trackballItem);
 
-    var toolbarItem = ddItem('Show Toolbar', '', function() {
-        _toggles.toolbar = !_toggles.toolbar;
-        if (_toolbar) _toolbar.classList.toggle('hidden', !_toggles.toolbar);
-        updateViewMenuChecks();
-    });
-    toolbarItem.classList.add('checked');
-    _viewMenuItems.toolbar = toolbarItem;
-    dropdown.appendChild(toolbarItem);
 }
 
 // -- Render Menu --
@@ -819,6 +834,10 @@ function createToolbar() {
         modeGroup.appendChild(btn);
     });
     _modeBtns = { model: meshBtn, splat: splatBtn, pointcloud: cloudBtn };
+    // Start hidden — shown when assets load via updateModeButtonVisibility()
+    meshBtn.style.display = 'none';
+    splatBtn.style.display = 'none';
+    cloudBtn.style.display = 'none';
     toolbar.appendChild(modeGroup);
 
     toolbar.appendChild(createEl('div', 'ind-toolbar-sep'));
@@ -1417,6 +1436,8 @@ function onAutoRotateChange(active) {
 
 function onAssetLoaded() {
     if (!_panel || !_deps) return;
+    // Show/hide mode buttons based on loaded asset types
+    updateModeButtonVisibility();
     // Rebuild layers with updated asset info
     if (_panel._layersBody) buildLayersSection(_panel._layersBody, _manifest);
     // Refresh vertex/face status bar counts
@@ -1646,6 +1667,9 @@ function setup(manifest, deps) {
         }
     };
     window.addEventListener('keydown', _keydownHandler, true);
+
+    // Show/hide mode buttons based on initially loaded assets
+    updateModeButtonVisibility();
 }
 
 // ---- initLoadingScreen ----

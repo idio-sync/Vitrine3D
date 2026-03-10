@@ -421,6 +421,11 @@ async function _doInit(): Promise<void> {
     config._themeMeta = themeMeta;
     config._layoutModule = themeMeta.layoutModule || null;
 
+    // Apply theme scene background color (overrides default SCENE_BACKGROUND)
+    if (themeMeta.sceneBg && sceneManager) {
+        sceneManager.setBackgroundColor(themeMeta.sceneBg);
+    }
+
     if (hasLayoutModule) {
         document.body.classList.add(`kiosk-${layoutStyle}`);
         log.info(`Layout module enabled: ${layoutStyle}`);
