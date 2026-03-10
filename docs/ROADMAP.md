@@ -97,7 +97,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [ ] Add convergence criteria and maximum correspondence distance to ICP
 - [ ] Implement point-to-plane ICP for better convergence on planar surfaces
 - [ ] RANSAC-based initial alignment for distant starting positions
-- [ ] Display alignment quality metrics (RMSE, overlap percentage) in the UI
+- [x] **Done** — Display alignment quality metrics (RMSE, match count) in the UI — shown after Colmap↔flight path alignment
 
 ### Format Registration
 - [ ] Register `.ddim` format with PRONOM for a format ID
@@ -147,6 +147,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [x] **Done** — DXF drawing files as an independent asset type (loaded via `three-dxf-loader`, displayed in a dedicated drawing layer)
 - [x] **Done** — STEP/IGES parametric CAD files as an independent asset type (loaded via `occt-import-js` OpenCASCADE WASM, tessellated and rendered in a dedicated CAD layer; stored as `cad_` entries in archives)
 - [x] **Done** — DJI flight path import (CSV, KML/KMZ, SRT, DJI binary .txt) as an independent asset type (`flightpath_` entries in archives); GPS→local coordinate conversion, 3D line rendering with instanced markers, hover telemetry tooltips, manual alignment via transform gizmo. Binary .txt logs parsed via `dji-log-parser-js` WASM; v13+ encrypted logs require `DJI_API_KEY` (Docker env var or admin settings)
+- [x] **Done** — Colmap SfM camera visualization as an independent asset type (`colmap_sfm_` entries in archives); parses `cameras.bin` + `images.bin` binary format, renders camera positions as frustum wireframes or instanced markers, frustum scale slider, display mode toggle. Auto-align flight paths to splats via Umeyama similarity transform using timestamp-matched Colmap↔GPS point pairs. Full editor integration (import, transform, archive save/load) and kiosk mode support with lazy loading and toggle button.
 
 ### Annotations & Walkthrough
 - [x] **Done** — Image attachments in annotations via `asset:` protocol
