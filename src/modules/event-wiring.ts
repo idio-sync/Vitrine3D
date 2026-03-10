@@ -1192,12 +1192,30 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     // ─── SfM Camera settings ─────────────────────────────────
     let pendingCamerasBin: ArrayBuffer | null = null;
     let pendingImagesBin: ArrayBuffer | null = null;
+    let pendingPoints3DBin: ArrayBuffer | null = null;
+
+    const updateColmapStatus = () => {
+        const camEl = document.getElementById('colmap-status-cameras');
+        const imgEl = document.getElementById('colmap-status-images');
+        const ptsEl = document.getElementById('colmap-status-points3d');
+        if (camEl) camEl.textContent = pendingCamerasBin || deps.colmap.hasData ? '● cameras.bin' : '○ cameras.bin';
+        if (imgEl) imgEl.textContent = pendingImagesBin || deps.colmap.hasData ? '● images.bin' : '○ images.bin';
+        if (ptsEl) ptsEl.textContent = deps.colmap.hasPoints3D ? '● points3D.bin' : '○ points3D.bin';
+
+        const alignBtn = document.getElementById('btn-align-from-camera-data') as HTMLButtonElement | null;
+        if (alignBtn) {
+            const ready = deps.colmap.hasData && deps.colmap.hasPoints3D && deps.state.splatLoaded;
+            alignBtn.disabled = !ready;
+            alignBtn.title = ready ? 'Auto-align using ICP on camera data' : 'Load camera data (cameras.bin, images.bin, points3D.bin) and a splat to enable';
+        }
+    };
 
     const tryLoadColmap = () => {
         if (!pendingCamerasBin || !pendingImagesBin) return;
         deps.colmap.loadFromBuffers(pendingCamerasBin, pendingImagesBin);
         pendingCamerasBin = null;
         pendingImagesBin = null;
+        updateColmapStatus();
     };
 
     addListener('colmap-cameras-input', 'change', async (e: Event) => {
@@ -1205,6 +1223,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (!file) return;
         pendingCamerasBin = await file.arrayBuffer();
         tryLoadColmap();
+        updateColmapStatus();
     });
 
     addListener('colmap-images-input', 'change', async (e: Event) => {
@@ -1212,6 +1231,20 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (!file) return;
         pendingImagesBin = await file.arrayBuffer();
         tryLoadColmap();
+        updateColmapStatus();
+    });
+
+    addListener('colmap-points3d-input', 'change', async (e: Event) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        const buffer = await file.arrayBuffer();
+        const { parsePoints3D } = await import('./colmap-alignment.js');
+        const result = parsePoints3D(buffer);
+        if (result) {
+            deps.colmap.loadPoints3D(result.positions, result.count);
+            deps.colmap.points3DBuffer = buffer;
+        }
+        updateColmapStatus();
     });
 
     addListener('btn-colmap-frustums', 'click', () => deps.colmap.setDisplayMode('frustums'));
@@ -1225,6 +1258,12 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     });
 
     addListener('btn-align-flightpath', 'click', () => deps.colmap.alignFlightPath());
+
+    addListener('btn-align-from-camera-data', 'click', async () => {
+        if (deps.colmap.alignFromCameraData) {
+            await deps.colmap.alignFromCameraData();
+        }
+    });
 
     // ─── Setup collapsible sections ──────────────────────────
     setupCollapsibles();

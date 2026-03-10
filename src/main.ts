@@ -8,7 +8,8 @@ import { CrossSectionTool } from './modules/cross-section.js';
 import { MeasurementSystem } from './modules/measurement-system.js';
 import { FlightPathManager } from './modules/flight-path.js';
 import { ColmapManager } from './modules/colmap-loader.js';
-import { alignCamerasToFlightPath } from './modules/colmap-alignment.js';
+import { alignCamerasToFlightPath, computeSimilarityTransform, matchCamerasToFlightPoints } from './modules/colmap-alignment.js';
+import { runICP, sampleSplatPoints } from './modules/icp-alignment.js';
 import { ArchiveCreator, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
 import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS, DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET } from './modules/constants.js';
 import { getLodBudget } from './modules/quality-tier.js';
@@ -882,6 +883,102 @@ function createEventWiringDeps(): EventWiringDeps {
                     notify.warning(`Alignment RMSE is high (${result.rmse.toFixed(2)}). Verify match quality.`);
                 } else {
                     notify.success(`Cameras aligned to flight path (${result.matchCount} matches, RMSE: ${result.rmse.toFixed(3)})`);
+                }
+            },
+            get hasData() { return colmapManager?.hasData ?? false; },
+            get hasPoints3D() { return colmapManager?.hasPoints3D ?? false; },
+            loadPoints3D: (positions: Float64Array, count: number) => {
+                colmapManager?.loadPoints3D(positions, count);
+            },
+            get points3DBuffer() { return colmapManager?.points3DBuffer ?? null; },
+            set points3DBuffer(buf: ArrayBuffer | null) { if (colmapManager) colmapManager.points3DBuffer = buf; },
+            alignFromCameraData: async () => {
+                if (!colmapManager?.hasPoints3D || !splatMesh) {
+                    notify.error('Load splat + camera data first');
+                    return;
+                }
+
+                showLoading('Auto-aligning from camera data...');
+
+                try {
+                    const splatSample = sampleSplatPoints(splatMesh);
+                    if (!splatSample) {
+                        notify.error('Could not sample splat points');
+                        return;
+                    }
+
+                    const points3D = colmapManager.points3D!;
+                    const points3DCount = colmapManager.points3DCount;
+
+                    const icpResult = runICP(points3D, points3DCount, splatSample.points, splatSample.count);
+                    if (!icpResult) {
+                        notify.error('Alignment failed — insufficient point overlap');
+                        return;
+                    }
+
+                    const colmapGrp = sceneManager?.colmapGroup;
+                    if (colmapGrp) {
+                        colmapGrp.quaternion.copy(icpResult.rotation);
+                        colmapGrp.scale.setScalar(icpResult.scale);
+                        colmapGrp.position.copy(icpResult.translation);
+                        colmapGrp.updateMatrix();
+                        colmapGrp.updateMatrixWorld(true);
+                    }
+
+                    if (flightPathManager?.hasData && colmapManager.colmapCameras.length >= 3) {
+                        const fpGroup = sceneManager?.flightPathGroup;
+                        if (fpGroup) {
+                            const matchedPairs = matchCamerasToFlightPoints(
+                                colmapManager.colmapCameras,
+                                flightPathManager.getAllPoints()
+                            );
+
+                            if (matchedPairs.length >= 3) {
+                                const gpsSlice = matchedPairs.map(p => p.gpsPos);
+                                const colmapSlice = matchedPairs.map(p => p.colmapPos);
+
+                                const tGeo = computeSimilarityTransform(gpsSlice, colmapSlice);
+                                if (tGeo) {
+                                    const composedQ = icpResult.rotation.clone().multiply(tGeo.rotation);
+                                    const composedScale = icpResult.scale * tGeo.scale;
+                                    const composedT = tGeo.translation.clone()
+                                        .applyQuaternion(icpResult.rotation)
+                                        .multiplyScalar(icpResult.scale)
+                                        .add(icpResult.translation);
+
+                                    fpGroup.quaternion.copy(composedQ);
+                                    fpGroup.scale.setScalar(composedScale);
+                                    fpGroup.position.copy(composedT);
+                                    fpGroup.updateMatrix();
+                                    fpGroup.updateMatrixWorld(true);
+
+                                    notify.success(`Aligned camera data + flight path — RMSE: ${icpResult.rmse.toFixed(3)}`);
+                                } else {
+                                    notify.success(`Aligned camera data — RMSE: ${icpResult.rmse.toFixed(3)}`);
+                                    notify.warning('Flight path alignment failed (insufficient GPS↔camera matches)');
+                                }
+                            } else {
+                                notify.success(`Aligned camera data — RMSE: ${icpResult.rmse.toFixed(3)}`);
+                                notify.warning('Flight path: insufficient camera↔GPS matches (need >= 3)');
+                            }
+                        }
+                    } else {
+                        notify.success(`Aligned camera data — RMSE: ${icpResult.rmse.toFixed(3)}, ${icpResult.matchCount} matches`);
+                    }
+
+                    const resultEl = document.getElementById('icp-align-result');
+                    if (resultEl) {
+                        resultEl.style.display = '';
+                        resultEl.textContent = `RMSE: ${icpResult.rmse.toFixed(3)} | ${icpResult.matchCount} matches | ${icpResult.converged ? 'converged' : 'max iter'}`;
+                    }
+
+                    updateTransformInputs();
+                    storeLastPositions();
+                } catch (err) {
+                    log.error('Alignment failed:', err);
+                    notify.error('Alignment failed — see console for details');
+                } finally {
+                    hideLoading();
                 }
             },
         },
