@@ -851,6 +851,145 @@ body.kiosk-mode.kiosk-industrial .ind-anno-title {
     white-space: nowrap;
 }
 
+/* ---- Annotation form (QA Phase 3) ---- */
+
+body.kiosk-mode.kiosk-industrial .ind-anno-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-count {
+    font-size: 10px;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-csv-btn {
+    font-size: 10px;
+    padding: 2px 6px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-sev-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: auto;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-pass {
+    background: rgba(76, 175, 80, 0.2);
+    color: #4caf50;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-fail {
+    background: rgba(244, 67, 54, 0.2);
+    color: #f44336;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-review {
+    background: rgba(255, 152, 0, 0.2);
+    color: #ff9800;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-del-btn {
+    background: none;
+    border: none;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.4);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    margin-left: 4px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-del-btn:hover {
+    color: #f44336;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-back-btn {
+    font-size: 11px;
+    margin-bottom: 8px;
+    width: 100%;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-form {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-form-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.65);
+    margin-top: 4px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-form-input,
+body.kiosk-mode.kiosk-industrial .ind-anno-form-textarea,
+body.kiosk-mode.kiosk-industrial .ind-anno-form-select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 6px;
+    background: rgb(var(--kiosk-bg-deep-rgb));
+    border: 1px solid var(--kiosk-border);
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+    border-radius: 3px;
+    font-family: var(--kiosk-font-body);
+    font-size: 12px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-form-textarea {
+    resize: vertical;
+    min-height: 36px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-row {
+    display: flex;
+    gap: 4px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-btn {
+    flex: 1;
+    padding: 4px 0;
+    background: rgb(var(--kiosk-bg-deep-rgb));
+    border: 1px solid var(--kiosk-border);
+    color: rgba(var(--kiosk-text-body-rgb), 0.7);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--kiosk-font-body);
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-btn.active[data-status="pass"] {
+    background: rgba(76, 175, 80, 0.25);
+    color: #4caf50;
+    border-color: #4caf50;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-btn.active[data-status="fail"] {
+    background: rgba(244, 67, 54, 0.25);
+    color: #f44336;
+    border-color: #f44336;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-btn.active[data-status="review"] {
+    background: rgba(255, 152, 0, 0.25);
+    color: #ff9800;
+    border-color: #ff9800;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-form-btns {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-save-btn {
+    flex: 1;
+    background: var(--kiosk-accent);
+    color: #fff;
+    border-color: var(--kiosk-accent);
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-cancel-btn {
+    flex: 1;
+}
+
 /* ---- FPS field in status bar ---- */
 
 body.kiosk-mode.kiosk-industrial .ind-status-fps-field {

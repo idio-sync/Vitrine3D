@@ -169,6 +169,11 @@ export interface Annotation {
     camera_position: { x: number; y: number; z: number };
     /** Camera orientation quaternion — captures exact view direction. Optional for backward compat with older archives. */
     camera_quaternion?: { x: number; y: number; z: number; w: number };
+    // QA / defect marking fields (Phase 3)
+    severity?: 'low' | 'medium' | 'high' | 'critical';
+    category?: 'surface_defect' | 'gap' | 'missing_data' | 'scan_artifact' | 'dimensional_variance' | 'other';
+    status?: 'pass' | 'fail' | 'review';
+    qa_notes?: string;
 }
 
 // ===== Walkthrough =====

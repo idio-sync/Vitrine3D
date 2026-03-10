@@ -1445,6 +1445,167 @@ function buildPropertiesSection(body, manifest, selectedAsset) {
     }
 }
 
+function buildAnnotationDetailForm(annotation, onSave, onCancel) {
+    var form = createEl('div', 'ind-anno-form');
+
+    // Title
+    var titleLabel = createEl('label', 'ind-anno-form-label', 'Title');
+    var titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.className = 'ind-anno-form-input';
+    titleInput.value = annotation.title || '';
+    titleInput.placeholder = 'Annotation title';
+    form.appendChild(titleLabel);
+    form.appendChild(titleInput);
+
+    // Description
+    var descLabel = createEl('label', 'ind-anno-form-label', 'Description');
+    var descInput = document.createElement('textarea');
+    descInput.className = 'ind-anno-form-textarea';
+    descInput.value = annotation.body || '';
+    descInput.placeholder = 'Description';
+    descInput.rows = 2;
+    form.appendChild(descLabel);
+    form.appendChild(descInput);
+
+    // Severity dropdown
+    var sevLabel = createEl('label', 'ind-anno-form-label', 'Severity');
+    var sevSelect = document.createElement('select');
+    sevSelect.className = 'ind-anno-form-select';
+    var sevOptions = [
+        { value: '', label: '\u2014 None \u2014', color: '' },
+        { value: 'low', label: '\u{1F7E2} Low', color: '#4caf50' },
+        { value: 'medium', label: '\u{1F7E1} Medium', color: '#ff9800' },
+        { value: 'high', label: '\u{1F7E0} High', color: '#f57c00' },
+        { value: 'critical', label: '\u{1F534} Critical', color: '#f44336' }
+    ];
+    sevOptions.forEach(function(opt) {
+        var option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.label;
+        if (annotation.severity === opt.value || (!annotation.severity && opt.value === '')) {
+            option.selected = true;
+        }
+        sevSelect.appendChild(option);
+    });
+    form.appendChild(sevLabel);
+    form.appendChild(sevSelect);
+
+    // Category dropdown
+    var catLabel = createEl('label', 'ind-anno-form-label', 'Category');
+    var catSelect = document.createElement('select');
+    catSelect.className = 'ind-anno-form-select';
+    var catOptions = [
+        { value: '', label: '\u2014 None \u2014' },
+        { value: 'surface_defect', label: 'Surface Defect' },
+        { value: 'gap', label: 'Gap' },
+        { value: 'missing_data', label: 'Missing Data' },
+        { value: 'scan_artifact', label: 'Scan Artifact' },
+        { value: 'dimensional_variance', label: 'Dimensional Variance' },
+        { value: 'other', label: 'Other' }
+    ];
+    catOptions.forEach(function(opt) {
+        var option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.label;
+        if (annotation.category === opt.value || (!annotation.category && opt.value === '')) {
+            option.selected = true;
+        }
+        catSelect.appendChild(option);
+    });
+    form.appendChild(catLabel);
+    form.appendChild(catSelect);
+
+    // Status toggle (Pass / Fail / Review)
+    var statusLabel = createEl('label', 'ind-anno-form-label', 'Status');
+    var statusRow = createEl('div', 'ind-anno-status-row');
+    var currentStatus = annotation.status || '';
+    ['pass', 'fail', 'review'].forEach(function(s) {
+        var btn = createEl('button', 'ind-anno-status-btn' + (currentStatus === s ? ' active' : ''),
+            s.charAt(0).toUpperCase() + s.slice(1));
+        btn.setAttribute('data-status', s);
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            statusRow.querySelectorAll('.ind-anno-status-btn').forEach(function(b) { b.classList.remove('active'); });
+            if (currentStatus === s) {
+                currentStatus = '';
+            } else {
+                currentStatus = s;
+                btn.classList.add('active');
+            }
+        });
+        statusRow.appendChild(btn);
+    });
+    form.appendChild(statusLabel);
+    form.appendChild(statusRow);
+
+    // QA Notes
+    var notesLabel = createEl('label', 'ind-anno-form-label', 'Notes');
+    var notesInput = document.createElement('textarea');
+    notesInput.className = 'ind-anno-form-textarea';
+    notesInput.value = annotation.qa_notes || '';
+    notesInput.placeholder = 'QA notes';
+    notesInput.rows = 2;
+    form.appendChild(notesLabel);
+    form.appendChild(notesInput);
+
+    // Buttons
+    var btnRow = createEl('div', 'ind-anno-form-btns');
+    var saveBtn = createEl('button', 'ind-tool-btn ind-anno-save-btn', 'Save');
+    saveBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        onSave({
+            title: titleInput.value,
+            body: descInput.value,
+            severity: sevSelect.value || undefined,
+            category: catSelect.value || undefined,
+            status: currentStatus || undefined,
+            qa_notes: notesInput.value || undefined
+        });
+    });
+    var cancelBtn = createEl('button', 'ind-tool-btn ind-anno-cancel-btn', 'Cancel');
+    cancelBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        onCancel();
+    });
+    btnRow.appendChild(saveBtn);
+    btnRow.appendChild(cancelBtn);
+    form.appendChild(btnRow);
+
+    return form;
+}
+
+function exportAnnotationsCSV() {
+    if (!_deps || !_deps.annotationSystem) return;
+    var annotations = _deps.annotationSystem.getAnnotations();
+    var rows = ['title,severity,category,status,notes,x,y,z'];
+    if (annotations) {
+        annotations.forEach(function(a) {
+            var fields = [
+                '"' + (a.title || '').replace(/"/g, '""') + '"',
+                a.severity || '',
+                a.category || '',
+                a.status || '',
+                '"' + (a.qa_notes || '').replace(/"/g, '""') + '"',
+                a.position ? a.position.x.toFixed(4) : '',
+                a.position ? a.position.y.toFixed(4) : '',
+                a.position ? a.position.z.toFixed(4) : ''
+            ];
+            rows.push(fields.join(','));
+        });
+    }
+    var csv = rows.join('\n');
+    var blob = new Blob([csv], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'defects.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
 function buildAnnotationsSection(body, manifest) {
     body.innerHTML = '';
     var annotations = _deps && _deps.annotationSystem ? _deps.annotationSystem.getAnnotations() : [];
@@ -1452,25 +1613,82 @@ function buildAnnotationsSection(body, manifest) {
         body.appendChild(createEl('div', 'ind-panel-empty', 'No annotations'));
         return;
     }
+
+    // Header with CSV export button
+    var header = createEl('div', 'ind-anno-header');
+    var count = createEl('span', 'ind-anno-count', annotations.length + ' annotation' + (annotations.length !== 1 ? 's' : ''));
+    var csvBtn = createEl('button', 'ind-tool-btn ind-anno-csv-btn', 'Export CSV');
+    csvBtn.setAttribute('data-tooltip', 'Export defect annotations as CSV');
+    csvBtn.addEventListener('click', function(e) { e.stopPropagation(); exportAnnotationsCSV(); });
+    header.appendChild(count);
+    header.appendChild(csvBtn);
+    body.appendChild(header);
+
     annotations.forEach(function(anno, i) {
         var item = createEl('div', 'ind-anno-item');
         item.setAttribute('data-anno-id', anno.id);
         var num = createEl('span', 'ind-anno-num', String(i + 1));
         var title = createEl('span', 'ind-anno-title', anno.title || ('Annotation ' + (i + 1)));
+
+        // Severity dot indicator
+        if (anno.severity) {
+            var sevColors = { low: '#4caf50', medium: '#ff9800', high: '#f57c00', critical: '#f44336' };
+            var dot = createEl('span', 'ind-anno-sev-dot');
+            dot.style.background = sevColors[anno.severity] || '#888';
+            dot.setAttribute('title', anno.severity);
+            item.appendChild(dot);
+        }
+
         item.appendChild(num);
         item.appendChild(title);
+
+        // Status badge
+        if (anno.status) {
+            var statusCls = 'ind-anno-status-badge ind-anno-status-' + anno.status;
+            var statusBadge = createEl('span', statusCls, anno.status.toUpperCase());
+            item.appendChild(statusBadge);
+        }
+
+        // Delete button
+        var delBtn = createEl('button', 'ind-anno-del-btn', '\u00d7');
+        delBtn.setAttribute('title', 'Delete annotation');
+        delBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (_deps && _deps.annotationSystem) {
+                _deps.annotationSystem.deleteAnnotation(anno.id);
+                buildAnnotationsSection(body, manifest);
+            }
+        });
+        item.appendChild(delBtn);
+
         item.addEventListener('click', function() {
             if (_deps && _deps.annotationSystem) {
                 _deps.annotationSystem.goToAnnotation(anno.id);
             }
-            // Show annotation detail popup
-            if (_deps && _deps.showAnnotationPopup) {
-                var popupId = _deps.showAnnotationPopup(anno, _deps.state ? _deps.state.imageAssets : undefined);
-                if (_deps.setCurrentPopupId) _deps.setCurrentPopupId(popupId);
-            }
+            // Show edit form in panel
+            showAnnotationDetailPanel(body, anno, manifest);
         });
         body.appendChild(item);
     });
+}
+
+function showAnnotationDetailPanel(body, annotation, manifest) {
+    body.innerHTML = '';
+    var backBtn = createEl('button', 'ind-tool-btn ind-anno-back-btn', '\u25C0 Back to list');
+    backBtn.addEventListener('click', function() {
+        buildAnnotationsSection(body, manifest);
+    });
+    body.appendChild(backBtn);
+
+    var form = buildAnnotationDetailForm(annotation, function onSave(updates) {
+        if (_deps && _deps.annotationSystem) {
+            _deps.annotationSystem.updateAnnotation(annotation.id, updates);
+        }
+        buildAnnotationsSection(body, manifest);
+    }, function onCancel() {
+        buildAnnotationsSection(body, manifest);
+    });
+    body.appendChild(form);
 }
 
 function buildCrossSectionPanel(body) {
@@ -1706,14 +1924,16 @@ function onMeasurementChanged() {
 
 function onAnnotationSelect(annotationId) {
     if (!_panel) return;
-    // Highlight the matching item in the annotations list (called with ID, not object)
     var id = String(annotationId);
+
+    // Highlight the matching item in the annotations list
     var items = _panel.querySelectorAll('.ind-anno-item');
     for (var i = 0; i < items.length; i++) {
         var match = items[i].getAttribute('data-anno-id') === id;
         items[i].classList.toggle('selected', match);
         if (match) items[i].scrollIntoView({ block: 'nearest' });
     }
+
     // Expand the annotations section if it's collapsed
     var annosSection = document.getElementById('ind-panel-annotations');
     if (annosSection) {
@@ -1721,16 +1941,24 @@ function onAnnotationSelect(annotationId) {
         var arrow = annosSection.querySelector('.ind-panel-arrow');
         if (body && body.classList.contains('collapsed')) {
             body.classList.remove('collapsed');
-            if (arrow) arrow.textContent = '▼';
+            if (arrow) arrow.textContent = '\u25BC';
         }
     }
-    // Show annotation popup (3D marker was clicked)
-    if (_deps && _deps.showAnnotationPopup && _deps.annotationSystem) {
+
+    // Show annotation popup + detail form
+    if (_deps && _deps.annotationSystem) {
         var annotations = _deps.annotationSystem.getAnnotations();
         var anno = annotations ? annotations.find(function(a) { return String(a.id) === id; }) : null;
         if (anno) {
-            var popupId = _deps.showAnnotationPopup(anno, _deps.state ? _deps.state.imageAssets : undefined);
-            if (_deps.setCurrentPopupId) _deps.setCurrentPopupId(popupId);
+            if (_deps.showAnnotationPopup) {
+                var popupId = _deps.showAnnotationPopup(anno, _deps.state ? _deps.state.imageAssets : undefined);
+                if (_deps.setCurrentPopupId) _deps.setCurrentPopupId(popupId);
+            }
+            // Show edit form in the annotations panel body
+            if (annosSection) {
+                var panelBody = annosSection.querySelector('.ind-panel-section-body');
+                if (panelBody) showAnnotationDetailPanel(panelBody, anno, _manifest);
+            }
         }
     }
 }
@@ -1744,6 +1972,12 @@ function onAnnotationDeselect() {
     if (_deps && _deps.hideAnnotationPopup) _deps.hideAnnotationPopup();
     if (_deps && _deps.hideAnnotationLine) _deps.hideAnnotationLine();
     if (_deps && _deps.setCurrentPopupId) _deps.setCurrentPopupId(null);
+    // Restore annotations list (in case detail form was showing)
+    var annosSection = document.getElementById('ind-panel-annotations');
+    if (annosSection) {
+        var body = annosSection.querySelector('.ind-panel-section-body');
+        if (body) buildAnnotationsSection(body, _manifest);
+    }
 }
 
 function onViewModeChange(mode) {
