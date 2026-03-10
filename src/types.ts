@@ -96,6 +96,16 @@ export interface AppState {
     proxyMeshGroup: any | null;
     proxyMeshSettings: DecimationOptions | null;
     proxyMeshFaceCount: number | null;
+    // HD web optimization (revert support)
+    originalMeshBlob: Blob | null;
+    originalMeshGroup: any | null;
+    meshOptimized: boolean;
+    meshOptimizationSettings: {
+        targetFaces: number;
+        dracoEnabled: boolean;
+        originalFaces: number;
+        resultFaces: number;
+    } | null;
     // Detected asset format extensions (set during file load)
     meshFormat: string | null;
     pointcloudFormat: string | null;

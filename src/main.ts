@@ -314,6 +314,10 @@ const state: AppState = {
     proxyMeshGroup: null,
     proxyMeshSettings: null,
     proxyMeshFaceCount: null,
+    originalMeshBlob: null,
+    originalMeshGroup: null,
+    meshOptimized: false,
+    meshOptimizationSettings: null,
     // Detected asset format extensions (set during file load)
     meshFormat: null,
     pointcloudFormat: null,
@@ -828,6 +832,12 @@ function createEventWiringDeps(): EventWiringDeps {
             loadFromBuffers: (camerasBuffer: ArrayBuffer, imagesBuffer: ArrayBuffer) => {
                 if (!colmapManager) return;
                 colmapManager.loadFromBuffers(camerasBuffer, imagesBuffer);
+                // Store blobs for archive export
+                const assets = getStore();
+                assets.colmapBlobs.push({
+                    camerasBlob: new Blob([camerasBuffer]),
+                    imagesBlob: new Blob([imagesBuffer]),
+                });
                 // Cameras are in Colmap space (same as the splat). Copy the splat's
                 // current transform so cameras align with the splat in the scene.
                 const colmapGrp = sceneManager?.colmapGroup;
@@ -891,7 +901,14 @@ function createEventWiringDeps(): EventWiringDeps {
                 colmapManager?.loadPoints3D(positions, count);
             },
             get points3DBuffer() { return colmapManager?.points3DBuffer ?? null; },
-            set points3DBuffer(buf: ArrayBuffer | null) { if (colmapManager) colmapManager.points3DBuffer = buf; },
+            set points3DBuffer(buf: ArrayBuffer | null) {
+                if (colmapManager) colmapManager.points3DBuffer = buf;
+                // Also store in asset store for export
+                const assets = getStore();
+                if (assets.colmapBlobs.length > 0 && buf) {
+                    assets.colmapBlobs[assets.colmapBlobs.length - 1].points3DBuffer = buf;
+                }
+            },
             alignFromCameraData: async () => {
                 if (!colmapManager?.hasPoints3D || !splatMesh) {
                     notify.error('Load splat + camera data first');
