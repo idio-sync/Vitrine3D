@@ -702,6 +702,18 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
             await deps.renderFlightPaths();
         }
 
+        // Load colmap SfM data
+        const colmapEntries = Object.entries(manifest.data_entries || {})
+            .filter(([, entry]: [string, any]) => entry.role === 'colmap_sfm');
+        for (const [key, entry] of colmapEntries) {
+            const basePath = (entry as any).file_name || `assets/${key}/`;
+            const camerasBuffer = await archiveLoader.extractFileBuffer(`${basePath}cameras.bin`);
+            const imagesBuffer = await archiveLoader.extractFileBuffer(`${basePath}images.bin`);
+            if (camerasBuffer && imagesBuffer && deps.colmap) {
+                deps.colmap.loadFromBuffers(camerasBuffer, imagesBuffer);
+            }
+        }
+
         // Load walkthrough
         const walkthroughData = archiveLoader.getWalkthrough();
         if (walkthroughData) {

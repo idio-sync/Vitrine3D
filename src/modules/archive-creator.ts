@@ -1489,6 +1489,31 @@ export class ArchiveCreator {
         return entryKey;
     }
 
+    addColmap(camerasBlob: Blob, imagesBlob: Blob, options: AddAssetOptions = {}): string {
+        const index = this._countEntriesOfType('colmap_sfm_');
+        const entryKey = `colmap_sfm_${index}`;
+
+        this.files.set(`assets/colmap_sfm_${index}/cameras.bin`, { blob: camerasBlob, originalName: 'cameras.bin' });
+        this.files.set(`assets/colmap_sfm_${index}/images.bin`, { blob: imagesBlob, originalName: 'images.bin' });
+
+        this.manifest.data_entries[entryKey] = {
+            file_name: `assets/colmap_sfm_${index}/`,
+            created_by: options.created_by || "unknown",
+            _created_by_version: options.created_by_version || "",
+            _source_notes: options.source_notes || "",
+            role: 'colmap_sfm',
+            original_name: 'colmap_sfm',
+            _parameters: {
+                position: options.position || [0, 0, 0],
+                rotation: options.rotation || [0, 0, 0],
+                scale: options.scale !== undefined ? options.scale : 1,
+                ...(options.parameters || {})
+            }
+        };
+
+        return entryKey;
+    }
+
     addSourceFile(blob: Blob, fileName: string, options: AddSourceFileOptions = {}): string {
         const index = this._countEntriesOfType('source_');
         const entryKey = `source_${index}`;

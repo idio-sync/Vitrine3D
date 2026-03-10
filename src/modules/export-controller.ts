@@ -458,6 +458,18 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         }
     }
 
+    // Add colmap data if loaded
+    const colmapGroup = sceneRefs.colmapGroup;
+    if (state.colmapLoaded && assets.colmapBlobs.length > 0) {
+        log.info(` Adding ${assets.colmapBlobs.length} colmap SfM dataset(s)`);
+        for (const { camerasBlob, imagesBlob } of assets.colmapBlobs) {
+            const position = colmapGroup ? [colmapGroup.position.x, colmapGroup.position.y, colmapGroup.position.z] : [0, 0, 0];
+            const rotation = colmapGroup ? [colmapGroup.rotation.x, colmapGroup.rotation.y, colmapGroup.rotation.z] : [0, 0, 0];
+            const scale = colmapGroup ? colmapGroup.scale.x : 1;
+            archiveCreator.addColmap(camerasBlob, imagesBlob, { position, rotation, scale });
+        }
+    }
+
     // Save global alignment — definitive scene state for re-import
     archiveCreator.setAlignment({
         splat: splatMesh ? {
