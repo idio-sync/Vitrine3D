@@ -112,33 +112,25 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('proxy-mesh-input', 'change', deps.files.handleProxyMeshFile);
     addListener('proxy-splat-input', 'change', deps.files.handleProxySplatFile);
     addListener('stl-input', 'change', deps.files.handleSTLFile);
-    addListener('btn-load-stl-url', 'click', deps.files.handleLoadSTLFromUrlPrompt);
     addListener('cad-input', 'change', deps.files.handleCADFile);
-    addListener('btn-load-cad-url', 'click', deps.files.handleLoadCADFromUrlPrompt);
     addListener('drawing-input', 'change', deps.files.handleDrawingFile);
-    addListener('btn-load-drawing-url', 'click', deps.files.handleLoadDrawingFromUrlPrompt);
     addListener('source-files-input', 'change', deps.files.handleSourceFilesInput);
-    addListener('btn-load-pointcloud-url', 'click', deps.files.handleLoadPointcloudFromUrlPrompt);
     addListener('btn-load-archive-url', 'click', deps.files.handleLoadArchiveFromUrlPrompt);
     addListener('btn-load-full-res', 'click', deps.files.handleLoadFullResMesh);
     addListener('proxy-load-full-link', 'click', (e: Event) => { e.preventDefault(); deps.files.handleLoadFullResMesh(); });
     addListener('btn-quality-sd', 'click', () => deps.files.switchQualityTier('sd'));
     addListener('btn-quality-hd', 'click', () => deps.files.switchQualityTier('hd'));
 
+    // ─── Asset remove buttons ────────────────────────────────
+    addListener('btn-remove-splat', 'click', deps.files.removeSplat);
+    addListener('btn-remove-model', 'click', deps.files.removeModel);
+    addListener('btn-remove-pointcloud', 'click', deps.files.removePointcloud);
+    addListener('btn-remove-stl', 'click', deps.files.removeSTL);
+    addListener('btn-remove-cad', 'click', deps.files.removeCAD);
+    addListener('btn-remove-drawing', 'click', deps.files.removeDrawing);
+
     // ─── Tauri native file dialogs ───────────────────────────
     deps.tauri.wireNativeDialogsIfAvailable();
-
-    // ─── URL load buttons ────────────────────────────────────
-    const splatUrlBtn = document.getElementById('btn-load-splat-url');
-    const modelUrlBtn = document.getElementById('btn-load-model-url');
-    log.info(' URL buttons found - splat:', !!splatUrlBtn, 'model:', !!modelUrlBtn);
-
-    if (splatUrlBtn) {
-        splatUrlBtn.addEventListener('click', deps.files.handleLoadSplatFromUrlPrompt);
-    }
-    if (modelUrlBtn) {
-        modelUrlBtn.addEventListener('click', deps.files.handleLoadModelFromUrlPrompt);
-    }
 
     // ─── Splat settings ──────────────────────────────────────
     addListener('splat-scale', 'input', (e: Event) => {

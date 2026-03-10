@@ -660,11 +660,14 @@ input, select, textarea {
     cursor: pointer;
 }
 
-.prop-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-strong); }
+.prop-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-strong); }
+.prop-btn:disabled { opacity: 0.35; cursor: default; }
 .prop-btn:last-child { margin-bottom: 0; }
 
 .prop-btn-row { display: flex; gap: 4px; }
-.prop-btn-row .prop-btn { flex: 1; }
+.prop-btn-row .prop-btn { flex: 1; margin-bottom: 0; }
+
+.prop-btn.small { padding: 3px 8px; font-size: 10px; }
 
 .prop-btn.danger { color: var(--danger); border-color: rgba(196, 92, 92, 0.3); }
 .prop-btn.danger:hover { background: rgba(196, 92, 92, 0.1); }

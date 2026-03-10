@@ -91,13 +91,7 @@ import {
     loadSTLFile as loadSTLFileHandler,
 } from './modules/file-handlers.js';
 import {
-    handleLoadSplatFromUrlPrompt as handleLoadSplatFromUrlPromptCtrl,
-    handleLoadModelFromUrlPrompt as handleLoadModelFromUrlPromptCtrl,
-    handleLoadPointcloudFromUrlPrompt as handleLoadPointcloudFromUrlPromptCtrl,
     handleLoadArchiveFromUrlPrompt as handleLoadArchiveFromUrlPromptCtrl,
-    handleLoadSTLFromUrlPrompt as handleLoadSTLFromUrlPromptCtrl,
-    handleLoadCADFromUrlPrompt as handleLoadCADFromUrlPromptCtrl,
-    handleLoadDrawingFromUrlPrompt as handleLoadDrawingFromUrlPromptCtrl,
     handleSplatFile as handleSplatFileCtrl,
     handleModelFile as handleModelFileCtrl,
     handleSTLFile as handleSTLFileCtrl,
@@ -450,6 +444,7 @@ function createFileHandlerDeps(): any {
                     clearArchiveMetadata();
                 }
                 updatePronomRegistry(state);
+                enableRemoveBtn('btn-remove-splat', true);
             },
             onModelLoaded: (object: any, file: any, faceCount: number) => {
                 state.meshFaceCount = faceCount;
@@ -495,6 +490,7 @@ function createFileHandlerDeps(): any {
                     }
                 }
                 showQualityToggleIfNeeded();
+                enableRemoveBtn('btn-remove-model', true);
                 // Advisory face count warnings
                 if (faceCount > MESH_LOD.DESKTOP_WARNING_FACES) {
                     notify.warning(`Mesh has ${faceCount.toLocaleString()} faces. A display proxy is recommended for broad device support.`);
@@ -526,6 +522,7 @@ function createFileHandlerDeps(): any {
                 // Center STL on grid
                 setTimeout(() => centerModelOnGrid(stlGroup), TIMING.AUTO_ALIGN_DELAY);
                 updatePronomRegistry(state);
+                enableRemoveBtn('btn-remove-stl', true);
             },
             onDrawingLoaded: (object: any, file: any) => {
                 updateVisibility();
@@ -534,6 +531,7 @@ function createFileHandlerDeps(): any {
                 if (filenameEl) filenameEl.textContent = file.name || 'DXF loaded';
                 // Center drawing on grid
                 setTimeout(() => centerModelOnGrid(drawingGroup), TIMING.AUTO_ALIGN_DELAY);
+                enableRemoveBtn('btn-remove-drawing', true);
             }
         }
     };
@@ -705,6 +703,7 @@ function createCADDeps(): any {
             updateTransformInputs();
             storeLastPositions();
             updateObjectSelectButtons();
+            enableRemoveBtn('btn-remove-cad', true);
         },
     };
 }
@@ -729,10 +728,9 @@ function createEventWiringDeps(): EventWiringDeps {
             handleSplatFile, handleModelFile, handleArchiveFile,
             handlePointcloudFile, handleProxyMeshFile, handleProxySplatFile,
             handleSTLFile, handleCADFile, handleDrawingFile, handleSourceFilesInput,
-            handleLoadSplatFromUrlPrompt, handleLoadModelFromUrlPrompt,
-            handleLoadPointcloudFromUrlPrompt, handleLoadArchiveFromUrlPrompt,
-            handleLoadSTLFromUrlPrompt, handleLoadCADFromUrlPrompt, handleLoadDrawingFromUrlPrompt,
-            handleLoadFullResMesh, switchQualityTier
+            handleLoadArchiveFromUrlPrompt,
+            handleLoadFullResMesh, switchQualityTier,
+            removeSplat, removeModel, removePointcloud, removeSTL, removeCAD, removeDrawing
         },
         display: {
             setDisplayMode, updateModelOpacity, updateModelWireframe,
@@ -1711,6 +1709,98 @@ function resetTransform() {
     updateTransformInputs();
 }
 
+// ── Asset removal ───────────────────────────────────────────
+function enableRemoveBtn(id: string, enabled: boolean) {
+    const btn = document.getElementById(id) as HTMLButtonElement | null;
+    if (btn) btn.disabled = !enabled;
+}
+
+function removeAssetGroup(group: THREE.Group, stateKey: keyof AppState, filenameId: string, defaultHint: string, blobKey?: keyof ReturnType<typeof getStore>) {
+    while (group.children.length > 0) {
+        const child = group.children[0];
+        disposeObject(child);
+        group.remove(child);
+    }
+    (state as any)[stateKey] = false;
+    const el = document.getElementById(filenameId);
+    if (el) el.textContent = defaultHint;
+    if (blobKey) (getStore() as any)[blobKey] = null;
+    updateVisibility();
+    updateTransformInputs();
+    storeLastPositions();
+    updateObjectSelectButtons();
+}
+
+function removeSplat() {
+    if (!state.splatLoaded) return;
+    if (splatMesh) {
+        scene.remove(splatMesh);
+        if (splatMesh.dispose) splatMesh.dispose();
+        splatMesh = null;
+        if (sceneRefs) sceneRefs.splatMesh = null;
+    }
+    state.splatLoaded = false;
+    assets.splatBlob = null;
+    const el = document.getElementById('splat-filename');
+    if (el) el.textContent = '.ply, .splat, .ksplat, .spz';
+    const vertRow = document.getElementById('splat-vertices-row');
+    if (vertRow) vertRow.style.display = 'none';
+    enableRemoveBtn('btn-remove-splat', false);
+    if (state.displayMode === 'splat' || state.displayMode === 'both') {
+        setDisplayMode(state.modelLoaded ? 'model' : 'splat');
+    }
+    updateVisibility();
+    updateTransformInputs();
+    storeLastPositions();
+    updateObjectSelectButtons();
+}
+
+function removeModel() {
+    if (!state.modelLoaded) return;
+    removeAssetGroup(modelGroup, 'modelLoaded', 'model-filename', '.glb, .obj (+.mtl)', 'meshBlob');
+    const facesRow = document.getElementById('model-faces-row');
+    if (facesRow) facesRow.style.display = 'none';
+    const texRow = document.getElementById('model-textures-row');
+    if (texRow) texRow.style.display = 'none';
+    enableRemoveBtn('btn-remove-model', false);
+    if (state.displayMode === 'model' || state.displayMode === 'both') {
+        setDisplayMode(state.splatLoaded ? 'splat' : 'model');
+    }
+}
+
+function removePointcloud() {
+    if (!state.pointcloudLoaded) return;
+    removeAssetGroup(pointcloudGroup, 'pointcloudLoaded', 'pointcloud-filename', '.e57', 'pointcloudBlob');
+    const ptsRow = document.getElementById('pointcloud-points-row');
+    if (ptsRow) ptsRow.style.display = 'none';
+    enableRemoveBtn('btn-remove-pointcloud', false);
+}
+
+function removeSTL() {
+    if (!state.stlLoaded) return;
+    removeAssetGroup(stlGroup, 'stlLoaded', 'stl-filename', '.stl');
+    enableRemoveBtn('btn-remove-stl', false);
+    if (state.displayMode === 'stl') {
+        setDisplayMode(state.modelLoaded ? 'model' : 'splat');
+    }
+}
+
+function removeCAD() {
+    if (!state.cadLoaded) return;
+    removeAssetGroup(cadGroup, 'cadLoaded', 'cad-filename', '.step, .iges', 'cadBlob');
+    const store = getStore();
+    store.cadFileName = null;
+    state.currentCadUrl = null;
+    enableRemoveBtn('btn-remove-cad', false);
+}
+
+function removeDrawing() {
+    if (!state.drawingLoaded) return;
+    removeAssetGroup(drawingGroup, 'drawingLoaded', 'drawing-filename', '.dxf');
+    state.currentDrawingUrl = null;
+    enableRemoveBtn('btn-remove-drawing', false);
+}
+
 function updateVisibility() {
     updateVisibilityHandler(state.displayMode, splatMesh, modelGroup, pointcloudGroup, stlGroup);
     updateDisplayPill({
@@ -1742,6 +1832,13 @@ function updateObjectSelectButtons() {
     show('btn-select-drawing', state.drawingLoaded);
     show('btn-select-flightpath', state.flightPathLoaded);
     show('btn-select-colmap', state.colmapLoaded);
+    // Sync remove buttons with loaded state
+    enableRemoveBtn('btn-remove-splat', state.splatLoaded);
+    enableRemoveBtn('btn-remove-model', state.modelLoaded);
+    enableRemoveBtn('btn-remove-pointcloud', state.pointcloudLoaded);
+    enableRemoveBtn('btn-remove-stl', state.stlLoaded);
+    enableRemoveBtn('btn-remove-cad', state.cadLoaded);
+    enableRemoveBtn('btn-remove-drawing', state.drawingLoaded);
     // "All" only when 2+ types are loaded
     const loadedCount = [state.splatLoaded, state.modelLoaded, state.pointcloudLoaded, state.stlLoaded, state.cadLoaded, state.drawingLoaded, state.flightPathLoaded, state.colmapLoaded].filter(Boolean).length;
     show('btn-select-both', loadedCount >= 2);
@@ -1845,21 +1942,6 @@ function updateColmapUI(): void {
     if (count && colmapManager) count.textContent = String(colmapManager.cameraCount);
     if (selectBtn) selectBtn.style.display = state.colmapLoaded ? '' : 'none';
     if (alignBtn) alignBtn.style.display = (state.colmapLoaded && state.flightPathLoaded) ? '' : 'none';
-}
-
-// Handle loading splat from URL via prompt
-function handleLoadSplatFromUrlPrompt() {
-    handleLoadSplatFromUrlPromptCtrl(createFileInputDeps());
-}
-
-// Handle loading model from URL via prompt
-function handleLoadModelFromUrlPrompt() {
-    handleLoadModelFromUrlPromptCtrl(createFileInputDeps());
-}
-
-// Handle loading point cloud from URL via prompt
-function handleLoadPointcloudFromUrlPrompt() {
-    handleLoadPointcloudFromUrlPromptCtrl(createFileInputDeps());
 }
 
 // Handle loading archive from URL via prompt
@@ -2319,24 +2401,12 @@ async function handleSTLFile(event: Event) {
     return handleSTLFileCtrl(event, createFileInputDeps());
 }
 
-function handleLoadSTLFromUrlPrompt() {
-    handleLoadSTLFromUrlPromptCtrl(createFileInputDeps());
-}
-
 async function handleDrawingFile(event: Event) {
     return handleDrawingFileCtrl(event, createFileInputDeps());
 }
 
-function handleLoadDrawingFromUrlPrompt() {
-    handleLoadDrawingFromUrlPromptCtrl(createFileInputDeps());
-}
-
 async function handleCADFile(event: Event) {
     return handleCADFileCtrl(event, createFileInputDeps());
-}
-
-function handleLoadCADFromUrlPrompt() {
-    handleLoadCADFromUrlPromptCtrl(createFileInputDeps());
 }
 
 async function handleProxyMeshFile(event: Event) {
@@ -2766,6 +2836,7 @@ function createPointcloudDeps(): any {
                     if (pcRow) pcRow.style.display = '';
                 }
                 updatePronomRegistry(state);
+                enableRemoveBtn('btn-remove-pointcloud', true);
             }
         }
     };

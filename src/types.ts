@@ -346,15 +346,15 @@ export interface EventWiringDeps {
         handleCADFile: (e: Event) => void;
         handleDrawingFile: (e: Event) => void;
         handleSourceFilesInput: (e: Event) => void;
-        handleLoadSplatFromUrlPrompt: () => void;
-        handleLoadModelFromUrlPrompt: () => void;
-        handleLoadPointcloudFromUrlPrompt: () => void;
         handleLoadArchiveFromUrlPrompt: () => void;
-        handleLoadSTLFromUrlPrompt: () => void;
-        handleLoadCADFromUrlPrompt: () => void;
-        handleLoadDrawingFromUrlPrompt: () => void;
         handleLoadFullResMesh: () => void;
         switchQualityTier: (tier: string) => void;
+        removeSplat: () => void;
+        removeModel: () => void;
+        removePointcloud: () => void;
+        removeSTL: () => void;
+        removeCAD: () => void;
+        removeDrawing: () => void;
     };
     display: {
         setDisplayMode: (mode: string) => void;

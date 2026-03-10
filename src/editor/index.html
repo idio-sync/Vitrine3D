@@ -1097,7 +1097,7 @@
                     <div class="prop-section-body">
                         <div class="prop-btn-row">
                             <label for="archive-input" class="prop-btn accent" style="cursor:pointer; margin-bottom:0;">Open .ddim</label>
-                            <button class="prop-btn" id="btn-load-archive-url" style="font-size:10px; color:var(--text-muted); margin-bottom:0;">From URL...</button>
+                            <button class="prop-btn" id="btn-load-archive-url" style="color:var(--text-muted); margin-bottom:0;">From URL...</button>
                         </div>
                         <input type="file" id="archive-input" accept=".ddim,.a3d,.a3z" style="display:none" />
                         <span id="archive-filename" class="prop-hint">Loads a complete scene with all assets and metadata</span>
@@ -1114,7 +1114,7 @@
                         <span class="prop-label">3D Model</span>
                         <div class="prop-btn-row">
                             <label for="model-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#6a8bce;">+</span> File</label>
-                            <button class="prop-btn" id="btn-load-model-url" style="margin-bottom:0;">From URL...</button>
+                            <button class="prop-btn danger" id="btn-remove-model" disabled>Remove</button>
                         </div>
                         <input type="file" id="model-input" accept=".glb,.gltf,.obj,.mtl,.png,.jpg,.jpeg,.tga,.bmp,.webp" multiple style="display:none" />
                         <span id="model-filename" class="prop-hint">.glb, .obj (+.mtl)</span>
@@ -1124,7 +1124,7 @@
                         <span class="prop-label mt4">Gaussian Splat</span>
                         <div class="prop-btn-row">
                             <label for="splat-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:var(--accent-text);">+</span> File</label>
-                            <button class="prop-btn" id="btn-load-splat-url" style="margin-bottom:0;">From URL...</button>
+                            <button class="prop-btn danger" id="btn-remove-splat" disabled>Remove</button>
                         </div>
                         <input type="file" id="splat-input" accept=".ply,.splat,.ksplat,.spz,.sog" style="display:none" />
                         <span id="splat-filename" class="prop-hint">.ply, .splat, .ksplat, .spz</span>
@@ -1143,7 +1143,7 @@
                         <span class="prop-label">Point Cloud</span>
                         <div class="prop-btn-row">
                             <label for="pointcloud-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#c4863a;">+</span> File</label>
-                            <button class="prop-btn" id="btn-load-pointcloud-url" style="margin-bottom:0;">From URL...</button>
+                            <button class="prop-btn danger" id="btn-remove-pointcloud" disabled>Remove</button>
                         </div>
                         <input type="file" id="pointcloud-input" accept=".e57" style="display:none" />
                         <span id="pointcloud-filename" class="prop-hint">.e57</span>
@@ -1152,7 +1152,7 @@
                         <span class="prop-label mt4">STL Model</span>
                         <div class="prop-btn-row">
                             <label for="stl-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#9a7bce;">+</span> File</label>
-                            <button class="prop-btn" id="btn-load-stl-url" style="margin-bottom:0;">From URL...</button>
+                            <button class="prop-btn danger" id="btn-remove-stl" disabled>Remove</button>
                         </div>
                         <input type="file" id="stl-input" accept=".stl" style="display:none" />
                         <span id="stl-filename" class="prop-hint">.stl</span>
@@ -1160,7 +1160,7 @@
                         <span class="prop-label mt4">CAD Model</span>
                         <div class="prop-btn-row">
                             <label for="cad-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#4a9e6b;">+</span> File</label>
-                            <button class="prop-btn" id="btn-load-cad-url" style="margin-bottom:0;">From URL...</button>
+                            <button class="prop-btn danger" id="btn-remove-cad" disabled>Remove</button>
                         </div>
                         <input type="file" id="cad-input" accept=".step,.stp,.iges,.igs" style="display:none" />
                         <span id="cad-filename" class="prop-hint">.step, .iges</span>
@@ -1168,7 +1168,7 @@
                         <span class="prop-label mt4">CAD Drawing</span>
                         <div class="prop-btn-row">
                             <label for="drawing-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#7bce9a;">+</span> File</label>
-                            <button class="prop-btn" id="btn-load-drawing-url" style="margin-bottom:0;">From URL...</button>
+                            <button class="prop-btn danger" id="btn-remove-drawing" disabled>Remove</button>
                         </div>
                         <input type="file" id="drawing-input" accept=".dxf" style="display:none" />
                         <span id="drawing-filename" class="prop-hint">.dxf</span>
