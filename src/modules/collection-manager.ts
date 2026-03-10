@@ -14,7 +14,7 @@ const log = Logger.getLogger('collection-manager');
 // ── Types ──
 
 interface CollectionWithArchives extends Collection {
-    archives?: { hash: string }[];
+    archives?: { hash: string; thumbnail: string | null }[];
 }
 
 // ── State ──
@@ -31,6 +31,13 @@ let sidebarList: HTMLElement | null = null;
 let addBtn: HTMLElement | null = null;
 let chipsContainer: HTMLElement | null = null;
 let addSelect: HTMLSelectElement | null = null;
+
+// ── Collection detail panel state ──
+
+let detailPanel: HTMLElement | null = null;
+let collectionDetailEl: HTMLElement | null = null;
+let editingCollection: (Collection & { archives?: { hash: string; thumbnail: string | null }[] }) | null = null;
+let isManualThumb = false;
 
 // ── API ──
 
@@ -134,6 +141,279 @@ function renderSidebar(): void {
     }
 }
 
+function createCollectionDetailPanel(): HTMLElement {
+    const el = document.createElement('div');
+    el.id = 'collection-detail-panel';
+    el.className = 'hidden';
+    el.innerHTML = `
+        <div class="collection-detail-header">
+            <h3 class="collection-detail-title">Edit Collection</h3>
+        </div>
+        <div class="collection-detail-body">
+            <label class="collection-field-label">Name</label>
+            <input type="text" id="collection-edit-name" class="collection-field-input" placeholder="Collection name" />
+
+            <label class="collection-field-label">Description</label>
+            <textarea id="collection-edit-desc" class="collection-field-textarea" rows="4" placeholder="Collection summary..."></textarea>
+
+            <label class="collection-field-label">Preview Image</label>
+            <div id="collection-thumb-preview" class="collection-thumb-preview">
+                <img id="collection-thumb-img" src="" alt="" />
+                <div id="collection-thumb-placeholder" class="collection-thumb-placeholder">No image</div>
+            </div>
+            <div class="collection-thumb-actions">
+                <button id="collection-thumb-upload" class="collection-btn-secondary" type="button">Upload Image</button>
+                <button id="collection-thumb-pick" class="collection-btn-secondary" type="button">Choose from Archives</button>
+                <button id="collection-thumb-generate" class="collection-btn-secondary" type="button">Auto-generate</button>
+            </div>
+            <div id="collection-thumb-reset" class="collection-thumb-reset hidden">
+                <a href="#" id="collection-thumb-reset-link">Reset to auto-generated</a>
+            </div>
+
+            <div id="collection-archive-thumbs" class="collection-archive-thumbs hidden">
+                <label class="collection-field-label">Pick an archive thumbnail</label>
+                <div id="collection-archive-thumb-grid" class="collection-archive-thumb-grid"></div>
+            </div>
+
+            <input type="file" id="collection-thumb-file" accept="image/*" style="display:none" />
+
+            <div class="collection-detail-footer">
+                <button id="collection-save-btn" class="collection-btn-primary" type="button">Save</button>
+            </div>
+        </div>
+    `;
+    return el;
+}
+
+async function showCollectionDetail(slug: string): Promise<void> {
+    if (!collectionDetailEl || !detailPanel) return;
+    try {
+        const res = await apiFetch(`/api/collections/${slug}`);
+        if (!res.ok) throw new Error(`Failed to fetch collection: ${res.status}`);
+        const data = await res.json();
+        editingCollection = data;
+
+        const nameInput = document.getElementById('collection-edit-name') as HTMLInputElement;
+        const descInput = document.getElementById('collection-edit-desc') as HTMLTextAreaElement;
+        const thumbImg = document.getElementById('collection-thumb-img') as HTMLImageElement;
+        const thumbPlaceholder = document.getElementById('collection-thumb-placeholder') as HTMLElement;
+        const resetEl = document.getElementById('collection-thumb-reset') as HTMLElement;
+
+        if (nameInput) nameInput.value = data.name || '';
+        if (descInput) descInput.value = data.description || '';
+
+        isManualThumb = !!(data.thumbnail && data.thumbnail.includes(`collection-${slug}.jpg`) && !data.thumbnail.includes('-auto'));
+
+        if (data.thumbnail) {
+            if (thumbImg) { thumbImg.src = data.thumbnail; thumbImg.style.display = ''; }
+            if (thumbPlaceholder) thumbPlaceholder.style.display = 'none';
+        } else {
+            if (thumbImg) thumbImg.style.display = 'none';
+            if (thumbPlaceholder) thumbPlaceholder.style.display = '';
+        }
+
+        if (resetEl) resetEl.classList.toggle('hidden', !isManualThumb);
+
+        detailPanel.classList.add('hidden');
+        collectionDetailEl.classList.remove('hidden');
+
+        const archiveThumbsEl = document.getElementById('collection-archive-thumbs');
+        if (archiveThumbsEl) archiveThumbsEl.classList.add('hidden');
+    } catch (err) {
+        log.error('Failed to load collection detail:', err);
+        notify.error('Failed to load collection details');
+    }
+}
+
+function hideCollectionDetail(): void {
+    if (collectionDetailEl) collectionDetailEl.classList.add('hidden');
+    if (detailPanel) detailPanel.classList.remove('hidden');
+    editingCollection = null;
+}
+
+function wireCollectionDetailEvents(): void {
+    const saveBtn = document.getElementById('collection-save-btn');
+    if (saveBtn) saveBtn.addEventListener('click', handleSaveCollection);
+
+    const uploadBtn = document.getElementById('collection-thumb-upload');
+    const fileInput = document.getElementById('collection-thumb-file') as HTMLInputElement;
+    if (uploadBtn && fileInput) {
+        uploadBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleThumbFileSelected);
+    }
+
+    const pickBtn = document.getElementById('collection-thumb-pick');
+    if (pickBtn) pickBtn.addEventListener('click', handleShowArchiveThumbs);
+
+    const genBtn = document.getElementById('collection-thumb-generate');
+    if (genBtn) genBtn.addEventListener('click', handleGenerateMosaic);
+
+    const resetLink = document.getElementById('collection-thumb-reset-link');
+    if (resetLink) resetLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        handleResetThumb();
+    });
+}
+
+async function handleSaveCollection(): Promise<void> {
+    if (!editingCollection) return;
+    const slug = editingCollection.slug;
+    const nameInput = document.getElementById('collection-edit-name') as HTMLInputElement;
+    const descInput = document.getElementById('collection-edit-desc') as HTMLTextAreaElement;
+
+    const body: Record<string, string> = {};
+    if (nameInput && nameInput.value !== editingCollection.name) body.name = nameInput.value;
+    if (descInput && descInput.value !== (editingCollection.description || '')) body.description = descInput.value;
+
+    if (Object.keys(body).length === 0) {
+        notify.info('No changes to save');
+        return;
+    }
+
+    try {
+        const res = await apiFetch(`/api/collections/${slug}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+        notify.success('Collection updated');
+        await refreshCollections();
+    } catch (err) {
+        log.error('Failed to save collection:', err);
+        notify.error('Failed to save collection');
+    }
+}
+
+async function handleThumbFileSelected(): Promise<void> {
+    if (!editingCollection) return;
+    const fileInput = document.getElementById('collection-thumb-file') as HTMLInputElement;
+    if (!fileInput?.files?.length) return;
+
+    const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+
+    try {
+        const headers: Record<string, string> = authHeadersGetter ? authHeadersGetter() : {};
+        if (_csrfTokenGetter) {
+            const token = _csrfTokenGetter();
+            if (token) headers['x-csrf-token'] = token;
+        }
+        const res = await fetch(`/api/collections/${editingCollection.slug}/thumbnail`, {
+            method: 'POST',
+            headers,
+            body: formData,
+            credentials: 'include',
+        });
+        if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+        const data = await res.json();
+        updateThumbPreview(data.thumbnail);
+        isManualThumb = true;
+        const resetEl = document.getElementById('collection-thumb-reset');
+        if (resetEl) resetEl.classList.remove('hidden');
+        notify.success('Thumbnail uploaded');
+    } catch (err) {
+        log.error('Thumbnail upload failed:', err);
+        notify.error('Failed to upload thumbnail');
+    }
+    fileInput.value = '';
+}
+
+function handleShowArchiveThumbs(): void {
+    if (!editingCollection?.archives) return;
+    const container = document.getElementById('collection-archive-thumbs');
+    const grid = document.getElementById('collection-archive-thumb-grid');
+    if (!container || !grid) return;
+
+    grid.innerHTML = '';
+    const archivesWithThumbs = editingCollection.archives.filter(a => a.thumbnail);
+
+    if (archivesWithThumbs.length === 0) {
+        grid.innerHTML = '<p style="color: rgba(232,236,240,0.5); font-size: 0.8rem;">No archive thumbnails available</p>';
+        container.classList.remove('hidden');
+        return;
+    }
+
+    for (const archive of archivesWithThumbs) {
+        const img = document.createElement('img');
+        img.src = archive.thumbnail!;
+        img.alt = '';
+        img.className = 'collection-archive-thumb-option';
+        img.addEventListener('click', () => handlePickArchiveThumb(archive.thumbnail!));
+        grid.appendChild(img);
+    }
+    container.classList.remove('hidden');
+}
+
+async function handlePickArchiveThumb(thumbUrl: string): Promise<void> {
+    if (!editingCollection) return;
+    try {
+        const res = await apiFetch(`/api/collections/${editingCollection.slug}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ thumbnail: thumbUrl }),
+        });
+        if (!res.ok) throw new Error(`Failed: ${res.status}`);
+        updateThumbPreview(thumbUrl);
+        isManualThumb = true;
+        const resetEl = document.getElementById('collection-thumb-reset');
+        if (resetEl) resetEl.classList.remove('hidden');
+        const archiveThumbsEl = document.getElementById('collection-archive-thumbs');
+        if (archiveThumbsEl) archiveThumbsEl.classList.add('hidden');
+        notify.success('Thumbnail updated');
+    } catch (err) {
+        log.error('Failed to set archive thumbnail:', err);
+        notify.error('Failed to update thumbnail');
+    }
+}
+
+async function handleGenerateMosaic(): Promise<void> {
+    if (!editingCollection) return;
+    try {
+        const res = await apiFetch(`/api/collections/${editingCollection.slug}/generate-thumbnail`, { method: 'POST' });
+        if (!res.ok) throw new Error(`Generate failed: ${res.status}`);
+        const data = await res.json();
+        updateThumbPreview(data.thumbnail);
+        isManualThumb = false;
+        const resetEl = document.getElementById('collection-thumb-reset');
+        if (resetEl) resetEl.classList.add('hidden');
+        notify.success('Mosaic generated');
+    } catch (err) {
+        log.error('Mosaic generation failed:', err);
+        notify.error('Failed to generate mosaic');
+    }
+}
+
+async function handleResetThumb(): Promise<void> {
+    if (!editingCollection) return;
+    try {
+        const res = await apiFetch(`/api/collections/${editingCollection.slug}/thumbnail`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`Reset failed: ${res.status}`);
+        const data = await res.json();
+        updateThumbPreview(data.thumbnail);
+        isManualThumb = false;
+        const resetEl = document.getElementById('collection-thumb-reset');
+        if (resetEl) resetEl.classList.add('hidden');
+        notify.success('Thumbnail reset to auto-generated');
+    } catch (err) {
+        log.error('Thumbnail reset failed:', err);
+        notify.error('Failed to reset thumbnail');
+    }
+}
+
+function updateThumbPreview(url: string | null): void {
+    const img = document.getElementById('collection-thumb-img') as HTMLImageElement;
+    const placeholder = document.getElementById('collection-thumb-placeholder');
+    if (url) {
+        if (img) { img.src = url + '?t=' + Date.now(); img.style.display = ''; }
+        if (placeholder) placeholder.style.display = 'none';
+    } else {
+        if (img) img.style.display = 'none';
+        if (placeholder) placeholder.style.display = '';
+    }
+}
+
 function renderChips(archiveHash: string, archiveCollections: Collection[]): void {
     if (!chipsContainer || !addSelect) return;
 
@@ -227,6 +507,11 @@ function setActiveCollection(slug: string): void {
     activeSlug = slug;
     renderSidebar();
     if (onFilterChange) onFilterChange(slug);
+    if (slug) {
+        showCollectionDetail(slug);
+    } else {
+        hideCollectionDetail();
+    }
 }
 
 async function handleNewCollection(): Promise<void> {
@@ -286,6 +571,13 @@ export async function initCollectionManager(config: CollectionManagerConfig): Pr
     chipsContainer = document.getElementById('library-collection-chips');
     addSelect = document.getElementById('library-add-to-collection') as HTMLSelectElement | null;
 
+    detailPanel = document.getElementById('library-detail');
+    if (detailPanel) {
+        collectionDetailEl = createCollectionDetailPanel();
+        detailPanel.parentElement?.appendChild(collectionDetailEl);
+        wireCollectionDetailEvents();
+    }
+
     if (addBtn) {
         addBtn.addEventListener('click', handleNewCollection);
     }
@@ -340,4 +632,4 @@ export async function updateChipsForArchive(archiveHash: string): Promise<void> 
 /**
  * Refresh the collection list (e.g., after upload).
  */
-export { refreshCollections };
+export { refreshCollections, hideCollectionDetail };

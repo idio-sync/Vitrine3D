@@ -8,7 +8,7 @@
 
 import { Logger, notify } from './utilities.js';
 import { activateTool } from './ui-controller.js';
-import { initCollectionManager, getActiveCollectionArchives, updateChipsForArchive } from './collection-manager.js';
+import { initCollectionManager, getActiveCollectionArchives, updateChipsForArchive, hideCollectionDetail } from './collection-manager.js';
 
 const log = Logger.getLogger('library-panel');
 
@@ -406,6 +406,7 @@ function updateStorage(data: ArchiveListResponse): void {
 // ── Detail pane ──
 
 function selectArchive(hash: string): void {
+    hideCollectionDetail();
     selectedHash = hash;
     const archive = archives.find(a => a.hash === hash);
 
