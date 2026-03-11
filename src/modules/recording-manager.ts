@@ -252,7 +252,13 @@ export function pollMediaStatus(
     onStatusChange: (status: string, data?: any) => void,
     serverUrl = ''
 ): void {
+    let attempts = 0;
+    const MAX_ATTEMPTS = 120; // ~4 minutes at 2s interval
     const poll = async () => {
+        if (++attempts > MAX_ATTEMPTS) {
+            onStatusChange('error', { error: 'Polling timed out' });
+            return;
+        }
         try {
             const res = await fetch(`${serverUrl}/api/media/${mediaId}`);
             if (!res.ok) return;
@@ -288,6 +294,8 @@ function compositeFrame(): void {
 }
 
 function cleanup(): void {
+    if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = 0; }
+    if (_maxDurationTimeout) { clearTimeout(_maxDurationTimeout); _maxDurationTimeout = 0; }
     if (_compositeRafId) {
         cancelAnimationFrame(_compositeRafId);
         _compositeRafId = 0;

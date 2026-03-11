@@ -12,6 +12,7 @@ import { ArchiveLoader } from './archive-loader.js';
 import { hasAnyProxy } from './quality-tier.js';
 import { ASSET_STATE } from './constants.js';
 import { loadWalkthroughFromArchive } from './walkthrough-controller.js';
+import { resetWalkthroughEditor } from './walkthrough-editor.js';
 import { Logger, notify, computeMeshFaceCount, computeTextureInfo, disposeObject } from './utilities.js';
 import { updateOverlayPill } from './ui-controller.js';
 import { getStore } from './asset-store.js';
@@ -319,9 +320,12 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
     // Already loading — wait for it
     if (state.assetStates[assetType] === ASSET_STATE.LOADING) {
         return new Promise(resolve => {
+            const MAX_WAIT = 120_000; // 2 minutes
+            const start = Date.now();
             const check = () => {
                 if (state.assetStates[assetType] === ASSET_STATE.LOADED) resolve(true);
                 else if (state.assetStates[assetType] === ASSET_STATE.ERROR) resolve(false);
+                else if (Date.now() - start > MAX_WAIT) { log.warn(`ensureAssetLoaded timed out for ${assetType}`); resolve(false); }
                 else setTimeout(check, 50);
             };
             check();
@@ -1058,6 +1062,9 @@ export function clearArchiveMetadata(deps: ArchivePipelineDeps): void {
 
     const section = document.getElementById('archive-metadata-section');
     if (section) section.style.display = 'none';
+
+    // Reset walkthrough editor state
+    resetWalkthroughEditor();
 
     // Clear source files from previous archive
     assets.sourceFiles = [];

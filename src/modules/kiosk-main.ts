@@ -16,6 +16,8 @@ import { createSparkRenderer, isSparkV2 } from './spark-compat.js';
 
 // Local AssetType (not exported from types.ts)
 type AssetType = 'splat' | 'mesh' | 'pointcloud';
+
+function errMsg(e: unknown): string { return e instanceof Error ? e.message : String(e); }
 import { FlyControls } from './fly-controls.js';
 import { AnnotationSystem } from './annotation-system.js';
 import { MeasurementSystem } from './measurement-system.js';
@@ -986,7 +988,7 @@ async function handleDirectFile(mainFile: File, category: FileCategory, allFiles
     } catch (err) {
         log.error(`Failed to load ${category}:`, err);
         hideLoading();
-        notify.error(`Failed to load ${category}: ${err.message}`);
+        notify.error(`Failed to load ${category}: ${errMsg(err)}`);
         // Show picker again for retry
         const picker = document.getElementById('kiosk-file-picker');
         if (picker) picker.classList.remove('hidden');
@@ -1057,7 +1059,7 @@ async function loadDirectFilesFromUrls(config: AppConfig): Promise<void> {
     } catch (err) {
         log.error('Failed to load from URLs:', err);
         hideLoading();
-        notify.error(`Failed to load: ${err.message}`);
+        notify.error(`Failed to load: ${errMsg(err)}`);
         const picker = document.getElementById('kiosk-file-picker');
         if (picker) picker.classList.remove('hidden');
     }
@@ -1204,7 +1206,7 @@ async function showClickGate(archiveUrl: string): Promise<void> {
         }
         loader.dispose();
     } catch (e) {
-        log.warn('Could not extract poster via Range requests:', e.message);
+        log.warn('Could not extract poster via Range requests:', errMsg(e));
         // Fallback: generic play button without poster (still functional)
     }
 
@@ -1254,7 +1256,7 @@ async function loadArchiveFromUrl(url: string): Promise<void> {
         } catch (err: any) {
             log.error('Tauri: failed to download archive from URL:', err);
             hideLoading();
-            notify.error(`Failed to load archive: ${err.message}`);
+            notify.error(`Failed to load archive: ${errMsg(err)}`);
             const picker = document.getElementById('kiosk-file-picker');
             if (picker) picker.classList.remove('hidden');
             return;
@@ -1295,7 +1297,7 @@ async function loadArchiveFromUrl(url: string): Promise<void> {
     } catch (err) {
         log.error('Failed to load archive from URL:', err);
         hideLoading();
-        notify.error(`Failed to load archive: ${err.message}`);
+        notify.error(`Failed to load archive: ${errMsg(err)}`);
         // Fall back to showing file picker
         const picker = document.getElementById('kiosk-file-picker');
         if (picker) picker.classList.remove('hidden');
@@ -1320,7 +1322,7 @@ async function loadArchiveFromTauri(filePath: string): Promise<void> {
     } catch (err) {
         log.error('Failed to load archive from filesystem:', err);
         hideLoading();
-        notify.error(`Failed to load archive: ${err.message}`);
+        notify.error(`Failed to load archive: ${errMsg(err)}`);
         const picker = document.getElementById('kiosk-file-picker');
         if (picker) picker.classList.remove('hidden');
     }
@@ -1433,9 +1435,12 @@ async function ensureAssetLoaded(assetType: AssetType, onProgress?: (percent: nu
     if (state.assetStates[assetType] === ASSET_STATE.ERROR) return false;
     if (state.assetStates[assetType] === ASSET_STATE.LOADING) {
         return new Promise(resolve => {
+            const MAX_WAIT = 120_000; // 2 minutes
+            const start = Date.now();
             const check = () => {
                 if (state.assetStates[assetType] === ASSET_STATE.LOADED) resolve(true);
                 else if (state.assetStates[assetType] === ASSET_STATE.ERROR) resolve(false);
+                else if (Date.now() - start > MAX_WAIT) { log.warn(`ensureAssetLoaded timed out for ${assetType}`); resolve(false); }
                 else setTimeout(check, 50);
             };
             check();
@@ -1743,7 +1748,7 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                         state.imageAssets.set(entry.file_name, { blob: data.blob, url: data.url, name: entry.file_name });
                     }
                 } catch (e: any) {
-                    log.warn('Failed to extract image:', entry.file_name, e.message);
+                    log.warn('Failed to extract image:', entry.file_name, errMsg(e));
                 }
             }));
             log.info(`Extracted ${state.imageAssets.size} embedded images`);
@@ -2073,7 +2078,7 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                         log.warn('Progressive load: HD mesh upgrade failed, keeping SD proxy');
                     }
                 } catch (e: any) {
-                    log.warn('Progressive load: HD mesh upgrade failed, keeping SD proxy:', e.message);
+                    log.warn('Progressive load: HD mesh upgrade failed, keeping SD proxy:', errMsg(e));
                 } finally {
                     hideBgLoadingIndicator();
                 }
@@ -2140,7 +2145,7 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
     } catch (e) {
         log.error('Error loading archive:', e);
         hideLoading();
-        notify.error(`Failed to load archive: ${e.message}`);
+        notify.error(`Failed to load archive: ${errMsg(e)}`);
         // Show picker again so user can retry
         const picker = document.getElementById('kiosk-file-picker');
         if (picker) picker.classList.remove('hidden');
@@ -2276,7 +2281,7 @@ async function switchQualityTier(newTier: string): Promise<void> {
         log.info(`Quality tier switched to ${newTier}`);
     } catch (e) {
         log.error('Error switching quality tier:', e);
-        notify.error(`Failed to switch quality: ${e.message}`);
+        notify.error(`Failed to switch quality: ${errMsg(e)}`);
     } finally {
         document.querySelectorAll('.quality-toggle-btn').forEach(btn => {
             btn.classList.remove('loading');
@@ -4712,7 +4717,7 @@ function createExportButton(label: string, filename: string, onClick: (btn: HTML
             await onClick(btn);
         } catch (err) {
             log.error('Export failed:', err);
-            notify.error(`Export failed: ${err.message}`);
+            notify.error(`Export failed: ${errMsg(err)}`);
         } finally {
             btn.disabled = false;
             btn.textContent = origText;
@@ -5143,7 +5148,7 @@ async function showBrandedLoading(archiveLoader: ArchiveLoader): Promise<void> {
 
         updateProgress(20, 'Preparing scene...');
     } catch (e) {
-        log.warn('Could not show branded loading:', e.message);
+        log.warn('Could not show branded loading:', errMsg(e));
     }
 }
 

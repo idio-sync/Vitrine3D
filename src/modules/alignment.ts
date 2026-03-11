@@ -674,7 +674,7 @@ export class LandmarkAlignment {
         if (this._rmseEl) this._rmseEl.classList.add('hidden');
 
         // Remove listeners
-        this.renderer.domElement.removeEventListener('click', this._onClickBound);
+        this.renderer.domElement.removeEventListener('click', this._onClickBound, { capture: true });
         document.removeEventListener('keydown', this._onKeyDownBound);
         this.renderer.domElement.style.cursor = 'default';
 

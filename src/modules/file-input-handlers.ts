@@ -1,4 +1,6 @@
 import { Logger, notify } from './utilities.js';
+
+function errMsg(e: unknown): string { return e instanceof Error ? e.message : String(e); }
 import { ArchiveLoader } from './archive-loader.js';
 import {
     loadSplatFromFile as loadSplatFromFileHandler,
@@ -89,7 +91,7 @@ async function loadPointcloudFromUrlInternal(url: string, deps: FileInputDeps) {
     } catch (error) {
         log.error('Error loading point cloud from URL:', error);
         deps.hideLoading();
-        notify.error('Error loading point cloud: ' + error.message);
+        notify.error('Error loading point cloud: ' + errMsg(error));
     }
 }
 
@@ -102,7 +104,7 @@ async function loadSTLFromUrlInternal(url: string, deps: FileInputDeps) {
     } catch (error) {
         log.error('Error loading STL from URL:', error);
         deps.hideLoading();
-        notify.error('Error loading STL: ' + error.message);
+        notify.error('Error loading STL: ' + errMsg(error));
     }
 }
 
@@ -118,7 +120,7 @@ async function loadDrawingFromUrlInternal(url: string, deps: FileInputDeps) {
     } catch (error) {
         log.error('Error loading DXF from URL:', error);
         deps.hideLoading();
-        notify.error('Error loading DXF drawing: ' + error.message);
+        notify.error('Error loading DXF drawing: ' + errMsg(error));
     }
 }
 
@@ -132,7 +134,7 @@ async function loadCADFromUrlInternal(url: string, deps: FileInputDeps) {
     } catch (error) {
         log.error('Error loading CAD from URL:', error);
         deps.hideLoading();
-        notify.error('Error loading CAD model: ' + error.message);
+        notify.error('Error loading CAD model: ' + errMsg(error));
     }
 }
 
@@ -258,7 +260,7 @@ export async function handleSplatFile(event: Event, deps: FileInputDeps) {
     } catch (error) {
         log.error('Error loading splat:', error);
         deps.hideLoading();
-        notify.error('Error loading Gaussian Splat: ' + error.message);
+        notify.error('Error loading Gaussian Splat: ' + errMsg(error));
     }
 }
 
@@ -286,7 +288,7 @@ export async function handleModelFile(event: Event, deps: FileInputDeps) {
     } catch (error) {
         log.error('Error loading model:', error);
         deps.hideLoading();
-        notify.error('Error loading model: ' + error.message);
+        notify.error('Error loading model: ' + errMsg(error));
     }
 }
 
@@ -304,7 +306,7 @@ export async function handleSTLFile(event: Event, deps: FileInputDeps) {
     } catch (error) {
         log.error('Error loading STL:', error);
         deps.hideLoading();
-        notify.error('Error loading STL: ' + error.message);
+        notify.error('Error loading STL: ' + errMsg(error));
     }
 }
 
@@ -322,7 +324,7 @@ export async function handleDrawingFile(event: Event, deps: FileInputDeps) {
     } catch (error) {
         log.error('Error loading DXF:', error);
         deps.hideLoading();
-        notify.error('Error loading DXF drawing: ' + error.message);
+        notify.error('Error loading DXF drawing: ' + errMsg(error));
     }
 }
 
@@ -339,7 +341,7 @@ export async function handlePointcloudFile(event: Event, deps: FileInputDeps) {
     } catch (error) {
         log.error('Error loading point cloud:', error);
         deps.hideLoading();
-        notify.error('Error loading point cloud: ' + error.message);
+        notify.error('Error loading point cloud: ' + errMsg(error));
     }
 }
 
@@ -356,7 +358,7 @@ export async function handleCADFile(event: Event, deps: FileInputDeps) {
     } catch (error) {
         log.error('Error loading CAD model:', error);
         deps.hideLoading();
-        notify.error('Error loading CAD model: ' + error.message);
+        notify.error('Error loading CAD model: ' + errMsg(error));
     }
 }
 
@@ -417,7 +419,7 @@ export function wireNativeFileDialogs(deps: FileInputDeps) {
             } catch (e) {
                 log.error('Error loading splat:', e);
                 deps.hideLoading();
-                notify.error('Error loading Gaussian Splat: ' + e.message);
+                notify.error('Error loading Gaussian Splat: ' + errMsg(e));
             }
         },
         onModelFiles: async (files: any[]) => {
@@ -429,7 +431,7 @@ export function wireNativeFileDialogs(deps: FileInputDeps) {
             } catch (e) {
                 log.error('Error loading model:', e);
                 deps.hideLoading();
-                notify.error('Error loading model: ' + e.message);
+                notify.error('Error loading model: ' + errMsg(e));
             }
         },
         onArchiveFiles: async (files: any[]) => {
@@ -444,7 +446,7 @@ export function wireNativeFileDialogs(deps: FileInputDeps) {
             } catch (e) {
                 log.error('Error loading archive:', e);
                 deps.hideLoading();
-                notify.error('Error loading archive: ' + e.message);
+                notify.error('Error loading archive: ' + errMsg(e));
             }
         },
         onPointcloudFiles: async (files: any[]) => {
@@ -456,7 +458,7 @@ export function wireNativeFileDialogs(deps: FileInputDeps) {
             } catch (e) {
                 log.error('Error loading point cloud:', e);
                 deps.hideLoading();
-                notify.error('Error loading point cloud: ' + e.message);
+                notify.error('Error loading point cloud: ' + errMsg(e));
             }
         },
         onSTLFiles: async (files: any[]) => {
@@ -468,7 +470,7 @@ export function wireNativeFileDialogs(deps: FileInputDeps) {
             } catch (e) {
                 log.error('Error loading STL:', e);
                 deps.hideLoading();
-                notify.error('Error loading STL: ' + e.message);
+                notify.error('Error loading STL: ' + errMsg(e));
             }
         },
         onProxyMeshFiles: async (files: any[]) => {
@@ -497,7 +499,7 @@ export function wireNativeFileDialogs(deps: FileInputDeps) {
                 if (envBgToggle) envBgToggle.checked = false;
                 document.querySelectorAll('.color-preset').forEach(b => b.classList.remove('active'));
             } catch (err) {
-                notify.error('Failed to load background image: ' + err.message);
+                notify.error('Failed to load background image: ' + errMsg(err));
             }
         },
         onHDRFiles: async (files: any[]) => {
@@ -515,7 +517,7 @@ export function wireNativeFileDialogs(deps: FileInputDeps) {
                 notify.success('HDR environment loaded');
             } catch (err) {
                 deps.hideLoading();
-                notify.error('Failed to load HDR: ' + err.message);
+                notify.error('Failed to load HDR: ' + errMsg(err));
             }
         }
     });

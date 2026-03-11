@@ -34,6 +34,16 @@ let walkthrough: Walkthrough = {
     loop: false,
 };
 
+/** Reset editor state (call when loading a new archive). */
+export function resetWalkthroughEditor(): void {
+    walkthrough = { title: 'Building Tour', stops: [], auto_play: true, loop: false };
+    selectedStopIndex = -1;
+    const editor = document.getElementById('walkthrough-stop-editor');
+    if (editor) editor.classList.add('hidden');
+    const container = document.getElementById('walkthrough-stop-list');
+    if (container) container.innerHTML = '';
+}
+
 // =============================================================================
 // INIT
 // =============================================================================
@@ -172,12 +182,18 @@ export function selectStop(index: number): void {
     if (!editor) return;
     editor.classList.remove('hidden');
 
-    (document.getElementById('wt-stop-title') as HTMLInputElement).value = stop.title || '';
-    (document.getElementById('wt-stop-description') as HTMLTextAreaElement).value = stop.description || '';
-    (document.getElementById('wt-stop-transition') as HTMLSelectElement).value = stop.transition;
-    (document.getElementById('wt-stop-fly-duration') as HTMLInputElement).value = String(stop.fly_duration ?? WALKTHROUGH.DEFAULT_FLY_DURATION);
-    (document.getElementById('wt-stop-fade-duration') as HTMLInputElement).value = String(stop.fade_duration ?? WALKTHROUGH.DEFAULT_FADE_DURATION);
-    (document.getElementById('wt-stop-dwell') as HTMLInputElement).value = String(stop.dwell_time);
+    const titleEl = document.getElementById('wt-stop-title') as HTMLInputElement | null;
+    if (titleEl) titleEl.value = stop.title || '';
+    const descEl = document.getElementById('wt-stop-description') as HTMLTextAreaElement | null;
+    if (descEl) descEl.value = stop.description || '';
+    const transEl = document.getElementById('wt-stop-transition') as HTMLSelectElement | null;
+    if (transEl) transEl.value = stop.transition;
+    const flyDurEl = document.getElementById('wt-stop-fly-duration') as HTMLInputElement | null;
+    if (flyDurEl) flyDurEl.value = String(stop.fly_duration ?? WALKTHROUGH.DEFAULT_FLY_DURATION);
+    const fadeDurEl = document.getElementById('wt-stop-fade-duration') as HTMLInputElement | null;
+    if (fadeDurEl) fadeDurEl.value = String(stop.fade_duration ?? WALKTHROUGH.DEFAULT_FADE_DURATION);
+    const dwellEl = document.getElementById('wt-stop-dwell') as HTMLInputElement | null;
+    if (dwellEl) dwellEl.value = String(stop.dwell_time);
 
     // Show/hide duration rows based on transition type
     updateDurationRowVisibility(stop.transition);
