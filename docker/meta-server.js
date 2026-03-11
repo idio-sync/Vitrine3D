@@ -1549,8 +1549,12 @@ function handleDeleteArchive(req, res, hash) {
     // Delete sidecar files
     try { fs.unlinkSync(path.join(META_DIR, hash + '.json')); } catch {}
     try { fs.unlinkSync(path.join(THUMBS_DIR, hash + '.jpg')); } catch {}
+    // Delete history directory for this archive (backup files)
+    const deleteBasename = path.parse(row.filename).name;
+    const historyDir = path.join(ARCHIVES_DIR, 'history', deleteBasename);
+    try { fs.rmSync(historyDir, { recursive: true }); } catch {}
 
-    // Delete from DB + audit log atomically
+    // Delete from DB + audit log atomically (archive_versions cascade-deleted)
     const deleteActor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
     db.transaction(() => {
         db.prepare('DELETE FROM archives WHERE hash = ?').run(hash);
@@ -1658,6 +1662,20 @@ function handleRenameArchive(req, res, hash) {
             // Rename the file
             fs.renameSync(oldFilePath, newPath);
 
+            // Rename history directory if it exists
+            const oldBasename = path.parse(oldRow.filename).name;
+            const newBasename = path.parse(sanitized).name;
+            const oldHistDir = path.join(ARCHIVES_DIR, 'history', oldBasename);
+            const newHistDir = path.join(ARCHIVES_DIR, 'history', newBasename);
+            if (fs.existsSync(oldHistDir)) {
+                if (fs.existsSync(newHistDir)) {
+                    // Conflict — revert file rename and abort
+                    fs.renameSync(newPath, oldFilePath);
+                    return sendJson(res, 409, { error: 'History directory conflict: ' + newBasename });
+                }
+                fs.renameSync(oldHistDir, newHistDir);
+            }
+
             // Clean old sidecar files
             try { fs.unlinkSync(path.join(META_DIR, hash + '.json')); } catch {}
             try { fs.unlinkSync(path.join(THUMBS_DIR, hash + '.jpg')); } catch {}
@@ -1701,6 +1719,11 @@ function handleRenameArchive(req, res, hash) {
                     metadata_raw: JSON.stringify(metaRaw),
                     oldHash: hash,
                 });
+                // Update version filenames to reflect new basename
+                db.prepare(
+                    'UPDATE archive_versions SET filename = replace(filename, ?, ?) WHERE archive_id = ?'
+                ).run('history/' + oldBasename + '/', 'history/' + newBasename + '/', oldRow.id);
+
                 db.prepare(`INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)`)
                   .run(renameActor, 'rename', hash, JSON.stringify({ old: oldRow.filename, new: sanitized }), req.headers['x-real-ip'] || null);
             })();
