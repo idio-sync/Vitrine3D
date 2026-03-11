@@ -288,7 +288,7 @@ export class FlightPathManager {
     /** Build colored line + instanced markers based on current color mode. */
     private buildColoredPath(renderPoints: FlightPoint[]): { line: THREE.Line; markers: THREE.InstancedMesh } {
         // Compute value range for the active color mode
-        const values = renderPoints.map(p => this.getColorValue(p, renderPoints));
+        const values = renderPoints.map((p, i) => this.getColorValue(p, renderPoints, i));
         let minVal = Infinity, maxVal = -Infinity;
         for (const v of values) {
             if (v < minVal) minVal = v;
@@ -355,14 +355,14 @@ export class FlightPathManager {
     }
 
     /** Get the numeric value for color mapping based on current mode. */
-    private getColorValue(point: FlightPoint, allPoints: FlightPoint[]): number {
+    private getColorValue(point: FlightPoint, allPoints: FlightPoint[], index: number): number {
         switch (this._colorMode) {
             case 'speed':
                 return point.speed ?? 0;
             case 'altitude':
                 return point.alt;
             case 'climbrate': {
-                const idx = allPoints.indexOf(point);
+                const idx = index;
                 if (idx <= 0) return 0;
                 const prev = allPoints[idx - 1];
                 const dt = (point.timestamp - prev.timestamp) / 1000;

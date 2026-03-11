@@ -362,7 +362,9 @@ async function proxyTauriImages(container: HTMLElement): Promise<void> {
             const ext = url.split('.').pop()?.toLowerCase() || 'jpg';
             const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
             const blob = new Blob([bytes], { type: mime });
-            img.src = URL.createObjectURL(blob);
+            const blobUrl = URL.createObjectURL(blob);
+            img.src = blobUrl;
+            img.addEventListener('load', () => URL.revokeObjectURL(blobUrl), { once: true });
         } catch (e) {
             log.warn('Failed to proxy thumbnail:', url, e);
         }
