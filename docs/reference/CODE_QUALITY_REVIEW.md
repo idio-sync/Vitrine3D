@@ -26,7 +26,7 @@
 |----------|-------|-------|------|------------------|
 | **CRITICAL** | 9 | 9 | 0 | Phases 1–2 (`936259b`–`53cbbfb`) |
 | **HIGH** | 32 | 32 | 0 | Phases 1–11 (`936259b`–latest) |
-| **MEDIUM** | 69 | ~10 | ~59 | Phase 8 + incidental fixes during HIGH work |
+| **MEDIUM** | 69 | ~12 | ~57 | Phases 8, 12 + incidental fixes during HIGH work |
 | **LOW** | 48 | 0 | 48 | Not addressed |
 
 All CRITICAL and HIGH issues were resolved across 10 phases committed to the `dev` branch on 2026-03-11.
@@ -198,13 +198,13 @@ Near-identical if/else chains for 8 asset types appear in:
 
 Adding a 9th asset type requires touching 20+ locations. A registry/map pattern would eliminate this.
 
-### Module-Level Singletons Without Cleanup (~6 issues)
+### Module-Level Singletons Without Cleanup (~4 remaining)
 
 Modules with mutable state that's never reset:
-- `map-picker.ts` — map instance leaks on repeated open/close
+- `map-picker.ts` — **fixed** (Phase 12): `destroyMapPicker()` clears Leaflet map, marker, search timeout on modal close
+- `collection-manager.ts` — **fixed** (Phase 12): `resetCollectionManager()` clears all state, removes DOM, allows re-init
 - `recording-manager.ts` — timer state partially cleaned (improved in Phase 3)
 - `walkthrough-editor.ts` — reset added in Phase 3, but other singletons remain
-- `collection-manager.ts` — double-init guard added in Phase 7, but no full dispose/reset
 
 ### Large File Decomposition (~5 issues)
 
@@ -266,7 +266,7 @@ Asset loading completion is detected by polling state every 50ms. Converting to 
 
 ### Module Singletons Without Lifecycle
 
-Several modules use mutable module-scope state without reset/dispose functions, causing issues on repeated initialization (duplicate listeners, stale state).
+Partially addressed in Phase 12: `map-picker.ts` now has `destroyMapPicker()` (called automatically on modal close), `collection-manager.ts` now has `resetCollectionManager()`. Other modules with mutable singleton state (e.g., annotation-system, transform-controller) still lack dispose/reset.
 
 ---
 

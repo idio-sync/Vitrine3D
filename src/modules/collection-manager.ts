@@ -656,4 +656,41 @@ export async function updateChipsForArchive(archiveHash: string): Promise<void> 
 /**
  * Refresh the collection list (e.g., after upload).
  */
+/**
+ * Reset the collection manager to its uninitialized state.
+ * Clears all module-scope state, removes dynamically created DOM elements,
+ * and allows clean re-initialization via `initCollectionManager()`.
+ */
+export function resetCollectionManager(): void {
+    // Remove dynamically created detail panel
+    if (collectionDetailEl) {
+        collectionDetailEl.remove();
+        collectionDetailEl = null;
+    }
+
+    // Remove event listener from add button
+    if (addBtn) {
+        addBtn.removeEventListener('click', handleNewCollection);
+    }
+
+    // Clear state
+    collections = [];
+    activeSlug = '';
+    _csrfTokenGetter = null;
+    authHeadersGetter = null;
+    onFilterChange = null;
+    editingCollection = null;
+    isManualThumb = false;
+
+    // Clear DOM refs
+    sidebarList = null;
+    addBtn = null;
+    chipsContainer = null;
+    addSelect = null;
+    detailPanel = null;
+
+    _initialized = false;
+    log.info('Collection manager reset');
+}
+
 export { refreshCollections, hideCollectionDetail };

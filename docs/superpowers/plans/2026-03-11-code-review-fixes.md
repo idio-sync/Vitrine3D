@@ -1455,21 +1455,21 @@ git commit -m "refactor: eliminate remaining any usage in kiosk-main.ts (H-TS4)"
 
 The map instance leaks on repeated open/close. Add a `dispose()` or `destroy()` export that removes the Leaflet map instance, clears event listeners, and nulls references.
 
-- [ ] **Step 1: Read map-picker.ts and identify mutable state**
+- [x] **Step 1: Read map-picker.ts and identify mutable state**
 
-- [ ] **Step 2: Add `destroyMapPicker()` export**
+Module-scope: `map`, `marker`, `searchTimeout`.
 
-Clean up the Leaflet map instance, remove event listeners, null the reference.
+- [x] **Step 2: Add `destroyMapPicker()` export**
 
-- [ ] **Step 3: Wire the destroy call**
+Clears `searchTimeout`, calls `map.remove()`, nulls `map` and `marker`.
 
-Call `destroyMapPicker()` when the map picker modal closes, or from a global cleanup function.
+- [x] **Step 3: Wire the destroy call**
 
-- [ ] **Step 4: Verify build**
+Called from `closeModal()` after cleaning up event listeners.
 
-Run: `npm run build`
+- [x] **Step 4: Verify build**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/modules/map-picker.ts
@@ -1483,17 +1483,17 @@ git commit -m "fix: add dispose lifecycle to map-picker singleton (M-SINGLE1)"
 
 Phase 7 added a double-init guard, but there's no full dispose/reset. Add a `resetCollectionManager()` export that clears state and allows clean re-initialization.
 
-- [ ] **Step 1: Read collection-manager.ts and identify all mutable state**
+- [x] **Step 1: Read collection-manager.ts and identify all mutable state**
 
-- [ ] **Step 2: Add `resetCollectionManager()` export**
+9 module-scope vars: `_initialized`, `collections`, `activeSlug`, `_csrfTokenGetter`, `authHeadersGetter`, `onFilterChange`, `sidebarList`, `addBtn`, `chipsContainer`, `addSelect`, `detailPanel`, `collectionDetailEl`, `editingCollection`, `isManualThumb`.
 
-Reset all module-scope variables, set `_initialized = false`, remove event listeners added during init.
+- [x] **Step 2: Add `resetCollectionManager()` export**
 
-- [ ] **Step 3: Verify build**
+Removes dynamically-created detail panel DOM, removes addBtn event listener, resets all module-scope vars to defaults, sets `_initialized = false`.
 
-Run: `npm run build`
+- [x] **Step 3: Verify build**
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/modules/collection-manager.ts
