@@ -25,11 +25,11 @@
 | Severity | Total | Fixed | Open | Fix Commit Range |
 |----------|-------|-------|------|------------------|
 | **CRITICAL** | 9 | 9 | 0 | Phases 1–2 (`936259b`–`53cbbfb`) |
-| **HIGH** | 32 | 31 | 1 | Phases 1–9 (`936259b`–latest) |
+| **HIGH** | 32 | 32 | 0 | Phases 1–10 (`936259b`–latest) |
 | **MEDIUM** | 69 | ~10 | ~59 | Phase 8 + incidental fixes during HIGH work |
 | **LOW** | 48 | 0 | 48 | Not addressed |
 
-All CRITICAL issues and 31 of 32 HIGH issues were resolved across 9 phases committed to the `dev` branch on 2026-03-11.
+All CRITICAL and HIGH issues were resolved across 10 phases committed to the `dev` branch on 2026-03-11.
 
 ---
 
@@ -145,24 +145,31 @@ All 9 CRITICAL issues have been fixed.
 |---|-------|------|-----|
 | H-TS1 | `SceneRefs` is 25+ fields of `any` despite `@types/three` installed | `types.ts:121-144` | Replaced all `any` with proper Three.js types (`Scene`, `PerspectiveCamera`, `WebGLRenderer`, `Group`, lights) and project types (`SplatMesh`, `FlyControls`, `AnnotationSystem`, `ArchiveCreator`, `MeasurementSystem`, `LandmarkAlignment`) |
 
+### Phase 10 — Type Deps Factories (1 fixed)
+
+| # | Issue | File | Fix |
+|---|-------|------|-----|
+| H-TS3 | 9 deps factories return `any` — entire dependency chain unchecked | `main.ts` | Typed all 9 factories with proper return types (`FileHandlerDeps`, `EditorAlignmentDeps`, `AnnotationControllerDeps`, `MetadataDeps`, `LoadCADDeps`, `FileInputDeps`, `AlignmentIODeps`, `ControlsPanelDeps`, `LoadPointcloudDeps`). Exported 6 previously non-exported interfaces from consuming modules. |
+
 ---
 
 ## 4. Open — HIGH Issues
 
-1 HIGH issue remains unresolved (3 type safety items grouped as one effort).
+All HIGH issues have been resolved. Remaining items of note:
 
-### Type Safety (2)
+### Type Safety (1 — ongoing effort)
 
 | # | Issue | File | Impact |
 |---|-------|------|--------|
-| H-TS3 | 6 deps factories return `any` — entire dependency chain unchecked | `main.ts:423-772` | Type errors in module calls not caught at compile time |
-| H-TS4 | 87 uses of `any` in kiosk-main.ts | `kiosk-main.ts` | Kiosk bundle has no type safety |
+| H-TS4 | 51 uses of `any` in kiosk-main.ts | `kiosk-main.ts` | Kiosk bundle has limited type safety |
 
 ### Architecture (1 — refactoring scope)
 
 | # | Issue | File | Impact |
 |---|-------|------|--------|
 | H-AR1 | `handleArchiveFile` is 660+ lines | `kiosk-main.ts:1479-2148` | Hard to test, review, and modify |
+
+These are tracked as future improvement items rather than blockers.
 
 ---
 
@@ -243,7 +250,7 @@ These are optional cleanup items that don't affect functionality or security.
 
 ### The `any` Epidemic
 
-Significant progress made: `AppState` index signature removed (Phase 7), `SceneRefs` fully typed with Three.js and project types (Phase 9). Remaining: deps factories in `main.ts` still return `any`, kiosk state and Spark.js integration points use `any`. The TypeScript migration is partially complete — scene objects are now type-checked, but the dependency chain and kiosk bundle still bypass the compiler.
+Major progress: `AppState` index signature removed (Phase 7), `SceneRefs` fully typed (Phase 9), all 9 deps factories in `main.ts` typed (Phase 10). Remaining: kiosk-main.ts still has ~51 uses of `any` (deps factories, traverse callbacks, manifest handling). The editor's TypeScript migration is substantially complete; the kiosk bundle lags behind.
 
 ### Duplication Across Editor/Kiosk
 
@@ -265,19 +272,18 @@ Several modules use mutable module-scope state without reset/dispose functions, 
 
 ## 8. Recommended Priority
 
-### Next up (high impact, remaining HIGH issues)
+### Next up (high impact)
 
-1. **Type deps factories** — Return typed objects instead of `any` from the 8 untyped factory functions in `main.ts`.
-2. **Reduce `any` in kiosk-main.ts** — Type state, deps factories, and archive manifest handling.
+1. **Reduce `any` in kiosk-main.ts** — Type state, deps factories, traverse callbacks, and archive manifest handling.
+2. **Extract kiosk-main.ts** — Break the 5,360-line file into focused modules (archive loading, viewer settings, metadata display, mobile UI).
 
 ### Medium-term (quality improvement)
 
-4. **Asset type registry** — Replace 8-way if/else chains with a map pattern; makes adding asset types a one-location change.
-5. **Extract kiosk-main.ts** — Break the 5,364-line file into focused modules (archive loading, viewer settings, metadata display, mobile UI).
+3. **Asset type registry** — Replace 8-way if/else chains with a map pattern; makes adding asset types a one-location change.
 
 ### Long-term (technical debt)
 
-6. **Promise-based asset loading** — Replace polling with Promise resolution.
-7. **Module singleton lifecycle** — Add full reset/dispose to map-picker, recording-manager, etc.
-8. **SHA-256 streaming fix** — Use incremental hashing instead of buffering the full file.
-9. **N+1 collection queries** — Batch API calls in collection-manager.
+4. **Promise-based asset loading** — Replace polling with Promise resolution.
+5. **Module singleton lifecycle** — Add full reset/dispose to map-picker, recording-manager, etc.
+6. **SHA-256 streaming fix** — Use incremental hashing instead of buffering the full file.
+7. **N+1 collection queries** — Batch API calls in collection-manager.

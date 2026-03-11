@@ -1,6 +1,6 @@
 // ===== Three.js & Module Type Imports =====
 
-import type { Scene, PerspectiveCamera, WebGLRenderer, Group, AmbientLight, HemisphereLight, DirectionalLight } from 'three';
+import type { Scene, PerspectiveCamera, WebGLRenderer, Group, AmbientLight, HemisphereLight, DirectionalLight, Object3D } from 'three';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { TransformControls } from 'three/addons/controls/TransformControls.js';
 import type { SplatMesh } from '@sparkjsdev/spark';
@@ -153,6 +153,53 @@ export interface SceneRefs {
     readonly hemisphereLight: HemisphereLight;
     readonly directionalLight1: DirectionalLight;
     readonly directionalLight2: DirectionalLight;
+}
+
+// ===== Editor Deps Factory Return Types =====
+
+/** Superset deps for alignment operations (serves AutoCenterAlignDeps, FitToViewDeps, AlignmentDataDeps, ResetCameraDeps). */
+export interface EditorAlignmentDeps {
+    splatMesh: SplatMesh | null;
+    modelGroup: Group;
+    pointcloudGroup: Group;
+    camera: PerspectiveCamera;
+    controls: OrbitControls;
+    state: AppState;
+    showLoading: (msg: string) => void;
+    hideLoading: () => void;
+    updateTransformInputs: () => void;
+    storeLastPositions: () => void;
+    initialPosition: { x: number; y: number; z: number };
+}
+
+/** Superset deps for file handlers (serves LoadSplatDeps, LoadModelDeps, LoadSTLDeps, LoadDrawingDeps). */
+export interface FileHandlerDeps {
+    scene: Scene;
+    modelGroup: Group;
+    stlGroup: Group;
+    drawingGroup: Group;
+    getSplatMesh: () => SplatMesh | null;
+    setSplatMesh: (mesh: SplatMesh | null) => void;
+    getModelGroup: () => Group;
+    state: AppState;
+    sceneManager: any;
+    archiveCreator: ArchiveCreator | null;
+    callbacks: {
+        onSplatLoaded?: (mesh: SplatMesh, file: File | Blob) => void;
+        onModelLoaded?: (object: Object3D, file: File | Blob, faceCount: number) => void;
+        onSTLLoaded?: (object: Object3D, file: File | Blob, faceCount: number) => void;
+        onDrawingLoaded?: (object: Object3D, file: File | Blob) => void;
+    };
+}
+
+/** Deps for alignment I/O (save/load alignment files). */
+export interface AlignmentIODeps {
+    splatMesh: SplatMesh | null;
+    modelGroup: Group;
+    pointcloudGroup: Group;
+    tauriBridge: any | null;
+    updateTransformInputs: () => void;
+    storeLastPositions: () => void;
 }
 
 // ===== Common UI Callback Shapes =====

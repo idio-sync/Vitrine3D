@@ -295,7 +295,7 @@ export function activateTool(toolName: string): void {
     log.debug(`Tool activated: ${toolName}`);
 }
 
-interface ControlsPanelDeps {
+export interface ControlsPanelDeps {
     state: AppState;
     config?: { controlsMode?: string; showControls?: boolean };
     onWindowResize?: () => void;

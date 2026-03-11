@@ -170,7 +170,13 @@ import {
 } from './modules/event-wiring.js';
 import { UndoManager } from './modules/undo-manager.js';
 import type { MatrixSnapshot } from './modules/undo-manager.js';
-import type { AppState, SceneRefs, ExportDeps, ArchivePipelineDeps, EventWiringDeps, DisplayMode, SelectedObject, TransformMode, DecimationOptions } from './types.js';
+import type { AppState, SceneRefs, ExportDeps, ArchivePipelineDeps, EventWiringDeps, DisplayMode, SelectedObject, TransformMode, DecimationOptions, EditorAlignmentDeps, FileHandlerDeps, AlignmentIODeps } from './types.js';
+import type { AnnotationControllerDeps } from './modules/annotation-controller.js';
+import type { MetadataDeps } from './modules/metadata-manager.js';
+import type { LoadCADDeps } from './modules/cad-loader.js';
+import type { ControlsPanelDeps } from './modules/ui-controller.js';
+import type { FileInputDeps } from './modules/file-input-handlers.js';
+import type { LoadPointcloudDeps } from './modules/file-handlers.js';
 import { generateProxy, estimateFaceCount } from './modules/mesh-decimator.js';
 // kiosk-viewer.js is loaded dynamically in downloadGenericViewer() to avoid
 // blocking the main application if the module fails to load.
@@ -420,7 +426,7 @@ log.info(' DOM elements found:', {
 });
 
 // Helper function to create dependencies object for file-handlers.js
-function createFileHandlerDeps(): any {
+function createFileHandlerDeps(): FileHandlerDeps {
     return {
         scene,
         modelGroup,
@@ -566,7 +572,7 @@ function createFileHandlerDeps(): any {
 }
 
 // Helper function to create dependencies object for alignment.js
-function createAlignmentDeps(): any {
+function createAlignmentDeps(): EditorAlignmentDeps {
     return {
         splatMesh,
         modelGroup,
@@ -583,7 +589,7 @@ function createAlignmentDeps(): any {
 }
 
 // Helper function to create dependencies object for annotation-controller.js
-function createAnnotationControllerDeps(): any {
+function createAnnotationControllerDeps(): AnnotationControllerDeps {
     return {
         annotationSystem,
         showAnnotationPopup: (annotation: any) => {
@@ -598,7 +604,7 @@ function createAnnotationControllerDeps(): any {
 }
 
 // Helper function to create dependencies object for metadata-manager.js
-function createMetadataDeps(): any {
+function createMetadataDeps(): MetadataDeps {
     return {
         state,
         annotationSystem,
@@ -754,7 +760,7 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
 }
 
 // Helper function to create dependencies object for file-input-handlers.ts
-function createCADDeps(): any {
+function createCADDeps(): LoadCADDeps {
     return {
         cadGroup,
         state,
@@ -769,7 +775,7 @@ function createCADDeps(): any {
     };
 }
 
-function createFileInputDeps(): any {
+function createFileInputDeps(): FileInputDeps {
     return {
         validateUserUrl, state, sceneManager, tauriBridge, assets,
         createFileHandlerDeps, createPointcloudDeps, createArchivePipelineDeps,
@@ -3095,7 +3101,7 @@ function updateModelMetalnessView() { updateModelMetalnessFn(modelGroup, state.m
 function updateModelSpecularF0View() { updateModelSpecularF0Fn(modelGroup, state.modelSpecularF0); }
 
 // Alignment I/O (delegated to alignment.js)
-function createAlignmentIODeps(): any {
+function createAlignmentIODeps(): AlignmentIODeps {
     return {
         splatMesh, modelGroup, pointcloudGroup, tauriBridge,
         updateTransformInputs, storeLastPositions
@@ -3203,7 +3209,7 @@ function resetOrbitCenter() {
 }
 
 // Controls panel visibility (delegated to ui-controller.js)
-function createControlsDeps(): any {
+function createControlsDeps(): ControlsPanelDeps {
     return { state, config, onWindowResize };
 }
 
@@ -3389,7 +3395,7 @@ async function loadModelFromUrl(url: string) {
 // Point cloud loading - URL wrapper
 // ============================================================
 
-function createPointcloudDeps(): any {
+function createPointcloudDeps(): LoadPointcloudDeps {
     return {
         pointcloudGroup,
         state,

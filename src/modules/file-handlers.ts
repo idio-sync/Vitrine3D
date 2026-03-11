@@ -110,7 +110,7 @@ const log = Logger.getLogger('file-handlers');
 // TYPE DEFINITIONS
 // =============================================================================
 
-interface LoadSplatDeps {
+export interface LoadSplatDeps {
     scene: THREE.Scene;
     getSplatMesh: () => any;
     setSplatMesh: (mesh: any) => void;
@@ -124,7 +124,7 @@ interface LoadSplatDeps {
     };
 }
 
-interface LoadModelDeps {
+export interface LoadModelDeps {
     modelGroup: THREE.Group;
     state: AppState;
     archiveCreator?: any;
@@ -133,7 +133,7 @@ interface LoadModelDeps {
     };
 }
 
-interface LoadSTLDeps {
+export interface LoadSTLDeps {
     stlGroup: THREE.Group;
     state: AppState;
     callbacks?: {
@@ -188,7 +188,7 @@ interface LoadFullResDeps {
     };
 }
 
-interface LoadPointcloudDeps {
+export interface LoadPointcloudDeps {
     pointcloudGroup: THREE.Group;
     state: AppState;
     archiveCreator?: any;
