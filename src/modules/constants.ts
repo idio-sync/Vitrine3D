@@ -129,6 +129,23 @@ export const MATERIAL = {
 } as const;
 
 // =============================================================================
+// SPARK RENDERER DEFAULTS
+// =============================================================================
+
+export const SPARK_DEFAULTS = {
+    /** Prevent edge popping without excessive overdraw (default: 1.4) */
+    CLIP_XY: 2.0,
+    /** Cull near-invisible splats (3/255 ≈ 0.012) */
+    MIN_ALPHA: 3 / 255,
+    /** Aggressive behind-camera culling */
+    BEHIND_FOVEATE: 0.1,
+    /** ~57° half-angle priority cone (matches ~60° camera FOV) */
+    CONE_FOV: 1.0,
+    /** Deprioritize splats outside view cone → center-out LOD fill */
+    CONE_FOVEATE: 0.3,
+} as const;
+
+// =============================================================================
 // ASSET STATE (used by lazy archive loading)
 // =============================================================================
 

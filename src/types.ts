@@ -13,7 +13,7 @@ import type { LandmarkAlignment } from './modules/alignment.js';
 // ===== Union Types =====
 
 export type DisplayMode = 'splat' | 'model' | 'pointcloud' | 'both' | 'split' | 'stl';
-export type SelectedObject = 'splat' | 'model' | 'pointcloud' | 'stl' | 'cad' | 'drawing' | 'flightpath' | 'colmap' | 'both' | 'none';
+export type SelectedObject = 'splat' | 'mesh' | 'pointcloud' | 'stl' | 'cad' | 'drawing' | 'flightpath' | 'colmap' | 'both' | 'none';
 export type TransformMode = 'translate' | 'rotate' | 'scale';
 export type RotationPivot = 'object' | 'origin';
 export type QualityTier = 'sd' | 'hd';

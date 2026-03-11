@@ -11,7 +11,7 @@ import { ColmapManager } from './modules/colmap-loader.js';
 import { alignCamerasToFlightPath, computeSimilarityTransform, matchCamerasToFlightPoints } from './modules/colmap-alignment.js';
 import { runICP, sampleSplatPoints } from './modules/icp-alignment.js';
 import { ArchiveCreator, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
-import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS, DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET } from './modules/constants.js';
+import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS, DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET, SPARK_DEFAULTS } from './modules/constants.js';
 import { getLodBudget } from './modules/quality-tier.js';
 import { Logger, notify, disposeObject } from './modules/utilities.js';
 import { FlyControls } from './modules/fly-controls.js';
@@ -266,7 +266,7 @@ function validateUserUrl(urlString: string, resourceType: string) {
 // Global state
 const state: AppState = {
     displayMode: config.initialViewMode || 'model', // 'splat', 'model', 'pointcloud', 'both', 'split'
-    selectedObject: 'none', // 'splat', 'model', 'both', 'none'
+    selectedObject: 'none', // 'splat', 'mesh', 'both', 'none'
     transformMode: 'translate', // 'translate', 'rotate', 'scale'
     rotationPivot: 'object', // 'object' | 'origin'
     scaleLockProportions: true, // lock proportions when scaling
@@ -1505,14 +1505,13 @@ async function init() {
     if (sceneManager.rendererType === 'webgl') {
         sparkRenderer = createSparkRenderer({
             renderer: renderer,
-            clipXY: 2.0,           // Prevent edge popping without excessive overdraw (default: 1.4)
+            clipXY: SPARK_DEFAULTS.CLIP_XY,
             autoUpdate: true,
-            minAlpha: 3 / 255,     // Cull near-invisible splats
-            // LOD (Spark 2.0) — budget-based rendering caps splats per frame
+            minAlpha: SPARK_DEFAULTS.MIN_ALPHA,
             lodSplatCount: getLodBudget(QUALITY_TIER.HD),
-            behindFoveate: 0.1,         // Aggressive behind-camera culling
-            coneFov: 1.0,               // ~57° half-angle priority cone (matches ~60° camera FOV)
-            coneFoveate: 0.3,           // Deprioritize splats outside view cone → center-out LOD fill
+            behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
+            coneFov: SPARK_DEFAULTS.CONE_FOV,
+            coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
         });
         scene.add(sparkRenderer);
         log.info(`SparkRenderer created with clipXY=2.0, minAlpha=3/255, lodSplatCount=${getLodBudget(QUALITY_TIER.HD)}`);
@@ -1550,13 +1549,13 @@ async function init() {
         if (sceneManager.rendererType === 'webgl') {
             sparkRenderer = createSparkRenderer({
                 renderer: newRenderer,
-                clipXY: 2.0,
+                clipXY: SPARK_DEFAULTS.CLIP_XY,
                 autoUpdate: true,
-                minAlpha: 3 / 255,
+                minAlpha: SPARK_DEFAULTS.MIN_ALPHA,
                 lodSplatCount: getLodBudget(QUALITY_TIER.HD),
-                behindFoveate: 0.1,
-                coneFov: 1.0,
-                coneFoveate: 0.3,
+                behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
+                coneFov: SPARK_DEFAULTS.CONE_FOV,
+                coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
             });
             scene.add(sparkRenderer);
             log.info(`Renderer changed, SparkRenderer recreated for WebGL (lodSplatCount=${getLodBudget(QUALITY_TIER.HD)})`);
@@ -2263,7 +2262,7 @@ function updateObjectSelectButtons() {
         if (el) el.style.display = visible ? '' : 'none';
     };
     show('btn-select-splat', state.splatLoaded);
-    show('btn-select-model', state.modelLoaded);
+    show('btn-select-mesh', state.modelLoaded);
     show('btn-select-pointcloud', state.pointcloudLoaded);
     show('btn-select-stl', state.stlLoaded);
     show('btn-select-cad', state.cadLoaded);

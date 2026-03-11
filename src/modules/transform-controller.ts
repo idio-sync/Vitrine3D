@@ -67,7 +67,7 @@ interface SetSelectedObjectDeps {
 
 /**
  * Set the selected object for transform controls.
- * @param selection - 'splat', 'model', 'pointcloud', 'stl', 'cad', 'drawing', 'flightpath', 'colmap', 'both', or 'none'
+ * @param selection - 'splat', 'mesh', 'pointcloud', 'stl', 'cad', 'drawing', 'flightpath', 'colmap', 'both', or 'none'
  * @param deps - { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup, state }
  */
 export function setSelectedObject(selection: SelectedObject, deps: SetSelectedObjectDeps): void {
@@ -75,7 +75,7 @@ export function setSelectedObject(selection: SelectedObject, deps: SetSelectedOb
     state.selectedObject = selection;
 
     // Update button states
-    (['splat', 'model', 'pointcloud', 'stl', 'cad', 'drawing', 'flightpath', 'colmap', 'both', 'none'] as const).forEach(s => {
+    (['splat', 'mesh', 'pointcloud', 'stl', 'cad', 'drawing', 'flightpath', 'colmap', 'both', 'none'] as const).forEach(s => {
         const btn = document.getElementById(`btn-select-${s}`);
         if (btn) btn.classList.toggle('active', s === selection);
     });
@@ -90,7 +90,7 @@ export function setSelectedObject(selection: SelectedObject, deps: SetSelectedOb
     try {
         if (selection === 'splat' && splatMesh) {
             transformControls.attach(splatMesh);
-        } else if (selection === 'model' && modelGroup && modelGroup.children.length > 0) {
+        } else if (selection === 'mesh' && modelGroup && modelGroup.children.length > 0) {
             transformControls.attach(modelGroup);
         } else if (selection === 'pointcloud' && pointcloudGroup && pointcloudGroup.children.length > 0) {
             transformControls.attach(pointcloudGroup);
@@ -504,7 +504,7 @@ export function resetTransform(deps: ResetTransformDeps): void {
         splatMesh.position.set(0, 0, 0);
         splatMesh.rotation.set(0, 0, 0);
     }
-    if ((sel === 'model' || sel === 'both') && modelGroup) {
+    if ((sel === 'mesh' || sel === 'both') && modelGroup) {
         modelGroup.position.set(0, 0, 0);
         modelGroup.rotation.set(0, 0, 0);
     }

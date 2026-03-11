@@ -25,7 +25,7 @@ import { FlyControls } from './fly-controls.js';
 import { AnnotationSystem } from './annotation-system.js';
 import { MeasurementSystem } from './measurement-system.js';
 import { CrossSectionTool } from './cross-section.js';
-import { CAMERA, ASSET_STATE, QUALITY_TIER, WALKTHROUGH, COLORS } from './constants.js';
+import { CAMERA, ASSET_STATE, QUALITY_TIER, WALKTHROUGH, COLORS, SPARK_DEFAULTS } from './constants.js';
 import { WalkthroughEngine } from './walkthrough-engine.js';
 import type { WalkthroughPlaybackState } from './walkthrough-engine.js';
 import type { Walkthrough, WalkthroughStop } from '../types.js';
@@ -72,7 +72,7 @@ import { initCollectionsBrowser, showCollectionsBrowser, handleViewerBack } from
 // TYPE DEFINITIONS
 // =============================================================================
 
-type FileCategory = 'splat' | 'model' | 'pointcloud' | 'archive';
+type FileCategory = 'splat' | 'mesh' | 'pointcloud' | 'archive';
 type SheetSnap = 'peek' | 'half' | 'full';
 
 interface KioskState {
@@ -248,14 +248,14 @@ const assetLoadingPromises = new Map<string, Promise<boolean>>();
 
 const FILE_CATEGORIES = {
     archive:    ['.ddim', '.a3d', '.a3z'],
-    model:      ['.glb', '.gltf', '.obj', '.stl'],
+    mesh:       ['.glb', '.gltf', '.obj', '.stl'],
     splat:      ['.ply', '.splat', '.ksplat', '.spz', '.sog'],
     pointcloud: ['.e57']
 };
 /**
  * Classify a filename into its asset category.
  * @param {string} filename
- * @returns {'splat'|'model'|'pointcloud'|'archive'|null}
+ * @returns {'splat'|'mesh'|'pointcloud'|'archive'|null}
  */
 function classifyFile(filename: string): FileCategory | null {
     const ext = '.' + filename.split('.').pop().toLowerCase();
@@ -310,14 +310,13 @@ async function _doInit(): Promise<void> {
         const lodBudget = getLodBudget(state.qualityResolved);
         sparkRenderer = createSparkRenderer({
             renderer: renderer,
-            clipXY: 2.0,           // Prevent edge popping without excessive overdraw (default: 1.4)
+            clipXY: SPARK_DEFAULTS.CLIP_XY,
             autoUpdate: true,
-            minAlpha: 3 / 255,     // Cull near-invisible splats
-            // LOD (Spark 2.0) — device-tier-aware splat budget
+            minAlpha: SPARK_DEFAULTS.MIN_ALPHA,
             lodSplatCount: lodBudget,
-            behindFoveate: 0.1,    // Aggressive behind-camera culling
-            coneFov: 1.0,          // ~57° half-angle priority cone (matches ~60° camera FOV)
-            coneFoveate: 0.3,      // Deprioritize splats outside view cone → center-out LOD fill
+            behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
+            coneFov: SPARK_DEFAULTS.CONE_FOV,
+            coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
         });
         scene.add(sparkRenderer);
         log.info(`SparkRenderer created with clipXY=2.0, minAlpha=3/255, lodSplatCount=${lodBudget}`);
@@ -352,13 +351,13 @@ async function _doInit(): Promise<void> {
         const lodBudget = getLodBudget(state.qualityResolved);
         sparkRenderer = createSparkRenderer({
             renderer: newRenderer,
-            clipXY: 2.0,
+            clipXY: SPARK_DEFAULTS.CLIP_XY,
             autoUpdate: true,
-            minAlpha: 3 / 255,
+            minAlpha: SPARK_DEFAULTS.MIN_ALPHA,
             lodSplatCount: lodBudget,
-            behindFoveate: 0.1,
-            coneFov: 1.0,
-            coneFoveate: 0.3,
+            behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
+            coneFov: SPARK_DEFAULTS.CONE_FOV,
+            coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
         });
         scene.add(sparkRenderer);
         log.info('Renderer changed to', sceneManager!.rendererType, `- SparkRenderer recreated (lodSplatCount=${lodBudget})`);
@@ -971,7 +970,7 @@ function handlePickedFiles(fileList: FileList | File[], pickerElement: HTMLEleme
 /**
  * Load a single direct (non-archive) file into the kiosk viewer.
  * @param {File} mainFile - The primary file
- * @param {'splat'|'model'|'pointcloud'} category - Detected category
+ * @param {'splat'|'mesh'|'pointcloud'} category - Detected category
  * @param {File[]} allFiles - All dropped files (for OBJ+MTL pairs)
  */
 async function handleDirectFile(mainFile: File, category: FileCategory, allFiles: File[]): Promise<void> {
@@ -983,7 +982,7 @@ async function handleDirectFile(mainFile: File, category: FileCategory, allFiles
 
         if (category === 'splat') {
             await loadSplatFromFile(mainFile, createSplatDeps());
-        } else if (category === 'model') {
+        } else if (category === 'mesh') {
             await loadModelFromFile(allFiles as any || [mainFile], createModelDeps());
         } else if (category === 'pointcloud') {
             await loadPointcloudFromFile(mainFile, createPointcloudDeps());
@@ -2660,7 +2659,7 @@ function createLayoutDeps() {
         getAutoRotate: () => !!(controls && controls.autoRotate),
         getFlyModeActive: () => state.flyModeActive,
         sparkRenderer,
-        getSplatBudget: () => (sparkRenderer ? sparkRenderer.lodSplatCount : 500000),
+        getSplatBudget: () => (sparkRenderer ? sparkRenderer.lodSplatCount : getLodBudget(state.qualityResolved)),
         setSplatBudget: (n: number) => { if (sparkRenderer) sparkRenderer.lodSplatCount = n; },
     };
 }
@@ -5365,6 +5364,6 @@ function animate(): void {
 
         sceneManager.updateFPS(fpsElement);
     } catch (e) {
-        console.warn('[animate] frame error:', e);
+        log.warn('Frame error:', e);
     }
 }

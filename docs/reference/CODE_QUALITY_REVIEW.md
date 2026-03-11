@@ -26,7 +26,7 @@
 |----------|-------|-------|------|------------------|
 | **CRITICAL** | 9 | 9 | 0 | Phases 1–2 (`936259b`–`53cbbfb`) |
 | **HIGH** | 32 | 32 | 0 | Phases 1–11 (`936259b`–latest) |
-| **MEDIUM** | 69 | ~18 | ~51 | Phases 8, 12–14 + incidental fixes during HIGH work |
+| **MEDIUM** | 69 | ~25 | ~44 | Phases 8, 12–15 + incidental fixes during HIGH work |
 | **LOW** | 48 | 0 | 48 | Not addressed |
 
 All CRITICAL and HIGH issues were resolved across 10 phases committed to the `dev` branch on 2026-03-11.
@@ -156,6 +156,18 @@ All 32 HIGH issues have been fixed.
 | # | Issue | File | Fix |
 |---|-------|------|-----|
 | H-TS4 | 51 uses of `any` in kiosk-main.ts | `kiosk-main.ts` | Eliminated ~51 explicit `any` type annotations: typed module vars (`WebGLRenderer`, `OrbitControls`, `SparkRenderer`, `SplatMesh`, `FlightPathManager`), all `catch` clauses to `unknown`, `.traverse()` callbacks to `Object3D`, material forEach to `Material`/`MeshStandardMaterial` casts, light queries with type guards, manifest params to `Record<string, unknown>`, state interface fields, image entries, kiosk deps factories (inference). 26 `as any` casts remain for cross-module type mismatches. |
+
+### Phase 15 — Quick Wins (7 MEDIUM fixed)
+
+| # | Issue | File | Fix |
+|---|-------|------|-----|
+| M-QW1 | Scale input sync duplicated 4x | `event-wiring.ts` | Extracted `writeScaleInputs()` helper, replaced all 4 sites |
+| M-QW2 | `'model'` vs `'mesh'` asset type inconsistency | 8 files | Renamed `'model'` → `'mesh'` in `SelectedObject` context across types.ts, transform-controller, event-wiring, ui-controller, main.ts, editor HTML, kiosk-main (`FileCategory` + `FILE_CATEGORIES`) |
+| M-QW3 | Stale magic `500000` LOD budget fallback | `kiosk-main.ts` | Replaced with `getLodBudget(state.qualityResolved)` |
+| M-QW4 | Raw `console.warn` in animate loop | `kiosk-main.ts` | Replaced with `log.warn()` |
+| M-QW5 | SparkRenderer magic numbers duplicated 4x | `constants.ts`, `kiosk-main.ts`, `main.ts` | Added `SPARK_DEFAULTS` constants, replaced all 4 creation sites |
+| M-QW6 | No init guard in recording-manager | `recording-manager.ts` | Already guarded — `startRecording` checks `!_deps`, composite frame guards `!_deps` |
+| M-QW7 | No init guard in walkthrough-editor | `walkthrough-editor.ts` | Already guarded — `editorDeps` checked at line 221 |
 
 ---
 

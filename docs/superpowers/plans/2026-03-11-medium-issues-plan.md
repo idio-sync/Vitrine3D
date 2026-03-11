@@ -17,208 +17,47 @@
 
 ---
 
-## Phase 15: Quick Wins
+## Phase 15: Quick Wins ✅
 
 > 7 tasks, ~2 hours total, low risk. All independent — can be parallelized.
+> **Status: COMPLETE** — All tasks done. Build passes, 423 tests pass.
 
-### Task 15.1: Extract `readScaleInputs()` helper in event-wiring.ts
+### Task 15.1: Extract `writeScaleInputs()` helper in event-wiring.ts ✅
 
-**Files:**
-- Modify: `src/modules/event-wiring.ts`
+Extracted `writeScaleInputs(value, excludeAxis?)` helper. Replaced 3 identical scale-sync loops + 1 variant (exclude-axis) across slider handlers. 4 sites consolidated.
 
-Four identical `['x','y','z'].forEach(a => document.getElementById('transform-scale-' + a))` loops exist at lines ~192, ~209, ~294, ~516.
+### Task 15.2: Canonicalize `'mesh'` vs `'model'` asset type naming ✅
 
-- [ ] **Step 1: Read event-wiring.ts and locate all 4 loops**
+Renamed `'model'` → `'mesh'` in `SelectedObject` context across 8 files:
+- `types.ts` — `SelectedObject` type union
+- `transform-controller.ts` — comment, button list, branching (2 sites)
+- `event-wiring.ts` — button binding, selection comparisons (6 sites)
+- `ui-controller.ts` — selection comparisons (2 sites)
+- `main.ts` — comment + button show call
+- `editor/index.html` — button ID + label (`btn-select-mesh`)
+- `kiosk-main.ts` — `FileCategory` type, `FILE_CATEGORIES` key, `handleDirectFile` comparison + JSDoc
 
-Grep for `transform-scale-` to find all instances.
+`DisplayMode` values (`'model'` meaning "show mesh only") intentionally left unchanged — different concept.
 
-- [ ] **Step 2: Extract a `readScaleInputs()` helper**
+### Task 15.3: Replace magic LOD budget literal with `getLodBudget()` ✅
 
-```typescript
-function readScaleInputs(): { x: number; y: number; z: number } | null {
-    const xEl = document.getElementById('transform-scale-x') as HTMLInputElement | null;
-    const yEl = document.getElementById('transform-scale-y') as HTMLInputElement | null;
-    const zEl = document.getElementById('transform-scale-z') as HTMLInputElement | null;
-    if (!xEl || !yEl || !zEl) return null;
-    return { x: parseFloat(xEl.value) || 1, y: parseFloat(yEl.value) || 1, z: parseFloat(zEl.value) || 1 };
-}
-```
+Replaced stale `500000` fallback with `getLodBudget(state.qualityResolved)` in kiosk deps factory.
 
-Verify the exact loop body before extracting — each site may have slight variations.
+### Task 15.4: Replace raw console.warn with Logger ✅
 
-- [ ] **Step 3: Replace all 4 sites with the helper**
+Replaced `console.warn('[animate] frame error:', e)` with `log.warn('Frame error:', e)` in kiosk animate loop.
 
-- [ ] **Step 4: Verify build**
+### Task 15.5: Extract magic numbers to named constants ✅
 
-Run: `npm run build`
+Added `SPARK_DEFAULTS` to `constants.ts` with 5 named constants (`CLIP_XY`, `MIN_ALPHA`, `BEHIND_FOVEATE`, `CONE_FOV`, `CONE_FOVEATE`). Replaced 4 SparkRenderer creation sites (2 in kiosk-main.ts, 2 in main.ts).
 
-- [ ] **Step 5: Commit**
+### Task 15.6: Add init guard to recording-manager.ts ✅ (already guarded)
 
-```bash
-git add src/modules/event-wiring.ts
-git commit -m "refactor: extract readScaleInputs helper in event-wiring (M-QW1)"
-```
+Verified: `startRecording` already checks `if (!_deps)` at line 69; composite frame function guards at line 286. No additional work needed.
 
-### Task 15.2: Canonicalize `'mesh'` vs `'model'` asset type naming
+### Task 15.7: Add init guard to walkthrough-editor.ts ✅ (already guarded)
 
-**Files:**
-- Modify: `src/modules/transform-controller.ts`
-- Modify: `src/modules/event-wiring.ts`
-- Modify: `src/modules/ui-controller.ts`
-- Possibly: `src/modules/constants.js`, `src/types.ts`
-
-The canonical name is `'mesh'` (used by archive-pipeline.ts, archive-loader.ts, asset-store.ts). `transform-controller.ts` and `event-wiring.ts` use `'model'` for the same concept.
-
-**IMPORTANT:** This is a **behavioral rename** — any string comparison like `assetType === 'model'` must become `assetType === 'mesh'`. Search exhaustively before committing.
-
-- [ ] **Step 1: Grep the entire `src/` for `'model'` as an asset type string**
-
-Search for patterns like `=== 'model'`, `'model'` in asset type contexts, `assetType.*model`. Exclude unrelated uses (e.g., `modelGroup`, `loadModel`, `model.glb`).
-
-- [ ] **Step 2: Rename in transform-controller.ts**
-
-Replace `'model'` asset type references with `'mesh'` in all branching logic.
-
-- [ ] **Step 3: Rename in event-wiring.ts**
-
-Same — `'model'` → `'mesh'` in asset type contexts only.
-
-- [ ] **Step 4: Rename in ui-controller.ts if applicable**
-
-Check for `'model'` in `ASSET_BUTTON_MAP` or display mode logic.
-
-- [ ] **Step 5: Update any TypeScript type unions**
-
-If `AssetType` or similar unions list `'model'`, update to `'mesh'`.
-
-- [ ] **Step 6: Verify build + tests**
-
-Run: `npm run build && npm test`
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add src/modules/transform-controller.ts src/modules/event-wiring.ts src/modules/ui-controller.ts
-git commit -m "refactor: canonicalize asset type 'model' → 'mesh' (M-QW2)"
-```
-
-### Task 15.3: Replace magic LOD budget literal with `getLodBudget()`
-
-**Files:**
-- Modify: `src/modules/kiosk-main.ts`
-
-Line ~2663 has a hardcoded `500000` that duplicates the SD return value of `getLodBudget()`.
-
-- [ ] **Step 1: Read the context around line 2663**
-
-- [ ] **Step 2: Replace with `getLodBudget('sd')` or import the constant**
-
-- [ ] **Step 3: Verify build**
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add src/modules/kiosk-main.ts
-git commit -m "refactor: replace magic LOD budget with getLodBudget() (M-QW3)"
-```
-
-### Task 15.4: Replace raw console.error with Logger
-
-**Files:**
-- Modify: `src/modules/kiosk-main.ts`
-
-Line ~5368 uses `console.error` in the frame error handler. Replace with `log.error()`.
-
-- [ ] **Step 1: Read context and replace**
-
-- [ ] **Step 2: Verify build**
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add src/modules/kiosk-main.ts
-git commit -m "fix: replace raw console.error with Logger (M-QW4)"
-```
-
-### Task 15.5: Extract magic numbers to named constants
-
-**Files:**
-- Modify: `src/modules/kiosk-main.ts`
-- Modify: `src/modules/constants.js` (add new constants)
-
-Key magic number clusters:
-- Progress percentages: `20`, `30`, `40`, `70`, `0.3`, `0.5` in archive loading progress
-- `setTimeout` delays: `80`, `100`, `1400`, `500` not in TIMING constants
-- SparkRenderer tuning: `2.0`, `3/255`, `0.1`, `1.0`, `0.3` — renderer params
-
-- [ ] **Step 1: Grep kiosk-main.ts for numeric literals in setTimeout and progress**
-
-- [ ] **Step 2: Identify which numbers are truly magic vs. contextually obvious**
-
-Only extract numbers used in 2+ places or whose meaning is non-obvious. Don't extract things like `0` or `1` that are self-evident.
-
-- [ ] **Step 3: Add named constants to constants.js**
-
-Group under `KIOSK_TIMING` and `SPARK_DEFAULTS` sections.
-
-- [ ] **Step 4: Replace magic numbers in kiosk-main.ts**
-
-- [ ] **Step 5: Verify build**
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/modules/kiosk-main.ts src/modules/constants.js
-git commit -m "refactor: extract kiosk magic numbers to named constants (M-QW5)"
-```
-
-### Task 15.6: Add init guard to recording-manager.ts
-
-**Files:**
-- Modify: `src/modules/recording-manager.ts`
-
-Module uses `_deps` that can be `null` before `initRecordingManager()` is called. Add a guard that throws a descriptive error.
-
-- [ ] **Step 1: Read recording-manager.ts, identify all functions that use `_deps`**
-
-- [ ] **Step 2: Add an `assertInitialized()` guard**
-
-```typescript
-function assertInitialized(): asserts _deps is NonNullable<typeof _deps> {
-    if (!_deps) throw new Error('recording-manager: not initialized — call initRecordingManager() first');
-}
-```
-
-Call at the top of each public function that uses `_deps`.
-
-- [ ] **Step 3: Verify build**
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add src/modules/recording-manager.ts
-git commit -m "fix: add init guard to recording-manager singleton (M-QW6)"
-```
-
-### Task 15.7: Add init guard to walkthrough-editor.ts
-
-**Files:**
-- Modify: `src/modules/walkthrough-editor.ts`
-
-Same pattern as 15.6 — module state initialized inline but deps set lazily.
-
-- [ ] **Step 1: Read walkthrough-editor.ts, identify guard needs**
-
-- [ ] **Step 2: Add guard if applicable**
-
-- [ ] **Step 3: Verify build**
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add src/modules/walkthrough-editor.ts
-git commit -m "fix: add init guard to walkthrough-editor singleton (M-QW7)"
-```
+Verified: `editorDeps` already guarded at line 221 (`if (!select || !editorDeps) return`). No additional work needed.
 
 ---
 
@@ -598,7 +437,7 @@ Likely additional candidates:
 
 | Phase | Tasks | Effort | Risk | Depends On |
 |-------|-------|--------|------|------------|
-| 15 — Quick Wins | 7 | ~2 hours | Low | None |
+| 15 — Quick Wins | 7 | ~2 hours | Low | None | ✅ Done |
 | 16 — file-handlers split | 1 | ~2 hours | Medium | None |
 | 17 — Asset Registry | 2 | ~4 hours | Medium-High | Phase 15.2 |
 | 18 — Moderate Refactors | 3 | ~3 hours | Medium | None (18.1 independent) |

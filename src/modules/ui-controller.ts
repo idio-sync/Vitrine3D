@@ -422,7 +422,7 @@ export function updateTransformInputs(
     if (selection !== 'none') {
         let src: any = null;
         if (selection === 'splat' && splatMesh) src = splatMesh;
-        else if (selection === 'model' && modelGroup) src = modelGroup;
+        else if (selection === 'mesh' && modelGroup) src = modelGroup;
         else if (selection === 'pointcloud' && pointcloudGroup) src = pointcloudGroup;
         else if (selection === 'stl' && stlGroup) src = stlGroup;
         else if (selection === 'cad' && cadGroup) src = cadGroup;
@@ -490,7 +490,7 @@ export function updateTransformPaneSelection(
     if (showValues) {
         let src: any = null;
         if (selection === 'splat' && splatMesh) src = splatMesh;
-        else if (selection === 'model' && modelGroup) src = modelGroup;
+        else if (selection === 'mesh' && modelGroup) src = modelGroup;
         else if (selection === 'pointcloud' && pointcloudGroup) src = pointcloudGroup;
         else if (selection === 'stl' && stlGroup) src = stlGroup;
         else if (selection === 'cad' && cadGroup) src = cadGroup;

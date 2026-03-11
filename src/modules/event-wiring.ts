@@ -35,6 +35,15 @@ import type { EventWiringDeps, AppState } from '@/types.js';
 
 const log = Logger.getLogger('event-wiring');
 
+/** Write a uniform scale value to all three transform-scale inputs. */
+function writeScaleInputs(value: string, excludeAxis?: string): void {
+    for (const a of ['x', 'y', 'z']) {
+        if (a === excludeAxis) continue;
+        const el = document.getElementById(`transform-scale-${a}`) as HTMLInputElement | null;
+        if (el) el.value = value;
+    }
+}
+
 // ============================================================
 // MAIN EXPORT
 // ============================================================
@@ -75,7 +84,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 if (sceneRefs.splatMesh) {
                     deps.transform.setSelectedObject('splat' as any);
                 } else if (sceneRefs.modelGroup && sceneRefs.modelGroup.children.length > 0) {
-                    deps.transform.setSelectedObject('model' as any);
+                    deps.transform.setSelectedObject('mesh' as any);
                 }
             }
             // Cross-section: activate when entering, deactivate when leaving
@@ -187,11 +196,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (sceneRefs.splatMesh) {
             sceneRefs.splatMesh.scale.setScalar(scale);
             // Sync transform pane XYZ inputs
-            const formatted = scale.toFixed(3);
-            for (const a of ['x', 'y', 'z']) {
-                const el = document.getElementById(`transform-scale-${a}`) as HTMLInputElement | null;
-                if (el) el.value = formatted;
-            }
+            writeScaleInputs(scale.toFixed(3));
         }
     });
 
@@ -204,11 +209,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (sceneRefs.modelGroup) {
             sceneRefs.modelGroup.scale.setScalar(scale);
             // Sync transform pane XYZ inputs
-            const formatted = scale.toFixed(3);
-            for (const a of ['x', 'y', 'z']) {
-                const el = document.getElementById(`transform-scale-${a}`) as HTMLInputElement | null;
-                if (el) el.value = formatted;
-            }
+            writeScaleInputs(scale.toFixed(3));
         }
     });
 
@@ -289,11 +290,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (sceneRefs.pointcloudGroup) {
             sceneRefs.pointcloudGroup.scale.setScalar(scale);
             // Sync transform pane XYZ inputs
-            const formatted = scale.toFixed(3);
-            for (const a of ['x', 'y', 'z']) {
-                const el = document.getElementById(`transform-scale-${a}`) as HTMLInputElement | null;
-                if (el) el.value = formatted;
-            }
+            writeScaleInputs(scale.toFixed(3));
         }
     });
 
@@ -363,7 +360,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     // ─── Transform controls ─────────────────────────────────
     addListener('btn-select-none', 'click', () => deps.transform.setSelectedObject('none' as any));
     addListener('btn-select-splat', 'click', () => deps.transform.setSelectedObject('splat' as any));
-    addListener('btn-select-model', 'click', () => deps.transform.setSelectedObject('model' as any));
+    addListener('btn-select-mesh', 'click', () => deps.transform.setSelectedObject('mesh' as any));
     addListener('btn-select-pointcloud', 'click', () => deps.transform.setSelectedObject('pointcloud' as any));
     addListener('btn-select-stl', 'click', () => deps.transform.setSelectedObject('stl' as any));
     addListener('btn-select-cad', 'click', () => deps.transform.setSelectedObject('cad' as any));
@@ -413,7 +410,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             const sel = state.selectedObject;
             if (sel === 'splat' && sceneRefs.splatMesh) {
                 (sceneRefs.splatMesh as any).position[axis] = val;
-            } else if (sel === 'model' && sceneRefs.modelGroup) {
+            } else if (sel === 'mesh' && sceneRefs.modelGroup) {
                 (sceneRefs.modelGroup as any).position[axis] = val;
             } else if (sel === 'pointcloud' && sceneRefs.pointcloudGroup) {
                 (sceneRefs.pointcloudGroup as any).position[axis] = val;
@@ -446,7 +443,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             const sel = state.selectedObject;
             if (sel === 'splat' && sceneRefs.splatMesh) {
                 (sceneRefs.splatMesh as any).rotation[axis] = rad;
-            } else if (sel === 'model' && sceneRefs.modelGroup) {
+            } else if (sel === 'mesh' && sceneRefs.modelGroup) {
                 (sceneRefs.modelGroup as any).rotation[axis] = rad;
             } else if (sel === 'pointcloud' && sceneRefs.pointcloudGroup) {
                 (sceneRefs.pointcloudGroup as any).rotation[axis] = rad;
@@ -484,7 +481,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             };
             if (sel === 'splat' && sceneRefs.splatMesh) {
                 apply(sceneRefs.splatMesh);
-            } else if (sel === 'model' && sceneRefs.modelGroup) {
+            } else if (sel === 'mesh' && sceneRefs.modelGroup) {
                 apply(sceneRefs.modelGroup);
             } else if (sel === 'pointcloud' && sceneRefs.pointcloudGroup) {
                 apply(sceneRefs.pointcloudGroup);
@@ -510,15 +507,9 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             }
             if (uniform) {
                 // Sync the other two axis inputs
-                const formatted = val.toFixed(2);
-                for (const a of ['x', 'y', 'z'] as const) {
-                    if (a !== axis) {
-                        const el = document.getElementById(`transform-scale-${a}`) as HTMLInputElement | null;
-                        if (el) el.value = formatted;
-                    }
-                }
+                writeScaleInputs(val.toFixed(2), axis);
                 // Sync sidebar scale slider
-                const sliderId = sel === 'splat' ? 'splat-scale' : sel === 'model' ? 'model-scale' : null;
+                const sliderId = sel === 'splat' ? 'splat-scale' : sel === 'mesh' ? 'model-scale' : null;
                 if (sliderId) {
                     const slider = document.getElementById(sliderId) as HTMLInputElement | null;
                     if (slider) slider.value = String(val);
@@ -1029,7 +1020,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                     if (sceneRefs.splatMesh) {
                         deps.transform.setSelectedObject('splat' as any);
                     } else if (sceneRefs.modelGroup && sceneRefs.modelGroup.children.length > 0) {
-                        deps.transform.setSelectedObject('model' as any);
+                        deps.transform.setSelectedObject('mesh' as any);
                     }
                 }
                 break;
