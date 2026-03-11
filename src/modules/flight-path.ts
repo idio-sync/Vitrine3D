@@ -758,7 +758,11 @@ export class FlightPathManager {
     seekTo(t: number): void {
         const pathData = this._playbackPathId ? this.paths.find(p => p.id === this._playbackPathId) : null;
         if (!pathData) return;
-        this._playbackTime = t * pathData.durationS * 1000;
+        const trimmed = this.getTrimmedPoints(pathData);
+        if (trimmed.length < 2) return;
+        const start = trimmed[0].timestamp;
+        const end = trimmed[trimmed.length - 1].timestamp;
+        this._playbackTime = start + t * (end - start);
         this.updatePlaybackPosition();
     }
 
@@ -777,8 +781,13 @@ export class FlightPathManager {
 
     get playbackProgress(): number {
         const pathData = this._playbackPathId ? this.paths.find(p => p.id === this._playbackPathId) : null;
-        if (!pathData || pathData.durationS === 0) return 0;
-        return Math.min(1, this._playbackTime / (pathData.durationS * 1000));
+        if (!pathData) return 0;
+        const trimmed = this.getTrimmedPoints(pathData);
+        if (trimmed.length < 2) return 0;
+        const start = trimmed[0].timestamp;
+        const end = trimmed[trimmed.length - 1].timestamp;
+        if (end === start) return 0;
+        return Math.min(1, (this._playbackTime - start) / (end - start));
     }
 
     /** Register a callback for playback position updates. */
@@ -821,7 +830,8 @@ export class FlightPathManager {
         const pathData = this._playbackPathId ? this.paths.find(p => p.id === this._playbackPathId) : null;
         if (!pathData || !this._playbackMarker) return;
 
-        const points = pathData.points;
+        const points = this.getTrimmedPoints(pathData);
+        if (points.length === 0) return;
         const t = this._playbackTime;
 
         // Find the two points we're between
