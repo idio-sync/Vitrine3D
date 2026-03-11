@@ -1261,6 +1261,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
 
     addListener('btn-align-from-camera-data', 'click', async () => {
         console.log('[ICP-DEBUG] Align button clicked');
+        alert('ICP-DEBUG: Align button clicked');
         if (deps.colmap.alignFromCameraData) {
             console.log('[ICP-DEBUG] Calling alignFromCameraData...');
             await deps.colmap.alignFromCameraData();
