@@ -175,7 +175,7 @@ These are tracked as future improvement items rather than blockers.
 
 ## 5. Open — MEDIUM Issues
 
-~59 MEDIUM issues remain. Grouped by theme:
+~35 distinct MEDIUM issues remain (revised from original ~59 after Phases 8–14 fixes). Detailed plan: `docs/superpowers/plans/2026-03-11-medium-issues-plan.md`. Grouped by theme:
 
 ### Editor/Kiosk Code Duplication (~10 issues)
 
@@ -260,9 +260,9 @@ The editor (`main.ts`) and kiosk (`kiosk-main.ts`) share significant logic but i
 
 Eight asset types (splat, model, pointcloud, STL, CAD, drawing, flightpath, colmap) create long if/else chains in transform-controller, event-wiring, ui-controller, and archive-pipeline. A registry or map-based dispatch pattern would reduce this from O(asset types × call sites) to O(1) per addition.
 
-### Polling Instead of Events
+### Polling Instead of Events — Fixed (Phase 14)
 
-Asset loading completion is detected by polling state every 50ms. Converting to Promise-based resolution would be cleaner and more efficient.
+Asset loading completion was detected by polling state every 50ms. Converted to stored-promise pattern in Phase 14 — concurrent callers now await the same in-flight promise.
 
 ### Module Singletons Without Lifecycle
 
@@ -274,16 +274,19 @@ Partially addressed in Phase 12: `map-picker.ts` now has `destroyMapPicker()` (c
 
 ### Next up (high impact)
 
-1. **Reduce `any` in kiosk-main.ts** — Type state, deps factories, traverse callbacks, and archive manifest handling.
-2. **Extract kiosk-main.ts** — Break the 5,360-line file into focused modules (archive loading, viewer settings, metadata display, mobile UI).
+1. ~~**Reduce `any` in kiosk-main.ts**~~ — Done (Phase 11). 51 explicit `any` replaced; 26 `as any` casts remain.
+2. **Extract kiosk-main.ts** — Break the 5,360-line file into focused modules (Phase 19 in MEDIUM plan).
 
 ### Medium-term (quality improvement)
 
-3. **Asset type registry** — Replace 8-way if/else chains with a map pattern; makes adding asset types a one-location change.
+3. **Asset type registry** — Replace 8-way if/else chains with a map pattern (Phase 17 in MEDIUM plan).
+4. **file-handlers.ts split** — Per-asset-type loader modules (Phase 16 in MEDIUM plan).
 
 ### Long-term (technical debt)
 
-4. **Promise-based asset loading** — Replace polling with Promise resolution.
-5. **Module singleton lifecycle** — Add full reset/dispose to map-picker, recording-manager, etc.
-6. **SHA-256 streaming fix** — Use incremental hashing instead of buffering the full file.
-7. **N+1 collection queries** — Batch API calls in collection-manager.
+5. ~~**Promise-based asset loading**~~ — Done (Phase 14). Stored-promise pattern replaces polling.
+6. ~~**Module singleton lifecycle**~~ — Done (Phase 12). `destroyMapPicker()` and `resetCollectionManager()` added.
+7. ~~**SHA-256 streaming fix**~~ — Done (Phase 13). Uses `blob.stream().getReader()`.
+8. ~~**N+1 collection queries**~~ — Done (Phase 13). `Promise.all` parallel fetch.
+
+See `docs/superpowers/plans/2026-03-11-medium-issues-plan.md` for the full remaining MEDIUM issues plan (Phases 15–20).
