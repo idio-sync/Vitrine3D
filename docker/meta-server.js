@@ -1736,6 +1736,105 @@ function handleRenameArchive(req, res, hash) {
     });
 }
 
+// --- Version History API Handlers ---
+
+/**
+ * GET /api/archives/:hash/versions — list backup versions for an archive
+ */
+function handleListVersions(req, res, hash) {
+    if (!requireAuth(req, res)) return;
+    const row = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+    if (!row) return sendJson(res, 404, { error: 'Archive not found' });
+
+    const versions = db.prepare(
+        'SELECT id, size, created_at FROM archive_versions WHERE archive_id = ? ORDER BY created_at DESC, id DESC'
+    ).all(row.id);
+
+    sendJson(res, 200, { versions });
+}
+
+/**
+ * GET /api/archives/:hash/versions/:id/download — download a specific backup
+ */
+function handleDownloadVersion(req, res, hash, versionId) {
+    if (!requireAuth(req, res)) return;
+    const row = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+    if (!row) return sendJson(res, 404, { error: 'Archive not found' });
+
+    const version = db.prepare(
+        'SELECT * FROM archive_versions WHERE id = ? AND archive_id = ?'
+    ).get(versionId, row.id);
+    if (!version) return sendJson(res, 404, { error: 'Version not found' });
+
+    // Path traversal protection: resolved path must be under ARCHIVES_DIR/history/
+    const fullPath = path.join(ARCHIVES_DIR, version.filename);
+    try {
+        const realPath = fs.realpathSync(fullPath);
+        const realHistoryDir = fs.realpathSync(path.join(ARCHIVES_DIR, 'history'));
+        if (!realPath.startsWith(realHistoryDir + '/') && !realPath.startsWith(realHistoryDir + '\\')) {
+            return sendJson(res, 403, { error: 'Access denied' });
+        }
+    } catch {
+        return sendJson(res, 404, { error: 'Backup file not found on disk' });
+    }
+
+    const stat = fs.statSync(fullPath);
+    const downloadName = path.basename(version.filename);
+    res.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': 'attachment; filename="' + downloadName + '"',
+        'Content-Length': stat.size,
+    });
+    fs.createReadStream(fullPath).pipe(res);
+}
+
+/**
+ * DELETE /api/archives/:hash/versions/:id — delete a specific backup
+ */
+function handleDeleteVersion(req, res, hash, versionId) {
+    if (!requireAuth(req, res)) return;
+    if (!checkCsrf(req, res)) return;
+    const row = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+    if (!row) return sendJson(res, 404, { error: 'Archive not found' });
+
+    const version = db.prepare(
+        'SELECT * FROM archive_versions WHERE id = ? AND archive_id = ?'
+    ).get(versionId, row.id);
+    if (!version) return sendJson(res, 404, { error: 'Version not found' });
+
+    // Path traversal protection
+    const fullPath = path.join(ARCHIVES_DIR, version.filename);
+    try {
+        const realPath = fs.realpathSync(fullPath);
+        const realHistoryDir = fs.realpathSync(path.join(ARCHIVES_DIR, 'history'));
+        if (!realPath.startsWith(realHistoryDir + '/') && !realPath.startsWith(realHistoryDir + '\\')) {
+            return sendJson(res, 403, { error: 'Access denied' });
+        }
+    } catch {
+        // File already gone from disk — still delete DB row
+    }
+
+    // Delete file from disk
+    try { fs.unlinkSync(fullPath); } catch {}
+
+    // Delete DB row + audit
+    const actor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
+    db.transaction(() => {
+        db.prepare('DELETE FROM archive_versions WHERE id = ?').run(versionId);
+        db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
+          .run(actor, 'delete_version', hash, JSON.stringify({ version_id: versionId }), req.headers['x-real-ip'] || null);
+    })();
+
+    // Clean up empty history subdirectory
+    const histSubdir = path.dirname(fullPath);
+    try {
+        const remaining = fs.readdirSync(histSubdir);
+        if (remaining.length === 0) fs.rmdirSync(histSubdir);
+    } catch {}
+
+    sendJson(res, 200, { deleted: true });
+}
+
 // --- Collection API Handlers ---
 
 /**
@@ -3031,6 +3130,24 @@ const server = http.createServer((req, res) => {
                 handleCompleteChunk(req, res, chunkCompleteMatch[1].toLowerCase());
                 return;
             }
+        }
+
+        // Match /api/archives/:hash/versions/:id/download
+        const versionDownloadMatch = pathname.match(/^\/api\/archives\/([a-f0-9]{16})\/versions\/(\d+)\/download$/);
+        if (versionDownloadMatch && req.method === 'GET') {
+            return handleDownloadVersion(req, res, versionDownloadMatch[1], parseInt(versionDownloadMatch[2], 10));
+        }
+
+        // Match /api/archives/:hash/versions/:id (DELETE)
+        const versionIdMatch = pathname.match(/^\/api\/archives\/([a-f0-9]{16})\/versions\/(\d+)$/);
+        if (versionIdMatch && req.method === 'DELETE') {
+            return handleDeleteVersion(req, res, versionIdMatch[1], parseInt(versionIdMatch[2], 10));
+        }
+
+        // Match /api/archives/:hash/versions (GET)
+        const versionsMatch = pathname.match(/^\/api\/archives\/([a-f0-9]{16})\/versions$/);
+        if (versionsMatch && req.method === 'GET') {
+            return handleListVersions(req, res, versionsMatch[1]);
         }
 
         // Match /api/archives/:hash/regenerate
