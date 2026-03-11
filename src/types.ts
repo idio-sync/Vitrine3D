@@ -1,3 +1,15 @@
+// ===== Three.js & Module Type Imports =====
+
+import type { Scene, PerspectiveCamera, WebGLRenderer, Group, AmbientLight, HemisphereLight, DirectionalLight } from 'three';
+import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import type { TransformControls } from 'three/addons/controls/TransformControls.js';
+import type { SplatMesh } from '@sparkjsdev/spark';
+import type { FlyControls } from './modules/fly-controls.js';
+import type { AnnotationSystem } from './modules/annotation-system.js';
+import type { ArchiveCreator } from './modules/archive-creator.js';
+import type { MeasurementSystem } from './modules/measurement-system.js';
+import type { LandmarkAlignment } from './modules/alignment.js';
+
 // ===== Union Types =====
 
 export type DisplayMode = 'splat' | 'model' | 'pointcloud' | 'both' | 'split' | 'stl';
@@ -119,28 +131,28 @@ export interface AppState {
 // ===== Scene References =====
 
 export interface SceneRefs {
-    readonly scene: any;              // THREE.Scene
-    readonly camera: any;             // THREE.PerspectiveCamera
-    readonly renderer: any;           // THREE.WebGLRenderer
-    readonly controls: any;           // OrbitControls
-    readonly transformControls: any;  // TransformControls
-    readonly splatMesh: any;          // SplatMesh | null
-    readonly modelGroup: any;         // THREE.Group
-    readonly pointcloudGroup: any;    // THREE.Group
-    readonly stlGroup: any;           // THREE.Group
-    readonly cadGroup: any;           // THREE.Group
-    readonly drawingGroup: any;       // THREE.Group
-    readonly flightPathGroup: any;    // THREE.Group
-    readonly colmapGroup: any;        // THREE.Group
-    readonly flyControls: any;        // FlyControls | null
-    readonly annotationSystem: any;   // AnnotationSystem | null
-    readonly archiveCreator: any;     // ArchiveCreator | null
-    readonly measurementSystem: any;  // MeasurementSystem | null
-    readonly landmarkAlignment: any;  // LandmarkAlignment | null
-    readonly ambientLight: any;       // THREE.AmbientLight
-    readonly hemisphereLight: any;    // THREE.HemisphereLight
-    readonly directionalLight1: any;  // THREE.DirectionalLight
-    readonly directionalLight2: any;  // THREE.DirectionalLight
+    readonly scene: Scene;
+    readonly camera: PerspectiveCamera;
+    readonly renderer: WebGLRenderer;
+    readonly controls: OrbitControls;
+    readonly transformControls: TransformControls;
+    readonly splatMesh: SplatMesh | null;
+    readonly modelGroup: Group;
+    readonly pointcloudGroup: Group;
+    readonly stlGroup: Group;
+    readonly cadGroup: Group;
+    readonly drawingGroup: Group;
+    readonly flightPathGroup: Group;
+    readonly colmapGroup: Group;
+    readonly flyControls: FlyControls | null;
+    readonly annotationSystem: AnnotationSystem | null;
+    readonly archiveCreator: ArchiveCreator | null;
+    readonly measurementSystem: MeasurementSystem | null;
+    readonly landmarkAlignment: LandmarkAlignment | null;
+    readonly ambientLight: AmbientLight;
+    readonly hemisphereLight: HemisphereLight;
+    readonly directionalLight1: DirectionalLight;
+    readonly directionalLight2: DirectionalLight;
 }
 
 // ===== Common UI Callback Shapes =====

@@ -25,11 +25,11 @@
 | Severity | Total | Fixed | Open | Fix Commit Range |
 |----------|-------|-------|------|------------------|
 | **CRITICAL** | 9 | 9 | 0 | Phases 1–2 (`936259b`–`53cbbfb`) |
-| **HIGH** | 32 | 30 | 2 | Phases 1–8 (`936259b`–`d3e1cd1`) |
+| **HIGH** | 32 | 31 | 1 | Phases 1–9 (`936259b`–latest) |
 | **MEDIUM** | 69 | ~10 | ~59 | Phase 8 + incidental fixes during HIGH work |
 | **LOW** | 48 | 0 | 48 | Not addressed |
 
-All CRITICAL issues and 30 of 32 HIGH issues were resolved across 8 phases committed to the `dev` branch on 2026-03-11.
+All CRITICAL issues and 31 of 32 HIGH issues were resolved across 9 phases committed to the `dev` branch on 2026-03-11.
 
 ---
 
@@ -139,17 +139,22 @@ All 9 CRITICAL issues have been fixed.
 | M-DUP4 | `errMsg` duplicated in 2 modules | `file-input-handlers.ts`, `kiosk-main.ts` | Added canonical version to `utilities.ts`; removed local copies |
 | M-DUP5 | `escapeHtml` imported from `collection-page.ts` instead of `utilities.ts` | `library-page.ts`, `collections-browser.ts` | Updated imports to use `utilities.ts` |
 
+### Phase 9 — Type SceneRefs (1 fixed)
+
+| # | Issue | File | Fix |
+|---|-------|------|-----|
+| H-TS1 | `SceneRefs` is 25+ fields of `any` despite `@types/three` installed | `types.ts:121-144` | Replaced all `any` with proper Three.js types (`Scene`, `PerspectiveCamera`, `WebGLRenderer`, `Group`, lights) and project types (`SplatMesh`, `FlyControls`, `AnnotationSystem`, `ArchiveCreator`, `MeasurementSystem`, `LandmarkAlignment`) |
+
 ---
 
 ## 4. Open — HIGH Issues
 
-2 HIGH issues remain unresolved.
+1 HIGH issue remains unresolved (3 type safety items grouped as one effort).
 
-### Type Safety (3)
+### Type Safety (2)
 
 | # | Issue | File | Impact |
 |---|-------|------|--------|
-| H-TS1 | `SceneRefs` is 25+ fields of `any` despite `@types/three` installed | `types.ts:123-146` | IDE support and compile-time safety lost for all scene objects |
 | H-TS3 | 6 deps factories return `any` — entire dependency chain unchecked | `main.ts:423-772` | Type errors in module calls not caught at compile time |
 | H-TS4 | 87 uses of `any` in kiosk-main.ts | `kiosk-main.ts` | Kiosk bundle has no type safety |
 
@@ -238,7 +243,7 @@ These are optional cleanup items that don't affect functionality or security.
 
 ### The `any` Epidemic
 
-The single biggest quality debt. `SceneRefs`, `AppState`, all deps factories, kiosk state, and Spark.js types all use `any` extensively. TypeScript is configured and `@types/three` is installed, but types are bypassed everywhere. This makes the TypeScript migration incomplete — the compiler catches almost nothing.
+Significant progress made: `AppState` index signature removed (Phase 7), `SceneRefs` fully typed with Three.js and project types (Phase 9). Remaining: deps factories in `main.ts` still return `any`, kiosk state and Spark.js integration points use `any`. The TypeScript migration is partially complete — scene objects are now type-checked, but the dependency chain and kiosk bundle still bypass the compiler.
 
 ### Duplication Across Editor/Kiosk
 
@@ -262,9 +267,8 @@ Several modules use mutable module-scope state without reset/dispose functions, 
 
 ### Next up (high impact, remaining HIGH issues)
 
-1. **Type `SceneRefs` with Three.js types** — Replace 25+ `any` fields with proper types from `@types/three`.
-2. **Type deps factories** — Return typed objects instead of `any` from the 6 factory functions in `main.ts`.
-3. **Reduce `any` in kiosk-main.ts** — Type state, deps factories, and archive manifest handling.
+1. **Type deps factories** — Return typed objects instead of `any` from the 8 untyped factory functions in `main.ts`.
+2. **Reduce `any` in kiosk-main.ts** — Type state, deps factories, and archive manifest handling.
 
 ### Medium-term (quality improvement)
 
