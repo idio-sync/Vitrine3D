@@ -26,7 +26,7 @@
 |----------|-------|-------|------|------------------|
 | **CRITICAL** | 9 | 9 | 0 | Phases 1–2 (`936259b`–`53cbbfb`) |
 | **HIGH** | 32 | 32 | 0 | Phases 1–11 (`936259b`–latest) |
-| **MEDIUM** | 69 | ~25 | ~44 | Phases 8, 12–15 + incidental fixes during HIGH work |
+| **MEDIUM** | 69 | ~26 | ~43 | Phases 8, 12–16 + incidental fixes during HIGH work |
 | **LOW** | 48 | 0 | 48 | Not addressed |
 
 All CRITICAL and HIGH issues were resolved across 10 phases committed to the `dev` branch on 2026-03-11.
@@ -224,7 +224,7 @@ Modules with mutable state that's never reset:
 |--------|-------|----------------------|
 | `kiosk-main.ts` | 5,364 | Archive loading, viewer settings, metadata display, mobile UI, toolbar |
 | `metadata-manager.ts` | 2,940 | Display, collection, camera constraints |
-| `file-handlers.ts` | 2,593 | Per-format loaders into separate files |
+| `file-handlers.ts` | 2,593 | Per-format loaders into separate files — **done** (Phase 16): split into 6 modules under `loaders/` (splat-loader, mesh-loader, drawing-loader, pointcloud-loader, mesh-material-updates, archive-asset-loader); file-handlers.ts is now a ~55-line re-export hub |
 
 ### Polling Instead of Events — **fixed** (Phase 14)
 
@@ -292,7 +292,7 @@ Partially addressed in Phase 12: `map-picker.ts` now has `destroyMapPicker()` (c
 ### Medium-term (quality improvement)
 
 3. **Asset type registry** — Replace 8-way if/else chains with a map pattern (Phase 17 in MEDIUM plan).
-4. **file-handlers.ts split** — Per-asset-type loader modules (Phase 16 in MEDIUM plan).
+4. ~~**file-handlers.ts split**~~ — Done (Phase 16). Split into 6 focused modules under `src/modules/loaders/`.
 
 ### Long-term (technical debt)
 

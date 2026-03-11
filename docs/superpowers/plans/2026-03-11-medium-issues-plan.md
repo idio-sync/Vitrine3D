@@ -61,60 +61,22 @@ Verified: `editorDeps` already guarded at line 221 (`if (!select || !editorDeps)
 
 ---
 
-## Phase 16: file-handlers.ts Split
+## Phase 16: file-handlers.ts Split ✅
 
 > 1 task, moderate effort (~2 hours), medium risk. The cleanest decomposition since functions already have typed deps interfaces.
+> **Status: COMPLETE** — Split into 6 modules. Build passes, 423 tests pass.
 
-### Task 16.1: Split file-handlers.ts by asset type
+### Task 16.1: Split file-handlers.ts by asset type ✅
 
-**Files:**
-- Modify: `src/modules/file-handlers.ts` (2,601 lines → coordinator + re-exports)
-- Create: `src/modules/loaders/splat-loader.ts`
-- Create: `src/modules/loaders/mesh-loader.ts`
-- Create: `src/modules/loaders/pointcloud-loader.ts`
-- Create: `src/modules/loaders/drawing-loader.ts`
-- Create: `src/modules/loaders/stl-loader.ts`
+Split the 2,601-line `file-handlers.ts` into 6 focused modules under `src/modules/loaders/`:
+- `splat-loader.ts` (~250 lines) — Spark SplatMesh loading (.ply, .spz, .splat, .ksplat, .rad, .sog)
+- `mesh-loader.ts` (~580 lines) — GLTF/GLB, OBJ (multi-part), STL, DRC loading + DracoLoader singleton
+- `drawing-loader.ts` (~260 lines) — DXF parsing + drawing load functions
+- `pointcloud-loader.ts` (~250 lines) — E57 lazy loading + point cloud updates
+- `mesh-material-updates.ts` (~330 lines) — opacity, wireframe, texture toggle, matcap, normals, PBR debug views
+- `archive-asset-loader.ts` (~570 lines) — archive processing, lazy extraction, quality tier swap
 
-- [ ] **Step 1: Map the current file structure**
-
-Read file-handlers.ts and identify per-asset-type function boundaries. Document which functions belong to each loader and their shared dependencies.
-
-- [ ] **Step 2: Create `src/modules/loaders/` directory**
-
-- [ ] **Step 3: Extract splat-loader.ts**
-
-Move `loadSplatFromBlobUrl`, `loadSplatFromUrl`, `loadSplatFromFile`, `getSplatFileType` and related helpers. Each function already takes typed `LoadSplatDeps`. Re-export from file-handlers.ts for backward compatibility.
-
-- [ ] **Step 4: Extract mesh-loader.ts**
-
-Move `loadModelFromBlobUrl`, `loadModelFromUrl`, `loadModelFromFile`, `loadGLTF`, `loadOBJFromUrl`. Uses `LoadModelDeps`.
-
-- [ ] **Step 5: Extract pointcloud-loader.ts**
-
-Move `loadPointcloudFromBlobUrl`, `loadPointcloudFromUrl`, `loadPointcloudFromFile`. Uses `LoadPointcloudDeps`.
-
-- [ ] **Step 6: Extract drawing-loader.ts and stl-loader.ts**
-
-Smaller — `loadDrawingFromBlobUrl`/`loadDrawingFromUrl` and `loadSTLFromBlobUrl`/`loadSTLFromUrl`.
-
-- [ ] **Step 7: Update file-handlers.ts to re-export from loaders**
-
-file-handlers.ts becomes a coordinator that re-exports all loader functions (preserving the existing import surface for all consumers).
-
-- [ ] **Step 8: Check for circular imports**
-
-Run: `npm run build` — Vite will warn about circular dependencies.
-
-- [ ] **Step 9: Verify build + tests**
-
-Run: `npm run build && npm test`
-
-- [ ] **Step 10: Commit**
-
-```bash
-git add src/modules/file-handlers.ts src/modules/loaders/
-git commit -m "refactor: split file-handlers.ts into per-asset-type loaders (M-MR4)"
-```
+`file-handlers.ts` is now a ~55-line re-export hub. Zero consumer files changed their import paths. STL was kept in mesh-loader (shared Three.js addon imports, small function count) rather than a separate file.
 
 ---
 
@@ -438,7 +400,7 @@ Likely additional candidates:
 | Phase | Tasks | Effort | Risk | Depends On |
 |-------|-------|--------|------|------------|
 | 15 — Quick Wins | 7 | ~2 hours | Low | None | ✅ Done |
-| 16 — file-handlers split | 1 | ~2 hours | Medium | None |
+| 16 — file-handlers split | 1 | ~2 hours | Medium | None | ✅ Done |
 | 17 — Asset Registry | 2 | ~4 hours | Medium-High | Phase 15.2 |
 | 18 — Moderate Refactors | 3 | ~3 hours | Medium | None (18.1 independent) |
 | 19 — kiosk-main decomp | 4 | ~6 hours | High | None (but benefits from 16, 17) |
