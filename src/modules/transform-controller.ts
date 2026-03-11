@@ -45,6 +45,12 @@ const lastColmapScale = new THREE.Vector3(1, 1, 1);
 // Quaternion tracking for pivot rotation
 const lastSplatQuat = new THREE.Quaternion();
 const lastModelQuat = new THREE.Quaternion();
+const lastPointcloudQuat = new THREE.Quaternion();
+const lastStlQuat = new THREE.Quaternion();
+const lastCadQuat = new THREE.Quaternion();
+const lastDrawingQuat = new THREE.Quaternion();
+const lastFlightpathQuat = new THREE.Quaternion();
+const lastColmapQuat = new THREE.Quaternion();
 
 interface SetSelectedObjectDeps {
     transformControls: any; // TODO: type when @types/three is installed (TransformControls)
@@ -405,31 +411,37 @@ export function storeLastPositions(deps: StoreLastPositionsDeps): void {
         lastPointcloudPosition.copy(pointcloudGroup.position);
         lastPointcloudRotation.copy(pointcloudGroup.rotation);
         lastPointcloudScale.copy(pointcloudGroup.scale);
+        lastPointcloudQuat.copy(pointcloudGroup.quaternion);
     }
     if (stlGroup) {
         lastStlPosition.copy(stlGroup.position);
         lastStlRotation.copy(stlGroup.rotation);
         lastStlScale.copy(stlGroup.scale);
+        lastStlQuat.copy(stlGroup.quaternion);
     }
     if (cadGroup) {
         lastCadPosition.copy(cadGroup.position);
         lastCadRotation.copy(cadGroup.rotation);
         lastCadScale.copy(cadGroup.scale);
+        lastCadQuat.copy(cadGroup.quaternion);
     }
     if (drawingGroup) {
         lastDrawingPosition.copy(drawingGroup.position);
         lastDrawingRotation.copy(drawingGroup.rotation);
         lastDrawingScale.copy(drawingGroup.scale);
+        lastDrawingQuat.copy(drawingGroup.quaternion);
     }
     if (flightpathGroup) {
         lastFlightpathPosition.copy(flightpathGroup.position);
         lastFlightpathRotation.copy(flightpathGroup.rotation);
         lastFlightpathScale.copy(flightpathGroup.scale);
+        lastFlightpathQuat.copy(flightpathGroup.quaternion);
     }
     if (colmapGroup) {
         lastColmapPosition.copy(colmapGroup.position);
         lastColmapRotation.copy(colmapGroup.rotation);
         lastColmapScale.copy(colmapGroup.scale);
+        lastColmapQuat.copy(colmapGroup.quaternion);
     }
 }
 
@@ -711,7 +723,14 @@ export function applyPivotRotation(deps: ApplyPivotRotationDeps): void {
     if (!obj) return;
 
     // Determine which last-quaternion to use
-    const lastQuat = (obj === splatMesh) ? lastSplatQuat : lastModelQuat;
+    let lastQuat = lastModelQuat;
+    if (obj === splatMesh) lastQuat = lastSplatQuat;
+    else if (obj === pointcloudGroup) lastQuat = lastPointcloudQuat;
+    else if (obj === stlGroup) lastQuat = lastStlQuat;
+    else if (obj === cadGroup) lastQuat = lastCadQuat;
+    else if (obj === drawingGroup) lastQuat = lastDrawingQuat;
+    else if (obj === flightpathGroup) lastQuat = lastFlightpathQuat;
+    else if (obj === colmapGroup) lastQuat = lastColmapQuat;
 
     // Compute delta: deltaQ = currentQ * inverse(lastQ)
     const currentQuat = obj.quaternion.clone();
@@ -749,11 +768,7 @@ export function applyPivotRotation(deps: ApplyPivotRotationDeps): void {
     }
 
     // Update stored quaternion for next delta
-    if (obj === splatMesh) {
-        lastSplatQuat.copy(currentQuat);
-    } else {
-        lastModelQuat.copy(currentQuat);
-    }
+    lastQuat.copy(currentQuat);
 }
 
 // =============================================================================
