@@ -313,15 +313,6 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-center-at-origin', 'click', deps.alignment.centerAtOrigin);
     addListener('btn-reset-alignment', 'click', deps.alignment.resetAlignment);
 
-    // ─── Share ───────────────────────────────────────────────
-    addListener('btn-share', 'click', deps.share.copyShareLink);
-
-    // ─── Preview kiosk mode ──────────────────────────────────
-    addListener('btn-preview-kiosk', 'click', () => {
-        const url = new URL(window.location.href);
-        url.searchParams.set('kiosk', 'true');
-        window.open(url.toString(), '_blank');
-    });
 
     // ─── Camera buttons ──────────────────────────────────────
     addListener('btn-reset-camera', 'click', deps.camera.resetCamera);
