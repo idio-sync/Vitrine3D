@@ -1062,6 +1062,7 @@ function createEventWiringDeps(): EventWiringDeps {
                 if (flightPathManager) flightPathManager.setVisible(visible);
             },
         },
+        validateUrl: validateUserUrl,
     };
 }
 

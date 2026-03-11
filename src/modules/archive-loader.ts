@@ -611,11 +611,16 @@ export class ArchiveLoader {
         const compressedData = await this._readBytes(dataOffset, entry.compressedSize);
 
         // Decompress based on compression method
+        const MAX_UNCOMPRESSED_SIZE = 2 * 1024 * 1024 * 1024; // 2 GB per-file safety limit
         let fileData: Uint8Array;
         if (entry.method === 0) {
             // Stored (no compression) — use bytes directly
             fileData = compressedData;
         } else if (entry.method === 8) {
+            // Guard against decompression bombs
+            if (entry.uncompressedSize > MAX_UNCOMPRESSED_SIZE) {
+                throw new Error(`File "${filename}" uncompressed size (${entry.uncompressedSize} bytes) exceeds safety limit`);
+            }
             // Deflate — decompress with fflate inflateSync
             fileData = inflateSync(compressedData);
         } else {

@@ -711,6 +711,10 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-load-bg-image-url', 'click', async () => {
         const url = prompt('Enter background image URL:');
         if (!url || !sceneManager) return;
+        if (deps.validateUrl) {
+            const result = deps.validateUrl(url, 'background image');
+            if (!result.valid) { notify.error(result.error || 'Invalid URL'); return; }
+        }
         try {
             await sceneManager.loadBackgroundImage(url);
             const statusRow = document.getElementById('bg-image-status');
@@ -934,6 +938,10 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-load-hdr-url', 'click', async () => {
         const url = prompt('Enter HDR file URL (.hdr):');
         if (!url) return;
+        if (deps.validateUrl) {
+            const result = deps.validateUrl(url, 'HDR file');
+            if (!result.valid) { notify.error(result.error || 'Invalid URL'); return; }
+        }
         showLoading('Loading HDR environment...');
         try {
             await sceneManager.loadHDREnvironment(url);

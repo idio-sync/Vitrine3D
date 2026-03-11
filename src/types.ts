@@ -499,6 +499,7 @@ export interface EventWiringDeps {
         toggleSfm: (visible: boolean) => void;
         toggleFlightPath: (visible: boolean) => void;
     };
+    validateUrl?: (url: string, resourceType: string) => { valid: boolean; url: string; error: string };
 }
 
 export interface PostProcessingEffectConfig {

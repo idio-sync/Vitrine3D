@@ -55,6 +55,13 @@ export function getWalkthroughData(): Walkthrough {
 }
 
 export function setWalkthroughData(wt: Walkthrough): void {
+    // Sanitize transition values from untrusted archive data
+    const validTransitions = ['fly', 'fade', 'cut'];
+    for (const stop of wt.stops) {
+        if (!validTransitions.includes(stop.transition)) {
+            stop.transition = 'fly';
+        }
+    }
     walkthrough = wt;
     syncSettingsToDOM();
     renderStopList();
@@ -124,7 +131,7 @@ export function renderStopList(): void {
             <span class="wt-stop-badge">${i + 1}</span>
             <div class="wt-stop-info">
                 <span class="wt-stop-name">${escapeHtml(stop.title || 'Untitled')}</span>
-                <span class="wt-stop-meta">${stop.transition}${stop.annotation_id ? ' \u00b7 linked' : ''}</span>
+                <span class="wt-stop-meta">${escapeHtml(stop.transition)}${stop.annotation_id ? ' \u00b7 linked' : ''}</span>
             </div>
             <span class="wt-stop-drag-handle" title="Drag to reorder">&#8942;&#8942;</span>
         </div>

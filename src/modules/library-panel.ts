@@ -227,7 +227,13 @@ function uploadFileChunked(file: File): Promise<Archive> {
 
     return (async () => {
         let next = 0;
-        const worker = async () => { while (next < totalChunks) await uploadChunk(next++); };
+        const worker = async () => {
+            while (true) {
+                const idx = next++;  // capture index synchronously before await yields
+                if (idx >= totalChunks) break;
+                await uploadChunk(idx);
+            }
+        };
         await Promise.all(Array.from({ length: Math.min(CHUNK_CONCURRENCY, totalChunks) }, worker));
         return complete();
     })();

@@ -377,7 +377,7 @@ async function _doInit(): Promise<void> {
         }
         // Highlight the corresponding sidebar item
         document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
-        const item = document.querySelector(`.kiosk-anno-item[data-anno-id="${annotation.id}"]`);
+        const item = document.querySelector(`.kiosk-anno-item[data-anno-id="${CSS.escape(annotation.id)}"]`);
         if (item) item.classList.add('active');
 
         // Notify layout module of selection
@@ -3988,9 +3988,9 @@ function hasValue(val: any): boolean {
     return true;
 }
 
-function escapeHtml(str: any): string {
-    if (typeof str !== 'string') str = String(str);
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function escapeHtml(str: unknown): string {
+    const s = typeof str === 'string' ? str : String(str ?? '');
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 /** Check if a URL scheme is safe for use in href/src attributes */
@@ -4939,7 +4939,7 @@ function showMobileAnnotationDetail(annotation: Annotation): void {
     }
 
     // Find annotation number from marker
-    const marker = document.querySelector(`.annotation-marker[data-annotation-id="${annotation.id}"]`);
+    const marker = document.querySelector(`.annotation-marker[data-annotation-id="${CSS.escape(annotation.id)}"]`);
     const number = marker ? marker.textContent.trim() : '?';
 
     // Render full content
@@ -4959,7 +4959,7 @@ function showMobileAnnotationDetail(annotation: Annotation): void {
         </div>
         <div class="mobile-anno-header">
             <span class="mobile-anno-number">${number}</span>
-            <h2 class="mobile-anno-title">${annotation.title || 'Untitled'}</h2>
+            <h2 class="mobile-anno-title">${escapeHtml(annotation.title || 'Untitled')}</h2>
         </div>
         <div class="mobile-anno-body">${bodyHtml}</div>
     `;
@@ -5031,7 +5031,7 @@ function navigateAnnotation(direction: number): void {
 
     // Update sidebar list active state
     document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
-    const item = document.querySelector(`.kiosk-anno-item[data-anno-id="${newAnno.id}"]`);
+    const item = document.querySelector(`.kiosk-anno-item[data-anno-id="${CSS.escape(newAnno.id)}"]`);
     if (item) item.classList.add('active');
 
     // Show single marker if annotations are globally hidden

@@ -6,7 +6,7 @@
  */
 
 import { captureScreenshot } from './archive-creator.js';
-import { Logger, notify } from './utilities.js';
+import { Logger, notify, escapeHtml } from './utilities.js';
 import { dracoCompressGLB } from './mesh-decimator.js';
 import { formatFileSize, getActiveProfile, VALIDATION_RULES } from './metadata-manager.js';
 import { validateSIP, toManifestCompliance } from './sip-validator.js';
@@ -102,7 +102,7 @@ function showComplianceDialog(result: SIPValidationResult): Promise<boolean> {
         if (errorSection) errorSection.classList.toggle('hidden', result.errors.length === 0);
         if (errorList) {
             errorList.innerHTML = result.errors
-                .map(f => `<li><span class="finding-label">${f.label}</span><span class="finding-msg">${f.message}</span></li>`)
+                .map(f => `<li><span class="finding-label">${escapeHtml(f.label)}</span><span class="finding-msg">${escapeHtml(f.message)}</span></li>`)
                 .join('');
         }
 
@@ -110,7 +110,7 @@ function showComplianceDialog(result: SIPValidationResult): Promise<boolean> {
         if (warningSection) warningSection.classList.toggle('hidden', result.warnings.length === 0);
         if (warningList) {
             warningList.innerHTML = result.warnings
-                .map(f => `<li><span class="finding-label">${f.label}</span><span class="finding-msg">${f.message}</span></li>`)
+                .map(f => `<li><span class="finding-label">${escapeHtml(f.label)}</span><span class="finding-msg">${escapeHtml(f.message)}</span></li>`)
                 .join('');
         }
 
