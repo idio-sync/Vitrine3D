@@ -18,8 +18,8 @@
 | **OBJ** | Yes | Yes | Yes |
 | **FBX** | Yes (export) | Yes | No |
 | **USDZ** | Yes (iOS AR) | Yes | No |
-| **STL** | Yes | Yes | No |
-| **PLY** | No | Yes | No |
+| **STL** | Yes | Yes | Yes |
+| **PLY** | No | Yes | Yes |
 | **STEP/IGES (CAD)** | Yes | No | Yes (occt-import-js) |
 | **E57 (point cloud)** | No | No | Yes (WASM loader) |
 | **Gaussian splats (.ply/.sog)** | No | No | Yes (Spark.js) |
@@ -34,8 +34,8 @@
 | **Rendering engine** | Custom WebGL viewer | Custom WebGL (proprietary) | Three.js 0.183 + Spark.js 2.0 |
 | **PBR materials** | Yes | Yes (metalness + specular workflows) | Yes (via Three.js) |
 | **Environment maps** | HDR (hosted on GCS) | IBL + 3 dynamic lights | HDR environment lighting |
-| **Tone mapping** | Neutral (configurable exposure) | Multiple options | Three.js tone mapping |
-| **Post-processing** | Sharpen filter | SSR, SSAO, DOF, bloom, chromatic aberration, vignette | None |
+| **Tone mapping** | Neutral (configurable exposure) | Multiple options | Configurable (None, Linear, Reinhard, Cineon, ACESFilmic, AgX) + adjustable exposure |
+| **Post-processing** | Sharpen filter | SSR, SSAO, DOF, bloom, chromatic aberration, vignette | SSAO, bloom, sharpen, vignette, chromatic aberration, color balance, grain (custom uber-shader) |
 | **Shadows** | Yes | Real-time shadows | Yes |
 | **Animation** | Limited | Skeleton, solid, morph target | No |
 | **Gaussian splatting** | No | No | Yes (Spark.js LOD — 500K SD / 1.5M HD budget) |
@@ -45,8 +45,8 @@
 
 | | VNTANA | Sketchfab | Vitrine3D |
 |---|---|---|---|
-| **Auto mesh decimation** | Yes — patented (98% reduction, e.g. 11.5M → 239K polys) | Server-side processing on upload | None (manual prep expected) |
-| **Texture compression** | Yes (automated) | Yes (Draco, KTX2) | No |
+| **Mesh decimation** | Yes — patented, automatic (98% reduction, e.g. 11.5M → 239K polys) | Server-side processing on upload | Yes — manual button (meshoptimizer WASM, configurable presets, texture downscaling) |
+| **Mesh compression** | Yes (automated) | Yes (Draco, KTX2) | Yes — Draco compression via gltf-transform (edgebreaker method, per-mesh toggle in editor + export) |
 | **LOD system** | Likely (enterprise pipeline) | Progressive loading | Spark.js LOD for splats only |
 | **Scene graph preservation** | Yes | Yes | N/A (single-asset focus) |
 
@@ -55,7 +55,7 @@
 | Feature | VNTANA | Sketchfab | Vitrine3D |
 |---|---|---|---|
 | **Annotations/hotspots** | Yes (animated hotspots) | Yes (5–100 depending on plan) | Yes (3D raycasted, unlimited) |
-| **Measurements** | Unknown | Community add-on | No |
+| **Measurements** | Unknown | Community add-on | Yes (point-to-point 3D distance, multi-unit: m/ft/in/cm) |
 | **AR viewing** | Yes (WebXR + USDZ) | Yes (Premium+) | No |
 | **VR viewing** | WebXR | WebVR (Vive, Oculus, Cardboard) | No |
 | **Fullscreen** | Yes | Yes | Yes |
@@ -64,7 +64,7 @@
 | **First-person controls** | No | No | Yes (WASD + mouse-look) |
 | **Flight path overlay** | No | No | Yes (DJI CSV, KML, SRT) |
 | **Themes/white-label** | Bulk-editable with governance lock | Premium+ (white-label) | 5 built-in themes (editorial, gallery, exhibit, minimal, industrial) |
-| **QR code sharing** | Yes | No | No |
+| **QR code sharing** | Yes | No | Yes (client-side SVG QR code generation in share dialog) |
 | **Embeddable** | Yes (iframe) | Yes (iframe, oEmbed) | Yes (URL params, self-hosted) |
 | **Offline viewing** | No | No (requires internet) | Yes (.ddim archive + Tauri desktop) |
 
@@ -72,7 +72,7 @@
 
 | | VNTANA | Sketchfab | Vitrine3D |
 |---|---|---|---|
-| **API** | REST API + NPM package | REST API + Viewer API (Premium+) | None (file-based) |
+| **API** | REST API + NPM package | REST API + Viewer API (Premium+) | REST API (archive CRUD, collections, media, storage, settings, audit log, chunked upload) |
 | **DAM/PIM/PLM integration** | Yes (core selling point) | Limited (Enterprise) | No |
 | **CMS embedding** | Yes (automated publishing) | iframe embed | URL param config |
 | **Team/collaboration** | QA workflows, approval chains, permissions | Teams + folders (Premium+) | Single-user (editor) |
@@ -112,18 +112,20 @@
 - Multiple themed presentation modes for different client contexts
 - First-person WASD navigation for walkthrough-style viewing
 - CAD format support (STEP, IGES via occt-import-js WASM)
+- Built-in mesh decimation (meshoptimizer WASM) + Draco compression (gltf-transform)
+- Point-to-point 3D measurement tool with multi-unit support
+- QR code sharing (client-side SVG generation, zero dependencies)
+- REST API for archive CRUD, collections, media, storage management, and audit logging
 
 ## Key Gaps for Vitrine3D
 
 | Gap | Impact | Difficulty |
 |---|---|---|
-| No automatic mesh optimization | Users must pre-optimize assets | High (would need server-side decimation pipeline) |
-| No texture compression (KTX2/Draco) | Larger download sizes for mesh-heavy scenes | Medium |
+| No *automatic* mesh decimation | Decimation exists but requires manual button press (not triggered on upload) | Medium (could auto-trigger on archive import) |
 | No AR/VR/WebXR | Can't preview in physical space | Medium-High |
-| No REST API | Can't integrate with external systems | Medium |
 | No animation support | Static scenes only | Low priority (scan data is static) |
 | No analytics/view tracking | No insight into client engagement | Low-Medium |
-| Limited post-processing | Less cinematic rendering options | Low (Three.js EffectComposer available) |
+| No DOF or SSR post-processing | Missing depth-of-field and screen-space reflections vs Sketchfab | Low priority |
 
 ## Summary
 
