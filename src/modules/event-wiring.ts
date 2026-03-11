@@ -31,7 +31,7 @@ import {
     updateModelTextures
 } from './file-handlers.js';
 import * as postProcessing from './post-processing.js';
-import type { EventWiringDeps } from '@/types.js';
+import type { EventWiringDeps, AppState } from '@/types.js';
 
 const log = Logger.getLogger('event-wiring');
 
@@ -1293,7 +1293,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
  * roughness, metalness, specularF0.
  */
 function clearDebugViews(state: any, deps: EventWiringDeps, activeView: string): void {
-    const views: Record<string, { stateKey: string; cbId: string; update: () => void; styleGroupId?: string }> = {
+    const views: Record<string, { stateKey: keyof AppState; cbId: string; update: () => void; styleGroupId?: string }> = {
         wireframe:  { stateKey: 'modelWireframe',  cbId: 'model-wireframe',   update: deps.display.updateModelWireframe },
         matcap:     { stateKey: 'modelMatcap',      cbId: 'model-matcap',      update: deps.display.updateModelMatcap, styleGroupId: 'matcap-style-group' },
         normals:    { stateKey: 'modelNormals',     cbId: 'model-normals',     update: deps.display.updateModelNormals },

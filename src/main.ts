@@ -2173,7 +2173,6 @@ function removeSplat() {
         scene.remove(splatMesh);
         if (splatMesh.dispose) splatMesh.dispose();
         splatMesh = null;
-        if (sceneRefs) sceneRefs.splatMesh = null;
     }
     state.splatLoaded = false;
     assets.splatBlob = null;
