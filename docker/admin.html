@@ -264,6 +264,21 @@ tr:last-child td { border-bottom: none; }
 .badge-delete_orphan { background: rgba(196,92,92,0.10); color: #c47a7a; }
 .badge-default   { background: var(--bg-elevated); color: var(--text-muted); }
 
+/* Version history in archive rows */
+.version-row td { padding: 0 !important; }
+.version-detail { padding: 8px 16px; background: var(--bg-elevated); border-radius: 6px; margin: 4px 8px; }
+.version-detail summary { cursor: pointer; color: var(--text-secondary); font-size: 0.85em; user-select: none; }
+.version-detail summary:hover { color: var(--text-primary); }
+.version-list { margin: 8px 0 0; padding: 0; list-style: none; }
+.version-item { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.85em; }
+.version-item:last-child { border-bottom: none; }
+.version-date { color: var(--text-secondary); min-width: 140px; }
+.version-size { color: var(--text-muted); min-width: 80px; }
+.version-actions { margin-left: auto; display: flex; gap: 6px; }
+.version-actions a, .version-actions button { font-size: 0.8em; padding: 2px 8px; border-radius: 4px; cursor: pointer; text-decoration: none; }
+.version-actions a { background: rgba(90,158,151,0.15); color: var(--accent-text); border: none; }
+.version-actions button { background: rgba(196,92,92,0.15); color: var(--danger); border: none; }
+
 /* ── Pagination ── */
 .pagination {
     display: flex;
@@ -867,7 +882,9 @@ function showError(msg) {
 function actionBadgeClass(action) {
     const map = {
         upload: 'badge-upload',
+        upload_replace: 'badge-upload',
         delete: 'badge-delete',
+        delete_version: 'badge-delete',
         rename: 'badge-rename',
         regenerate: 'badge-regenerate',
         delete_orphan: 'badge-delete_orphan',
@@ -1110,7 +1127,15 @@ function renderArchiveRow(a) {
         <td class="td-muted">${formatBytes(a.size)}</td>
         <td class="td-muted">${assets}</td>
         <td class="td-faint">${escapeHtml(created)}</td>
-    </tr>`;
+    </tr>
+    <tr class="version-row"><td colspan="4">
+        <details class="version-detail" data-hash="${escapeHtml(a.hash)}">
+            <summary>Version History</summary>
+            <ul class="version-list" data-version-list="${escapeHtml(a.hash)}">
+                <li class="version-item" style="color:var(--text-muted)">Click to load&hellip;</li>
+            </ul>
+        </details>
+    </td></tr>`;
 }
 
 function renderOrphans(orphans) {
@@ -1129,6 +1154,58 @@ function renderOrphans(orphans) {
         <td><button class="btn-danger btn-delete-orphan" data-filename="${escapeHtml(o.filename)}">Remove</button></td>
     </tr>`).join('');
 }
+
+// ── Version History ─────────────────────────────────────────────────────────
+document.addEventListener('toggle', async (e) => {
+    const details = e.target.closest('.version-detail');
+    if (!details || !details.open) return;
+    const hash = details.dataset.hash;
+    const list = details.querySelector('.version-list');
+    if (list.dataset.loaded) return;
+    list.dataset.loaded = '1';
+    list.innerHTML = '<li class="version-item" style="color:var(--text-muted)">Loading&hellip;</li>';
+    try {
+        const data = await apiFetch('/api/archives/' + hash + '/versions');
+        if (!data.versions || !data.versions.length) {
+            list.innerHTML = '<li class="version-item" style="color:var(--text-muted)">No previous versions</li>';
+            return;
+        }
+        list.innerHTML = data.versions.map(v => {
+            const date = new Date(v.created_at).toLocaleString();
+            return `<li class="version-item">
+                <span class="version-date">${escapeHtml(date)}</span>
+                <span class="version-size">${formatBytes(v.size)}</span>
+                <span class="version-actions">
+                    <a href="/api/archives/${escapeHtml(hash)}/versions/${v.id}/download">Download</a>
+                    <button data-del-version="${v.id}" data-del-hash="${escapeHtml(hash)}">Delete</button>
+                </span>
+            </li>`;
+        }).join('');
+    } catch (err) {
+        list.innerHTML = '<li class="version-item" style="color:var(--danger)">Error: ' + escapeHtml(err.message) + '</li>';
+    }
+}, true);
+
+document.addEventListener('click', async (e) => {
+    const delBtn = e.target.closest('[data-del-version]');
+    if (delBtn) {
+        const vId = delBtn.dataset.delVersion;
+        const hash = delBtn.dataset.delHash;
+        if (!confirm('Delete this backup version?')) return;
+        try {
+            await apiDelete('/api/archives/' + hash + '/versions/' + vId);
+            // Reload the version list
+            const details = delBtn.closest('.version-detail');
+            const list = details.querySelector('.version-list');
+            delete list.dataset.loaded;
+            details.open = false;
+            details.open = true;
+        } catch (err) {
+            alert('Delete failed: ' + err.message);
+        }
+        return;
+    }
+});
 
 document.addEventListener('click', async (e) => {
     const btn = e.target.closest('.btn-delete-orphan');
