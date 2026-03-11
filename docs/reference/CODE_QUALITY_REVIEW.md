@@ -302,3 +302,94 @@ Partially addressed in Phase 12: `map-picker.ts` now has `destroyMapPicker()` (c
 8. ~~**N+1 collection queries**~~ — Done (Phase 13). `Promise.all` parallel fetch.
 
 See `docs/superpowers/plans/2026-03-11-medium-issues-plan.md` for the full remaining MEDIUM issues plan (Phases 15–20).
+
+---
+
+## 9. TypeScript `strict: true` Migration Plan
+
+### Current State
+
+`tsconfig.json` has `strict: false`. All sub-flags (`noImplicitAny`, `strictNullChecks`, `strictFunctionTypes`, `strictBindCallApply`, `noImplicitThis`, `strictPropertyInitialization`) are off. The codebase compiles without errors but TypeScript catches far fewer bugs than it could.
+
+**556 explicit `any` uses** remain across the codebase (down from 1,000+ before Phases 7–11).
+
+### Error Counts by Flag
+
+Measured 2026-03-11 against the full `src/` tree:
+
+| Flag | Total Errors | kiosk-main.ts | Rest of Codebase |
+|------|-------------|---------------|------------------|
+| `--strict` (all flags) | 575 | ~449 | ~126 |
+| `--noImplicitAny` | 341 | 267 | 74 |
+| `--strictNullChecks` | 438 | 326 | 112 |
+| `--strictFunctionTypes` | 306 | 239 | 67 |
+| `--strictBindCallApply` | 304 | ~237 | ~67 |
+| `--noImplicitThis` | 304 | ~237 | ~67 |
+
+**Key insight:** `kiosk-main.ts` accounts for ~78% of all strict errors. Fixing the rest of the codebase is a manageable ~126 errors across ~15 files.
+
+### Top Error Files (excluding kiosk-main.ts)
+
+| File | noImplicitAny | strictNullChecks | Notes |
+|------|--------------|------------------|-------|
+| `export-controller.ts` | 32 | 33 | Mostly untyped params in helper functions |
+| `file-input-handlers.ts` | — | 26 | Null checks on DOM elements |
+| `main.ts` | 22 | 25 | Callback params (`onModelLoaded: (object: any)`) |
+| `archive-pipeline.ts` | 7 | 6 | Cross-module type mismatches |
+| `share-dialog.ts` | 3 | 3 | Minor |
+| `mesh-loader.ts` | 2 | 2 | Three.js addon types |
+| Other files | ~8 | ~17 | 1–4 errors each |
+
+### Recommended Migration Strategy
+
+**Approach: Incremental flag enablement, not big-bang `strict: true`.**
+
+#### Phase A: Quick Wins (~1 hour, 0 risk)
+
+Replace `catch (err: any)` with `catch (err: unknown)` across all files (~30 sites). No flag change needed — this is a pure code improvement that works with or without strict mode.
+
+#### Phase B: Enable `noImplicitAny` for non-kiosk files (~2 hours)
+
+1. Add `// @ts-nocheck` to `kiosk-main.ts` temporarily (or use a per-file `// @ts-ignore` strategy)
+2. Enable `noImplicitAny: true` in tsconfig
+3. Fix ~74 errors across ~12 files — mostly adding types to function params
+4. Common fixes:
+   - `(obj: any)` → `(obj: THREE.Object3D)` in traverse callbacks
+   - `(mesh: any, file: any)` → `(mesh: THREE.Group, file: File)` in loader callbacks
+   - `(err: any)` → `(err: unknown)` in catch blocks
+   - Untyped function params in export-controller and main.ts
+
+#### Phase C: Enable `strictNullChecks` for non-kiosk files (~3 hours)
+
+1. Enable `strictNullChecks: true` in tsconfig
+2. Fix ~112 errors — mostly null guards on DOM element lookups and optional chaining
+3. Common fixes:
+   - `document.getElementById('x').value` → `document.getElementById('x')?.value`
+   - Add `if (!element) return` guards
+   - Use non-null assertions (`element!`) sparingly and only where the element is guaranteed by HTML
+
+#### Phase D: Enable remaining flags (~1 hour)
+
+`strictFunctionTypes`, `strictBindCallApply`, `noImplicitThis` — these largely overlap with the errors fixed in Phases B and C. Incremental effort is small once those are done.
+
+#### Phase E: Fix kiosk-main.ts (~6+ hours)
+
+This is the heavy lift — 449 errors in a 5,364-line file. Best done **after Phase 19 (kiosk-main.ts decomposition)**, since splitting it into smaller modules makes each piece easier to type correctly. Attempting this before decomposition is not recommended.
+
+#### Phase F: Enable `strict: true` and remove per-file overrides
+
+Once all files pass, flip `strict: true` and remove any `// @ts-nocheck` annotations. This is the finish line.
+
+### Execution Order
+
+```
+Phase A (catch blocks)           — independent, do anytime
+Phase B (noImplicitAny)          — do after Phase A
+Phase C (strictNullChecks)       — do after Phase B
+Phase D (remaining flags)        — do after Phase C
+Phase 19 (kiosk-main decomp)     — from MEDIUM plan
+Phase E (kiosk-main strict)      — do after Phase 19
+Phase F (flip strict: true)      — do after Phase E
+```
+
+**Phases A–D can be done independently of the MEDIUM issues plan.** Phase E depends on Phase 19 (kiosk-main decomposition) for practical reasons.
