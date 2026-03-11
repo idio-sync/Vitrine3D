@@ -487,7 +487,6 @@ export interface EventWiringDeps {
     export: {
         showExportPanel: () => void;
         downloadArchive: () => void;
-        downloadGenericViewer: () => void;
         saveToLibrary: () => void;
     };
     screenshots: {

@@ -857,55 +857,6 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
         notify.error('Error saving to library: ' + e.message);
     }
 }
-
-/**
- * Download a generic offline viewer (standalone HTML that opens any .ddim archive).
- * @deprecated Downloadable offline viewer has been removed from the product.
- */
-export async function downloadGenericViewer(deps: ExportDeps): Promise<void> {
-    const { ui, tauriBridge } = deps;
-
-    log.info(' downloadGenericViewer called');
-    ui.showLoading('Building offline viewer...', true);
-
-    try {
-        ui.updateProgress(1, 'Loading viewer module...');
-        const { fetchDependencies: fetchViewerDeps, generateGenericViewer } =
-            await import('./kiosk-viewer.js');
-
-        ui.updateProgress(5, 'Fetching viewer libraries...');
-        const viewerDeps = await fetchViewerDeps((msg: string) => {
-            ui.updateProgress(15, msg);
-        });
-
-        ui.updateProgress(90, 'Assembling viewer...');
-        const html = generateGenericViewer(viewerDeps);
-
-        ui.updateProgress(95, 'Starting download...');
-        const blob = new Blob([html], { type: 'text/html' });
-        if (tauriBridge) {
-            await tauriBridge.download(blob, 'archive-viewer.html', { name: 'HTML Files', extensions: ['html'] });
-        } else {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'archive-viewer.html';
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        log.info(`[Viewer] Generic viewer exported (${(blob.size / 1024).toFixed(0)} KB)`);
-        ui.updateProgress(100, 'Complete');
-        ui.hideLoading();
-        notify.success('Offline viewer downloaded: archive-viewer.html');
-
-    } catch (e: any) {
-        ui.hideLoading();
-        log.error(' Error creating generic viewer:', e);
-        notify.error('Error creating viewer: ' + e.message);
-    }
-}
-
 /**
  * Toggle "Save to Library" button visibility based on selected export format.
  * .ddim shows it (if library is configured), .zip hides it (local download only).

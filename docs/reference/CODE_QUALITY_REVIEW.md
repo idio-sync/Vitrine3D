@@ -26,7 +26,7 @@
 |----------|-------|-------|------|------------------|
 | **CRITICAL** | 9 | 9 | 0 | Phases 1–2 (`936259b`–`53cbbfb`) |
 | **HIGH** | 32 | 32 | 0 | Phases 1–11 (`936259b`–latest) |
-| **MEDIUM** | 69 | ~26 | ~43 | Phases 8, 12–16 + incidental fixes during HIGH work |
+| **MEDIUM** | 69 | ~27 | ~42 | Phases 8, 12–16, 18.1 + incidental fixes during HIGH work |
 | **LOW** | 48 | 0 | 48 | Not addressed |
 
 All CRITICAL and HIGH issues were resolved across 10 phases committed to the `dev` branch on 2026-03-11.
@@ -241,7 +241,7 @@ Modules with mutable state that's never reset:
 - Magic numbers remaining outside `constants.js` (grid colors, material params, popup dimensions)
 - Inconsistent use of `notify()` vs `console.error` in non-critical paths
 - Missing JSDoc on public APIs in newer modules
-- Unused imports and dead code paths
+- ~~Unused imports and dead code paths~~ — `kiosk-viewer.ts` deleted (Phase 18.1): deprecated module removed along with `downloadGenericViewer` from export-controller, main.ts, event-wiring, types.ts, and editor HTML
 
 ---
 

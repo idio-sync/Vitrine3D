@@ -178,8 +178,6 @@ import type { ControlsPanelDeps } from './modules/ui-controller.js';
 import type { FileInputDeps } from './modules/file-input-handlers.js';
 import type { LoadPointcloudDeps } from './modules/file-handlers.js';
 import { generateProxy, estimateFaceCount } from './modules/mesh-decimator.js';
-// kiosk-viewer.js is loaded dynamically in downloadGenericViewer() to avoid
-// blocking the main application if the module fails to load.
 
 declare global {
     interface Window {
@@ -812,7 +810,7 @@ function createEventWiringDeps(): EventWiringDeps {
             updateSelectedAnnotationCamera, deleteSelectedAnnotation,
             dismissPopup: () => dismissPopupHandler(createAnnotationControllerDeps())
         },
-        export: { showExportPanel, downloadArchive, downloadGenericViewer, saveToLibrary },
+        export: { showExportPanel, downloadArchive, saveToLibrary },
         screenshots: { downloadScreenshot, captureScreenshotToList, showViewfinder, captureManualPreview, hideViewfinder },
         recording: { startRecording: handleStartRecording, stopRecording: handleStopRecording },
         metadata: { hideMetadataPanel, toggleMetadataDisplay, setupMetadataSidebar, populateMetadataDisplay },
@@ -2815,12 +2813,6 @@ async function downloadArchive() {
 // Save archive to library — delegated to export-controller.ts
 async function saveToLibrary() {
     const { saveToLibrary: ctrl } = await import('./modules/export-controller.js');
-    return ctrl(createExportDeps());
-}
-
-// Download generic offline viewer — delegated to export-controller.ts
-async function downloadGenericViewer() {
-    const { downloadGenericViewer: ctrl } = await import('./modules/export-controller.js');
     return ctrl(createExportDeps());
 }
 

@@ -587,9 +587,6 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-save-to-library', 'click', deps.export.saveToLibrary);
     setupExportFormatToggle();
 
-    // Generic viewer download button
-    addListener('btn-download-viewer', 'click', deps.export.downloadGenericViewer);
-
     // ─── Screenshot controls ─────────────────────────────────
     addListener('btn-download-screenshot', 'click', deps.screenshots.downloadScreenshot);
     addListener('btn-capture-screenshot', 'click', deps.screenshots.captureScreenshotToList);

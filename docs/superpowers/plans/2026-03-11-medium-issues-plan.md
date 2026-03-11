@@ -206,26 +206,9 @@ git commit -m "refactor: complete asset registry migration (M-AR1)"
 
 > 3 tasks, mixed effort, medium risk.
 
-### Task 18.1: Delete deprecated kiosk-viewer.ts
+### Task 18.1: Delete deprecated kiosk-viewer.ts ✅
 
-**Files:**
-- Delete: `src/modules/kiosk-viewer.ts`
-- Modify: `src/modules/export-controller.ts` (remove `downloadGenericViewer` reference)
-- Modify: `src/editor/index.html` (confirm `btn-download-viewer` is hidden and can stay as dead HTML)
-
-- [ ] **Step 1: Grep for all imports of kiosk-viewer**
-
-Confirm no live code path reaches it.
-
-- [ ] **Step 2: Remove the file and update imports**
-
-- [ ] **Step 3: Verify build + tests**
-
-- [ ] **Step 4: Commit**
-
-```bash
-git commit -m "chore: delete deprecated kiosk-viewer.ts (M-DEAD)"
-```
+Deleted `kiosk-viewer.ts` and removed all references: `downloadGenericViewer` from export-controller.ts, main.ts wrapper, event-wiring.ts binding, types.ts interface, and hidden button from editor/index.html. Build passes, 423 tests pass.
 
 ### Task 18.2: Extract cross-section activation helper
 
