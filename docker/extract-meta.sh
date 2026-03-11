@@ -2,7 +2,7 @@
 #
 # extract-meta.sh — Extract metadata and thumbnails from Vitrine3D archives
 #
-# Scans a directory for .a3d/.a3z files, extracts manifest metadata and
+# Scans a directory for .a3d/.a3z/.ddim files, extracts manifest metadata and
 # preview thumbnails into sidecar files for the meta-server.
 #
 # Usage:
@@ -94,7 +94,7 @@ except: pass
 
     # Fall back to filename as title
     if [ -z "$title" ]; then
-        title=$(basename "$archive_path" | sed 's/\.\(a3d\|a3z\)$//')
+        title=$(basename "$archive_path" | sed 's/\.\(a3d\|a3z\|ddim\)$//')
     fi
 
     # Try to extract preview thumbnail
@@ -126,7 +126,7 @@ try:
     assets = []
     type_map = {
         'scene_': 'splat', 'mesh_': 'mesh', 'pointcloud_': 'pointcloud',
-        'cad_': 'cad', 'drawing_': 'drawing'
+        'cad_': 'cad', 'drawing_': 'drawing', 'flightpath_': 'flightpath'
     }
     for key, entry in entries.items():
         # Skip thumbnails, images, source files
@@ -244,10 +244,10 @@ if [ -n "$SINGLE_FILE" ]; then
     fi
 else
     # Batch mode: scan directory recursively
-    echo "[extract-meta] Scanning $ARCHIVES_DIR for .a3d/.a3z files..."
+    echo "[extract-meta] Scanning $ARCHIVES_DIR for .a3d/.a3z/.ddim files..."
 
     count=0
-    find "$ARCHIVES_DIR" -type f \( -name "*.a3d" -o -name "*.a3z" \) | while read -r archive; do
+    find "$ARCHIVES_DIR" -type f \( -name "*.a3d" -o -name "*.a3z" -o -name "*.ddim" \) | while read -r archive; do
         process_archive "$archive"
         count=$((count + 1))
     done

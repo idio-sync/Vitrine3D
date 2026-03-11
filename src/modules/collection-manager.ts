@@ -193,7 +193,8 @@ function createCollectionDetailPanel(): HTMLElement {
         </div>
         <div class="prop-section open">
             <div class="prop-section-body" style="padding-top:8px;">
-                <button id="collection-save-btn" class="prop-btn accent" type="button">Save Changes</button>
+                <button id="collection-delete-btn" class="prop-btn danger" type="button">Delete Collection</button>
+                <button id="collection-save-btn" class="prop-btn accent" type="button" style="margin-top:24px;">Save Changes</button>
             </div>
         </div>
     `;
@@ -247,6 +248,9 @@ function hideCollectionDetail(): void {
 }
 
 function wireCollectionDetailEvents(): void {
+    const deleteBtn = document.getElementById('collection-delete-btn');
+    if (deleteBtn) deleteBtn.addEventListener('click', handleDeleteFromDetail);
+
     const saveBtn = document.getElementById('collection-save-btn');
     if (saveBtn) saveBtn.addEventListener('click', handleSaveCollection);
 
@@ -539,6 +543,11 @@ async function handleNewCollection(): Promise<void> {
     } catch (err) {
         notify.error('Create failed: ' + (err as Error).message);
     }
+}
+
+async function handleDeleteFromDetail(): Promise<void> {
+    if (!editingCollection) return;
+    await handleDeleteCollection(editingCollection);
 }
 
 async function handleDeleteCollection(coll: Collection): Promise<void> {

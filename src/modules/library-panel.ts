@@ -463,6 +463,7 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
     pointcloud: 'Point Cloud',
     cad: 'CAD Model',
     drawing: 'Drawing',
+    flightpath: 'Flight Path',
 };
 
 const ASSET_TYPE_ICONS: Record<string, string> = {
@@ -471,6 +472,7 @@ const ASSET_TYPE_ICONS: Record<string, string> = {
     pointcloud: '\u2059',  // dot pattern
     cad: '\u2B21',         // hexagon
     drawing: '\u25A1',     // square
+    flightpath: '\u2708',  // airplane
 };
 
 function renderAssets(archive: Archive): void {
