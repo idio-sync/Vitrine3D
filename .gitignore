@@ -1,10 +1,11 @@
 .omc/
-.claude/settings.local.json
+.claude/
 .mcp.json
 CLAUDE.md
 nul
 src/models/
 archives/
+.superpowers/
 
 # Tauri
 dist/

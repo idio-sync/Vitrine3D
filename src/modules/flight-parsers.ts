@@ -11,6 +11,12 @@
 
 import type { FlightPoint } from '../types.js';
 
+/** Parse a float, returning undefined only for NaN (not for zero). */
+function parseOptionalFloat(value: string): number | undefined {
+    const n = parseFloat(value);
+    return isNaN(n) ? undefined : n;
+}
+
 // ===== GPS → Local Coordinate Conversion =====
 
 /** Convert a GPS coordinate to local XYZ relative to an origin point.
@@ -130,10 +136,10 @@ export function parseDjiCsv(csvText: string): FlightPoint[] {
         points.push({
             ...local,
             lat, lon, alt, timestamp,
-            speed: speedIdx !== -1 ? parseFloat(cols[speedIdx]) || undefined : undefined,
-            heading: headingIdx !== -1 ? parseFloat(cols[headingIdx]) || undefined : undefined,
-            gimbalPitch: gimbalPitchIdx !== -1 ? parseFloat(cols[gimbalPitchIdx]) || undefined : undefined,
-            gimbalYaw: gimbalYawIdx !== -1 ? parseFloat(cols[gimbalYawIdx]) || undefined : undefined,
+            speed: speedIdx !== -1 ? parseOptionalFloat(cols[speedIdx]) : undefined,
+            heading: headingIdx !== -1 ? parseOptionalFloat(cols[headingIdx]) : undefined,
+            gimbalPitch: gimbalPitchIdx !== -1 ? parseOptionalFloat(cols[gimbalPitchIdx]) : undefined,
+            gimbalYaw: gimbalYawIdx !== -1 ? parseOptionalFloat(cols[gimbalYawIdx]) : undefined,
         });
     }
 

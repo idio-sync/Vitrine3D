@@ -18,6 +18,15 @@ const log = Logger.getLogger('flight-path');
 
 export type ColorMode = 'speed' | 'altitude' | 'climbrate';
 
+/** Find the maximum value in an array without spreading (avoids stack overflow on large arrays). */
+function maxOf(arr: number[]): number {
+    let max = -Infinity;
+    for (let i = 0; i < arr.length; i++) {
+        if (arr[i] > max) max = arr[i];
+    }
+    return max;
+}
+
 /** Subsample an array to at most maxPoints entries, evenly spaced. */
 function subsample<T>(arr: T[], maxPoints: number): T[] {
     if (arr.length <= maxPoints) return arr;
@@ -205,7 +214,7 @@ export class FlightPathManager {
             fileName,
             originGps: [points[0].lat, points[0].lon],
             durationS: Math.round(lastPoint.timestamp / 1000),
-            maxAltM: Math.max(...points.map(p => p.alt)),
+            maxAltM: maxOf(points.map(p => p.alt)),
         };
 
         this.paths.push(data);
@@ -237,7 +246,7 @@ export class FlightPathManager {
             fileName,
             originGps: [points[0].lat, points[0].lon],
             durationS: Math.round(lastPoint.timestamp / 1000),
-            maxAltM: Math.max(...points.map(p => p.alt)),
+            maxAltM: maxOf(points.map(p => p.alt)),
         };
 
         this.paths.push(data);
@@ -657,7 +666,7 @@ export class FlightPathManager {
             const last = trimmed[trimmed.length - 1];
             totalDuration += Math.round((last.timestamp - first.timestamp) / 1000);
             totalDistanceM += computeGpsDistanceM(trimmed);
-            const trimMaxAlt = Math.max(...trimmed.map(pt => pt.alt));
+            const trimMaxAlt = maxOf(trimmed.map(pt => pt.alt));
             if (trimMaxAlt > maxAlt) maxAlt = trimMaxAlt;
             for (const pt of trimmed) {
                 if (pt.speed !== undefined) {

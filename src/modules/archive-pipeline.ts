@@ -99,8 +99,10 @@ async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
     deps.ui.updateVisibility();
 
     // Update UI
-    document.getElementById('splat-filename')!.textContent = fileName;
-    document.getElementById('splat-vertices')!.textContent = 'Loaded';
+    const splatFilenameEl = document.getElementById('splat-filename');
+    if (splatFilenameEl) splatFilenameEl.textContent = fileName;
+    const splatVerticesEl = document.getElementById('splat-vertices');
+    if (splatVerticesEl) splatVerticesEl.textContent = 'Loaded';
 }
 
 /**
@@ -142,8 +144,10 @@ async function loadModelFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
 
         // Count faces and update UI
         const faceCount = computeMeshFaceCount(loadedObject);
-        document.getElementById('model-filename')!.textContent = fileName;
-        document.getElementById('model-faces')!.textContent = faceCount.toLocaleString();
+        const modelFilenameEl = document.getElementById('model-filename');
+        if (modelFilenameEl) modelFilenameEl.textContent = fileName;
+        const modelFacesEl = document.getElementById('model-faces');
+        if (modelFacesEl) modelFacesEl.textContent = faceCount.toLocaleString();
 
         const textureInfo = computeTextureInfo(loadedObject);
         state.meshTextureInfo = textureInfo;
@@ -169,18 +173,22 @@ function updateArchiveMetadataUI(manifest: any, archiveLoader: any): void {
     const metadata = archiveLoader.getMetadata();
 
     // Update basic info
-    document.getElementById('archive-version')!.textContent = metadata.version || '-';
+    const archiveVersionEl = document.getElementById('archive-version');
+    if (archiveVersionEl) archiveVersionEl.textContent = metadata.version || '-';
 
     const packerText = metadata.packerVersion
         ? `${metadata.packer} v${metadata.packerVersion}`
         : metadata.packer;
-    document.getElementById('archive-packer')!.textContent = packerText;
+    const archivePackerEl = document.getElementById('archive-packer');
+    if (archivePackerEl) archivePackerEl.textContent = packerText;
 
-    document.getElementById('archive-created')!.textContent =
+    const archiveCreatedEl = document.getElementById('archive-created');
+    if (archiveCreatedEl) archiveCreatedEl.textContent =
         metadata.createdAt ? new Date(metadata.createdAt).toLocaleString() : '-';
 
     // Populate entries list
-    const entriesList = document.getElementById('archive-entries-list')!;
+    const entriesList = document.getElementById('archive-entries-list');
+    if (!entriesList) return;
     entriesList.replaceChildren(); // Clear existing content safely
     const header = document.createElement('p');
     header.className = 'entries-header';
@@ -226,7 +234,8 @@ export async function handleArchiveFile(event: Event, deps: ArchivePipelineDeps)
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
 
-    document.getElementById('archive-filename')!.textContent = file.name;
+    const archiveFilenameEl = document.getElementById('archive-filename');
+    if (archiveFilenameEl) archiveFilenameEl.textContent = file.name;
     deps.ui.showLoading('Loading archive...');
 
     try {
@@ -280,7 +289,8 @@ export async function loadArchiveFromUrl(url: string, deps: ArchivePipelineDeps)
             });
         }
 
-        document.getElementById('archive-filename')!.textContent = fileName;
+        const archiveFilenameEl2 = document.getElementById('archive-filename');
+        if (archiveFilenameEl2) archiveFilenameEl2.textContent = fileName;
 
         deps.state.currentArchiveUrl = url;
         await processArchive(archiveLoader, fileName, deps);
@@ -443,8 +453,10 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
                 pointcloudGroup.rotation.set(...transform.rotation);
                 pointcloudGroup.scale.set(...ps);
             }
-            document.getElementById('pointcloud-filename')!.textContent = pointcloudEntry.file_name.split('/').pop()!;
-            document.getElementById('pointcloud-points')!.textContent = result.pointCount.toLocaleString();
+            const pcFilenameEl = document.getElementById('pointcloud-filename');
+            if (pcFilenameEl) pcFilenameEl.textContent = pointcloudEntry.file_name.split('/').pop() || '';
+            const pcPointsEl = document.getElementById('pointcloud-points');
+            if (pcPointsEl) pcPointsEl.textContent = result.pointCount.toLocaleString();
             assets.pointcloudBlob = pcData.blob;
             // Detect point cloud format from archive filename
             state.pointcloudFormat = pointcloudEntry.file_name.split('.').pop()?.toLowerCase() || 'e57';
@@ -472,7 +484,8 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
                 drawingGroup.rotation.set(...transform.rotation);
                 drawingGroup.scale.set(...ds);
             }
-            document.getElementById('drawing-filename')!.textContent = drawingEntry.file_name.split('/').pop()!;
+            const drawingFilenameEl = document.getElementById('drawing-filename');
+            if (drawingFilenameEl) drawingFilenameEl.textContent = drawingEntry.file_name.split('/').pop() || '';
             state.assetStates[assetType] = ASSET_STATE.LOADED;
             return true;
 
@@ -497,7 +510,8 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
                 cadGroup.rotation.set(...cadTransform.rotation);
                 cadGroup.scale.set(...cs);
             }
-            document.getElementById('cad-filename')!.textContent = cadEntry.file_name.split('/').pop()!;
+            const cadFilenameEl = document.getElementById('cad-filename');
+            if (cadFilenameEl) cadFilenameEl.textContent = cadEntry.file_name.split('/').pop() || '';
             const cadStore = getStore();
             cadStore.cadFileName = cadEntry.original_name || cadEntry.file_name.split('/').pop() || cadEntry.file_name;
             cadStore.cadBlob = cadData.blob;
@@ -1149,7 +1163,8 @@ export async function handleLoadFullResMesh(deps: ArchivePipelineDeps): Promise<
         if (result.loaded) {
             assets.meshBlob = result.blob;
             state.viewingProxy = false;
-            document.getElementById('model-faces')!.textContent = (result.faceCount || 0).toLocaleString();
+            const modelFacesEl2 = document.getElementById('model-faces');
+            if (modelFacesEl2) modelFacesEl2.textContent = (result.faceCount || 0).toLocaleString();
             // Hide proxy indicator and Load Full Res button
             document.getElementById('proxy-mesh-indicator')?.classList.add('hidden');
             const fullResBtn = document.getElementById('btn-load-full-res');

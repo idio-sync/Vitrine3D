@@ -385,6 +385,9 @@ export async function loadSplatFromUrl(url: string, deps: LoadSplatDeps, onProgr
     state.splatLoaded = true;
     state.currentSplatUrl = url;
 
+    // Clean up blob URL after loading completes
+    setTimeout(() => URL.revokeObjectURL(blobUrl), TIMING.BLOB_REVOKE_DELAY);
+
     // Call callbacks
     if (callbacks?.onSplatLoaded) {
         callbacks.onSplatLoaded(splatMesh, blob);
@@ -866,6 +869,7 @@ export async function loadSTLFromUrlWithDeps(url: string, deps: LoadSTLDeps): Pr
         }
     }
 
+    URL.revokeObjectURL(blobUrl);
     return loadedObject;
 }
 
@@ -1099,6 +1103,7 @@ export async function loadDrawingFromUrl(url: string, deps: LoadDrawingDeps, onP
         }
     }
 
+    URL.revokeObjectURL(blobUrl);
     return loadedObject;
 }
 
@@ -1284,6 +1289,9 @@ export async function loadModelFromUrl(url: string, deps: LoadModelDeps, onProgr
     } else if (extension === 'drc') {
         loadedObject = await loadDRC(blobUrl);
     }
+
+    // Clean up blob URL — Three.js loaders have finished reading it
+    URL.revokeObjectURL(blobUrl);
 
     if (loadedObject) {
         modelGroup.add(loadedObject);

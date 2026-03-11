@@ -563,8 +563,8 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     // Set quality stats
     log.info(' Setting quality stats');
     archiveCreator.setQualityStats({
-        splat_count: (includeSplat && state.splatLoaded) ? parseInt(document.getElementById('splat-vertices')?.textContent || '0') || 0 : 0,
-        mesh_polygons: (includeModel && state.modelLoaded) ? parseInt(document.getElementById('model-faces')?.textContent || '0') || 0 : 0,
+        splat_count: (includeSplat && state.splatLoaded) ? parseInt((document.getElementById('splat-vertices')?.textContent || '0').replace(/,/g, '')) || 0 : 0,
+        mesh_polygons: (includeModel && state.modelLoaded) ? parseInt((document.getElementById('model-faces')?.textContent || '0').replace(/,/g, '')) || 0 : 0,
         mesh_vertices: (includeModel && state.modelLoaded) ? (state.meshVertexCount || 0) : 0,
         splat_file_size: (includeSplat && assets.splatBlob) ? assets.splatBlob.size : 0,
         mesh_file_size: (includeModel && finalMeshBlob) ? finalMeshBlob.size : 0,

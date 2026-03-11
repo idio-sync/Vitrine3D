@@ -89,7 +89,8 @@ export async function parseDjiTxt(buffer: ArrayBuffer): Promise<FlightPoint[]> {
 
         // Pass height as both alt and originAlt=0 so gpsToLocal uses it directly as Y
         const local = gpsToLocal(lat, lon, alt, originLat, originLon, 0);
-        const speed = Math.sqrt(osd.xSpeed * osd.xSpeed + osd.ySpeed * osd.ySpeed) || undefined;
+        const rawSpeed = Math.sqrt(osd.xSpeed * osd.xSpeed + osd.ySpeed * osd.ySpeed);
+        const speed = isNaN(rawSpeed) ? undefined : rawSpeed;
 
         points.push({
             ...local,

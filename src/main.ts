@@ -2909,19 +2909,22 @@ function wireNativeFileDialogs() {
     if (!tauriBridge || !tauriBridge.isTauri()) return;
     tauriBridge.wireNativeFileDialogs({
         onSplatFiles: async (files: any[]) => {
-            document.getElementById('splat-filename').textContent = files[0].name;
+            const el = document.getElementById('splat-filename');
+            if (el) el.textContent = files[0].name;
             showLoading('Loading Gaussian Splat...');
             try { await loadSplatFromFileHandler(files[0], createFileHandlerDeps()); hideLoading(); }
             catch (e) { log.error('Error loading splat:', e); hideLoading(); notify.error('Error loading Gaussian Splat: ' + e.message); }
         },
         onModelFiles: async (files: any[]) => {
-            document.getElementById('model-filename').textContent = files[0].name;
+            const el = document.getElementById('model-filename');
+            if (el) el.textContent = files[0].name;
             showLoading('Loading 3D Model...');
             try { await loadModelFromFileHandler(files as any, createFileHandlerDeps()); hideLoading(); }
             catch (e) { log.error('Error loading model:', e); hideLoading(); notify.error('Error loading model: ' + e.message); }
         },
         onArchiveFiles: async (files: any[]) => {
-            document.getElementById('archive-filename').textContent = files[0].name;
+            const el = document.getElementById('archive-filename');
+            if (el) el.textContent = files[0].name;
             showLoading('Loading archive...');
             try {
                 if (state.archiveLoader) state.archiveLoader.dispose();
@@ -2932,20 +2935,23 @@ function wireNativeFileDialogs() {
             } catch (e) { log.error('Error loading archive:', e); hideLoading(); notify.error('Error loading archive: ' + e.message); }
         },
         onPointcloudFiles: async (files: any[]) => {
-            document.getElementById('pointcloud-filename').textContent = files[0].name;
+            const el = document.getElementById('pointcloud-filename');
+            if (el) el.textContent = files[0].name;
             showLoading('Loading point cloud...');
             try { await loadPointcloudFromFileHandler(files[0], createPointcloudDeps()); hideLoading(); }
             catch (e) { log.error('Error loading point cloud:', e); hideLoading(); notify.error('Error loading point cloud: ' + e.message); }
         },
         onSTLFiles: async (files: any[]) => {
-            document.getElementById('stl-filename').textContent = files[0].name;
+            const el = document.getElementById('stl-filename');
+            if (el) el.textContent = files[0].name;
             showLoading('Loading STL Model...');
             try { await loadSTLFileHandler([files[0]] as any, createFileHandlerDeps()); hideLoading(); }
             catch (e) { log.error('Error loading STL:', e); hideLoading(); notify.error('Error loading STL: ' + e.message); }
         },
         onProxyMeshFiles: async (files: any[]) => {
             assets.proxyMeshBlob = files[0];
-            document.getElementById('proxy-mesh-filename').textContent = files[0].name;
+            const el = document.getElementById('proxy-mesh-filename');
+            if (el) el.textContent = files[0].name;
             notify.info(`Display proxy "${files[0].name}" ready — will be included in archive exports.`);
         },
         onSourceFiles: async (files: any[]) => {
