@@ -1446,10 +1446,15 @@ async function handleUploadArchive(req, res) {
             fs.mkdirSync(ARCHIVES_DIR, { recursive: true });
         }
 
-        // Check for duplicate
+        // If file already exists, backup and replace instead of rejecting
         if (fs.existsSync(finalPath)) {
-            try { fs.unlinkSync(tmpPath); } catch {}
-            return sendJson(res, 409, { error: 'File already exists: ' + filename });
+            const existingRow = db.prepare('SELECT * FROM archives WHERE filename = ?').get(filename);
+            if (existingRow) {
+                const updatedRow = backupAndReplace(existingRow, tmpPath, filename, req);
+                return sendJson(res, 200, buildArchiveObjectFromRow(updatedRow));
+            }
+            // Edge case: file on disk but no DB row — remove orphan and proceed as new upload
+            try { fs.unlinkSync(finalPath); } catch {}
         }
 
         // Move from temp to archives (rename if same filesystem, copy+delete otherwise)
@@ -2490,9 +2495,6 @@ async function handleCompleteChunk(req, res, uploadId) {
 
         if (!fs.existsSync(ARCHIVES_DIR)) fs.mkdirSync(ARCHIVES_DIR, { recursive: true });
         const finalPath = path.join(ARCHIVES_DIR, filename);
-        if (fs.existsSync(finalPath)) {
-            return sendJson(res, 409, { error: 'File already exists: ' + filename });
-        }
 
         // Assemble chunks in order via streaming
         const tmpPath = path.join('/tmp', 'v3d_assembled_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex'));
@@ -2513,6 +2515,17 @@ async function handleCompleteChunk(req, res, uploadId) {
 
         // Clean up chunk dir before moving (best-effort)
         try { fs.rmSync(chunkDir, { recursive: true, force: true }); } catch {}
+
+        // If file already exists, backup and replace instead of rejecting
+        if (fs.existsSync(finalPath)) {
+            const existingRow = db.prepare('SELECT * FROM archives WHERE filename = ?').get(filename);
+            if (existingRow) {
+                const updatedRow = backupAndReplace(existingRow, tmpPath, filename, req);
+                return sendJson(res, 200, buildArchiveObjectFromRow(updatedRow));
+            }
+            // Edge case: file on disk but no DB row — remove orphan and proceed as new upload
+            try { fs.unlinkSync(finalPath); } catch {}
+        }
 
         try {
             fs.renameSync(tmpPath, finalPath);
