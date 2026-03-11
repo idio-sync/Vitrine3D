@@ -3094,7 +3094,7 @@ function setupViewerUI(): void {
     const backBtn = document.createElement('button');
     backBtn.id = 'kiosk-back-library';
     backBtn.className = 'kiosk-back-library hidden';
-    backBtn.textContent = '\u2190 Library';
+    backBtn.innerHTML = '<span class="back-arrow">\u2190</span> <span class="back-label">Library</span>';
     backBtn.addEventListener('click', handleViewerBack);
     document.body.appendChild(backBtn);
 }

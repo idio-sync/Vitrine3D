@@ -2077,35 +2077,41 @@ body.kiosk-mode .kiosk-wt-player {
     }
 }
 
-/* ── Back to Library button (Tauri in-app library) ── */
+/* ── Back to Library button (Tauri in-app library) ──
+   Anchored below the editorial title block, aligned with the gold spine.
+   Styled as a minimal typographic link, not a bordered pill. */
 .kiosk-back-library {
     position: fixed;
-    top: 16px;
-    left: 16px;
-    z-index: 1000;
-    background: rgba(8, 24, 42, 0.85);
-    border: 1px solid rgba(254, 192, 58, 0.2);
-    color: rgba(232, 236, 240, 0.9);
-    font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 0.78rem;
+    top: var(--back-btn-top, 110px);
+    left: 24px;
+    z-index: 91;
+    background: none;
+    border: none;
+    color: var(--kiosk-accent, rgba(254, 192, 58, 0.7));
+    font-family: var(--kiosk-font-body, 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+    font-size: 0.68rem;
     font-weight: 600;
-    letter-spacing: 0.03em;
-    padding: 8px 16px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0;
     cursor: pointer;
-    transition: border-color 0.2s ease, background 0.2s ease;
-    backdrop-filter: blur(8px);
+    transition: color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8), 0 0 10px rgba(0,0,0,0.4);
+}
+
+.kiosk-back-library .back-arrow {
+    display: inline-block;
+    transition: transform 0.2s ease;
 }
 
 .kiosk-back-library:hover {
-    border-color: rgba(254, 192, 58, 0.4);
-    background: rgba(8, 24, 42, 0.95);
+    color: var(--kiosk-accent, rgba(254, 192, 58, 1));
 }
 
-/* Shift the editorial title block right when the back-to-library button is visible,
-   so the title sits beside the button instead of underneath it.
-   --back-nav-offset is set dynamically in JS based on actual button width. */
-body.has-back-nav .editorial-title-block {
-    left: var(--back-nav-offset, 200px);
-    transition: left 0.3s ease, opacity 0.6s ease;
+.kiosk-back-library:hover .back-arrow {
+    transform: translateX(-3px);
 }
 

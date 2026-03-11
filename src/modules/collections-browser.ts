@@ -695,18 +695,21 @@ function openArchive(archive: CollectionArchive, collectionName: string): void {
     const app = document.getElementById('app');
     if (app) app.style.display = '';
 
-    // Relabel the kiosk-back-library button and show it;
-    // shift the title block right so it sits beside the button, not underneath.
+    // Show the back button below the title block, labelled with the collection name.
     const backBtn = getBackButtonEl();
     if (backBtn) {
-        backBtn.textContent = '\u2190 ' + collectionName;
+        const label = backBtn.querySelector('.back-label');
+        if (label) label.textContent = collectionName;
         backBtn.classList.remove('hidden');
         document.body.classList.add('has-back-nav');
 
-        // Measure button width after render and set a CSS var for the title offset
+        // Position below the editorial title block (measure after render)
         requestAnimationFrame(() => {
-            const btnRight = backBtn.offsetLeft + backBtn.offsetWidth + 12; // 12px gap
-            document.documentElement.style.setProperty('--back-nav-offset', btnRight + 'px');
+            const titleBlock = document.querySelector('.editorial-title-block') as HTMLElement | null;
+            if (titleBlock) {
+                const titleBottom = titleBlock.offsetTop + titleBlock.offsetHeight;
+                document.documentElement.style.setProperty('--back-btn-top', titleBottom + 'px');
+            }
         });
     }
 
@@ -731,7 +734,7 @@ export function handleViewerBack(): void {
     const backBtn = getBackButtonEl();
     if (backBtn) backBtn.classList.add('hidden');
     document.body.classList.remove('has-back-nav');
-    document.documentElement.style.removeProperty('--back-nav-offset');
+    document.documentElement.style.removeProperty('--back-btn-top');
 
     const app = document.getElementById('app');
     if (app) app.style.display = 'none';
