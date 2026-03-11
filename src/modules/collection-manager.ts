@@ -497,22 +497,21 @@ async function refreshCollections(): Promise<void> {
 
 /**
  * Fetch which collections an archive belongs to.
- * Uses a lightweight approach: iterate collections and check membership.
+ * Queries all collections in parallel rather than sequentially.
  * TODO: Add a dedicated server endpoint for efficiency.
  */
 async function fetchArchiveCollections(archiveHash: string): Promise<Collection[]> {
-    const result: Collection[] = [];
-    for (const coll of collections) {
-        try {
-            const res = await apiFetch('/api/collections/' + coll.slug);
-            if (!res.ok) continue;
-            const data = await res.json() as CollectionWithArchives;
-            if (data.archives?.some(a => a.hash === archiveHash)) {
-                result.push(coll);
-            }
-        } catch { /* skip */ }
-    }
-    return result;
+    const results = await Promise.all(
+        collections.map(async (coll) => {
+            try {
+                const res = await apiFetch('/api/collections/' + coll.slug);
+                if (!res.ok) return null;
+                const data = await res.json() as CollectionWithArchives;
+                return data.archives?.some(a => a.hash === archiveHash) ? coll : null;
+            } catch { return null; }
+        })
+    );
+    return results.filter((c): c is Collection => c !== null);
 }
 
 // ── Actions ──

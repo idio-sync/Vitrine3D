@@ -26,7 +26,7 @@
 |----------|-------|-------|------|------------------|
 | **CRITICAL** | 9 | 9 | 0 | Phases 1–2 (`936259b`–`53cbbfb`) |
 | **HIGH** | 32 | 32 | 0 | Phases 1–11 (`936259b`–latest) |
-| **MEDIUM** | 69 | ~12 | ~57 | Phases 8, 12 + incidental fixes during HIGH work |
+| **MEDIUM** | 69 | ~14 | ~55 | Phases 8, 12–13 + incidental fixes during HIGH work |
 | **LOW** | 48 | 0 | 48 | Not addressed |
 
 All CRITICAL and HIGH issues were resolved across 10 phases committed to the `dev` branch on 2026-03-11.
@@ -218,10 +218,10 @@ Modules with mutable state that's never reset:
 
 `ensureAssetLoaded` in `archive-pipeline.ts` and `kiosk-main.ts` polls with `setTimeout`. The loader could resolve a Promise instead, eliminating the polling pattern entirely.
 
-### Performance (~3 issues)
+### Performance (~1 remaining)
 
-- `calculateSHA256Streaming` reads chunks then combines into a full buffer, doubling peak memory (`archive-creator.ts:513-565`)
-- N+1 query pattern — sequential API call per collection (`collection-manager.ts:502-515`)
+- `calculateSHA256Streaming` — **fixed** (Phase 13): extracted `hexFromBuffer` helper, no-progress path uses `blob.arrayBuffer()` directly (zero intermediate copy), progress path uses `blob.stream().getReader()` instead of manual `blob.slice()` chunking
+- N+1 query pattern — **fixed** (Phase 13): `fetchArchiveCollections` now uses `Promise.all` for parallel execution instead of sequential `for...await`
 - Inline style manipulation instead of CSS class toggling (multiple modules)
 
 ### Miscellaneous (~20 issues)

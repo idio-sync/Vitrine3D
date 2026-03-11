@@ -1513,9 +1513,9 @@ git commit -m "fix: add full reset lifecycle to collection-manager (M-SINGLE2)"
 
 `calculateSHA256Streaming` reads the blob in 4MB chunks but then combines them into a single `Uint8Array` before hashing — doubling peak memory. The comment says "SubtleCrypto doesn't support incremental hashing", but this is wrong: `crypto.subtle` doesn't, but a lightweight JS implementation (or reading the full blob via `blob.arrayBuffer()` directly) would avoid the intermediate copy.
 
-- [ ] **Step 1: Read the current implementation**
+- [x] **Step 1: Read the current implementation**
 
-- [ ] **Step 2: Simplify to avoid double-buffer**
+- [x] **Step 2: Simplify to avoid double-buffer**
 
 Option A (simplest): For blobs, just use `blob.arrayBuffer()` directly and hash the result. The chunked reading was only for progress reporting — keep progress by using a `ReadableStream` reader instead:
 
@@ -1555,7 +1555,7 @@ async function calculateSHA256Streaming(blob: Blob, onProgress: ((progress: numb
 
 Note: The true fix (zero-copy incremental hashing) would require a WASM or JS SHA-256 library. The above still copies once but removes the *double* copy (chunks array + combined array → just combined array). The no-progress path avoids copying entirely.
 
-- [ ] **Step 3: Extract hex conversion helper**
+- [x] **Step 3: Extract hex conversion helper**
 
 ```typescript
 function hexFromBuffer(buffer: ArrayBuffer): string {
@@ -1566,11 +1566,11 @@ function hexFromBuffer(buffer: ArrayBuffer): string {
 }
 ```
 
-- [ ] **Step 4: Verify build**
+- [x] **Step 4: Verify build**
 
-Run: `npm run build`
+Run: `npm run build` — ✓ built in 10.54s
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/modules/archive-creator.ts
@@ -1584,11 +1584,11 @@ git commit -m "perf: remove double-buffer in SHA-256 streaming (M-PERF1)"
 
 Sequential API calls per collection (`for` loop with `await fetch` inside). If the API supports batch fetching, use a single call. If not, use `Promise.all` for parallel execution.
 
-- [ ] **Step 1: Read the N+1 pattern**
+- [x] **Step 1: Read the N+1 pattern**
 
 Read around line 500-520 of collection-manager.ts.
 
-- [ ] **Step 2: Replace sequential calls with `Promise.all`**
+- [x] **Step 2: Replace sequential calls with `Promise.all`**
 
 ```typescript
 // Before: sequential
@@ -1603,11 +1603,11 @@ const results = await Promise.all(
 );
 ```
 
-- [ ] **Step 3: Verify build**
+- [x] **Step 3: Verify build**
 
-Run: `npm run build`
+Run: `npm run build` — ✓ built in 10.54s. Tests: 423 passed, 3 skipped.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/modules/collection-manager.ts

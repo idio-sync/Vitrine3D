@@ -481,6 +481,14 @@ export interface CaptureScreenshotOptions {
 
 // ===== Hash Calculation Functions =====
 
+/** Convert an ArrayBuffer hash digest to a hex string. */
+function hexFromBuffer(buffer: ArrayBuffer): string {
+    const arr = new Uint8Array(buffer);
+    let hex = '';
+    for (let i = 0; i < arr.length; i++) hex += HEX_TABLE[arr[i]];
+    return hex;
+}
+
 async function calculateSHA256(data: Blob | ArrayBuffer, onProgress: ((progress: number) => void) | null = null): Promise<string | null> {
     if (!CRYPTO_AVAILABLE) {
         log.warn('✗ crypto.subtle not available (requires HTTPS). Skipping hash.');
@@ -489,9 +497,8 @@ async function calculateSHA256(data: Blob | ArrayBuffer, onProgress: ((progress:
 
     let buffer: ArrayBuffer;
     if (data instanceof Blob) {
-        // For large blobs, read in chunks to reduce memory pressure
-        if (data.size > 10 * 1024 * 1024 && data.stream) {
-            // Use streaming approach for files > 10MB
+        if (onProgress && data.size > 10 * 1024 * 1024 && data.stream) {
+            // Stream with progress reporting for large blobs
             return await calculateSHA256Streaming(data, onProgress);
         }
         buffer = await data.arrayBuffer();
@@ -500,68 +507,34 @@ async function calculateSHA256(data: Blob | ArrayBuffer, onProgress: ((progress:
     }
 
     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-
-    // Fast hex conversion using lookup table
-    const hashArray = new Uint8Array(hashBuffer);
-    let hex = '';
-    for (let i = 0; i < hashArray.length; i++) {
-        hex += HEX_TABLE[hashArray[i]];
-    }
-    return hex;
+    return hexFromBuffer(hashBuffer);
 }
 
-async function calculateSHA256Streaming(blob: Blob, onProgress: ((progress: number) => void) | null = null): Promise<string | null> {
-    if (!CRYPTO_AVAILABLE) {
-        log.warn('✗ crypto.subtle not available (requires HTTPS). Skipping hash.');
-        return null;
-    }
-
-    const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks
-    const totalSize = blob.size;
-
-    // We need to accumulate chunks and hash at the end
-    // Unfortunately, SubtleCrypto doesn't support incremental hashing
-    // So we read in chunks but still need full buffer for hashing
-    // The benefit is more responsive UI during the read phase
-
+async function calculateSHA256Streaming(blob: Blob, onProgress: (progress: number) => void): Promise<string | null> {
+    // Read via stream for progress reporting, then hash the full buffer once.
+    // SubtleCrypto doesn't support incremental hashing, so we must accumulate.
+    // Using blob.stream() avoids the old double-buffer (chunks[] + combined[]).
+    const reader = blob.stream().getReader();
+    let loaded = 0;
     const chunks: Uint8Array[] = [];
-    let offset = 0;
 
-    while (offset < totalSize) {
-        const end = Math.min(offset + CHUNK_SIZE, totalSize);
-        const chunk = blob.slice(offset, end);
-        const arrayBuffer = await chunk.arrayBuffer();
-        chunks.push(new Uint8Array(arrayBuffer));
-
-        if (onProgress) {
-            onProgress(end / totalSize);
-        }
-
-        offset = end;
-
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.length;
+        onProgress(loaded / blob.size);
         // Yield to UI thread between chunks
         await new Promise(resolve => setTimeout(resolve, 0));
     }
 
-    // Combine chunks
-    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-    const combined = new Uint8Array(totalLength);
-    let position = 0;
-    for (const chunk of chunks) {
-        combined.set(chunk, position);
-        position += chunk.length;
-    }
+    // Single copy: combine chunks into one buffer for hashing
+    const combined = new Uint8Array(loaded);
+    let pos = 0;
+    for (const c of chunks) { combined.set(c, pos); pos += c.length; }
 
-    // Hash the combined buffer
     const hashBuffer = await crypto.subtle.digest('SHA-256', combined.buffer);
-
-    // Fast hex conversion
-    const hashArray = new Uint8Array(hashBuffer);
-    let hex = '';
-    for (let i = 0; i < hashArray.length; i++) {
-        hex += HEX_TABLE[hashArray[i]];
-    }
-    return hex;
+    return hexFromBuffer(hashBuffer);
 }
 
 // ===== Archive Creator Class =====
