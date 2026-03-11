@@ -9,12 +9,12 @@
 import { Logger } from './utilities.js';
 import { cfAuthFetch } from './tauri-auth.js';
 import {
-    escapeHtml,
     ASSET_LABELS,
     injectStyles as injectBaseStyles,
     getLogoSrc,
     renderCard,
 } from './collection-page.js';
+import { escapeHtml } from './utilities.js';
 import type { CollectionArchive } from './collection-page.js';
 
 const log = Logger.getLogger('library-page');

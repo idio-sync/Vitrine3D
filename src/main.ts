@@ -1653,57 +1653,39 @@ async function init() {
 
     // Wire flight path file input
     if (sceneManager.flightPathGroup) {
-        const flightInput = document.getElementById('flightpath-input') as HTMLInputElement | null;
-        if (flightInput) {
-            flightInput.addEventListener('change', async (e) => {
-                const file = (e.target as HTMLInputElement).files?.[0];
-                if (!file || !flightPathManager) return;
-                const filenameEl = document.getElementById('flightpath-filename');
-                if (filenameEl) filenameEl.textContent = file.name;
-                showLoading('Importing flight log...');
-                try {
-                    const data = await flightPathManager.importFile(file);
-                    const fpStore = getStore();
-                    fpStore.flightPathBlobs.push({ blob: file, fileName: file.name });
-                    state.flightPathLoaded = true;
-                    updateObjectSelectButtons();
-                    updateFlightPathUI();
-                    updateColmapUI();
-                    updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
-                    hideLoading();
-                    notify.success('Flight path loaded: ' + data.points.length + ' points');
-                } catch (err: any) {
-                    hideLoading();
-                    notify.error('Error loading flight log: ' + err.message);
-                }
-                flightInput.value = '';
-            });
+        // Shared handler for flight path file inputs (toolbar + Flight Path pane)
+        async function handleFlightPathFile(e: Event, inputEl: HTMLInputElement) {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file || !flightPathManager) return;
+            const filenameEl = document.getElementById('flightpath-filename');
+            if (filenameEl) filenameEl.textContent = file.name;
+            showLoading('Importing flight log...');
+            try {
+                const data = await flightPathManager.importFile(file);
+                const fpStore = getStore();
+                fpStore.flightPathBlobs.push({ blob: file, fileName: file.name });
+                state.flightPathLoaded = true;
+                updateObjectSelectButtons();
+                updateFlightPathUI();
+                updateColmapUI();
+                updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
+                hideLoading();
+                notify.success('Flight path loaded: ' + data.points.length + ' points');
+            } catch (err: unknown) {
+                hideLoading();
+                notify.error('Error loading flight log: ' + (err instanceof Error ? err.message : String(err)));
+            }
+            inputEl.value = '';
         }
 
-        // Wire flight path pane file input (duplicate input in the Flight Path pane)
+        const flightInput = document.getElementById('flightpath-input') as HTMLInputElement | null;
+        if (flightInput) {
+            flightInput.addEventListener('change', (e) => handleFlightPathFile(e, flightInput));
+        }
+
         const flightInputPane = document.getElementById('flightpath-input-pane') as HTMLInputElement | null;
         if (flightInputPane) {
-            flightInputPane.addEventListener('change', async (e) => {
-                const file = (e.target as HTMLInputElement).files?.[0];
-                if (!file || !flightPathManager) return;
-                showLoading('Importing flight log...');
-                try {
-                    const data = await flightPathManager.importFile(file);
-                    const fpStore = getStore();
-                    fpStore.flightPathBlobs.push({ blob: file, fileName: file.name });
-                    state.flightPathLoaded = true;
-                    updateObjectSelectButtons();
-                    updateFlightPathUI();
-                    updateColmapUI();
-                    updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
-                    hideLoading();
-                    notify.success('Flight path loaded: ' + data.points.length + ' points');
-                } catch (err: any) {
-                    hideLoading();
-                    notify.error('Error loading flight log: ' + err.message);
-                }
-                flightInputPane.value = '';
-            });
+            flightInputPane.addEventListener('change', (e) => handleFlightPathFile(e, flightInputPane));
         }
 
         // Wire color mode dropdown

@@ -17,7 +17,6 @@ import { createSparkRenderer, isSparkV2 } from './spark-compat.js';
 // Local AssetType (not exported from types.ts)
 type AssetType = 'splat' | 'mesh' | 'pointcloud';
 
-function errMsg(e: unknown): string { return e instanceof Error ? e.message : String(e); }
 import { FlyControls } from './fly-controls.js';
 import { AnnotationSystem } from './annotation-system.js';
 import { MeasurementSystem } from './measurement-system.js';
@@ -27,7 +26,7 @@ import { WalkthroughEngine } from './walkthrough-engine.js';
 import type { WalkthroughPlaybackState } from './walkthrough-engine.js';
 import type { Walkthrough, WalkthroughStop } from '../types.js';
 import { resolveQualityTier, hasAnyProxy, getLodBudget, runGpuBenchmark } from './quality-tier.js';
-import { Logger, notify, parseMarkdown, resolveAssetRefs, fetchWithProgress, downloadBlob } from './utilities.js';
+import { Logger, notify, parseMarkdown, resolveAssetRefs, fetchWithProgress, downloadBlob, errMsg, escapeHtml, formatBytes } from './utilities.js';
 import {
     showLoading, hideLoading, updateProgress,
     setDisplayMode, setupCollapsibles, addListener,
@@ -3993,10 +3992,7 @@ function hasValue(val: any): boolean {
     return true;
 }
 
-function escapeHtml(str: unknown): string {
-    const s = typeof str === 'string' ? str : String(str ?? '');
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+// escapeHtml imported from utilities.ts
 
 /** Check if a URL scheme is safe for use in href/src attributes */
 function isSafeUrl(url: string): boolean {
@@ -4299,12 +4295,7 @@ function populateDetailedMetadata(manifest: any): void {
     log.info(`Populated ${filteredSections.length} detailed metadata sections`);
 }
 
-function formatBytes(bytes: number): string {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
-}
+// formatBytes imported from utilities.ts
 
 function populateSourceFilesList(archiveLoader: ArchiveLoader): void {
     const sourceEntries = archiveLoader.getSourceFileEntries();

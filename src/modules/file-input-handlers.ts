@@ -1,6 +1,4 @@
-import { Logger, notify } from './utilities.js';
-
-function errMsg(e: unknown): string { return e instanceof Error ? e.message : String(e); }
+import { Logger, notify, errMsg } from './utilities.js';
 import { ArchiveLoader } from './archive-loader.js';
 import {
     loadSplatFromFile as loadSplatFromFileHandler,

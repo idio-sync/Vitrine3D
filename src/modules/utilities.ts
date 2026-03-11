@@ -550,8 +550,9 @@ async function fetchWithProgress(url: string, onProgress: ((received: number, to
  * @param {string} text - Text to escape
  * @returns {string} Escaped text
  */
-function escapeHtml(text: string): string {
-    return text
+function escapeHtml(text: unknown): string {
+    const s = typeof text === 'string' ? text : String(text ?? '');
+    return s
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -756,6 +757,33 @@ function downloadBlob(blob: Blob, filename: string): void {
 // EXPORTS
 // =============================================================================
 
+/**
+ * Safely extract an error message from an unknown catch value.
+ */
+function errMsg(e: unknown): string {
+    return e instanceof Error ? e.message : String(e);
+}
+
+/**
+ * Format a byte count into a human-readable string (B, KB, MB, GB, TB).
+ */
+function formatBytes(b: number): string {
+    if (b === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(b) / Math.log(1024));
+    return (b / Math.pow(1024, i)).toFixed(i > 1 ? 1 : 0) + ' ' + units[i];
+}
+
+/**
+ * Format an ISO date string as a short locale date (e.g., "Mar 11, 2026").
+ */
+function formatDate(dateStr: string): string {
+    try {
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch { return ''; }
+}
+
 export {
     // Logging system
     Logger,
@@ -774,6 +802,11 @@ export {
     parseMarkdown,
     resolveAssetRefs,
     escapeHtml,
+
+    // Formatting
+    errMsg,
+    formatBytes,
+    formatDate,
 
     // Network utilities
     fetchWithProgress,

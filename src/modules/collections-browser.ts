@@ -7,11 +7,10 @@
  *   file picker → collections list → collection detail → archive viewer
  */
 
-import { Logger } from './utilities.js';
+import { Logger, escapeHtml } from './utilities.js';
 import {
     injectStyles as injectCardStyles,
     renderCard,
-    escapeHtml,
     getLogoSrc,
 } from './collection-page.js';
 import type { CollectionArchive } from './collection-page.js';

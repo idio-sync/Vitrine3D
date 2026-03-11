@@ -6,7 +6,7 @@
  * Communicates with the /api/archives REST API (available when ADMIN_ENABLED=true in Docker).
  */
 
-import { Logger, notify } from './utilities.js';
+import { Logger, notify, formatBytes, escapeHtml } from './utilities.js';
 import { activateTool } from './ui-controller.js';
 import { initCollectionManager, getActiveCollectionArchives, updateChipsForArchive, hideCollectionDetail } from './collection-manager.js';
 
@@ -107,14 +107,8 @@ let recordingsBody: HTMLElement | null = null;
 
 // ── Helpers ──
 
-function formatBytes(b: number): string {
-    if (b === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(b) / Math.log(1024));
-    return (b / Math.pow(1024, i)).toFixed(i > 1 ? 1 : 0) + ' ' + units[i];
-}
-
-function formatDate(iso: string): string {
+/** Relative-time date formatting for the library archive list. */
+function formatDateRelative(iso: string): string {
     const d = new Date(iso);
     const now = new Date();
     const diff = now.getTime() - d.getTime();
@@ -122,12 +116,6 @@ function formatDate(iso: string): string {
     if (diff < 172800000) return 'Yesterday';
     if (diff < 604800000) return Math.floor(diff / 86400000) + 'd ago';
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
-function escapeHtml(s: string): string {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
 }
 
 // ── API ──
@@ -333,7 +321,7 @@ function renderCard(a: Archive): HTMLElement {
             '<div class="library-card-title" title="' + escapeHtml(a.title) + '">' + escapeHtml(a.title) + '</div>' +
             '<div class="library-card-meta">' +
                 '<span>' + formatBytes(a.size) + '</span>' +
-                '<span>' + formatDate(a.modified) + '</span>' +
+                '<span>' + formatDateRelative(a.modified) + '</span>' +
             '</div>' +
         '</div>';
 
@@ -437,7 +425,7 @@ function selectArchive(hash: string): void {
     if (detailTitle) detailTitle.textContent = archive.title;
     if (detailFilename) detailFilename.textContent = archive.filename;
     if (detailSize) detailSize.textContent = formatBytes(archive.size);
-    if (detailDate) detailDate.textContent = formatDate(archive.modified);
+    if (detailDate) detailDate.textContent = formatDateRelative(archive.modified);
 
     renderAssets(archive);
     renderMetadata(archive);

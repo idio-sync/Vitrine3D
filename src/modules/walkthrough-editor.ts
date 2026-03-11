@@ -6,6 +6,7 @@
  */
 
 import { Logger } from './logger.js';
+import { escapeHtml } from './utilities.js';
 import { WALKTHROUGH } from './constants.js';
 import type { Walkthrough, WalkthroughTransition } from '../types.js';
 
@@ -368,7 +369,3 @@ function reorderStop(fromIndex: number, toIndex: number): void {
 // =============================================================================
 // UTILITIES
 // =============================================================================
-
-function escapeHtml(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}

@@ -6,7 +6,7 @@
  * Source Sans 3 typography, gold accent rules, staggered entry animations.
  */
 
-import { Logger } from './utilities.js';
+import { Logger, formatBytes, escapeHtml, formatDate } from './utilities.js';
 
 const log = Logger.getLogger('collection-page');
 
@@ -35,26 +35,7 @@ interface CollectionData {
 }
 
 // ── Helpers ──
-
-export function formatBytes(b: number): string {
-    if (b === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(b) / Math.log(1024));
-    return (b / Math.pow(1024, i)).toFixed(i > 1 ? 1 : 0) + ' ' + units[i];
-}
-
-export function escapeHtml(s: string): string {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
-}
-
-export function formatDate(dateStr: string): string {
-    try {
-        const d = new Date(dateStr);
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    } catch { return ''; }
-}
+// formatBytes, escapeHtml, formatDate imported from utilities.ts
 
 export const ASSET_LABELS: Record<string, string> = {
     splat: 'Gaussian Splat',

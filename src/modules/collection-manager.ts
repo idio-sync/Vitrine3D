@@ -6,7 +6,7 @@
  * and collection chip display in the archive detail pane.
  */
 
-import { Logger, notify } from './utilities.js';
+import { Logger, notify, escapeHtml } from './utilities.js';
 import type { Collection } from '../types.js';
 
 const log = Logger.getLogger('collection-manager');
@@ -513,12 +513,6 @@ async function fetchArchiveCollections(archiveHash: string): Promise<Collection[
         } catch { /* skip */ }
     }
     return result;
-}
-
-function escapeHtml(s: string): string {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
 }
 
 // ── Actions ──
