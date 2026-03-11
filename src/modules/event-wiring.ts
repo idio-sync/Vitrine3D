@@ -1257,16 +1257,9 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         deps.colmap.setFrustumScale(scale);
     });
 
-    addListener('btn-align-flightpath', 'click', () => deps.colmap.alignFlightPath());
-
     addListener('btn-align-from-camera-data', 'click', async () => {
-        console.log('[ICP-DEBUG] Align button clicked');
-        alert('ICP-DEBUG: Align button clicked');
         if (deps.colmap.alignFromCameraData) {
-            console.log('[ICP-DEBUG] Calling alignFromCameraData...');
             await deps.colmap.alignFromCameraData();
-        } else {
-            console.log('[ICP-DEBUG] alignFromCameraData not available on deps.colmap');
         }
     });
 
