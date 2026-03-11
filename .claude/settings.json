@@ -30,7 +30,11 @@
       "Bash(git log:*)",
       "Bash(xargs -I{} git log -1 --format=%H -- {})",
       "Bash(for f:*)",
-      "Bash(do echo:*)"
+      "Bash(do echo:*)",
+      "WebFetch(domain:www.metmuseum.org)",
+      "WebFetch(domain:vntana.com)",
+      "WebFetch(domain:polyhaven.com)",
+      "Bash(npm view:*)"
     ],
     "additionalDirectories": [
       "\\tmp"
