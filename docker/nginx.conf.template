@@ -143,6 +143,12 @@ server {
         add_header Cache-Control "public";
     }
 
+    # Block direct access to backup history files (must use authenticated API)
+    location ^~ /archives/history/ {
+        deny all;
+        return 403;
+    }
+
     # Serve archive files (.ddim, .a3d, .a3z) with proper headers
     # Range header must be in Allow-Headers for cross-origin byte-range requests (used by loadRemoteIndex)
     location ~* \.(ddim|a3d|a3z)$ {
