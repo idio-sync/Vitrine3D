@@ -19,6 +19,7 @@ interface CollectionWithArchives extends Collection {
 
 // ── State ──
 
+let _initialized = false;
 let collections: Collection[] = [];
 let activeSlug: string = ''; // '' = All Archives
 let _csrfTokenGetter: (() => string | null) | null = null;
@@ -586,6 +587,11 @@ export interface CollectionManagerConfig {
  * Initialize the collection manager. Call after library panel init.
  */
 export async function initCollectionManager(config: CollectionManagerConfig): Promise<void> {
+    if (_initialized) {
+        log.warn('Collection manager already initialized — skipping duplicate init');
+        return;
+    }
+    _initialized = true;
     authHeadersGetter = config.getAuthHeaders;
     _csrfTokenGetter = config.getCsrfToken;
     onFilterChange = config.onFilterChange;

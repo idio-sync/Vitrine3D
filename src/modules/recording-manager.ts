@@ -196,6 +196,7 @@ export async function uploadRecording(options: {
     trimStart: number;
     trimEnd: number;
     serverUrl?: string;
+    authHeaders?: Record<string, string>;
 }): Promise<{ id: string; status: string } | null> {
     if (!_result) {
         notify.error('No recording to upload');
@@ -220,9 +221,12 @@ export async function uploadRecording(options: {
 
     try {
         const baseUrl = options.serverUrl || '';
+        const headers: Record<string, string> = { ...(options.authHeaders || {}) };
         const res = await fetch(`${baseUrl}/api/media/upload`, {
             method: 'POST',
             body: formData,
+            headers,
+            credentials: 'same-origin',
         });
 
         if (!res.ok) {
@@ -236,9 +240,10 @@ export async function uploadRecording(options: {
         cleanup();
         notify.success('Recording uploaded — processing...');
         return data;
-    } catch (e: any) {
+    } catch (e: unknown) {
         _state = 'recorded'; // allow retry
-        notify.error(`Upload failed: ${e.message}`);
+        const msg = e instanceof Error ? e.message : String(e);
+        notify.error(`Upload failed: ${msg}`);
         log.error('Upload error:', e);
         return null;
     }

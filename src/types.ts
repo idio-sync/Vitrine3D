@@ -432,6 +432,7 @@ export interface EventWiringDeps {
         saveToLibrary: () => void;
     };
     screenshots: {
+        downloadScreenshot: () => void;
         captureScreenshotToList: () => void;
         showViewfinder: () => void;
         captureManualPreview: () => void;
