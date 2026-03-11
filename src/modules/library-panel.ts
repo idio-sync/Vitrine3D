@@ -102,6 +102,8 @@ let detailAssets: HTMLElement | null = null;
 let detailAssetsSection: HTMLElement | null = null;
 let detailMetadata: HTMLElement | null = null;
 let detailMetadataSection: HTMLElement | null = null;
+let detailVersions: HTMLElement | null = null;
+let detailVersionsSection: HTMLElement | null = null;
 let recordingsSection: HTMLElement | null = null;
 let recordingsBody: HTMLElement | null = null;
 
@@ -441,6 +443,12 @@ function selectArchive(hash: string): void {
         mediaCache.set(hash, items);
         if (selectedHash === hash) renderRecordings(items);
     });
+
+    // Fetch and render version history
+    renderVersions([], hash);
+    fetchVersionHistory(hash).then(versions => {
+        if (selectedHash === hash) renderVersions(versions, hash);
+    });
 }
 
 function showDetailEmpty(): void {
@@ -590,6 +598,48 @@ function renderRecordings(items: MediaItem[]): void {
     for (const item of items) {
         recordingsBody.appendChild(renderMediaCard(item));
     }
+}
+
+// ── Version History ──
+
+interface VersionEntry {
+    id: number;
+    size: number;
+    created_at: string;
+}
+
+async function fetchVersionHistory(archiveHash: string): Promise<VersionEntry[]> {
+    try {
+        const res = await apiFetch('/api/archives/' + encodeURIComponent(archiveHash) + '/versions');
+        if (!res.ok) return [];
+        const data = await res.json() as { versions: VersionEntry[] };
+        return data.versions || [];
+    } catch {
+        log.warn('Failed to fetch versions for', archiveHash);
+        return [];
+    }
+}
+
+function renderVersions(versions: VersionEntry[], archiveHash: string): void {
+    if (!detailVersions || !detailVersionsSection) return;
+
+    if (versions.length === 0) {
+        detailVersionsSection.style.display = 'none';
+        return;
+    }
+    detailVersionsSection.style.display = '';
+    let html = '';
+    for (const v of versions) {
+        const date = formatDateRelative(v.created_at);
+        const size = formatBytes(v.size);
+        const downloadUrl = '/api/archives/' + encodeURIComponent(archiveHash) + '/versions/' + v.id + '/download';
+        html += '<div class="version-item">'
+            + '<span class="version-date">' + escapeHtml(date) + '</span>'
+            + '<span class="version-size">' + escapeHtml(size) + '</span>'
+            + '<a class="version-download" href="' + escapeHtml(downloadUrl) + '" title="Download">&#8681;</a>'
+            + '</div>';
+    }
+    detailVersions.innerHTML = html;
 }
 
 function renderMediaCard(item: MediaItem): HTMLElement {
@@ -1161,6 +1211,8 @@ export function initLibraryPanel(): void {
     detailMetadataSection = document.getElementById('library-metadata-section');
     recordingsSection = document.getElementById('library-recordings-section');
     recordingsBody = document.getElementById('library-detail-recordings');
+    detailVersions = document.getElementById('library-detail-versions');
+    detailVersionsSection = document.getElementById('library-versions-section');
 
     // Show "Save to Library" button in export pane
     const saveBtn = document.getElementById('btn-save-to-library');
