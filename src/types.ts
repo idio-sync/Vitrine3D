@@ -502,9 +502,6 @@ export interface EventWiringDeps {
         setupMetadataSidebar: () => void;
         populateMetadataDisplay: () => void;
     };
-    share: {
-        copyShareLink: () => void;
-    };
     transform: {
         setSelectedObject: (selection: SelectedObject) => void;
         setTransformMode: (mode: TransformMode) => void;

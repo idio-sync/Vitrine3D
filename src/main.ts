@@ -814,7 +814,6 @@ function createEventWiringDeps(): EventWiringDeps {
         screenshots: { downloadScreenshot, captureScreenshotToList, showViewfinder, captureManualPreview, hideViewfinder },
         recording: { startRecording: handleStartRecording, stopRecording: handleStopRecording },
         metadata: { hideMetadataPanel, toggleMetadataDisplay, setupMetadataSidebar, populateMetadataDisplay },
-        share: { copyShareLink },
         transform: { setSelectedObject, setTransformMode, resetTransform, updateTransformInputs },
         crossSection: crossSection!,
         walkthrough: {
@@ -3107,51 +3106,6 @@ function loadAlignmentFromUrl(url: string) {
     return loadAlignmentFromUrlHandler(url, createAlignmentIODeps());
 }
 
-// Open share dialog with current state
-async function copyShareLink() {
-    // Gather current state for the share dialog
-    const shareState = {
-        archiveUrl: state.currentArchiveUrl,
-        splatUrl: state.currentSplatUrl,
-        modelUrl: state.currentModelUrl,
-        pointcloudUrl: state.currentPointcloudUrl,
-        displayMode: state.displayMode,
-        splatTransform: null,
-        modelTransform: null,
-        pointcloudTransform: null
-    };
-
-    // Add splat transform if available
-    if (splatMesh) {
-        shareState.splatTransform = {
-            position: [splatMesh.position.x, splatMesh.position.y, splatMesh.position.z],
-            rotation: [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z],
-            scale: splatMesh.scale.x
-        };
-    }
-
-    // Add model transform if available
-    if (modelGroup) {
-        shareState.modelTransform = {
-            position: [modelGroup.position.x, modelGroup.position.y, modelGroup.position.z],
-            rotation: [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z],
-            scale: modelGroup.scale.x
-        };
-    }
-
-    // Add pointcloud transform if available
-    if (pointcloudGroup) {
-        shareState.pointcloudTransform = {
-            position: [pointcloudGroup.position.x, pointcloudGroup.position.y, pointcloudGroup.position.z],
-            rotation: [pointcloudGroup.rotation.x, pointcloudGroup.rotation.y, pointcloudGroup.rotation.z],
-            scale: pointcloudGroup.scale.x
-        };
-    }
-
-    // Show the share dialog
-    const { showShareDialog } = await import('./modules/share-dialog.js');
-    showShareDialog(shareState);
-}
 
 function resetAlignment() {
     resetAlignmentHandler(createAlignmentDeps());
