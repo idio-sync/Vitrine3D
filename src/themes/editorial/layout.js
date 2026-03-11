@@ -720,6 +720,10 @@ export function setup(manifest, deps) {
     const log = Logger.getLogger('editorial-layout');
     log.info('Setting up editorial layout');
 
+    // Hide orbit-reset when the archive locks the orbit pivot (pan disabled)
+    const vs = manifest && manifest.viewer_settings;
+    const cameraLocked = !!(vs && vs.lock_orbit);
+
     const viewerContainer = document.getElementById('viewer-container') || document.body;
 
     // Set scene background from theme metadata, or fall back to CSS variable.
@@ -1274,14 +1278,14 @@ export function setup(manifest, deps) {
         annoRule.className = 'editorial-ribbon-rule';
         toolsGroup.appendChild(annoRule);
 
-        // Reset orbit center
-        toolsGroup.appendChild(createOrbitResetBtn());
+        // Reset orbit center — only useful when camera is fully unlocked
+        if (!cameraLocked) toolsGroup.appendChild(createOrbitResetBtn());
 
         if (measureWrapper) toolsGroup.appendChild(measureWrapper);
         if (sliceWrapper) toolsGroup.appendChild(sliceWrapper);
     } else {
         // No annotations — still show orbit reset and measure
-        toolsGroup.appendChild(createOrbitResetBtn());
+        if (!cameraLocked) toolsGroup.appendChild(createOrbitResetBtn());
         if (measureWrapper) toolsGroup.appendChild(measureWrapper);
         if (sliceWrapper) toolsGroup.appendChild(sliceWrapper);
     }
