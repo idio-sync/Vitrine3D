@@ -15,7 +15,105 @@ This guide covers the **editor** at `/editor/`. For the kiosk viewer at `/`, see
 - **Model** — 3D mesh (`.glb`, `.obj`)
 - **Point Cloud** — E57 point cloud (`.e57`)
 - **Drawing** — 2D/3D CAD drawing (`.dxf`); load from file or URL like any other asset type
-- **Flight Path** — Drone flight log (`.csv`, `.kml`, `.kmz`, `.srt`); renders GPS telemetry as a 3D line with hover data points
+- **Flight Path** — Drone flight log (`.txt`, `.csv`, `.kml`, `.kmz`, `.srt`); renders GPS telemetry as a 3D line with hover data points. Supports non-destructive trim with start/end scrubber handles
+- **SfM Cameras** — Colmap Structure-from-Motion data (`cameras.bin` + `images.bin`); visualizes camera positions as frustum wireframes or instanced markers. Can be auto-aligned to a flight path via Umeyama similarity transform
+
+## Example: Archive Creation to Delivery
+
+This walkthrough covers the full pipeline from loading raw assets through to sharing an archive with a client.
+
+### 1. Load assets
+
+Open the editor at `/editor/`. Use the Load Files panel to bring in your data:
+
+- **Splat**: Click "From File" under Splat and select your `.ply` or `.splat` Gaussian splat file
+- **Model**: Click "From File" under Model and load the `.glb` mesh
+- **Point Cloud** (optional): Load an `.e57` if you have LiDAR data to include
+
+All three assets render simultaneously in "Both" display mode. If you also have a DJI flight log or Colmap SfM cameras, load those from their respective sections — they'll appear as overlays in the scene.
+
+### 2. Align assets spatially
+
+Assets rarely share the same coordinate system out of the box:
+
+1. Click **Auto Align** to get a rough bounding-box alignment
+2. Use **Landmark Alignment** for precision — place 3+ matching point pairs on the splat and mesh, check the RMSE readout, then click Apply
+3. Alternatively, use **ICP Align** if the assets are already close — it refines the registration automatically using rigid transforms
+
+If you have a flight path and SfM cameras loaded, click **Align Cameras to Path** to compute the Umeyama similarity transform automatically.
+
+### 3. Set up the scene
+
+In the Scene Settings panel:
+
+- Choose a **background color** or load an **HDR environment map** for image-based lighting
+- Enable **shadows** — a shadow catcher ground plane appears automatically
+- Adjust **tone mapping** (ACESFilmic works well for presentation) and **exposure**
+- Optionally enable **SSAO** and **Bloom** for depth and cinematic polish
+
+Frame the subject with the camera, then set any **camera constraints** (lock orbit/pan/zoom, max elevation) that should apply in the kiosk viewer.
+
+### 4. Add annotations
+
+Press `A` to enter annotation mode, then click on surfaces to place markers. For each annotation:
+
+- Write a **title** and **description** (supports markdown)
+- Attach **images** that get bundled into the archive
+- The current camera viewpoint is saved — kiosk viewers will animate to this view when the annotation is selected
+
+### 5. Fill in metadata
+
+Press `M` to open the metadata sidebar. Choose a **completeness profile** (Basic for quick delivery, Archival for full Dublin Core). Key fields:
+
+- **Project tab**: Title, creator, description, tags, license
+- **Provenance tab**: Capture date, equipment, operator
+- **Quality tab**: Accuracy, resolution, coordinate reference system
+
+The **SIP validator** at export time will flag any missing required fields.
+
+### 6. Create a walkthrough (optional)
+
+Open the Walkthrough panel and click "Add Stop" at each camera position you want in the guided tour. Set transition types (fly/fade/cut) and dwell times. Click Preview to test the sequence.
+
+### 7. Capture a preview image
+
+Click **Set Archive Preview Image** to open the viewfinder overlay. Frame the subject and capture — this becomes the archive thumbnail shown in the kiosk click-to-load gate and the library browser.
+
+### 8. Export the archive
+
+Click the **Export Archive** toolbar button (or use the Export section in the controls panel). The editor:
+
+1. Computes SHA-256 hashes for all bundled files (requires HTTPS)
+2. Runs the SIP compliance validator — review any warnings
+3. Bundles everything (assets, manifest, annotations, screenshots, preview image, README.txt) into a `.ddim` ZIP archive
+4. Downloads the file to your browser
+
+### 9. Deploy to the library (Docker)
+
+Upload the `.ddim` file to your Docker server's archive directory. The meta-server API (`POST /api/archives`) indexes it automatically. The archive appears in the library browser at `/`.
+
+Optionally, add the archive to a **collection** via the library panel — collections group related archives with a shared thumbnail and description.
+
+### 10. Share with clients
+
+Generate a share link:
+
+- **Direct link**: `https://viewer.example.com?archive=/archives/uuid/scan.ddim` — loads immediately
+- **Deferred embed**: Add `&autoload=false` for a click-to-load gate (~100KB initial transfer instead of the full archive)
+- **Themed**: Add `&theme=editorial` for the gold-and-navy editorial layout, or `&theme=gallery` for cinematic full-bleed
+
+For iframes:
+
+```html
+<iframe
+  src="https://viewer.example.com?archive=/archives/uuid/scan.ddim&autoload=false&theme=editorial"
+  width="100%" height="600" frameborder="0" allow="fullscreen">
+</iframe>
+```
+
+For desktop delivery, build a **branded Tauri executable** (`npm run branded`) that bundles the archive into a standalone `.exe` or `.msi` installer with a custom name and icon.
+
+---
 
 ## Display Modes
 
@@ -50,7 +148,7 @@ This guide covers the **editor** at `/editor/`. For the kiosk viewer at `/`, see
 ## Alignment
 
 - **Auto Align** — Aligns objects using bounding box center-of-mass matching
-- **ICP Align** — Iterative Closest Point algorithm for precise point-to-point registration (works best when objects are roughly aligned first)
+- **ICP Align** — Iterative Closest Point algorithm for precise point-to-point registration using rigid transforms (works best when objects are roughly aligned first). Supports optional `points3D.bin` from Colmap for denser correspondence sets
 - **Landmark Alignment (N-point)** — Interactive point-pair matching for precise manual alignment:
   1. Click the landmark alignment button to enter the tool
   2. Click a point on the anchor object, then the matching point on the mover object — this is one pair
@@ -124,6 +222,29 @@ A walkthrough is a guided sequence of camera stops that plays back automatically
 | `fly` | Smooth camera animation from current position to stop |
 | `fade` | Fades to black, cuts camera, fades back in |
 | `cut` | Instant camera jump with no animation |
+
+## Post-Processing Effects
+
+The editor includes optional post-processing effects accessible from the Scene Settings panel:
+
+- **SSAO** (Screen Space Ambient Occlusion) — adds depth perception to mesh surfaces via the `SSAOPass`
+- **Bloom** — HDR glow effect via `UnrealBloomPass` for emissive and bright surfaces
+- **Vignette** — corner darkening with adjustable falloff
+- **Chromatic Aberration** — subtle RGB channel separation
+- **Film Grain** — noise overlay for cinematic feel
+
+Effects are combined in a custom uber-shader and are opt-in. They apply to meshes and point clouds but not to Gaussian splats (Spark.js uses a custom shader incompatible with the post-processing pipeline).
+
+## Recording
+
+Capture video and GIF recordings of the 3D scene:
+
+- **Turntable** — automated 360-degree spin recording
+- **Walkthrough** — records the guided walkthrough playback
+- **Annotation Tour** — flies through each annotation sequentially
+- **Free** — manual camera recording with start/stop controls
+
+Recordings are captured as WebM via the MediaRecorder API, then uploaded to the server-side FFmpeg pipeline for transcoding to MP4 and GIF. An inline trim UI with start/end scrubber handles allows adjusting the clip before upload.
 
 ## Scene Settings
 

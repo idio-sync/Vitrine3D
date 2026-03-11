@@ -103,14 +103,21 @@
 
 ## 2. Technology — Alignment & Analysis
 
-### 2.1 ICP Alignment Is Naive
+### 2.1 ICP Alignment — Improved but Not Complete
 
-**Problem:** The ICP implementation uses basic nearest-neighbor matching with a KD-tree but lacks RANSAC outlier rejection, multi-scale coarse-to-fine alignment, convergence criteria beyond iteration count, or point-to-plane variants. For a tool that documents metrology-grade accuracy, this is a significant gap between what the metadata can describe and what the tool can verify.
+**Problem:** ~~The ICP implementation uses basic nearest-neighbor matching with a KD-tree but lacks RANSAC outlier rejection, multi-scale coarse-to-fine alignment, convergence criteria beyond iteration count, or point-to-plane variants.~~ The ICP implementation has been significantly improved but still lacks some advanced features.
 
-**Solutions:**
-- **Short-term:** Add convergence criteria (stop when the transformation change between iterations falls below a threshold). Add a maximum correspondence distance to reject gross outliers.
+**Status: Partially Implemented (2026-03-07)**
+- **Rigid transforms** in ICP iterations prevent scale accumulation (previously a source of drift)
+- **Coarse rotation search** provides better initial alignment before ICP refinement
+- **points3D.bin support** — Colmap sparse reconstruction points can be used as alignment targets alongside mesh/splat geometry
+- **SpatialHash** nearest-neighbor lookup added as a faster alternative for large point sets
+- **Splat point sampling** (`sampleSplatPoints`) enables ICP alignment directly against Gaussian splat data
+- Alignment quality metrics (RMSE, match count) displayed in the UI after Colmap↔flight path alignment
+
+**Remaining solutions:**
 - **Medium-term:** Implement point-to-plane ICP (requires normals), which converges faster and more accurately on planar surfaces common in architecture and sculpture. Add RANSAC-based initial alignment for cases where the starting positions are far apart.
-- **Long-term:** Integrate a WASM-compiled alignment library (e.g., Open3D's registration module compiled to WebAssembly) for robust, production-quality registration. Provide alignment quality metrics (RMSE, overlap percentage, correspondence histogram) in the UI and store them in the manifest.
+- **Long-term:** Integrate a WASM-compiled alignment library (e.g., Open3D's registration module compiled to WebAssembly) for robust, production-quality registration.
 
 ---
 
@@ -311,11 +318,13 @@
 - **Point-to-point distance measurement** — two-click flow, 3D line overlay, DOM distance markers, configurable units (m/cm/mm/in/ft). Works in main app and kiosk viewer. (`measurement-system.ts`)
 - **Cross-section tool** — arbitrary-orientation clipping plane with draggable 3D handle, normal flip, and depth snap. Works in main app and kiosk viewer. (`cross-section.ts`)
 
+**Additional implementation (2026-03-07):**
+- **Coordinate readout** — hover over the surface, display XYZ coordinates in real-time. Implemented in the Industrial kiosk theme (`src/themes/industrial/`).
+
 **Remaining solutions:**
 - **Medium-term:** Add:
   - **Multi-point polyline measurement** — click a series of points, display cumulative distance
   - **Surface area measurement** — select a region, compute area from the mesh triangles within it
-  - **Coordinate readout** — hover over the surface, display XYZ coordinates in real-time
 - **Long-term:** Add:
   - **Volume estimation** from closed mesh regions
   - **Deviation analysis** — color-map the distance between two representations (e.g., mesh vs. point cloud) to visualize reconstruction accuracy
@@ -581,7 +590,7 @@
 | 8.2 | No metadata validation | Medium | Medium | **Medium** | **Done** |
 | 9.1 | No versioning | Medium | Medium | **Medium** | **Done** |
 | 1.3 | CDN dependency | Low | Low | **Low** | Resolved |
-| 2.1 | ICP alignment naive | Low | High | **Low** | |
+| 2.1 | ICP alignment naive | Low | High | **Low** | Partial |
 | 6.2 | Embedded JS will age | Low | High | **Low** | Deprecated |
 
 ---

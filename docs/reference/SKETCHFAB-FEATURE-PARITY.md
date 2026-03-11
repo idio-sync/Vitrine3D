@@ -1,7 +1,7 @@
 # Sketchfab Feature Parity Analysis
 
-**Date:** 2026-02-11 (last updated 2026-03-04)
-**Purpose:** Ranked feature gap analysis between this viewer and Sketchfab, evaluated for Three.js 0.182.0 feasibility.
+**Date:** 2026-02-11 (last updated 2026-03-11)
+**Purpose:** Ranked feature gap analysis between this viewer and Sketchfab, evaluated for Three.js 0.183.2 feasibility.
 
 ---
 
@@ -29,6 +29,10 @@
 | 2026-03-04 | Camera constraints (full). Lock orbit/pan/zoom toggles and max elevation angle. Saved in archive manifest, auto-applied in kiosk mode. | `main.ts`, `editor/index.html`, `kiosk-main.ts` |
 | 2026-03-04 | Gallery and Exhibit kiosk themes. Gallery: cinematic full-bleed with click gate. Exhibit: institutional with attract mode and click gate. | `src/themes/gallery/`, `src/themes/exhibit/` |
 | 2026-03-04 | Kiosk/editor bundle split. Two separate Vite entry points: kiosk at `/` and editor at `/editor/`. Kiosk bundle contains no editor code. | `src/index.html`, `src/editor/index.html`, `vite.config.ts` |
+| 2026-03-07 | Ranks 11, 12: SSAO + Bloom via `post-processing.ts` EffectComposer pipeline. Ranks 23, 24, 25: Vignette, chromatic aberration, film grain via custom uber-shader. | `post-processing.ts`, `main.ts`, `types.ts` |
+| 2026-03-07 | Rank 38: Video/GIF recording via MediaRecorder API. Four modes: turntable, walkthrough, annotation tour, free camera. Server-side FFmpeg transcode to MP4 and GIF. | `recording-manager.ts`, `recording-trim.ts` |
+| 2026-03-07 | Rank 10: Orthographic view toggle in Industrial theme (View menu, Top/Front/Right presets). | `src/themes/industrial/layout.js` |
+| 2026-03-07 | Industrial kiosk theme — MeshLab-style CAD inspection UI with coordinate readout, view cube, properties panel, layers tree, splat budget slider, and QA defect annotation workflow. | `src/themes/industrial/` |
 
 ---
 
@@ -59,7 +63,7 @@ These features exist in our viewer but **not in Sketchfab**:
 | Dublin Core metadata system (50+ fields, 8 tabs) | Archival-grade metadata |
 | SIP compliance validation at export time | Required-field checking, compliance scoring, manifest audit trail |
 | Split-view dual-canvas rendering | Side-by-side comparison |
-| Kiosk theming system | Pluggable themes (editorial, gallery, exhibit, minimal) with custom layouts |
+| Kiosk theming system | Pluggable themes (editorial, gallery, exhibit, industrial, minimal) with custom layouts |
 | SD/HD quality tier with proxy assets | Device-aware auto-detection, one-click switching |
 | Draco mesh compression support | Transparent loading of Draco-compressed GLBs |
 | STEP/IGES CAD file loading (occt-import-js WASM) | Parametric CAD in a dedicated layer |
@@ -85,10 +89,10 @@ These features deliver the most visual/functional parity per hour of work.
 | 7 | **Auto-rotate** | Turntable with speed/direction control | **DONE** | TRIVIAL | Medium | Toolbar toggle button. Default on in kiosk (auto-disables on interaction), off in main app. Speed: 2.0 (~30s/rev). |
 | 8 | **Camera constraints** | Orbit angle limits, zoom min/max, pan bounds | **DONE** | LOW | Medium | Lock orbit/pan/zoom toggles and max elevation angle. Saved in archive manifest, auto-applied in kiosk mode. |
 | 9 | **FOV control** | Adjustable field of view slider | **DONE** | TRIVIAL | Medium | Slider (10°–120°) in Scene Settings, kiosk, and editorial ribbon. |
-| 10 | **Orthographic view toggle** | Parallel projection mode | No | LOW | Medium | Swap between `PerspectiveCamera` and `OrthographicCamera`. Useful for architectural viewing. |
+| 10 | **Orthographic view toggle** | Parallel projection mode | **DONE** | LOW | Medium | Toggle between `PerspectiveCamera` and `OrthographicCamera` in the Industrial theme. View menu + orthographic view presets (Top/Front/Right). |
 
 **Estimated total effort for Tier 1: ~15-25 hours**
-**Progress: 9 of 10 features implemented (ranks 1–9). Only orthographic view remaining.**
+**Progress: 10 of 10 features implemented (ranks 1–10). Tier 1 complete.**
 **Expected result: ~60% visual parity with Sketchfab**
 
 ---
@@ -99,8 +103,8 @@ These are the features that make a 3D viewer feel "professional grade."
 
 | Rank | Feature | Sketchfab Has | We Have | Feasibility | Impact | Notes |
 |------|---------|--------------|---------|-------------|--------|-------|
-| 11 | **SSAO (ambient occlusion)** | Adjustable intensity & radius | No | MEDIUM | Very High | `SSAOPass` via EffectComposer. Dramatically improves depth perception. ~15-25% FPS cost. |
-| 12 | **Bloom** | HDR bloom with threshold & intensity | No | MEDIUM | High | `UnrealBloomPass`. Makes emissive surfaces glow, adds cinematic quality. |
+| 11 | **SSAO (ambient occlusion)** | Adjustable intensity & radius | **DONE** | MEDIUM | Very High | `SSAOPass` via EffectComposer in `post-processing.ts`. Adjustable intensity and radius. |
+| 12 | **Bloom** | HDR bloom with threshold & intensity | **DONE** | MEDIUM | High | `UnrealBloomPass` in `post-processing.ts`. Threshold, strength, and radius controls. |
 | 13 | **Clipping/section planes** | X/Y/Z axis with position sliders | **DONE** | MEDIUM | Very High | Arbitrary-orientation clipping plane with draggable 3D handle, normal flip, and depth snap. `cross-section.ts`. Works in main app and kiosk. |
 | 14 | **Distance measurement tool** | Click two points, show distance | **DONE** | MEDIUM | Very High | Two-click flow, 3D line overlay, DOM distance markers, configurable units (m/cm/mm/in/ft). `measurement-system.ts`. Works in main app and kiosk. |
 | 15 | **Guided annotation tours** | Sequential walkthrough with camera animation | **DONE** | MEDIUM | High | Walkthrough engine with camera-stop sequences, fly/fade/cut transitions, configurable dwell times, annotation links, auto-play and loop. `walkthrough-engine.ts`, `walkthrough-controller.ts`, `walkthrough-editor.ts`. |
@@ -111,7 +115,7 @@ These are the features that make a 3D viewer feel "professional grade."
 | 20 | **Outline / selection highlight** | Glow effect on hovered/selected objects | No | LOW-MEDIUM | Medium | `OutlinePass` in EffectComposer. Better visual feedback for object interaction. |
 
 **Estimated total effort for Tier 2: ~40-60 hours**
-**Progress: 4 of 10 features implemented (ranks 13, 14, 15, 16).**
+**Progress: 6 of 10 features implemented (ranks 11, 12, 13, 14, 15, 16).**
 **Expected result: ~85% functional parity with Sketchfab**
 
 ---
@@ -124,9 +128,9 @@ Features that enhance the professional feel but aren't critical for core use cas
 |------|---------|--------------|---------|-------------|--------|-------|
 | 21 | **Depth of field** | Adjustable focal distance & aperture | No | MEDIUM | Medium | `BokehPass`. Cinematic but niche — most useful for beauty shots. |
 | 22 | **Color grading / exposure control** | Temperature, brightness, contrast, saturation | No | MEDIUM | Medium | Custom shader pass or LUTPass. Add exposure slider at minimum. |
-| 23 | **Vignette** | Corner darkening with adjustable falloff | No | LOW | Low-Medium | Simple shader pass. Quick cinematic polish. |
-| 24 | **Chromatic aberration** | RGB channel separation | No | LOW | Low | Custom shader. Subtle cinematic effect. |
-| 25 | **Film grain** | Noise overlay | No | LOW | Low | Custom shader. Very subtle effect. |
+| 23 | **Vignette** | Corner darkening with adjustable falloff | **DONE** | LOW | Low-Medium | Custom uber-shader in `post-processing.ts`. Adjustable intensity. |
+| 24 | **Chromatic aberration** | RGB channel separation | **DONE** | LOW | Low | Custom uber-shader in `post-processing.ts`. Adjustable offset. |
+| 25 | **Film grain** | Noise overlay | **DONE** | LOW | Low | Custom uber-shader in `post-processing.ts`. Animated noise overlay. |
 | 26 | **Normal map visualization** | Display normals as RGB | **DONE** | LOW | Low-Medium | `MeshNormalMaterial` toggle. RGB = XYZ surface normals. Mutually exclusive with wireframe/matcap. |
 | 27 | **UV checker pattern** | Validate UV unwrapping | No | LOW | Low | Apply checkerboard texture. Diagnostic tool for modelers. |
 | 28 | **Unlit / shadeless mode** | Disable lighting, show base color only | No | LOW | Medium | Set all materials to `MeshBasicMaterial` temporarily. Useful for texture inspection. |
@@ -150,7 +154,7 @@ Significant engineering investment but differentiating for professional use.
 | 35 | **Exploded view** | Animate parts to separated positions | No | HIGH | Medium | Calculate part bounding boxes, animate along center-to-origin vectors. Useful for assembly visualization. |
 | 36 | **Object picking / scene tree** | Click to select, view hierarchy | Partial | HIGH | Medium | Have raycasting. Need scene graph UI panel + per-object visibility toggles + transform display. |
 | 37 | **Material inspector / editor** | View & edit PBR properties per material | No | HIGH | Medium | Read material properties from scene. Display in UI. Editing adds significant complexity. |
-| 38 | **Turntable video export** | Generate 360-degree animation GIF/video | No | HIGH | Medium | Rotate camera programmatically + `MediaRecorder` API on canvas stream. |
+| 38 | **Turntable video export** | Generate 360-degree animation GIF/video | **DONE** | HIGH | Medium | `recording-manager.ts` — four modes: turntable, walkthrough, annotation tour, free camera. Server-side FFmpeg transcode to MP4 and GIF. |
 | 39 | **Camera animation timeline** | Keyframe camera paths, export video | No | VERY HIGH | Medium | Full keyframe editor UI + camera path interpolation + video export. |
 | 40 | **LOD (level of detail)** | Auto-simplify by camera distance | Partial | HIGH | Medium | SD/HD quality tier system with proxy mesh/splat support addresses manual LOD switching. Still missing: automatic distance-based LOD via `THREE.LOD` class, runtime mesh decimation. |
 
@@ -223,37 +227,50 @@ Features Sketchfab has that are less relevant for 3D scan deliverables.
 | Distance measurement | Two-click flow, 3D line overlay, configurable units (m/cm/mm/in/ft) | Full |
 | Guided annotation tours | Walkthrough engine with fly/fade/cut transitions, dwell times, auto-play and loop | Full |
 | Camera constraints | Lock orbit/pan/zoom, max elevation angle, saved in archive manifest | Full |
+| Orthographic view toggle | Industrial theme View menu + orthographic presets (Top/Front/Right) | Full |
+| SSAO (ambient occlusion) | `SSAOPass` via EffectComposer in `post-processing.ts` | Full |
+| Bloom | `UnrealBloomPass` in `post-processing.ts` | Full |
+| Vignette | Custom uber-shader in `post-processing.ts` | Full |
+| Chromatic aberration | Custom uber-shader in `post-processing.ts` | Full |
+| Film grain | Custom uber-shader in `post-processing.ts` | Full |
+| Turntable video export | `recording-manager.ts` — 4 modes (turntable/walkthrough/annotation tour/free), FFmpeg transcode | Full |
 
 ---
 
 ## Implementation Roadmap Summary
 
 ```
-Phase 1 (Tier 1):  ~15-25 hrs  →  60% visual parity  [IN PROGRESS — 8/10 done]
+Phase 1 (Tier 1):  ~15-25 hrs  →  60% visual parity  [COMPLETE — 10/10 done]
   ✅ Tone mapping, HDR/IBL, env-as-background, shadows, shadow catcher
   ✅ Background image loading (bonus, not in Sketchfab)
   ✅ Auto-rotate (toolbar toggle, kiosk default-on)
   ✅ Screenshot capture (viewfinder preview, thumbnail grid, archive export)
   ✅ FOV control slider (10°–120°)
   ✅ Camera constraints (lock orbit/pan/zoom, max elevation angle, saved in archive)
-  ⬜ Orthographic view
+  ✅ Orthographic view toggle (Industrial theme, View menu + presets)
 
-Phase 2 (Tier 2):  ~40-60 hrs  →  85% functional parity  [IN PROGRESS — 4/10 done]
+Phase 2 (Tier 2):  ~40-60 hrs  →  85% functional parity  [IN PROGRESS — 6/10 done]
   ✅ Matcap rendering mode (5 procedural presets, checkbox + dropdown)
   ✅ Clipping/section planes (cross-section.ts, arbitrary orientation, draggable handle)
   ✅ Distance measurement tool (two-click, 3D overlay, configurable units)
   ✅ Guided annotation tours (walkthrough engine, fly/fade/cut transitions, auto-play)
-  ⬜ SSAO, bloom, inspector, angle measurement, saved viewpoints, outlines
+  ✅ SSAO (post-processing.ts, SSAOPass via EffectComposer)
+  ✅ Bloom (post-processing.ts, UnrealBloomPass)
+  ⬜ Inspector, angle measurement, saved viewpoints, outlines
 
-Phase 3 (Tier 3):  ~25-35 hrs  →  90% polish parity  [IN PROGRESS — 1/10 done]
+Phase 3 (Tier 3):  ~25-35 hrs  →  90% polish parity  [IN PROGRESS — 4/10 done]
   ✅ Normal map visualization (MeshNormalMaterial toggle)
-  ⬜ DOF, color grading, vignette, diagnostic overlays,
+  ✅ Vignette (post-processing.ts, custom uber-shader)
+  ✅ Chromatic aberration (post-processing.ts, custom uber-shader)
+  ✅ Film grain (post-processing.ts, custom uber-shader)
+  ⬜ DOF, color grading, diagnostic overlays,
     unlit mode, area measurement
 
 Phase 4 (Tier 4):  ~80-120 hrs →  95% feature parity
   🟡 LOD (partial — SD/HD quality tier with proxy assets)
+  ✅ Turntable video export (recording-manager.ts, 4 recording modes, FFmpeg transcode)
   ⬜ Section box, animation system, exploded view,
-    scene tree, material editor, video export
+    scene tree, material editor, camera animation timeline
 
 Phase 5 (Tier 5):  ~60-100 hrs →  ~98% parity (diminishing returns)
   ⬜ VR/AR, spatial audio, SSS, viewer API, analytics

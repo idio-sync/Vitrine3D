@@ -5,7 +5,7 @@
 Vitrine3D is a browser-based tool for viewing and comparing three kinds of 3D data side-by-side: Gaussian splats (a photogrammetry format), traditional 3D meshes (GLB/OBJ/STL), and E57 point clouds. It targets cultural-heritage, surveying, and digital-preservation workflows. The app also defines a custom ZIP-based archive format (.ddim) for bundling assets with metadata.
 
 **Two entry points** built as separate Vite bundles:
-- **Kiosk viewer** (`/`) — public-facing read-only viewer with pluggable themes (editorial, gallery, exhibit, minimal). Entry: `src/index.html` → `src/kiosk-web.ts` → `kiosk-main.ts`.
+- **Kiosk viewer** (`/`) — public-facing read-only viewer with pluggable themes (editorial, gallery, exhibit, industrial, minimal). Entry: `src/index.html` → `src/kiosk-web.ts` → `kiosk-main.ts`.
 - **Editor** (`/editor/`) — internal tool for composing scenes, aligning assets, annotating, editing metadata, and exporting archives. Entry: `src/editor/index.html` → `src/main.ts`.
 
 The project uses **Vite + TypeScript** with `allowJs: true` for hybrid .js/.ts support. All modules are now TypeScript (`.ts`). Run `npm run dev` for development (Vite dev server on port 8080), `npm run build` for production build to `dist/`. Dependencies installed via npm, resolved by Vite from `node_modules/`.
@@ -37,20 +37,29 @@ src/
     cad-loader.ts         - STEP/IGES CAD loading via occt-import-js WASM
     collection-manager.ts - Collection CRUD, sidebar rendering, archive membership in editor library
     collection-page.ts    - Editorial-themed collection browser for kiosk; shared rendering helpers
+    collections-browser.ts- Public collections browser page (no auth required)
+    colmap-alignment.ts   - Umeyama similarity transform, timestamp matching, camera↔GPS alignment
+    colmap-loader.ts      - Colmap cameras.bin + images.bin binary parser, ColmapManager class
     constants.ts          - Shared numeric/string constants
     cross-section.ts      - Movable/rotatable clipping plane tool using material-level clipping
+    dji-txt-parser.ts     - DJI binary .txt flight log parser via dji-log-parser-js WASM
     event-wiring.ts       - Central UI event binding — setupUIEvents()
     export-controller.ts  - Archive export, metadata manifests
     file-handlers.ts      - Asset loading (splat, mesh, point cloud, STL, archive)
     file-input-handlers.ts- File input events, URL prompts, URL loaders, Tauri dialogs
+    flight-parsers.ts     - DJI CSV, KML/KMZ, SRT flight log parsers (pure functions)
+    flight-path.ts        - FlightPathManager: 3D flight line rendering, markers, hover tooltips, trim
     fly-controls.ts       - WASD + mouse-look first-person camera
     home-screen.ts        - Stub; home screen now handled by kiosk-main.ts file picker
+    icp-alignment.ts      - ICP refinement with rigid transforms, coarse rotation search, points3D support
     kiosk-main.ts         - Shared kiosk viewer layer (used by both kiosk-web.ts and editor kiosk mode)
     kiosk-viewer.ts       - DEPRECATED: offline viewer generator (fetches CDN deps)
     library-page.ts       - Full-page editorial archive browser with All Archives/Collections tabs
+    library-panel.ts      - Library panel integrated into editor tool rail
     logger.ts             - Standalone Logger class (extracted from utilities)
     map-picker.ts         - Leaflet + OSM interactive map modal for GPS coordinate selection
     measurement-system.ts - Point-to-point distance measurement using raycasting (session-only)
+    mesh-decimator.ts     - In-browser mesh decimation via meshoptimizer WASM, Draco compression
     metadata-manager.ts   - Metadata sidebar (view/edit), Dublin Core schema
     metadata-profile.ts   - Basic/Standard/Archival completeness tiers controlling field visibility
     post-processing.ts    - EffectComposer pipeline: SSAO, Bloom, vignette/aberration/grain
@@ -68,17 +77,19 @@ src/
     theme-loader.ts       - Kiosk theme CSS/layout loading and metadata parsing
     transform-controller.ts- Transform gizmo orchestration, object sync, delta tracking
     ui-controller.ts      - Display-mode switching, progress overlay, keyboard shortcuts
+    undo-manager.ts       - Generic undo/redo stack for editor operations
     url-validation.ts     - URL validation for user-entered URLs (extracted, testable)
     utilities.ts          - Logger, notifications, mesh helpers
     walkthrough-controller.ts - Thin orchestration layer bridging walkthrough editor and engine
     walkthrough-editor.ts - Walkthrough props pane: stop list, inline editor, drag-to-reorder
     walkthrough-engine.ts - Pure playback state machine (no DOM/Three.js deps)
-    __tests__/            - Vitest test suites (10 suites; alignment.test.ts added)
+    __tests__/            - Vitest test suites (21 suites, ~420 tests)
   themes/
     _template/            - Copy to create a new theme
     editorial/            - Gold/navy editorial layout theme (default)
     gallery/              - Cinematic full-bleed theme with click gate
     exhibit/              - Institutional theme with attract mode and click gate
+    industrial/           - MeshLab-style CAD inspection theme with coord readout and view cube
     minimal/              - Neutral white sidebar theme
 
 docker/                   - Dockerfile (multi-stage: Node 20 + nginx:alpine), s6-overlay,
@@ -158,16 +169,26 @@ utilities.ts  (imports constants, logger, THREE)
      +---> walkthrough-engine.ts   (constants only — pure state machine, no DOM/THREE deps)
      +---> walkthrough-editor.ts   (constants, logger, types)
      +---> walkthrough-controller.ts (walkthrough-engine, walkthrough-editor, logger, constants)
+     +---> colmap-loader.ts       (THREE, utilities)
+     +---> colmap-alignment.ts    (THREE, utilities)
+     +---> icp-alignment.ts       (THREE, alignment, utilities)
+     +---> flight-path.ts         (THREE, flight-parsers, constants, utilities)
+     +---> flight-parsers.ts      (no THREE — pure parser functions)
+     +---> dji-txt-parser.ts      (WASM — dji-log-parser-js)
+     +---> mesh-decimator.ts      (THREE, utilities — meshoptimizer WASM)
+     +---> undo-manager.ts        (no imports — generic undo/redo stack)
+     +---> collections-browser.ts (collection-page, utilities)
 
 main.ts  (imports everything above and orchestrates it all — editor only)
 
 kiosk-web.ts → kiosk-main.ts  (slim viewer entry point — imports scene-manager,
                 file-handlers, annotation-system, metadata-manager, fly-controls,
-                quality-tier, theme-loader, ui-controller, spark-compat, utilities)
+                quality-tier, theme-loader, ui-controller, spark-compat, utilities;
+                lazy-imports walkthrough-engine, flight-path, colmap-loader)
 ```
 
 Dependencies installed via npm (pinned versions in `package.json`):
-- Three.js 0.182.0
+- Three.js 0.183.2
 - Spark.js 2.0.0-preview (vendored in `src/vendor/`)
 - fflate 0.8.2
 - three-e57-loader 1.2.0 / web-e57 1.2.0
@@ -435,7 +456,7 @@ Device capability detection for SD/HD asset selection:
 Runtime theme loading for kiosk viewer:
 - Fetches `theme.css` (required), `layout.css` (optional), and `layout.js` (optional) from `themes/{name}/`.
 - `parseThemeMeta()` extracts `@theme`, `@layout`, and `@scene-bg` directives from CSS comment blocks.
-- Supports sidebar, editorial, gallery, and exhibit layout modes. Gallery and exhibit themes include click gates (click-to-load interstitials).
+- Supports sidebar, editorial, gallery, exhibit, and industrial layout modes. Gallery and exhibit themes include click gates (click-to-load interstitials).
 
 ### `src/modules/tauri-auth.ts`
 Stores the Cloudflare Access JWT obtained via Tauri's deep-link auth flow. Provides `setCfToken()`, `getCfToken()`, `hasCfToken()`, and `clearCfToken()` for token lifecycle management. The key export is `cfAuthFetch()`, which wraps `fetch()` to inject the JWT as an authorization header and prepend the library base URL (`VITE_APP_LIBRARY_URL`) for relative paths. Used by `library-page.ts` and `collection-manager.ts` for authenticated API requests to the admin backend from within the Tauri desktop app.
@@ -486,7 +507,7 @@ Several operations rely on `setTimeout` with constants from `TIMING` (e.g., `AUT
 
 ### 8. Test coverage improved but not comprehensive
 **Before**: No tests of any kind.
-**After**: 10 Vitest suites covering security-critical code (206+ tests):
+**After**: 21 Vitest suites covering security-critical code and core algorithms (~420 tests):
 - `url-validation.test.ts` (62 tests)
 - `theme-loader.test.ts` (26 tests)
 - `archive-loader.test.ts` (41 tests)
@@ -494,9 +515,22 @@ Several operations rely on `setTimeout` with constants from `TIMING` (e.g., `AUT
 - `quality-tier.test.ts` (21 tests)
 - `archive-creator.test.ts` (15 tests)
 - `share-dialog.test.ts` (11 tests)
-- `alignment.test.ts` (added)
+- `alignment.test.ts`
+- `icp-alignment.test.ts`
+- `colmap-alignment.test.ts`
+- `colmap-loader.test.ts`
+- `points3d-parser.test.ts`
+- `flight-parsers.test.ts`
+- `mesh-decimator.test.ts`
+- `format-file-size.test.ts`
+- `sip-validator.test.ts`
+- `metadata-profile.test.ts`
+- `walkthrough-engine.test.ts`
+- `undo-manager.test.ts`
+- `asset-store.test.ts`
+- `constants.test.ts`
 
-**Remaining gaps**: No E2E tests, no integration tests. Complex logic like KD-tree, ICP algorithm, metadata collection, and transform controller still have no automated verification.
+**Remaining gaps**: No E2E tests, no integration tests. Metadata collection, transform controller, and recording pipeline still have no automated verification.
 
 ### 9. `'unsafe-eval'` in the Content Security Policy
 The CSP in `index.html` includes `'unsafe-eval'` because Spark.js uses WASM that requires it. This weakens XSS protections for the entire page. If Spark.js ever supports `'wasm-unsafe-eval'` (a narrower permission), it should be switched.

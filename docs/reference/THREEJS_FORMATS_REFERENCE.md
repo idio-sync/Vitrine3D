@@ -298,7 +298,7 @@ Ranked by combined relevance across DDI's scanning, archival, client delivery, a
 | 14 | **8** | **USDZ** (USDZExporter) | "View in AR" on iPhone for museum clients |
 | 15 | **8** | **Meshoptimizer / Basis** | Compression pipeline for optimized web delivery |
 
-> **Also supported but not listed above:** E57 point clouds via `three-e57-loader` (1.2.0) + `web-e57` WASM. STEP/IGES CAD via `occt-import-js` (OpenCASCADE WASM). HDR environment maps via `RGBELoader`. Custom `.ddim` archive format (ZIP-based; formerly `.a3d`/`.a3z`, still accepted on import).
+> **Also supported but not listed above:** E57 point clouds via `three-e57-loader` (1.2.0) + `web-e57` WASM. STEP/IGES CAD via `occt-import-js` (OpenCASCADE WASM). HDR environment maps via `RGBELoader`. Custom `.ddim` archive format (ZIP-based; formerly `.a3d`/`.a3z`, still accepted on import). Colmap SfM binary files (`cameras.bin`, `images.bin`, `points3D.bin`) parsed by `colmap-loader.ts` for camera visualization. DJI flight path logs (CSV, KML/KMZ, SRT, binary `.txt`) parsed by `flight-parsers.ts` and `dji-txt-parser.ts` for 3D flight path rendering.
 
 ---
 
@@ -340,4 +340,4 @@ Start: What are you trying to do?
 ---
 
 *Generated February 2026 for Direct Dimensions Inc. internal reference.*
-*Covers Three.js r182+ and community packages as of early 2026.*
+*Covers Three.js r183+ and community packages as of early 2026.*

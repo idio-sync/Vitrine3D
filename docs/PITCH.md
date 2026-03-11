@@ -37,6 +37,20 @@ Think of it as **a publishing platform for 3D captures**: load your assets, alig
 - **Point-to-point measurement** — two-click distance tool with configurable units (m/cm/mm/in/ft)
 - **Guided walkthroughs** — author camera tours with fly/fade/cut transitions, dwell times, and annotation links
 
+### SfM Camera Visualization
+- **Colmap integration** — import `cameras.bin` + `images.bin` binary files to visualize Structure-from-Motion camera positions as frustum wireframes or instanced markers
+- **Flight path alignment** — automatically align SfM cameras to GPS flight paths using timestamp-matched Umeyama similarity transforms
+
+### Video & GIF Recording
+- **Scene recording** — capture turntable spins, walkthrough playback, annotation tours, or free camera movement as WebM video
+- **Server-side transcoding** — recorded WebM is transcoded to MP4 and GIF via FFmpeg for easy sharing
+- **Inline trim** — scrubber-based start/end trim UI before uploading
+
+### Post-Processing Effects
+- **SSAO** (Screen Space Ambient Occlusion) — adds depth perception to mesh surfaces
+- **Bloom** — HDR glow effect for emissive and bright surfaces
+- **Cinematic effects** — vignette, chromatic aberration, and film grain via custom uber-shader
+
 ### Archive Format (.ddim)
 - **Open, ZIP-based container** — bundle all assets, metadata, alignment, annotations, and screenshots into a single file
 - **SHA-256 integrity hashing** — streaming verification for files over 10 MB
@@ -45,7 +59,7 @@ Think of it as **a publishing platform for 3D captures**: load your assets, alig
 - **Dublin Core & PRONOM aligned** — metadata schema maps to established digital preservation standards
 
 ### Presentation & Sharing
-- **Four kiosk themes** — Editorial (golden ratio layout), Gallery (cinematic full-bleed), Exhibit (institutional with attract mode), and Industrial (Mimics MeshLab with tools)
+- **Five kiosk themes** — Editorial (golden ratio layout), Gallery (cinematic full-bleed), Exhibit (institutional with attract mode), Industrial (MeshLab-style CAD inspection with coordinate readout, view cube, and QA annotations), and Minimal (neutral sidebar)
 - **Share dialog** — generate customized links, embed codes, and QR codes
 - **Create and share video and GIfs** - Record models and camera movements for easy sharing and viewing on the web
 - **Clean URLs** — `/view/{hash}` paths for shareable, parameter-free links
@@ -81,19 +95,19 @@ Both are built as **separate Vite bundles** from the same codebase, sharing core
 
 | Layer | Technology |
 |-------|-----------|
-| 3D Rendering | Three.js 0.182 + Spark.js 2.0 (Gaussian splats) |
+| 3D Rendering | Three.js 0.183 + Spark.js 2.0 (Gaussian splats) |
 | Point Clouds | three-e57-loader / web-e57 (WASM) |
 | CAD | occt-import-js (OpenCASCADE WASM) |
 | Compression | fflate (ZIP), Draco / meshoptimizer (geometry) |
 | Build | Vite + TypeScript |
-| Testing | Vitest (~380 tests across security, parsing, and quality paths) |
+| Testing | Vitest (~420 tests across 21 suites covering security, parsing, alignment, and quality paths) |
 | Apps | Tauri v2 (Windows, macOS, Linux, Android) |
 | Server | Docker (nginx + Node API), SQLite, s6-overlay |
 | Auth | Cloudflare Access |
 
 ### Module Architecture
 
-The codebase is organized as **~30 focused TypeScript modules** orchestrated by a central glue layer. Modules communicate through a typed dependency-injection pattern — no global imports, no circular dependencies.
+The codebase is organized as **~57 focused TypeScript modules** orchestrated by a central glue layer. Modules communicate through a typed dependency-injection pattern — no global imports, no circular dependencies.
 
 ```
 Scene Management -----> Three.js setup, rendering, camera, lighting
@@ -106,6 +120,9 @@ Metadata Manager -----> 8-tab editor, Dublin Core schema, SIP validation
 Theme Loader ---------> Runtime CSS/JS theme injection for kiosk
 Quality Tier ---------> Device capability detection, SD/HD asset selection
 Flight Path ----------> DJI telemetry parsing, 3D path rendering, hover tooltips
+Colmap / SfM ---------> Camera position visualization, flight path alignment
+Post-Processing ------> SSAO, bloom, vignette, chromatic aberration, film grain
+Recording Manager ----> Video/GIF capture, turntable/walkthrough/free modes
 ```
 
 ### Deployment Options
@@ -127,7 +144,9 @@ Flight Path ----------> DJI telemetry parsing, 3D path rendering, hover tooltips
 | Spatial alignment tools | None | None | Rare | ICP, landmark, auto-align |
 | Self-hosted | No | Yes | Yes | Yes (Docker or static) |
 | Desktop app | No | No | Rare | Tauri v2 (Win/Mac/Linux/Android) |
-| Themeable presentation | Limited | No | Custom | 4 built-in themes + template system |
+| Post-processing effects | Basic | No | Rare | SSAO, bloom, vignette, chromatic aberration, film grain |
+| Video/GIF recording | No | No | Rare | Turntable, walkthrough, annotation tour, free recording |
+| Themeable presentation | Limited | No | Custom | 5 built-in themes + template system |
 | Guided walkthroughs | Basic | No | Rare | Full authoring + playback engine |
 
 ---
@@ -145,8 +164,8 @@ Flight Path ----------> DJI telemetry parsing, 3D path rendering, hover tooltips
 ## Current Status
 
 - **v1.0** — Production-ready editor and kiosk viewer
-- **~380 automated tests** on security-critical code paths
-- **Full TypeScript migration** (26/29 modules converted, hybrid `allowJs` for remainder)
+- **~420 automated tests** across 21 suites covering security, parsing, alignment, and quality paths
+- **Full TypeScript migration** (all 57 modules converted to `.ts`, hybrid `allowJs` for config scripts)
 - **Docker deployment** in production with SQLite metadata, Cloudflare Access auth
 - **Tauri v2 desktop builds** for Windows, macOS, Linux, and Android
 - **Open archive format** with published specification and standards alignment

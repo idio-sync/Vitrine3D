@@ -422,6 +422,14 @@ All API routes require a valid `Cf-Access-Authenticated-User-Email` header and a
 | `POST` | `/api/archives` | Upload new archive (multipart/form-data) |
 | `DELETE` | `/api/archives/:hash` | Delete archive and sidecar files |
 | `PATCH` | `/api/archives/:hash` | Rename archive (JSON body: `{"filename": "new-name.ddim"}`) |
+| `GET` | `/api/collections` | List all collections with archive counts |
+| `POST` | `/api/collections` | Create a new collection (JSON body: `{"name": "..."}`) |
+| `GET` | `/api/collections/:id` | Get collection details with member archives |
+| `PATCH` | `/api/collections/:id` | Update collection name/description |
+| `DELETE` | `/api/collections/:id` | Delete a collection |
+| `POST` | `/api/collections/:id/archives` | Add an archive to a collection |
+| `DELETE` | `/api/collections/:id/archives/:hash` | Remove an archive from a collection |
+| `GET` | `/api/collections/:id/thumbnail` | Get auto-generated mosaic thumbnail for a collection |
 
 ### Security Notes
 

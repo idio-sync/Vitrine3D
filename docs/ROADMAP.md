@@ -20,7 +20,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 ## High Priority
 
 ### Measurement & Analysis Tools
-- [ ] Coordinate readout on hover (XYZ in scene units)
+- [x] **Done** — Coordinate readout on hover (XYZ in scene units) — implemented in the Industrial kiosk theme
 - [ ] Multi-point polyline measurement with cumulative distance
 
 ### Metadata Improvements
@@ -59,7 +59,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [ ] Replace `setTimeout`-based async sequencing with proper promise chains or event-driven patterns
 
 ### Testing
-- [ ] Add tests for: archive parsing/creation, alignment algorithms
+- [x] **Done** — Add tests for archive parsing/creation and alignment algorithms (21 suites, ~420 tests including archive-creator, archive-loader, alignment, icp-alignment, colmap-alignment, colmap-loader, points3d-parser)
 - [ ] Add E2E smoke tests for archive round-trip (create, load, verify metadata)
 
 ### Type Safety
@@ -94,7 +94,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [ ] Octree-based point cloud renderer that loads visible nodes on demand
 
 ### Alignment
-- [ ] Add convergence criteria and maximum correspondence distance to ICP
+- [x] **Done** — Use rigid transforms in ICP iterations to prevent scale accumulation; add coarse rotation search for better initial alignment
 - [ ] Implement point-to-plane ICP for better convergence on planar surfaces
 - [ ] RANSAC-based initial alignment for distant starting positions
 - [x] **Done** — Display alignment quality metrics (RMSE, match count) in the UI — shown after Colmap↔flight path alignment
@@ -161,14 +161,22 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [x] **Done** — Tauri v2 packaged viewer for institutional desktops (defaults to kiosk mode + editorial theme)
 
 ### Testing & Type Safety
-- [x] **Done** — Add a testing framework (Vitest) with ~380 tests across 15 suites (url-validation, theme-loader, archive-loader, utilities, quality-tier)
+- [x] **Done** — Add a testing framework (Vitest) with ~420 tests across 21 suites (url-validation, theme-loader, archive-loader, utilities, quality-tier, archive-creator, share-dialog, alignment, flight-parsers, colmap-alignment, colmap-loader, icp-alignment, points3d-parser, mesh-decimator, format-file-size, sip-validator, metadata-profile, walkthrough-engine, undo-manager, asset-store, constants)
 - [x] **Done** — Prioritize tests for: filename sanitization, URL validation, theme metadata parsing, utilities, quality-tier detection
 - [x] **Done** — Add shared TypeScript types (`src/types.ts`): `AppState`, `SceneRefs`, deps interfaces with JSDoc `@returns` on factory functions
-- [x] **Done** — TypeScript migration Phases 1–3 complete: 26 of 29 modules converted to `.ts`, hybrid `allowJs: true` setup, `@types/three` installed
+- [x] **Done** — TypeScript migration complete: all 57 modules converted to `.ts`, hybrid `allowJs: true` for config scripts, `@types/three` installed
 - [x] **Done** — Phase 4: Convert `main.js` → `main.ts` (~1,900 lines), extract `source-files-manager.ts` and `file-input-handlers.ts`
 
 ### Rendering
 - [x] Abstract the rendering backend to allow swapping Three.js WebGL for WebGPU when mature
 - [x] **Done** — N-point landmark alignment with live preview, RMSE quality metric, and undo (`LandmarkAlignment` class)
+- [x] **Done** — Post-processing pipeline: SSAO (`SSAOPass`), bloom (`UnrealBloomPass`), vignette, chromatic aberration, and film grain via custom uber-shader (`post-processing.ts`)
+
+### Video & Media
+- [x] **Done** — Video/GIF recording via MediaRecorder API with four modes: turntable, walkthrough, annotation tour, free camera. Server-side FFmpeg transcoding to MP4 and GIF (`recording-manager.ts`, `recording-trim.ts`)
+- [x] **Done** — Non-destructive flight path trim with start/end scrubber handles, persisted in archives (`recording-trim.ts`)
+
+### Collections
+- [x] **Done** — Collection management: create, rename, delete collections; add/remove archives from collections; mosaic thumbnail generation; editorial-themed collection browser in kiosk mode (`collection-manager.ts`, `collection-page.ts`, `collections-browser.ts`)
 
 </details>

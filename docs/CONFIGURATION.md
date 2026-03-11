@@ -20,7 +20,9 @@
 | `mode` | `splat`, `model`, `pointcloud`, `both`, `split` | Initial display mode |
 | `toolbar` | `show`, `hide` | Toolbar visibility |
 | `sidebar` | `closed`, `view`, `edit` | Metadata sidebar state |
-| `theme` | theme folder name | Kiosk theme (e.g., `editorial`, `gallery`, `exhibit`, `minimal`) |
+| `theme` | theme folder name | Kiosk theme (e.g., `editorial`, `gallery`, `exhibit`, `industrial`, `minimal`) |
+| `home` | `true`, `false` | Show file picker home screen with "Browse Files" and "Browse Collections" (Tauri/library mode) |
+| `kiosk` | `true`, `false` | Enable kiosk (read-only) mode |
 | `layout` | `sidebar`, `editorial`, `gallery`, `exhibit` | Layout override (overrides theme default) |
 | `autoload` | `true`, `false` | Auto-load archive on page load (default `true`; `false` shows a click-to-load gate) |
 

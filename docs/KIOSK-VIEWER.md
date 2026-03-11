@@ -22,6 +22,8 @@ Kiosk view mode is a read-only mode used for presentation of 3D data. It can be 
 - Annotation popups constrained to the 3D viewport — popups reposition automatically to stay within the visible canvas area rather than overflowing outside it
 - Cross-section clipping plane — if included in the archive, the clipping plane state is available in the kiosk viewer
 - SfM camera visualization — displays Colmap camera positions as frustum wireframes or instanced markers, with a toggle button that appears when camera data is present in the archive
+- Data overlay toggles — pill-style toggle buttons for SfM Cameras and Flight Paths appear when the respective data is present in the archive
+- Collections browser — editorial-themed collection pages accessible from the library, with mosaic thumbnails and archive membership
 
 ## SfM Cameras (Colmap)
 
@@ -125,6 +127,7 @@ The kiosk viewer supports themes — self-contained packages that control colors
 | `editorial` | Editorial | Gold and navy palette with full-bleed scene, edge-anchored title block, bottom ribbon, and magazine-spread details overlay. Default theme for kiosk mode. |
 | `gallery` | Gallery | Cinematic full-bleed layout with centered bottom title bar, slide-up details panel, and click gate |
 | `exhibit` | Exhibit | Institutional kiosk layout with attract mode idle screen, side panel, and click gate |
+| `industrial` | Industrial | MeshLab-style CAD inspection UI with coordinate readout, view cube, properties panel, layers tree, splat budget slider, and QA defect annotation workflow |
 | `minimal` | Sidebar | Neutral white accent with standard sidebar layout |
 
 ### Creating a custom theme
@@ -187,6 +190,7 @@ See `src/themes/editorial/`, `src/themes/gallery/`, or `src/themes/exhibit/` for
 ?theme=editorial          Full editorial experience (layout + colors) — default for kiosk mode
 ?theme=gallery            Cinematic full-bleed with click gate
 ?theme=exhibit            Institutional kiosk with attract mode and click gate
+?theme=industrial         MeshLab-style CAD inspection UI
 ?theme=minimal            Sidebar layout with neutral colors
 ?theme=my-custom-theme    Any user-created theme folder
 ?layout=editorial         Override layout regardless of theme

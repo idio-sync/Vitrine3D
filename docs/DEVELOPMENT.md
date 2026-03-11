@@ -41,7 +41,7 @@ src/
   types.ts                 Shared TypeScript interfaces
   styles.css               All styling
   kiosk.css                Kiosk-specific styles
-  modules/                 ~50 TypeScript modules
+  modules/                 57 TypeScript modules
   themes/                  Kiosk theme packages
   vendor/                  Vendored dependencies (Spark.js 2.0 preview)
 
@@ -146,16 +146,28 @@ npm run test:watch  # Watch mode
 
 Tests use **Vitest** with jsdom environment. Test files live in `src/modules/__tests__/`.
 
-Current test suites:
+Current test suites (21 suites, ~420 tests):
 - `url-validation.test.ts` — URL validation and domain allowlisting
-- `archive-loader.test.ts` — ZIP extraction, filename sanitization (41 tests)
+- `archive-loader.test.ts` — ZIP extraction, filename sanitization
+- `archive-creator.test.ts` — Archive creation and SHA-256 hashing
 - `theme-loader.test.ts` — Theme CSS parsing and metadata extraction
 - `utilities.test.ts` — Shared helpers
 - `quality-tier.test.ts` — Device capability detection
-- `archive-creator.test.ts` — Archive creation and SHA-256 hashing
 - `share-dialog.test.ts` — Share link URL generation
 - `alignment.test.ts` — Alignment algorithms
 - `flight-parsers.test.ts` — DJI CSV, KML/KMZ, and SRT telemetry parsing
+- `colmap-alignment.test.ts` — Umeyama similarity transform and camera alignment
+- `colmap-loader.test.ts` — Colmap binary file parsing
+- `icp-alignment.test.ts` — ICP rigid transform and convergence
+- `points3d-parser.test.ts` — Colmap points3D.bin parsing and subsampling
+- `mesh-decimator.test.ts` — Draco compression detection
+- `format-file-size.test.ts` — File size formatting
+- `sip-validator.test.ts` — SIP compliance validation
+- `metadata-profile.test.ts` — Metadata tier visibility
+- `walkthrough-engine.test.ts` — Walkthrough playback state machine
+- `undo-manager.test.ts` — Undo/redo stack
+- `asset-store.test.ts` — Blob reference management
+- `constants.test.ts` — Constants module contracts
 
 ## Docker Build
 
@@ -189,7 +201,7 @@ Requires Rust toolchain. See [TAURI_APPLICATION.md](docs/reference/TAURI_APPLICA
 | `src/types.ts` | All shared TypeScript interfaces |
 | `src/modules/constants.ts` | Numeric/string constants (no logic) |
 | `vite.config.ts` | Build config, aliases, custom plugins |
-| `docker/meta-server.js` | Node.js API server (OG tags, admin, video transcode) |
+| `docker/meta-server.js` | Node.js API server (OG tags, admin, video transcode, collections) |
 
 ## Adding a New Module
 
