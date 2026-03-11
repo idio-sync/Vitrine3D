@@ -1274,6 +1274,164 @@ function handleDeleteOrphan(req, res, filename) {
 }
 
 /**
+ * Prune old backup versions for an archive, keeping only maxVersions most recent.
+ * Must be called inside an existing db.transaction().
+ * @param {number} archiveId - The archive's DB row id
+ * @param {number} maxVersions - Max backups to retain
+ */
+function pruneArchiveVersions(archiveId, maxVersions) {
+    const versions = db.prepare(
+        'SELECT id, filename FROM archive_versions WHERE archive_id = ? ORDER BY created_at DESC, id DESC'
+    ).all(archiveId);
+
+    const toDelete = versions.slice(maxVersions);
+    const deleteStmt = db.prepare('DELETE FROM archive_versions WHERE id = ?');
+
+    for (const v of toDelete) {
+        const fullPath = path.join(ARCHIVES_DIR, v.filename);
+        deleteStmt.run(v.id);
+        try { fs.unlinkSync(fullPath); } catch {}
+    }
+
+    // Clean up empty history subdirectory
+    if (toDelete.length > 0) {
+        const histDir = path.dirname(path.join(ARCHIVES_DIR, versions[0].filename));
+        try {
+            const remaining = fs.readdirSync(histDir);
+            if (remaining.length === 0) fs.rmdirSync(histDir);
+        } catch {}
+    }
+}
+
+/**
+ * Back up an existing archive file to history/ and replace it with a new upload.
+ * Handles backup rotation, DB upsert, metadata extraction, and audit logging.
+ * Called by both handleUploadArchive and handleCompleteChunk when a file already exists.
+ *
+ * @param {Object} existingRow - The existing archives DB row (from SELECT * WHERE filename = ?)
+ * @param {string} tmpPath - Path to the newly uploaded temp file
+ * @param {string} filename - The target archive filename
+ * @param {Object} req - HTTP request (for actor extraction)
+ * @returns {Object} The updated archive DB row
+ */
+function backupAndReplace(existingRow, tmpPath, filename, req) {
+    const finalPath = path.join(ARCHIVES_DIR, filename);
+    const ext = path.extname(filename);
+    const basename = path.basename(filename, ext);
+    const maxVersions = parseInt(getSetting('backup.maxVersions'), 10) || 0;
+
+    let backupRelPath = null;
+    let existingSize = 0;
+
+    // --- Phase 1: Filesystem operations (outside transaction) ---
+    // If these fail, no DB state has changed — safe to abort.
+
+    if (maxVersions > 0) {
+        const histDir = path.join(ARCHIVES_DIR, 'history', basename);
+        if (!fs.existsSync(histDir)) {
+            fs.mkdirSync(histDir, { recursive: true });
+        }
+
+        const timestamp = new Date().toISOString().replace(/:/g, '-');
+        const backupFilename = basename + '.' + timestamp + ext;
+        backupRelPath = path.join('history', basename, backupFilename);
+        const backupFullPath = path.join(ARCHIVES_DIR, backupRelPath);
+
+        existingSize = fs.statSync(finalPath).size;
+
+        // Move existing file to history (rename if same FS, copy+delete otherwise)
+        try {
+            fs.renameSync(finalPath, backupFullPath);
+        } catch {
+            try {
+                fs.copyFileSync(finalPath, backupFullPath);
+                fs.unlinkSync(finalPath);
+            } catch (copyErr) {
+                // Clean up partial backup on failure
+                try { fs.unlinkSync(backupFullPath); } catch {}
+                throw copyErr;
+            }
+        }
+    } else {
+        // No backup — just remove existing file
+        try { fs.unlinkSync(finalPath); } catch {}
+    }
+
+    // Move new upload into place
+    try {
+        fs.renameSync(tmpPath, finalPath);
+    } catch {
+        fs.copyFileSync(tmpPath, finalPath);
+        try { fs.unlinkSync(tmpPath); } catch {}
+    }
+
+    // Extract metadata (slow — runs external shell script, keep outside transaction)
+    const archiveUrl = '/archives/' + filename;
+    const hash = archiveHash(archiveUrl);
+    runExtractMeta(finalPath);
+
+    let metaRaw = {};
+    const metaJsonPath = path.join(META_DIR, hash + '.json');
+    try { metaRaw = JSON.parse(fs.readFileSync(metaJsonPath, 'utf8')); } catch (_) {}
+
+    const thumbPath = '/thumbs/' + hash + '.jpg';
+    const thumbExists = fs.existsSync(path.join(HTML_ROOT, 'thumbs', hash + '.jpg'));
+    const newSize = fs.statSync(finalPath).size;
+
+    // --- Phase 2: DB operations (inside transaction) ---
+    // If the transaction fails, the file is already in place but DB is consistent.
+    // Compensating FS rollback is not attempted — the file on disk is the newer version
+    // which is the correct state even if the DB update needs to be retried.
+
+    const doDbUpdates = db.transaction(() => {
+        // Record backup version
+        if (maxVersions > 0 && backupRelPath) {
+            db.prepare(
+                'INSERT INTO archive_versions (archive_id, filename, size) VALUES (?, ?, ?)'
+            ).run(existingRow.id, backupRelPath, existingSize);
+
+            pruneArchiveVersions(existingRow.id, maxVersions);
+        }
+
+        // Upsert archives row (uuid only used on first insert — preserved on conflict)
+        db.prepare(`
+            INSERT INTO archives
+                (uuid, hash, filename, title, description, thumbnail, asset_types, metadata_raw, size, updated_at)
+            VALUES
+                (@uuid, @hash, @filename, @title, @description, @thumbnail, @asset_types, @metadata_raw, @size, datetime('now'))
+            ON CONFLICT(hash) DO UPDATE SET
+                filename    = excluded.filename,
+                title       = excluded.title,
+                description = excluded.description,
+                thumbnail   = excluded.thumbnail,
+                asset_types = excluded.asset_types,
+                metadata_raw= excluded.metadata_raw,
+                size        = excluded.size,
+                updated_at  = excluded.updated_at
+        `).run({
+            uuid: crypto.randomUUID(),
+            hash,
+            filename,
+            title: metaRaw.title || null,
+            description: metaRaw.description || null,
+            thumbnail: thumbExists ? thumbPath : null,
+            asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+            metadata_raw: JSON.stringify(metaRaw),
+            size: newSize,
+        });
+
+        // Audit log
+        const actor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
+        db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
+          .run(actor, 'upload_replace', filename, JSON.stringify({ hash, size: newSize, backed_up: maxVersions > 0 }), req.headers['x-real-ip'] || null);
+
+        return db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+    });
+
+    return doDbUpdates();
+}
+
+/**
  * POST /api/archives — upload a new archive
  */
 async function handleUploadArchive(req, res) {
