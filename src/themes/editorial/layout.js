@@ -1760,7 +1760,7 @@ function initFilePicker(container, deps) {
             <h1 class="editorial-picker-title">Vitrine3D</h1>
             <div class="editorial-loading-title-bar"></div>
             <p class="kiosk-picker-formats">
-                Scans, models, point clouds, and archives
+                Models, splats, point clouds, and 3D archives
             </p>
             <button id="kiosk-picker-btn" type="button">Browse Files</button>
             <p class="kiosk-picker-prompt">or drag and drop here</p>

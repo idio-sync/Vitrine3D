@@ -838,7 +838,7 @@ function initFilePicker(container) {
         '    <div class="kiosk-picker-box" id="kiosk-drop-zone" style="text-align:center;max-width:400px;padding:40px 32px;">' +
         '        <h1 style="font-family:var(--kiosk-font-display);font-size:1.4rem;font-weight:400;color:rgba(var(--kiosk-text-heading-rgb),0.95);margin:0 0 8px;">Vitrine3D</h1>' +
         '        <div style="width:48px;height:2px;background:var(--kiosk-accent);margin:0 auto 16px;"></div>' +
-        '        <p class="kiosk-picker-formats">Scans, models, point clouds, and archives</p>' +
+        '        <p class="kiosk-picker-formats">Models, splats, point clouds, and 3D archives</p>' +
         '        <button id="kiosk-picker-btn" type="button">Browse Files</button>' +
         '        <p class="kiosk-picker-prompt">or drag and drop here</p>' +
         '    </div>' +
