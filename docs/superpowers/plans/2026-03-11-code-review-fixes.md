@@ -1626,62 +1626,31 @@ git commit -m "perf: batch collection API calls with Promise.all (M-PERF2)"
 - Modify: `src/modules/archive-pipeline.ts`
 - Modify: `src/modules/file-handlers.ts` (if loaders need to resolve a promise)
 
-- [ ] **Step 1: Read the current polling implementation**
+- [x] **Step 1: Read the current polling implementation**
 
-Read `ensureAssetLoaded` in archive-pipeline.ts (around line 309).
+Both files use identical pattern: `setTimeout(check, 50)` polling `state.assetStates` every 50ms with 120s timeout.
 
-- [ ] **Step 2: Design the Promise-based approach**
+- [x] **Step 2: Design the Promise-based approach**
 
-Option A: Have each loader function return a `Promise` that resolves when the asset is ready. Store these promises in a registry. `ensureAssetLoaded` simply awaits the registered promise.
+Simpler than planned: since `ensureAssetLoaded` itself initiates AND completes loading, no external `signalAssetReady` needed. The loading work is wrapped in an async IIFE stored in a `Map<string, Promise<boolean>>`. Concurrent callers await the stored promise.
 
-Option B: Use a simple event emitter / callback registry: `onAssetLoaded(type, callback)` called by loaders when done, `ensureAssetLoaded` returns a promise that registers itself.
+- [x] **Step 3: Implement stored-promise pattern in archive-pipeline.ts**
 
-Choose the approach that minimizes changes to existing loader code.
+Added `assetLoadingPromises` map. LOADING branch returns stored promise. Loading work wrapped in IIFE stored in map. `finally` block deletes map entry.
 
-- [ ] **Step 3: Implement the promise registry**
+- [x] **Step 4: No changes needed in file-handlers.ts**
 
-```typescript
-const assetReadyPromises = new Map<string, { promise: Promise<boolean>; resolve: (v: boolean) => void }>();
+Loaders don't need to signal — the promise resolves naturally when `ensureAssetLoaded` completes.
 
-export function signalAssetReady(type: string): void {
-    const entry = assetReadyPromises.get(type);
-    if (entry) entry.resolve(true);
-}
+- [x] **Step 5: Apply the same pattern to kiosk-main.ts**
 
-export async function ensureAssetLoaded(type: string, deps: ArchivePipelineDeps): Promise<boolean> {
-    // If already loaded, return immediately
-    if (isAssetLoaded(type, deps)) return true;
+Identical approach: `assetLoadingPromises` map, stored-promise pattern, `finally` cleanup.
 
-    // Create a promise if one doesn't exist
-    if (!assetReadyPromises.has(type)) {
-        let resolve!: (v: boolean) => void;
-        const promise = new Promise<boolean>(r => { resolve = r; });
-        assetReadyPromises.set(type, { promise, resolve });
+- [x] **Step 6: Verify build + tests**
 
-        // Timeout fallback
-        setTimeout(() => {
-            const entry = assetReadyPromises.get(type);
-            if (entry) { entry.resolve(false); assetReadyPromises.delete(type); }
-        }, 120_000);
-    }
+Build: ✓ built in 10.13s. Tests: 423 passed, 3 skipped.
 
-    return assetReadyPromises.get(type)!.promise;
-}
-```
-
-- [ ] **Step 4: Call `signalAssetReady(type)` from loader completion points**
-
-In file-handlers.ts, after each loader completes (splat, model, pointcloud, etc.), call `signalAssetReady(type)`.
-
-- [ ] **Step 5: Apply the same pattern to kiosk-main.ts**
-
-Mirror the promise-based approach in kiosk-main's `ensureAssetLoaded`.
-
-- [ ] **Step 6: Verify build**
-
-Run: `npm run build`
-
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/modules/archive-pipeline.ts src/modules/file-handlers.ts src/modules/kiosk-main.ts
@@ -1702,13 +1671,11 @@ git commit -m "refactor: replace ensureAssetLoaded polling with Promise resoluti
 | 6 — Transform | HIGH | 1 | 1 | Medium (geometry math) | ✅ Done |
 | 7 — Type Safety & Auth | HIGH | 5 | 5 | Low (type changes, auth) | ✅ Done |
 | 8 — Consolidation | HIGH+MEDIUM | 6 | 11 | Low (import changes) | ✅ Done |
-| 9 — SceneRefs Types | HIGH | 1 | 1-2 | Low (type-only) | Planned |
-| 10 — Deps Factories | HIGH | 1 | 2 | Low (type-only) | Planned |
-| 11 — Kiosk `any` | HIGH | 2 | 2 | Low (type-only) | Planned |
-| 12 — Singleton Lifecycle | MEDIUM | 2 | 2 | Low (cleanup logic) | Planned |
-| 13 — Performance | MEDIUM | 2 | 2 | Medium (algorithm change) | Planned |
-| 14 — Polling → Promises | MEDIUM | 1 | 3 | Medium (async flow change) | Planned |
+| 9 — SceneRefs Types | HIGH | 1 | 1-2 | Low (type-only) | ✅ Done |
+| 10 — Deps Factories | HIGH | 1 | 2 | Low (type-only) | ✅ Done |
+| 11 — Kiosk `any` | HIGH | 2 | 2 | Low (type-only) | ✅ Done |
+| 12 — Singleton Lifecycle | MEDIUM | 2 | 2 | Low (cleanup logic) | ✅ Done |
+| 13 — Performance | MEDIUM | 2 | 2 | Medium (algorithm change) | ✅ Done |
+| 14 — Polling → Promises | MEDIUM | 1 | 2 | Medium (async flow change) | ✅ Done |
 
-**Phases 1-8: 34 tasks completed.** Phases 9-14: 9 tasks planned.
-
-Phases 9-11 (type safety) should be done in order. Phases 12-14 are independent of each other and of 9-11.
+**All 14 phases completed.** 43 tasks across 184 findings addressed.

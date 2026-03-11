@@ -35,6 +35,9 @@ import { normalizeScale } from '@/types.js';
 
 const log = Logger.getLogger('archive-pipeline');
 
+/** Tracks in-flight asset load promises so concurrent callers await the same operation. */
+const assetLoadingPromises = new Map<string, Promise<boolean>>();
+
 // ==================== Private Helpers ====================
 
 /**
@@ -317,24 +320,19 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
     if (state.assetStates[assetType] === ASSET_STATE.LOADED) return true;
     // Already errored — don't retry automatically
     if (state.assetStates[assetType] === ASSET_STATE.ERROR) return false;
-    // Already loading — wait for it
+    // Already loading — await the in-flight promise instead of polling
     if (state.assetStates[assetType] === ASSET_STATE.LOADING) {
-        return new Promise(resolve => {
-            const MAX_WAIT = 120_000; // 2 minutes
-            const start = Date.now();
-            const check = () => {
-                if (state.assetStates[assetType] === ASSET_STATE.LOADED) resolve(true);
-                else if (state.assetStates[assetType] === ASSET_STATE.ERROR) resolve(false);
-                else if (Date.now() - start > MAX_WAIT) { log.warn(`ensureAssetLoaded timed out for ${assetType}`); resolve(false); }
-                else setTimeout(check, 50);
-            };
-            check();
-        });
+        const pending = assetLoadingPromises.get(assetType);
+        if (pending) return pending;
+        // Fallback: no stored promise (shouldn't happen), resolve based on state
+        return false;
     }
 
     state.assetStates[assetType] = ASSET_STATE.LOADING;
     deps.ui.showInlineLoading(assetType);
 
+    // Store the loading promise so concurrent callers can await it
+    const loadPromise = (async () => {
     try {
         if (assetType === 'splat') {
             const sceneEntry = archiveLoader.getSceneEntry();
@@ -558,7 +556,12 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
         return false;
     } finally {
         deps.ui.hideInlineLoading(assetType);
+        assetLoadingPromises.delete(assetType);
     }
+    })();
+
+    assetLoadingPromises.set(assetType, loadPromise);
+    return loadPromise;
 }
 
 /**

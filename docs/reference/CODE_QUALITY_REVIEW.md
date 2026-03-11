@@ -26,7 +26,7 @@
 |----------|-------|-------|------|------------------|
 | **CRITICAL** | 9 | 9 | 0 | Phases 1–2 (`936259b`–`53cbbfb`) |
 | **HIGH** | 32 | 32 | 0 | Phases 1–11 (`936259b`–latest) |
-| **MEDIUM** | 69 | ~14 | ~55 | Phases 8, 12–13 + incidental fixes during HIGH work |
+| **MEDIUM** | 69 | ~18 | ~51 | Phases 8, 12–14 + incidental fixes during HIGH work |
 | **LOW** | 48 | 0 | 48 | Not addressed |
 
 All CRITICAL and HIGH issues were resolved across 10 phases committed to the `dev` branch on 2026-03-11.
@@ -214,9 +214,9 @@ Modules with mutable state that's never reset:
 | `metadata-manager.ts` | 2,940 | Display, collection, camera constraints |
 | `file-handlers.ts` | 2,593 | Per-format loaders into separate files |
 
-### Polling Instead of Events (~4 issues)
+### Polling Instead of Events — **fixed** (Phase 14)
 
-`ensureAssetLoaded` in `archive-pipeline.ts` and `kiosk-main.ts` polls with `setTimeout`. The loader could resolve a Promise instead, eliminating the polling pattern entirely.
+`ensureAssetLoaded` in both `archive-pipeline.ts` and `kiosk-main.ts` replaced `setTimeout` polling with stored-promise pattern. Concurrent callers now await the same in-flight promise instead of polling state every 50ms. Promise map is cleaned up in `finally` block.
 
 ### Performance (~1 remaining)
 

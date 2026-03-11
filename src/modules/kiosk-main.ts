@@ -239,6 +239,9 @@ const state: KioskState = {
     splatBackgroundColor: null
 };
 
+/** Tracks in-flight asset load promises so concurrent callers await the same operation. */
+const assetLoadingPromises = new Map<string, Promise<boolean>>();
+
 // =============================================================================
 // FILE FORMAT CLASSIFICATION
 // =============================================================================
@@ -1436,21 +1439,16 @@ async function ensureAssetLoaded(assetType: AssetType, onProgress?: (percent: nu
 
     if (state.assetStates[assetType] === ASSET_STATE.LOADED) return true;
     if (state.assetStates[assetType] === ASSET_STATE.ERROR) return false;
+    // Already loading — await the in-flight promise instead of polling
     if (state.assetStates[assetType] === ASSET_STATE.LOADING) {
-        return new Promise(resolve => {
-            const MAX_WAIT = 120_000; // 2 minutes
-            const start = Date.now();
-            const check = () => {
-                if (state.assetStates[assetType] === ASSET_STATE.LOADED) resolve(true);
-                else if (state.assetStates[assetType] === ASSET_STATE.ERROR) resolve(false);
-                else if (Date.now() - start > MAX_WAIT) { log.warn(`ensureAssetLoaded timed out for ${assetType}`); resolve(false); }
-                else setTimeout(check, 50);
-            };
-            check();
-        });
+        const pending = assetLoadingPromises.get(assetType);
+        if (pending) return pending;
+        return false;
     }
 
     showInlineLoading(assetType);
+
+    const loadPromise = (async () => {
     try {
         const result = await loadArchiveAsset(state.archiveLoader, assetType, { ...createArchiveDeps(), onProgress });
         if (result.loaded) {
@@ -1465,7 +1463,12 @@ async function ensureAssetLoaded(assetType: AssetType, onProgress?: (percent: nu
         return false;
     } finally {
         hideInlineLoading(assetType);
+        assetLoadingPromises.delete(assetType);
     }
+    })();
+
+    assetLoadingPromises.set(assetType, loadPromise);
+    return loadPromise;
 }
 
 // Trigger lazy loading of assets needed for a display mode
