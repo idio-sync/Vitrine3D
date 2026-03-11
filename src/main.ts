@@ -933,6 +933,7 @@ function createEventWiringDeps(): EventWiringDeps {
                 }
             },
             alignFromCameraData: async () => {
+                console.log('[ICP-DEBUG] alignFromCameraData called, hasPoints3D:', colmapManager?.hasPoints3D, 'splatMesh:', !!splatMesh);
                 if (!colmapManager?.hasPoints3D || !splatMesh) {
                     notify.error('Load splat + camera data first');
                     return;
