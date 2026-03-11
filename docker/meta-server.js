@@ -72,6 +72,7 @@ const SETTINGS_DEFAULTS = {
     'lod.budgetHd':           { default: '5000000', type: 'number', label: 'LOD Budget — HD',         group: 'Renderer',         description: 'Max splats per frame (HD tier)' },
     'renderer.maxPixelRatio': { default: '2',       type: 'number', label: 'Max Pixel Ratio',         group: 'Renderer',         description: 'Cap for high-DPI displays', min: 1, max: 4 },
     'flight.djiApiKey':       { default: '',        type: 'string', label: 'DJI API Key',             group: 'Flight Logs',      description: 'API key for decrypting v13+ DJI binary flight logs (.txt). Register at developer.dji.com' },
+    'backup.maxVersions':     { default: '5',       type: 'number', label: 'Max Backup Versions',      group: 'Storage',          description: 'Maximum backup versions kept per archive (0 to disable backups)', min: 0, max: 50 },
 };
 
 // Env var mapping for settings (key → env var name)
@@ -432,6 +433,15 @@ function initDb() {
             value      TEXT NOT NULL,
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
+
+        CREATE TABLE IF NOT EXISTS archive_versions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            archive_id  INTEGER NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
+            filename    TEXT    NOT NULL,
+            size        INTEGER NOT NULL,
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_av_archive ON archive_versions(archive_id);
     `);
 }
 
