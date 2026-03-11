@@ -617,10 +617,10 @@ async function generateCollectionMosaic(collectionId, slug) {
                     { input: tiles[3], left: halfW, top: halfH },
                 ]).jpeg({ quality: 85 }).toFile(autoPath);
         }
-        log.info(`Generated mosaic for collection "${slug}" at ${autoPath}`);
+        console.log(`[meta-server] Generated mosaic for collection "${slug}" at ${autoPath}`);
         return `/thumbs/collection-${slug}-auto.jpg`;
     } catch (err) {
-        log.error(`Failed to generate mosaic for collection "${slug}":`, err);
+        console.error(`[meta-server] Failed to generate mosaic for collection "${slug}":`, err);
         return null;
     }
 }
@@ -1782,7 +1782,7 @@ function handleAddCollectionArchives(req, res, slug) {
 
             sendJson(res, 200, { ok: true, added });
             maybeRegenerateMosaic(coll.id, slug).catch(err =>
-                log.error('Auto-mosaic regeneration failed after adding archives:', err)
+                console.error('[meta-server] Auto-mosaic regeneration failed after adding archives:', err)
             );
         } catch (err) {
             sendJson(res, 500, { error: err.message });
@@ -1815,7 +1815,7 @@ function handleRemoveCollectionArchive(req, res, slug, archiveHash) {
 
         sendJson(res, 200, { ok: true });
         maybeRegenerateMosaic(coll.id, slug).catch(err =>
-            log.error('Auto-mosaic regeneration failed after removing archive:', err)
+            console.error('[meta-server] Auto-mosaic regeneration failed after removing archive:', err)
         );
     } catch (err) {
         sendJson(res, 500, { error: err.message });
@@ -1896,11 +1896,11 @@ async function handleUploadCollectionThumbnail(req, res, slug) {
         db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
             .run(actor, 'upload_collection_thumbnail', slug, thumbUrl, req.headers['x-real-ip'] || req.socket.remoteAddress);
 
-        log.info(`Collection thumbnail uploaded for "${slug}" by ${actor}`);
+        console.log(`[meta-server] Collection thumbnail uploaded for "${slug}" by ${actor}`);
         sendJson(res, 200, { ok: true, thumbnail: thumbUrl });
     } catch (err) {
         if (tmpPath) { try { fs.unlinkSync(tmpPath); } catch {} }
-        log.error('handleUploadCollectionThumbnail error:', err);
+        console.error('[meta-server] handleUploadCollectionThumbnail error:', err);
         sendJson(res, 500, { error: err.message });
     }
 }
@@ -1930,10 +1930,10 @@ async function handleDeleteCollectionThumbnail(req, res, slug) {
         db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
             .run(actor, 'delete_collection_thumbnail', slug, '', req.headers['x-real-ip'] || req.socket.remoteAddress);
 
-        log.info(`Collection thumbnail deleted for "${slug}" by ${actor}`);
+        console.log(`[meta-server] Collection thumbnail deleted for "${slug}" by ${actor}`);
         sendJson(res, 200, { ok: true, thumbnail: autoThumb });
     } catch (err) {
-        log.error('handleDeleteCollectionThumbnail error:', err);
+        console.error('[meta-server] handleDeleteCollectionThumbnail error:', err);
         sendJson(res, 500, { error: err.message });
     }
 }
@@ -1958,10 +1958,10 @@ async function handleGenerateCollectionThumbnail(req, res, slug) {
         db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
             .run(actor, 'generate_collection_thumbnail', slug, autoThumb || '', req.headers['x-real-ip'] || req.socket.remoteAddress);
 
-        log.info(`Collection thumbnail regenerated for "${slug}" by ${actor}`);
+        console.log(`[meta-server] Collection thumbnail regenerated for "${slug}" by ${actor}`);
         sendJson(res, 200, { ok: true, thumbnail: autoThumb });
     } catch (err) {
-        log.error('handleGenerateCollectionThumbnail error:', err);
+        console.error('[meta-server] handleGenerateCollectionThumbnail error:', err);
         sendJson(res, 500, { error: err.message });
     }
 }
