@@ -13,6 +13,10 @@ import type { Annotation, DisplayMode } from '@/types.js';
 import { normalizeScale } from '@/types.js';
 import { SceneManager } from './scene-manager.js';
 import { createSparkRenderer, isSparkV2 } from './spark-compat.js';
+import type { SplatMesh } from '@sparkjsdev/spark';
+import type { SparkRenderer } from '@sparkjsdev/spark';
+import type { FlightPathManager } from './flight-path.js';
+import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 // Local AssetType (not exported from types.ts)
 type AssetType = 'splat' | 'mesh' | 'pointcloud';
@@ -79,7 +83,7 @@ interface KioskState {
     pointcloudLoaded: boolean;
     archiveLoaded: boolean;
     archiveLoader: ArchiveLoader | null;
-    archiveManifest: any;
+    archiveManifest: Record<string, unknown> | null;
     archiveFileName: string | null;
     currentArchiveUrl: string | null;
     currentSplatUrl: string | null;
@@ -87,7 +91,7 @@ interface KioskState {
     flyModeActive: boolean;
     annotationsVisible: boolean;
     assetStates: Record<string, string>;
-    imageAssets: Map<string, any>;
+    imageAssets: Map<string, string>;
     qualityTier: string;
     qualityResolved: string;
     meshBackgroundColor: string | null;
@@ -112,14 +116,14 @@ interface AppConfig {
         pointcloud?: { position?: number[]; rotation?: number[]; scale?: number };
     };
     _resolvedLayout?: string;
-    _themeMeta?: any;
+    _themeMeta?: Record<string, unknown>;
     _layoutModule?: LayoutModule | null;
 }
 
 interface WindowWithConfig extends Window {
     APP_CONFIG?: AppConfig;
-    __TAURI__?: any;
-    __KIOSK_THEME_ASSETS__?: Record<string, any>;
+    __TAURI__?: Record<string, unknown>;
+    __KIOSK_THEME_ASSETS__?: Record<string, string>;
 }
 
 declare const window: WindowWithConfig;
@@ -135,7 +139,7 @@ function camelToSnake(str: string): string {
 }
 
 /** Recursively convert all object keys from camelCase to snake_case */
-function deepSnakeKeys(obj: any): any {
+function deepSnakeKeys(obj: unknown): unknown {
     if (Array.isArray(obj)) return obj.map(deepSnakeKeys);
     if (obj !== null && typeof obj === 'object') {
         const result = {};
@@ -151,7 +155,7 @@ function deepSnakeKeys(obj: any): any {
  * Normalize a manifest to canonical snake_case keys and lift common fields.
  * Handles manifests created with either camelCase or snake_case conventions.
  */
-function normalizeManifest(raw: any): any {
+function normalizeManifest(raw: Record<string, unknown>): Record<string, unknown> {
     const m = deepSnakeKeys(raw);
     // Lift project fields to top level for convenient access
     if (m.project) {
@@ -182,7 +186,7 @@ function formatDisplayDate(raw: string, style: 'long' | 'medium' = 'long'): stri
 // =============================================================================
 
 let sceneManager: SceneManager | null = null;
-let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: any, controls: any, modelGroup: THREE.Group, pointcloudGroup: THREE.Group;
+let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, controls: OrbitControls, modelGroup: THREE.Group, pointcloudGroup: THREE.Group;
 let flyControls: FlyControls | null = null;
 let annotationSystem: AnnotationSystem | null = null;
 let walkthroughEngine: WalkthroughEngine | null = null;
@@ -191,9 +195,9 @@ let walkthroughPlayerEl: HTMLElement | null = null;
 let walkthroughFadeEl: HTMLElement | null = null;
 let crossSection: CrossSectionTool | null = null;
 let measurementSystem: MeasurementSystem | null = null;
-let flightPathManager: any = null; // FlightPathManager instance (shared with layout themes)
-let sparkRenderer: any = null; // SparkRenderer instance
-let splatMesh: any = null; // TODO: SplatMesh type
+let flightPathManager: FlightPathManager | null = null;
+let sparkRenderer: SparkRenderer | null = null;
+let splatMesh: SplatMesh | null = null;
 let fpsElement: HTMLElement | null = null;
 let currentPopupAnnotationId: string | null = null;
 let annotationLineEl: SVGLineElement | null = null;
@@ -328,7 +332,7 @@ async function _doInit(): Promise<void> {
     crossSection = new CrossSectionTool(scene, camera, renderer, controls, modelGroup, pointcloudGroup, null);
 
     // Register callback for renderer switches (WebGPU <-> WebGL)
-    sceneManager.onRendererChanged = (newRenderer: any) => {
+    sceneManager.onRendererChanged = (newRenderer: THREE.WebGLRenderer) => {
         renderer = newRenderer;
         controls = sceneManager!.controls;
         if (annotationSystem) annotationSystem.updateRenderer(newRenderer);
@@ -1252,7 +1256,7 @@ async function loadArchiveFromUrl(url: string): Promise<void> {
             state.archiveSourceUrl = url;
             await handleArchiveFile(new File([], fileName), archiveLoader);
             return;
-        } catch (err: any) {
+        } catch (err: unknown) {
             log.error('Tauri: failed to download archive from URL:', err);
             hideLoading();
             notify.error(`Failed to load archive: ${errMsg(err)}`);
@@ -1272,8 +1276,8 @@ async function loadArchiveFromUrl(url: string): Promise<void> {
         state.archiveSourceUrl = url;
         handleArchiveFile(new File([], fileName), archiveLoader);
         return;
-    } catch (rangeError: any) {
-        log.info('Range-based loading unavailable, falling back to full download:', rangeError.message);
+    } catch (rangeError: unknown) {
+        log.info('Range-based loading unavailable, falling back to full download:', errMsg(rangeError));
     }
 
     // Fallback: full download (server doesn't support Range requests)
@@ -1740,13 +1744,13 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         const imageEntries = archiveLoader.getImageEntries();
         if (imageEntries.length > 0) {
             state.imageAssets.clear();
-            await Promise.all(imageEntries.map(async (entry: any) => {
+            await Promise.all(imageEntries.map(async (entry: { file_name: string; getData: () => Promise<Uint8Array> }) => {
                 try {
                     const data = await archiveLoader.extractFile(entry.file_name);
                     if (data) {
                         state.imageAssets.set(entry.file_name, { blob: data.blob, url: data.url, name: entry.file_name });
                     }
-                } catch (e: any) {
+                } catch (e: unknown) {
                     log.warn('Failed to extract image:', entry.file_name, errMsg(e));
                 }
             }));
@@ -1852,10 +1856,10 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             if (manifest.viewer_settings.single_sided !== undefined) {
                 const side = manifest.viewer_settings.single_sided ? THREE.FrontSide : THREE.DoubleSide;
                 if (modelGroup) {
-                    modelGroup.traverse((child: any) => {
+                    modelGroup.traverse((child: THREE.Object3D) => {
                         if (child.isMesh && child.material) {
                             const mats = Array.isArray(child.material) ? child.material : [child.material];
-                            mats.forEach((m: any) => { m.side = side; m.needsUpdate = true; });
+                            mats.forEach((m: THREE.Material) => { (m as THREE.MeshStandardMaterial).side = side; m.needsUpdate = true; });
                         }
                     });
                 }
@@ -1936,15 +1940,15 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
 
             // Apply saved lighting intensities
             if (manifest.viewer_settings.ambient_intensity != null) {
-                const ambientLight = scene?.children.find((c: any) => c.isAmbientLight);
+                const ambientLight = scene?.children.find((c: THREE.Object3D) => (c as THREE.AmbientLight).isLight && c.type === 'AmbientLight') as THREE.AmbientLight | undefined;
                 if (ambientLight) (ambientLight as any).intensity = manifest.viewer_settings.ambient_intensity;
             }
             if (manifest.viewer_settings.hemisphere_intensity != null) {
-                const hemiLight = scene?.children.find((c: any) => c.isHemisphereLight);
+                const hemiLight = scene?.children.find((c: THREE.Object3D) => (c as THREE.HemisphereLight).isLight && c.type === 'HemisphereLight') as THREE.HemisphereLight | undefined;
                 if (hemiLight) (hemiLight as any).intensity = manifest.viewer_settings.hemisphere_intensity;
             }
             if (manifest.viewer_settings.directional1_intensity != null || manifest.viewer_settings.directional2_intensity != null) {
-                const dirLights = scene?.children.filter((c: any) => c.isDirectionalLight) || [];
+                const dirLights = scene?.children.filter((c: THREE.Object3D) => (c as THREE.DirectionalLight).isLight && c.type === 'DirectionalLight') as THREE.DirectionalLight[] || [];
                 if (dirLights[0] && manifest.viewer_settings.directional1_intensity != null) (dirLights[0] as any).intensity = manifest.viewer_settings.directional1_intensity;
                 if (dirLights[1] && manifest.viewer_settings.directional2_intensity != null) (dirLights[1] as any).intensity = manifest.viewer_settings.directional2_intensity;
             }
@@ -2076,7 +2080,7 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                     } else {
                         log.warn('Progressive load: HD mesh upgrade failed, keeping SD proxy');
                     }
-                } catch (e: any) {
+                } catch (e: unknown) {
                     log.warn('Progressive load: HD mesh upgrade failed, keeping SD proxy:', errMsg(e));
                 } finally {
                     hideBgLoadingIndicator();
@@ -2106,10 +2110,10 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                     // Re-apply viewer settings to newly loaded meshes
                     if (type === 'mesh' && manifest.viewer_settings?.single_sided !== undefined) {
                         const side = manifest.viewer_settings.single_sided ? THREE.FrontSide : THREE.DoubleSide;
-                        modelGroup.traverse((child: any) => {
+                        modelGroup.traverse((child: THREE.Object3D) => {
                             if (child.isMesh && child.material) {
                                 const mats = Array.isArray(child.material) ? child.material : [child.material];
-                                mats.forEach((m: any) => { m.side = side; m.needsUpdate = true; });
+                                mats.forEach((m: THREE.Material) => { (m as THREE.MeshStandardMaterial).side = side; m.needsUpdate = true; });
                             }
                         });
                     }
@@ -2292,7 +2296,7 @@ async function switchQualityTier(newTier: string): Promise<void> {
 // DEPS BUILDERS (matching the deps pattern used by file-handlers.js)
 // =============================================================================
 
-function createArchiveDeps(): any {
+function createArchiveDeps() {
     return {
         scene,
         modelGroup,
@@ -2364,7 +2368,7 @@ function createArchiveDeps(): any {
     };
 }
 
-function createSplatDeps(): any {
+function createSplatDeps() {
     return {
         scene,
         getSplatMesh: () => splatMesh,
@@ -2376,7 +2380,7 @@ function createSplatDeps(): any {
     };
 }
 
-function createModelDeps(): any {
+function createModelDeps() {
     return {
         modelGroup,
         state,
@@ -2385,7 +2389,7 @@ function createModelDeps(): any {
     };
 }
 
-function createPointcloudDeps(): any {
+function createPointcloudDeps() {
     return {
         pointcloudGroup,
         state,
@@ -2394,7 +2398,7 @@ function createPointcloudDeps(): any {
     };
 }
 
-function createDisplayModeDeps(): any {
+function createDisplayModeDeps() {
     const canvasRight = document.getElementById('viewer-canvas-right');
     return {
         state,
@@ -2406,11 +2410,12 @@ function createDisplayModeDeps(): any {
             const showPointcloud = state.displayMode === 'pointcloud' || state.displayMode === 'both' || state.displayMode === 'split';
 
             // Helper to set opacity on all materials in an object
-            const setOpacity = (obj: any, opacity: number) => {
-                obj.traverse((child: any) => {
-                    if (child.material) {
-                        const mats = Array.isArray(child.material) ? child.material : [child.material];
-                        mats.forEach((m: any) => {
+            const setOpacity = (obj: THREE.Object3D, opacity: number) => {
+                obj.traverse((child: THREE.Object3D) => {
+                    const mesh = child as THREE.Mesh;
+                    if (mesh.material) {
+                        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                        mats.forEach((m: THREE.Material) => {
                             m.transparent = true;
                             m.opacity = opacity;
                             m.needsUpdate = true;
@@ -2420,14 +2425,15 @@ function createDisplayModeDeps(): any {
             };
 
             // Helper to animate fade-in for regular meshes
-            const fadeIn = (obj: any, duration: number = 500) => {
+            const fadeIn = (obj: THREE.Object3D, duration: number = 500) => {
                 obj.visible = true;
                 // Save original transparency state before fade-in overrides it
-                const savedStates = new Map<any, { transparent: boolean; opacity: number }>();
-                obj.traverse((child: any) => {
-                    if (child.material) {
-                        const mats = Array.isArray(child.material) ? child.material : [child.material];
-                        mats.forEach((m: any) => {
+                const savedStates = new Map<THREE.Material, { transparent: boolean; opacity: number }>();
+                obj.traverse((child: THREE.Object3D) => {
+                    const mesh = child as THREE.Mesh;
+                    if (mesh.material) {
+                        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                        mats.forEach((m: THREE.Material) => {
                             savedStates.set(m, { transparent: m.transparent, opacity: m.opacity });
                         });
                     }
@@ -2444,10 +2450,11 @@ function createDisplayModeDeps(): any {
                         // Restore original transparency state so opaque meshes
                         // render in the opaque pass with depth writing — required
                         // for correct depth interleaving with Gaussian splats.
-                        obj.traverse((child: any) => {
-                            if (child.material) {
-                                const mats = Array.isArray(child.material) ? child.material : [child.material];
-                                mats.forEach((m: any) => {
+                        obj.traverse((child: THREE.Object3D) => {
+                            const mesh = child as THREE.Mesh;
+                            if (mesh.material) {
+                                const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                                mats.forEach((m: THREE.Material) => {
                                     const saved = savedStates.get(m);
                                     if (saved) {
                                         m.transparent = saved.transparent;
@@ -2466,7 +2473,7 @@ function createDisplayModeDeps(): any {
             };
 
             // Helper to animate fade-in for SplatMesh (uses .opacity property)
-            const fadeInSplat = (splat: any, duration: number = 500) => {
+            const fadeInSplat = (splat: SplatMesh, duration: number = 500) => {
                 splat.visible = true;
                 splat.opacity = 0;
                 const startTime = performance.now();
@@ -2556,11 +2563,11 @@ function cleanupCurrentScene(): void {
         while (modelGroup.children.length > 0) {
             const child = modelGroup.children[0];
             modelGroup.remove(child);
-            child.traverse?.((obj: any) => {
+            child.traverse?.((obj: THREE.Object3D) => {
                 if (obj.geometry) obj.geometry.dispose();
                 if (obj.material) {
                     const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-                    mats.forEach((m: any) => { if (m.map) m.map.dispose(); m.dispose(); });
+                    mats.forEach((m: THREE.Material) => { if ((m as THREE.MeshStandardMaterial).map) (m as THREE.MeshStandardMaterial).map!.dispose(); m.dispose(); });
                 }
             });
         }
@@ -2570,7 +2577,7 @@ function cleanupCurrentScene(): void {
         while (pointcloudGroup.children.length > 0) {
             const child = pointcloudGroup.children[0];
             pointcloudGroup.remove(child);
-            child.traverse?.((obj: any) => {
+            child.traverse?.((obj: THREE.Object3D) => {
                 if (obj.geometry) obj.geometry.dispose();
                 if (obj.material) obj.material.dispose?.();
             });
@@ -2595,7 +2602,7 @@ function cleanupCurrentScene(): void {
  * Build the dependency object for theme layout modules.
  * Layout modules receive everything via this object — no ES imports.
  */
-function createLayoutDeps(): any {
+function createLayoutDeps() {
     return {
         Logger,
         escapeHtml,
@@ -3214,7 +3221,7 @@ function createInfoOverlay(): void {
     document.body.appendChild(overlay);
 }
 
-function populateInfoOverlay(manifest: any): void {
+function populateInfoOverlay(manifest: Record<string, unknown>): void {
     const overlay = document.getElementById('kiosk-info-overlay');
     if (!overlay) return;
 
@@ -3336,7 +3343,7 @@ function createWallLabel(): void {
     document.body.appendChild(label);
 }
 
-function populateWallLabel(manifest: any): void {
+function populateWallLabel(manifest: Record<string, unknown>): void {
     const label = document.getElementById('kiosk-wall-label');
     if (!label) return;
 
@@ -3557,7 +3564,7 @@ function resetOrbitCenter(): void {
     controls.update();
 }
 
-function applyGlobalAlignment(alignment: any, opts?: { skipCamera?: boolean }): void {
+function applyGlobalAlignment(alignment: Record<string, unknown>, opts?: { skipCamera?: boolean }): void {
     if (!alignment) return;
 
     // Apply object transforms (position, rotation, scale)
@@ -3983,7 +3990,7 @@ function populateAnnotationList(): void {
 
 // --- Detailed metadata helpers ---
 
-function hasValue(val: any): boolean {
+function hasValue(val: unknown): boolean {
     if (val === null || val === undefined || val === '') return false;
     if (Array.isArray(val)) return val.length > 0;
     if (typeof val === 'object') {
@@ -4006,7 +4013,7 @@ function isSafeUrl(url: string): boolean {
 }
 
 /** Escape HTML, then convert [title](url) markdown links and bare URLs to clickable <a> tags */
-function linkifyValue(str: any): string {
+function linkifyValue(str: string): string {
     let html = escapeHtml(str);
     // Markdown links: [text](url)
     html = html.replace(
@@ -4045,7 +4052,7 @@ function createDetailSection(title: string): { section: HTMLElement; content: HT
     return { section, content };
 }
 
-function addDetailRow(container: HTMLElement, label: string, value: any): void {
+function addDetailRow(container: HTMLElement, label: string, value: unknown): void {
     if (!hasValue(value)) return;
     const row = document.createElement('div');
     row.className = 'display-detail';
@@ -4054,7 +4061,7 @@ function addDetailRow(container: HTMLElement, label: string, value: any): void {
     container.appendChild(row);
 }
 
-function populateDetailedMetadata(manifest: any): void {
+function populateDetailedMetadata(manifest: Record<string, unknown>): void {
     if (!manifest) return;
 
     const viewContent = document.querySelector('#sidebar-view .display-content');
@@ -4089,7 +4096,7 @@ function populateDetailedMetadata(manifest: any): void {
         }
         const texMaps = qm.texture_maps || manifest._meta?.quality?.texture_maps;
         if (Array.isArray(texMaps) && texMaps.length > 0) {
-            texMaps.forEach((m: any) => {
+            texMaps.forEach((m: { type?: string; width?: number; height?: number }) => {
                 const label = (m.type || '').replace(/([A-Z])/g, ' $1').replace(/^./, (s: string) => s.toUpperCase());
                 addDetailRow(content, `  ${label}`, `${m.width}×${m.height}`);
             });
@@ -4361,7 +4368,7 @@ function updateInfoPanel(): void {
     }
     if (modelGroup && modelGroup.children.length > 0) {
         let faceCount = 0;
-        modelGroup.traverse((child: any) => {
+        modelGroup.traverse((child: THREE.Object3D) => {
             if (child.isMesh && child.geometry) {
                 const idx = child.geometry.index;
                 faceCount += idx ? idx.count / 3 : (child.geometry.getAttribute('position')?.count || 0) / 3;
@@ -4371,7 +4378,7 @@ function updateInfoPanel(): void {
     }
     if (pointcloudGroup && pointcloudGroup.children.length > 0) {
         let pointCount = 0;
-        pointcloudGroup.traverse((child: any) => {
+        pointcloudGroup.traverse((child: THREE.Object3D) => {
             if (child.isPoints && child.geometry) {
                 const pos = child.geometry.getAttribute('position');
                 if (pos) pointCount += pos.count;
@@ -4381,7 +4388,7 @@ function updateInfoPanel(): void {
     }
 }
 
-function populateDisplayStats(annotationSystem: any): void {
+function populateDisplayStats(annotationSystem: AnnotationSystem | null): void {
     // Update display stats in sidebar
     const splatStat = document.getElementById('display-splat-stat');
     const splatCount = document.getElementById('display-splat-count');
