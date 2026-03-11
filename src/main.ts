@@ -2526,7 +2526,9 @@ function updateColmapUI(): void {
     const count = document.getElementById('colmap-camera-count');
     const selectBtn = document.getElementById('btn-select-colmap');
     const alignBtn = document.getElementById('btn-align-flightpath');
+    const noData = document.getElementById('colmap-no-data');
     if (info) info.style.display = state.colmapLoaded ? '' : 'none';
+    if (noData) noData.style.display = state.colmapLoaded ? 'none' : '';
     if (count && colmapManager) count.textContent = String(colmapManager.cameraCount);
     if (selectBtn) selectBtn.style.display = state.colmapLoaded ? '' : 'none';
     if (alignBtn) alignBtn.style.display = (state.colmapLoaded && state.flightPathLoaded) ? '' : 'none';

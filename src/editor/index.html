@@ -1133,6 +1133,28 @@
                     </div>
                 </div>
 
+                <!-- SfM Cameras -->
+                <div class="prop-section">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">SfM Cameras</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div id="colmap-info" style="display:none;">
+                            <span class="prop-hint">Cameras: <span id="colmap-camera-count">0</span></span>
+                            <div class="prop-btn-row mt4">
+                                <button class="prop-btn" id="btn-colmap-frustums">Frustums</button>
+                                <button class="prop-btn" id="btn-colmap-markers">Markers</button>
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Scale</span><span class="sl-val" id="colmap-scale-value">1.0</span></div>
+                                <input type="range" id="colmap-scale" min="0.1" max="10" step="0.1" value="1">
+                            </div>
+                        </div>
+                        <span id="colmap-no-data" class="prop-hint">No SfM data loaded.</span>
+                    </div>
+                </div>
+
                 </div><!-- /vs-tab-editor -->
 
             </div>
@@ -1228,13 +1250,38 @@
                         <input type="file" id="drawing-input" accept=".dxf" style="display:none" />
                         <span id="drawing-filename" class="prop-hint">.dxf</span>
 
-                        <span class="prop-label mt4">Flight Path</span>
+                    </div>
+                </div>
+
+                <!-- Data Overlays — flight paths, SfM cameras -->
+                <div class="prop-section">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Data Overlays</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <span class="prop-label">Flight Path</span>
                         <div class="prop-btn-row">
                             <label for="flightpath-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#4FC3F7;">+</span> File</label>
                             <button class="prop-btn danger" id="btn-remove-flightpath" disabled>Remove</button>
                         </div>
                         <input type="file" id="flightpath-input" accept=".csv,.kml,.kmz,.srt,.txt" style="display:none" />
                         <span id="flightpath-filename" class="prop-hint">.csv, .kml, .kmz, .srt, .txt</span>
+
+                        <span class="prop-label mt4">SfM Cameras</span>
+                        <div class="prop-btn-row">
+                            <label for="colmap-cameras-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#CE93D8;">+</span> cameras.bin</label>
+                            <label for="colmap-images-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#CE93D8;">+</span> images.bin</label>
+                        </div>
+                        <label for="colmap-points3d-input" class="prop-btn" style="cursor:pointer; margin-top:4px;"><span style="color:#CE93D8;">+</span> points3D.bin</label>
+                        <input type="file" id="colmap-cameras-input" accept=".bin" style="display:none" />
+                        <input type="file" id="colmap-images-input" accept=".bin" style="display:none" />
+                        <input type="file" id="colmap-points3d-input" accept=".bin" style="display:none" />
+                        <div id="colmap-file-status" class="prop-hint" style="margin-top:4px;">
+                            <span id="colmap-status-cameras">&#9675; cameras.bin</span><br>
+                            <span id="colmap-status-images">&#9675; images.bin</span><br>
+                            <span id="colmap-status-points3d">&#9675; points3D.bin</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1753,40 +1800,6 @@
                             <label for="flightpath-input-pane" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#4FC3F7;">+</span> Import</label>
                         </div>
                         <input type="file" id="flightpath-input-pane" accept=".csv,.kml,.kmz,.srt,.txt" style="display:none" />
-                    </div>
-                </div>
-
-                <!-- SfM Cameras -->
-                <div class="prop-section open">
-                    <div class="prop-section-hd">
-                        <span class="prop-section-title">SfM Cameras</span>
-                        <span class="prop-section-chevron">&#9654;</span>
-                    </div>
-                    <div class="prop-section-body">
-                        <div class="prop-btn-row">
-                            <label for="colmap-cameras-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#CE93D8;">+</span> cameras.bin</label>
-                            <label for="colmap-images-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#CE93D8;">+</span> images.bin</label>
-                        </div>
-                        <label for="colmap-points3d-input" class="prop-btn" style="cursor:pointer; margin-top:4px;"><span style="color:#CE93D8;">+</span> points3D.bin</label>
-                        <input type="file" id="colmap-cameras-input" accept=".bin" style="display:none" />
-                        <input type="file" id="colmap-images-input" accept=".bin" style="display:none" />
-                        <input type="file" id="colmap-points3d-input" accept=".bin" style="display:none" />
-                        <div id="colmap-file-status" class="prop-hint" style="margin-top:4px;">
-                            <span id="colmap-status-cameras">&#9675; cameras.bin</span><br>
-                            <span id="colmap-status-images">&#9675; images.bin</span><br>
-                            <span id="colmap-status-points3d">&#9675; points3D.bin</span>
-                        </div>
-                        <div id="colmap-info" style="display:none;">
-                            <span class="prop-hint">Cameras: <span id="colmap-camera-count">0</span></span>
-                            <div class="prop-btn-row mt4">
-                                <button class="prop-btn" id="btn-colmap-frustums">Frustums</button>
-                                <button class="prop-btn" id="btn-colmap-markers">Markers</button>
-                            </div>
-                            <div class="sl-row">
-                                <div class="sl-hd"><span class="sl-label">Scale</span><span class="sl-val" id="colmap-scale-value">1.0</span></div>
-                                <input type="range" id="colmap-scale" min="0.1" max="10" step="0.1" value="1">
-                            </div>
-                        </div>
                     </div>
                 </div>
 
