@@ -771,6 +771,30 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
             applyViewerSettings(manifest.viewer_settings, deps);
         }
 
+        // Load bundled HDR environment from archive
+        const envEntry = archiveLoader.getEnvironmentEntry();
+        if (envEntry) {
+            try {
+                const envData = await archiveLoader.extractFile(envEntry.entry.file_name);
+                if (envData) {
+                    const envBlob = new Blob([envData], { type: 'application/octet-stream' });
+                    deps.state.environmentBlob = envBlob; // store for re-export round-trip
+                    const blobUrl = URL.createObjectURL(envBlob);
+                    try {
+                        await deps.sceneManager.loadHDREnvironment(blobUrl);
+                        if (manifest.viewer_settings?.environment_as_background) {
+                            deps.sceneManager.setEnvironmentAsBackground(true);
+                        }
+                    } finally {
+                        URL.revokeObjectURL(blobUrl);
+                    }
+                    log.info('Loaded HDR environment from archive');
+                }
+            } catch (err: any) {
+                log.warn('Failed to load HDR environment from archive:', err.message);
+            }
+        }
+
         // Show quality toggle if archive has any proxies
         const contentInfoFinal = archiveLoader.getContentInfo();
         if (hasAnyProxy(contentInfoFinal)) {
@@ -974,8 +998,6 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
     if (settings.tone_mapping_exposure != null && sceneRefs.renderer) {
         sceneRefs.renderer.toneMappingExposure = settings.tone_mapping_exposure;
     }
-
-    // NOTE: environment_preset IBL would require async HDR loading; skipped here.
 
     // Apply post-processing settings
     if (settings.post_processing) {
