@@ -3557,6 +3557,7 @@ let _statusBarFrameCount = 0;
 const _prevCamPos = new THREE.Vector3();
 const _prevCamQuat = new THREE.Quaternion();
 let _markersDirty = true; // Start dirty so first frame always updates
+const _clock = new THREE.Clock();
 
 function animate() {
     requestAnimationFrame(animate);
@@ -3584,8 +3585,11 @@ function animate() {
         if (crossSection) crossSection.updatePlane();
 
         // Update flight path playback
+        // Always get delta (keeps clock ticking even when not playing)
+        // Clamp to 100ms to avoid huge first-frame jump (Clock starts on construction)
+        const dt = Math.min(_clock.getDelta(), 0.1);
         if (flightPathManager?.isPlaying) {
-            flightPathManager.updatePlayback(1 / 60);
+            flightPathManager.updatePlayback(dt);
         }
 
         // Check if camera moved since last frame (skip marker DOM updates when idle)
