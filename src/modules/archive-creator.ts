@@ -1496,7 +1496,6 @@ export class ArchiveCreator {
             _source_notes: "",
             role: 'environment',
             original_name: fileName,
-            _parameters: {},
         };
 
         return entryKey;
