@@ -63,7 +63,7 @@ export function parsePoints3D(buffer: ArrayBuffer, maxPoints = 20000): Points3DR
         const x = view.getFloat64(pOff, true);
         const y = view.getFloat64(pOff + 8, true);
         const z = view.getFloat64(pOff + 16, true);
-        positions[outIdx++] = x;
+        positions[outIdx++] = -x;
         positions[outIdx++] = -y;
         positions[outIdx++] = -z;
     }

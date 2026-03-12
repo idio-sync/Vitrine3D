@@ -127,10 +127,10 @@ export function parseImagesBin(buffer: ArrayBuffer, intrinsics: ColmapIntrinsics
         const pos = t.clone().negate().applyQuaternion(rInv);
 
         // Convert from Colmap (Y-down, Z-forward) to Three.js (Y-up, Z-backward):
-        // Position: negate Y and Z
-        // Quaternion: negate Y and Z components (equivalent to 180° rotation around X)
-        const posConverted = new THREE.Vector3(pos.x, -pos.y, -pos.z);
-        const qConverted = new THREE.Quaternion(rInv.x, -rInv.y, -rInv.z, rInv.w);
+        // Position: negate all three axes — Y,Z for coord system, X to fix SfM mirror ambiguity
+        // Quaternion: negate X (mirror) and Y,Z (coord conversion) = negate all components, keep w
+        const posConverted = new THREE.Vector3(-pos.x, -pos.y, -pos.z);
+        const qConverted = new THREE.Quaternion(-rInv.x, -rInv.y, -rInv.z, rInv.w);
 
         const intr = intrinsicsMap.get(cameraId);
         const focalLength = intr?.focalLength || 0;
