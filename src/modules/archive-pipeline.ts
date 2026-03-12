@@ -162,6 +162,16 @@ async function loadModelFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
             const texRow = texEl.closest('.prop-row') as HTMLElement;
             if (texRow) texRow.style.display = '';
         }
+
+        // Show web optimization section (same as onModelLoaded in main.ts)
+        const webOptSection = document.getElementById('web-opt-section');
+        if (webOptSection) webOptSection.classList.remove('hidden');
+        const webOptFaces = document.getElementById('web-opt-current-faces');
+        if (webOptFaces) webOptFaces.textContent = `Current faces: ${faceCount.toLocaleString()}`;
+
+        // Update decimation panel HD face count
+        const hdFacesEl = document.getElementById('decimation-hd-faces');
+        if (hdFacesEl) hdFacesEl.textContent = faceCount.toLocaleString();
     }
 }
 
