@@ -1866,9 +1866,28 @@
                                 <span id="fp-time-total">00:00</span>
                             </div>
                         </div>
-                        <div class="cb-row mt4">
-                            <input type="checkbox" id="fp-follow-camera">
-                            <label for="fp-follow-camera">Follow Camera</label>
+                        <!-- Camera Mode -->
+                        <div class="prop-label mt8 mb4">Camera</div>
+                        <div class="seg-ctrl mb4">
+                            <button class="seg-btn active" id="fp-cam-orbit">Orbit</button>
+                            <button class="seg-btn" id="fp-cam-chase">Chase</button>
+                            <button class="seg-btn" id="fp-cam-fpv">FPV</button>
+                        </div>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <button class="prop-btn small" id="fp-recenter-btn" style="display:none;" title="Re-center view">Re-center</button>
+                            <div class="cb-row" id="fp-pip-row" style="display:none;">
+                                <input type="checkbox" id="fp-pip-toggle">
+                                <label for="fp-pip-toggle">PiP</label>
+                            </div>
+                        </div>
+
+                        <!-- Telemetry Readout -->
+                        <div id="fp-telemetry" style="display:none; margin-top:8px; font-size:10px; color:var(--text-secondary);">
+                            <div style="display:flex; gap:12px;">
+                                <span>Alt: <span class="font-mono" id="fp-telem-alt">—</span></span>
+                                <span>Spd: <span class="font-mono" id="fp-telem-speed">—</span></span>
+                                <span>Hdg: <span class="font-mono" id="fp-telem-heading">—</span></span>
+                            </div>
                         </div>
                     </div>
                 </div>
