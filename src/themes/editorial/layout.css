@@ -3687,7 +3687,11 @@ body.kiosk-mode.kiosk-editorial .editorial-loading-title-bar {
     body.kiosk-mode.kiosk-editorial #loading-progress-bar::after,
     body.kiosk-mode.kiosk-editorial #annotation-line-overlay line,
     body.kiosk-mode.kiosk-editorial .editorial-info-overlay.open .editorial-info-content > *,
-    body.kiosk-mode.kiosk-editorial .annotation-marker {
+    body.kiosk-mode.kiosk-editorial .annotation-marker,
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-pill,
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip,
+    body.kiosk-mode.kiosk-editorial .editorial-info-overlay.mobile-open,
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover.open {
         animation: none !important;
     }
 

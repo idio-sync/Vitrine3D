@@ -1531,6 +1531,7 @@ export function setup(manifest, deps) {
     const createCapsuleBtn = (iconSvg, label, extraClass) => {
         const btn = document.createElement('button');
         btn.className = 'editorial-capsule-btn' + (extraClass ? ' ' + extraClass : '');
+        btn.setAttribute('aria-label', label);
         btn.innerHTML = iconSvg + '<span>' + label + '</span>';
         return btn;
     };
@@ -1776,6 +1777,7 @@ export function setup(manifest, deps) {
 
     const mobileCloseBtn = document.createElement('button');
     mobileCloseBtn.className = 'editorial-mobile-info-close';
+    mobileCloseBtn.setAttribute('aria-label', 'Close info overlay');
     mobileCloseBtn.innerHTML = '&times;';
     mobileCloseBtn.addEventListener('click', () => {
         overlay.classList.remove('mobile-open');
@@ -1783,10 +1785,10 @@ export function setup(manifest, deps) {
     });
 
     // Title
-    const title = manifest?.title || manifest?.project?.title || 'Untitled';
+    const mobileTitleText = manifest?.title || manifest?.project?.title || 'Untitled';
     const mobileTitle = document.createElement('div');
     mobileTitle.className = 'editorial-mobile-info-title';
-    mobileTitle.textContent = title;
+    mobileTitle.textContent = mobileTitleText;
 
     const mobileRule = document.createElement('div');
     mobileRule.className = 'editorial-mobile-info-rule';
@@ -2136,11 +2138,7 @@ function onWalkthroughStart(walkthrough) {
         // Insert before the first ribbon-rule after tools group, or append to tools group
         const toolsGroup = ribbon.querySelector('.editorial-ribbon-tools');
         if (toolsGroup) {
-            if (annoSeq) {
-                toolsGroup.insertBefore(wtStopDots, annoSeq);
-            } else {
-                toolsGroup.prepend(wtStopDots);
-            }
+            toolsGroup.prepend(wtStopDots);
         }
     }
 
