@@ -126,11 +126,13 @@ export function parseImagesBin(buffer: ArrayBuffer, intrinsics: ColmapIntrinsics
         const rInv = q.clone().invert();
         const pos = t.clone().negate().applyQuaternion(rInv);
 
-        // Convert from Colmap (Y-down, Z-forward) to Three.js (Y-up, Z-backward):
-        // Position: negate all three axes — Y,Z for coord system, X to fix SfM mirror ambiguity
-        // Quaternion: negate X (mirror) and Y,Z (coord conversion) = negate all components, keep w
-        const posConverted = new THREE.Vector3(-pos.x, -pos.y, -pos.z);
-        const qConverted = new THREE.Quaternion(-rInv.x, -rInv.y, -rInv.z, rInv.w);
+        // Store in raw COLMAP world coordinates — no axis conversion needed.
+        // The colmapGroup inherits the splatMesh's transform (π X-rotation + manual
+        // alignment), which handles the COLMAP→Three.js display conversion.  The splat
+        // was trained from the same COLMAP reconstruction, so cameras/points3D share
+        // its coordinate system.
+        const posConverted = pos;
+        const qConverted = rInv;
 
         const intr = intrinsicsMap.get(cameraId);
         const focalLength = intr?.focalLength || 0;

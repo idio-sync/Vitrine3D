@@ -29,8 +29,8 @@ function readUint64(view: DataView, offset: number): number {
 
 /**
  * Parse Colmap points3D.bin → Float64Array of xyz positions.
- * Coordinate-converts from Colmap (Y-down, Z-forward) to Three.js (Y-up, Z-backward)
- * by negating Y and Z, matching what colmap-loader.ts does for camera positions.
+ * Stored in raw COLMAP world coordinates (no axis conversion).
+ * The colmapGroup's transform handles COLMAP→Three.js display conversion.
  */
 export function parsePoints3D(buffer: ArrayBuffer, maxPoints = 20000): Points3DResult | null {
     if (buffer.byteLength < 8) return null;
@@ -63,9 +63,9 @@ export function parsePoints3D(buffer: ArrayBuffer, maxPoints = 20000): Points3DR
         const x = view.getFloat64(pOff, true);
         const y = view.getFloat64(pOff + 8, true);
         const z = view.getFloat64(pOff + 16, true);
-        positions[outIdx++] = -x;
-        positions[outIdx++] = -y;
-        positions[outIdx++] = -z;
+        positions[outIdx++] = x;
+        positions[outIdx++] = y;
+        positions[outIdx++] = z;
     }
 
     const actualCount = outIdx / 3;
@@ -269,6 +269,13 @@ export function computeSimilarityTransform(
         traceRH += rotSrc.dot(tgtCentered[i]);
     }
     const scale = rigid ? 1.0 : traceRH / (n * srcVar);
+
+    // Guard: negative scale means power iteration converged to wrong eigenvector
+    // (anti-rotation), producing a reflection instead of a proper similarity transform.
+    if (scale <= 0) {
+        log.warn(`Similarity transform: non-positive scale ${scale.toFixed(4)} — alignment unreliable`);
+        return null;
+    }
 
     // Step 7: Compute translation
     const rotatedCentroid = srcCentroid.clone().applyQuaternion(rotation).multiplyScalar(scale);

@@ -79,10 +79,10 @@ describe('parseImagesBin', () => {
         expect(images[0].name).toBe('DJI_20240315_142532_0001.jpg');
         expect(images[0].cameraId).toBe(1);
         expect(images[0].focalLength).toBeCloseTo(2800);
-        // Positions: X negated (SfM mirror fix), Y negated, Z negated (coord conversion)
-        expect(images[0].position[0]).toBeCloseTo(1);   // X negated (mirror fix)
-        expect(images[0].position[1]).toBeCloseTo(2);   // Y negated
-        expect(images[0].position[2]).toBeCloseTo(3);   // Z negated
+        // Raw COLMAP world-space position: -R^T * t = (-1, -2, -3) for identity R, t=(1,2,3)
+        expect(images[0].position[0]).toBeCloseTo(-1);
+        expect(images[0].position[1]).toBeCloseTo(-2);
+        expect(images[0].position[2]).toBeCloseTo(-3);
     });
 
     it('returns empty array for empty buffer', () => {

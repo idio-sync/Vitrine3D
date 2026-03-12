@@ -43,16 +43,16 @@ describe('parsePoints3D', () => {
         ]);
         const result = parsePoints3D(buf);
         expect(result).not.toBeNull();
-        // X negated (SfM mirror fix), Y negated, Z negated (coord conversion)
-        expect(result!.positions[0]).toBeCloseTo(-1.0);
-        expect(result!.positions[1]).toBeCloseTo(-2.0);
-        expect(result!.positions[2]).toBeCloseTo(-3.0);
-        expect(result!.positions[3]).toBeCloseTo(-4.0);
-        expect(result!.positions[4]).toBeCloseTo(-5.0);
-        expect(result!.positions[5]).toBeCloseTo(-6.0);
-        expect(result!.positions[6]).toBeCloseTo(-7.0);
-        expect(result!.positions[7]).toBeCloseTo(-8.0);
-        expect(result!.positions[8]).toBeCloseTo(-9.0);
+        // Raw COLMAP world coordinates — no axis conversion
+        expect(result!.positions[0]).toBeCloseTo(1.0);
+        expect(result!.positions[1]).toBeCloseTo(2.0);
+        expect(result!.positions[2]).toBeCloseTo(3.0);
+        expect(result!.positions[3]).toBeCloseTo(4.0);
+        expect(result!.positions[4]).toBeCloseTo(5.0);
+        expect(result!.positions[5]).toBeCloseTo(6.0);
+        expect(result!.positions[6]).toBeCloseTo(7.0);
+        expect(result!.positions[7]).toBeCloseTo(8.0);
+        expect(result!.positions[8]).toBeCloseTo(9.0);
         expect(result!.count).toBe(3);
     });
 
