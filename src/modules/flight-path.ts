@@ -164,6 +164,19 @@ export class FlightPathManager {
     private _recenterProgress = 0;
     private static readonly SLERP_ALPHA = 0.15;  // low-pass filter: 15% convergence per frame = heavy smoothing for noisy gimbal data
     private static readonly RECENTER_DURATION = 0.5; // seconds
+    // Transition state
+    private _transitionDuration = 1.0; // seconds
+    private _transitionElapsed = 0;
+    private _transitionFromPos = new THREE.Vector3();
+    private _transitionFromQuat = new THREE.Quaternion();
+    private _transitionToPos = new THREE.Vector3();
+    private _transitionToQuat = new THREE.Quaternion();
+    // Saved camera state for restoring on exit
+    private _savedCameraPos: THREE.Vector3 | null = null;
+    private _savedCameraQuat: THREE.Quaternion | null = null;
+    private _savedControlsTarget: THREE.Vector3 | null = null;
+    // Callback for when camera mode changes (main.ts uses to toggle controls.enabled)
+    private _onCameraModeChange: ((mode: FlightCameraMode) => void) | null = null;
     private _onPlaybackUpdate: ((currentMs: number, totalMs: number) => void) | null = null;
     private _onPlaybackEnd: (() => void) | null = null;
 
@@ -749,7 +762,7 @@ export class FlightPathManager {
         this._playing = false;
     }
 
-    /** Stop playback and reset to start. */
+    /** Stop playback and reset to start. Restores camera if in chase/fpv. */
     stopPlayback(): void {
         this._playing = false;
         this._playbackTime = 0;
@@ -757,6 +770,21 @@ export class FlightPathManager {
         if (this._playbackMarker) {
             this._playbackMarker.visible = false;
         }
+
+        // Restore camera if in follow mode
+        if (this._cameraMode !== 'orbit') {
+            this._cameraMode = 'orbit';
+            this._onCameraModeChange?.('orbit');
+
+            if (this._savedCameraPos && this.camera instanceof THREE.PerspectiveCamera) {
+                this.startTransition(this._savedCameraPos, this._savedCameraQuat!);
+            }
+        }
+
+        this._freeLookOffset.identity();
+        this._freeLookActive = false;
+        // Note: do NOT set _transitioning = false here — the fly-out transition
+        // started by startTransition() above needs to run to completion in updatePlayback()
         this._onPlaybackEnd?.();
     }
 
@@ -786,11 +814,75 @@ export class FlightPathManager {
         return this._cameraMode === 'chase';
     }
 
-    /** Set camera mode: orbit, chase, or fpv. */
+    /** Set camera mode with smooth transition. */
     setCameraMode(mode: FlightCameraMode): void {
         if (this._cameraMode === mode) return;
+        const prevMode = this._cameraMode;
+
+        // Save camera state when leaving orbit
+        if (prevMode === 'orbit' && (mode === 'chase' || mode === 'fpv')) {
+            this._savedCameraPos = this.camera.position.clone();
+            this._savedCameraQuat = this.camera.quaternion.clone();
+        }
+
         this._cameraMode = mode;
+        this._onCameraModeChange?.(mode);
+
+        // Reset free-look when switching modes
+        this._freeLookOffset.identity();
+        this._freeLookActive = false;
+        this._recentering = false;
+
+        // Start transition if playback marker exists
+        if (mode === 'orbit' && this._savedCameraPos) {
+            // Fly out to saved position
+            this.startTransition(this._savedCameraPos, this._savedCameraQuat!);
+        } else if ((mode === 'chase' || mode === 'fpv') && this._playbackMarker && this._playing) {
+            // Fly in — compute target from current playback position
+            this.startTransitionToPlaybackTarget(mode);
+        }
+
         log.info(`Camera mode changed to: ${mode}`);
+    }
+
+    private startTransition(toPos: THREE.Vector3, toQuat: THREE.Quaternion): void {
+        this._transitioning = true;
+        this._transitionElapsed = 0;
+        this._transitionFromPos.copy(this.camera.position);
+        this._transitionFromQuat.copy(this.camera.quaternion);
+        this._transitionToPos.copy(toPos);
+        this._transitionToQuat.copy(toQuat);
+    }
+
+    private startTransitionToPlaybackTarget(mode: FlightCameraMode): void {
+        if (!this._playbackMarker) return;
+        const pos = this._playbackMarker.position.clone();
+        let toPos: THREE.Vector3;
+        let toQuat: THREE.Quaternion;
+
+        if (mode === 'fpv') {
+            toPos = pos;
+            const pathData = this._playbackPathId ? this.paths.find(p => p.id === this._playbackPathId) : null;
+            const points = pathData ? this.getTrimmedPoints(pathData) : [];
+            toQuat = points.length > 0 ? this.computeFpvOrientation(points, this._playbackTime) : new THREE.Quaternion();
+        } else {
+            // Chase: behind and above
+            const pathData = this._playbackPathId ? this.paths.find(p => p.id === this._playbackPathId) : null;
+            const points = pathData ? this.getTrimmedPoints(pathData) : [];
+            const heading = points.length > 0 ? this.getPlaybackHeading(points, this._playbackTime) : 0;
+            const camDist = 0.5;
+            const camHeight = 0.3;
+            toPos = new THREE.Vector3(
+                pos.x - Math.sin(heading) * camDist,
+                pos.y + camHeight,
+                pos.z - Math.cos(heading) * camDist
+            );
+            toQuat = new THREE.Quaternion();
+            const lookMat = new THREE.Matrix4().lookAt(toPos, pos, new THREE.Vector3(0, 1, 0));
+            toQuat.setFromRotationMatrix(lookMat);
+        }
+
+        this.startTransition(toPos, toQuat);
     }
 
     get cameraMode(): FlightCameraMode {
@@ -799,6 +891,11 @@ export class FlightPathManager {
 
     get isTransitioning(): boolean {
         return this._transitioning;
+    }
+
+    /** Register callback for camera mode changes (used by main.ts to disable/enable OrbitControls). */
+    onCameraModeChange(cb: (mode: FlightCameraMode) => void): void {
+        this._onCameraModeChange = cb;
     }
 
     get isPlaying(): boolean {
@@ -828,6 +925,27 @@ export class FlightPathManager {
 
     /** Called each frame from the animate loop. deltaTime in seconds. */
     updatePlayback(deltaTime: number): void {
+        // Always update transition even when not playing (fly-out on stop)
+        if (this._transitioning) {
+            this._transitionElapsed += deltaTime;
+            const t = Math.min(1, this._transitionElapsed / this._transitionDuration);
+            const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+            if (this.camera instanceof THREE.PerspectiveCamera) {
+                this.camera.position.lerpVectors(this._transitionFromPos, this._transitionToPos, ease);
+                this.camera.quaternion.copy(this._transitionFromQuat).slerp(this._transitionToQuat, ease);
+            }
+            if (t >= 1) {
+                this._transitioning = false;
+                if (this._cameraMode === 'fpv') {
+                    this._smoothedQuaternion.copy(this._fpvQuaternion);
+                }
+                if (this._cameraMode === 'orbit') {
+                    this._savedCameraPos = null;
+                    this._savedCameraQuat = null;
+                }
+            }
+        }
+
         if (!this._playing || !this._playbackPathId) return;
 
         const pathData = this.paths.find(p => p.id === this._playbackPathId);

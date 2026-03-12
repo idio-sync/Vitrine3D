@@ -3588,7 +3588,7 @@ function animate() {
         // Always get delta (keeps clock ticking even when not playing)
         // Clamp to 100ms to avoid huge first-frame jump (Clock starts on construction)
         const dt = Math.min(_clock.getDelta(), 0.1);
-        if (flightPathManager?.isPlaying) {
+        if (flightPathManager && (flightPathManager.isPlaying || flightPathManager.isTransitioning)) {
             flightPathManager.updatePlayback(dt);
         }
 
