@@ -487,6 +487,12 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         }
     }
 
+    // Bundle HDR environment if one is loaded
+    if (state.environmentBlob) {
+        archiveCreator.addEnvironment(state.environmentBlob, 'environment_0.hdr');
+        log.info(' Adding HDR environment');
+    }
+
     // Save global alignment — definitive scene state for re-import
     archiveCreator.setAlignment({
         splat: splatMesh ? {
