@@ -1768,7 +1768,15 @@ async function init() {
         );
         const flightTooltip = document.getElementById('flight-tooltip');
         if (flightTooltip) flightPathManager.setupTooltip(flightTooltip);
+        flightPathManager.setupFreeLook();
         log.info(' FlightPathManager initialized');
+        flightPathManager.onCameraModeChange((mode) => {
+            if (mode === 'orbit') {
+                controls.enabled = true;
+            } else {
+                controls.enabled = false;
+            }
+        });
     }
 
     // Initialize colmap manager
