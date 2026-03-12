@@ -231,9 +231,11 @@ export const WALKTHROUGH = {
 export const ENVIRONMENT = {
     PRESETS: [
         { name: 'None', url: '' },
-        { name: 'Outdoor', url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_43d_clear_puresky_1k.hdr' },
-        { name: 'Studio', url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr' },
-        { name: 'Sunset', url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr' }
+        { name: 'Studio', url: '/hdri/studio_small_09_1k.hdr' },
+        { name: 'Outdoor', url: '/hdri/kloofendal_43d_clear_puresky_1k.hdr' },
+        { name: 'Studio (Dramatic)', url: '/hdri/pav_studio_03_1k.hdr' },
+        { name: 'Dark Studio', url: '/hdri/monochrome_studio_02_1k.hdr' },
+        { name: 'Sunset', url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr' },
     ]
 } as const;
 

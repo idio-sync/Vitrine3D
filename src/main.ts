@@ -331,6 +331,8 @@ const state: AppState = {
         sfmCameras: { visible: false, displayMode: 'frustums' },
         flightPath: { visible: false, lineColor: '#00ffff', lineOpacity: 1.0, showMarkers: true, markerDensity: 'all' },
     },
+    environmentBlob: null,
+    renderingPreset: null,
 };
 
 // Scene manager instance (handles scene, camera, renderer, controls, lighting)

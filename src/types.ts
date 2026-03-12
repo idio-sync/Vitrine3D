@@ -126,6 +126,9 @@ export interface AppState {
     viewDefaults: ViewDefaults;           // Archive-embeddable overlay display defaults
     meshVertexCount?: number;              // Dynamically set by file-handlers.js after mesh load
     meshTextureInfo?: import('./modules/utilities.js').TextureInfo;  // Dynamically set after mesh load
+    // Environment / rendering preset state
+    environmentBlob: Blob | null;          // raw HDR file for archive bundling
+    renderingPreset: string | null;        // current preset name or 'custom'
 }
 
 // ===== Scene References =====
