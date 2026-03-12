@@ -1001,7 +1001,8 @@ function createEventWiringDeps(): EventWiringDeps {
                         console.log('[ICP-DEBUG] Pre-transformed points3D by colmapGroup matrix');
                     }
 
-                    const icpResult = runICP(preTransformedPts, points3DCount, splatSample.points, splatSample.count);
+                    const icpResult = runICP(preTransformedPts, points3DCount, splatSample.points, splatSample.count,
+                        initialMatrix ? { skipCoarseSearch: true } : undefined);
                     if (!icpResult) {
                         notify.error('Alignment failed — insufficient point overlap');
                         return;

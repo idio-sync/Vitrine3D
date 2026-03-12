@@ -207,6 +207,15 @@ export interface ICPResult {
     converged: boolean;
 }
 
+export interface ICPOptions {
+    maxIterations?: number;
+    convergenceThreshold?: number;
+    /** Skip the 24-candidate coarse rotation search.  Use when source points
+     *  are already approximately aligned with target (e.g. pre-transformed by
+     *  the colmapGroup matrix). */
+    skipCoarseSearch?: boolean;
+}
+
 /**
  * Run ICP: coarse rotation search → iterative refinement.
  * Source points are transformed to match target points.
@@ -214,22 +223,29 @@ export interface ICPResult {
 export function runICP(
     source: Float64Array, sourceCount: number,
     target: Float64Array, targetCount: number,
-    maxIterations = 30,
-    convergenceThreshold = 1e-6
+    options?: ICPOptions
 ): ICPResult | null {
+    const maxIterations = options?.maxIterations ?? 30;
+    const convergenceThreshold = options?.convergenceThreshold ?? 1e-6;
+
     if (sourceCount < 3 || targetCount < 3) return null;
 
-    // Coarse rotation
-    const coarseQ = findBestCoarseRotation(source, sourceCount, target, targetCount);
-
-    // Apply coarse rotation
     const currentSource = new Float64Array(sourceCount * 3);
-    for (let i = 0; i < sourceCount; i++) {
-        const v = new THREE.Vector3(source[i * 3], source[i * 3 + 1], source[i * 3 + 2])
-            .applyQuaternion(coarseQ);
-        currentSource[i * 3] = v.x;
-        currentSource[i * 3 + 1] = v.y;
-        currentSource[i * 3 + 2] = v.z;
+
+    if (options?.skipCoarseSearch) {
+        // Source is already approximately aligned — copy as-is
+        log.info('Skipping coarse rotation search (pre-aligned source)');
+        currentSource.set(source);
+    } else {
+        // Coarse rotation search over 24 principal-axis candidates
+        const coarseQ = findBestCoarseRotation(source, sourceCount, target, targetCount);
+        for (let i = 0; i < sourceCount; i++) {
+            const v = new THREE.Vector3(source[i * 3], source[i * 3 + 1], source[i * 3 + 2])
+                .applyQuaternion(coarseQ);
+            currentSource[i * 3] = v.x;
+            currentSource[i * 3 + 1] = v.y;
+            currentSource[i * 3 + 2] = v.z;
+        }
     }
 
     // Centroid-align
