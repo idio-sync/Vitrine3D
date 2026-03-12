@@ -1176,7 +1176,7 @@ function handleAuditLog(req, res) {
         const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
         const total = db.prepare(`SELECT COUNT(*) AS cnt FROM audit_log ${where}`).get(...params).cnt;
-        const entries = db.prepare(`SELECT * FROM audit_log ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
+        const entries = db.prepare(`SELECT * FROM audit_log ${where} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
 
         const actors = db.prepare('SELECT DISTINCT actor FROM audit_log WHERE actor IS NOT NULL ORDER BY actor').all().map(r => r.actor);
         const actions = db.prepare('SELECT DISTINCT action FROM audit_log WHERE action IS NOT NULL ORDER BY action').all().map(r => r.action);
