@@ -74,6 +74,7 @@ interface ContentInfo {
     sourceFileCount: number;
     hasFlightPath: boolean;
     flightPathCount: number;
+    hasEnvironment: boolean;
 }
 
 interface ArchiveMetadata {
@@ -961,6 +962,11 @@ export class ArchiveLoader {
         return this.findEntriesByPrefix('flightpath_');
     }
 
+    getEnvironmentEntry(): { entry: ManifestDataEntry; key: string } | null {
+        const entries = this.findEntriesByPrefix('environment_');
+        return entries.length > 0 ? { entry: entries[0].entry, key: entries[0].key } : null;
+    }
+
     getContentInfo(): ContentInfo {
         if (this._contentInfoCache) return this._contentInfoCache;
 
@@ -975,6 +981,7 @@ export class ArchiveLoader {
 
         const sourceFiles = this.getSourceFileEntries();
         const flightPaths = this.getFlightPathEntries();
+        const environment = this.getEnvironmentEntry();
 
         this._contentInfoCache = {
             hasSplat: scene !== null && isFormatSupported(scene.file_name, 'splat'),
@@ -988,7 +995,8 @@ export class ArchiveLoader {
             hasSourceFiles: sourceFiles.length > 0,
             sourceFileCount: sourceFiles.length,
             hasFlightPath: flightPaths.length > 0,
-            flightPathCount: flightPaths.length
+            flightPathCount: flightPaths.length,
+            hasEnvironment: environment !== null
         };
         return this._contentInfoCache;
     }
