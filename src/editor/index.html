@@ -606,6 +606,26 @@
                     </div>
                 </div>
 
+                <!-- Rendering Preset -->
+                <div class="prop-section archived">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Rendering Preset</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <select class="prop-select mb4" id="rendering-preset-select">
+                            <option value="">None (manual settings)</option>
+                            <option value="technical">Technical</option>
+                            <option value="studio">Studio</option>
+                            <option value="outdoor">Outdoor</option>
+                            <option value="dramatic">Dramatic</option>
+                            <option value="custom" disabled>Custom</option>
+                        </select>
+                        <span class="prop-hint">Applies HDR environment, tone mapping, lighting, and post-processing as a unified look. Individual settings below can override.</span>
+                    </div>
+                </div>
+
                 <!-- Lighting on Open -->
                 <div class="prop-section archived">
                     <div class="prop-section-hd">
@@ -694,9 +714,11 @@
                         <div id="meta-viewer-env-controls" class="mt6" style="display:none;">
                             <select class="prop-select mb4" id="meta-viewer-env-preset">
                                 <option value="">None</option>
-                                <option value="preset:0">Outdoor</option>
-                                <option value="preset:1">Studio</option>
-                                <option value="preset:2">Sunset</option>
+                                <option value="Studio">Studio</option>
+                                <option value="Outdoor">Outdoor</option>
+                                <option value="Studio (Dramatic)">Studio (Dramatic)</option>
+                                <option value="Dark Studio">Dark Studio</option>
+                                <option value="Sunset">Sunset</option>
                             </select>
                             <div class="cb-row mt4">
                                 <input type="checkbox" id="meta-viewer-env-as-background">
@@ -1025,9 +1047,11 @@
                     <div class="prop-section-body">
                         <select class="prop-select mb4" id="env-map-select">
                             <option value="">None</option>
-                            <option value="preset:0">Outdoor</option>
-                            <option value="preset:1">Studio</option>
-                            <option value="preset:2">Sunset</option>
+                            <option value="Studio">Studio</option>
+                            <option value="Outdoor">Outdoor</option>
+                            <option value="Studio (Dramatic)">Studio (Dramatic)</option>
+                            <option value="Dark Studio">Dark Studio</option>
+                            <option value="Sunset">Sunset</option>
                         </select>
                         <div class="prop-btn-row mb4">
                             <label for="hdr-file-input" class="prop-btn" style="font-size:10px; cursor:pointer; margin-bottom:0;">HDR File</label>
