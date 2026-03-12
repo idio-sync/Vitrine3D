@@ -978,7 +978,30 @@ function createEventWiringDeps(): EventWiringDeps {
                         console.log(`[ICP-DEBUG] splatMesh.matrixWorld:`, splatMesh.matrixWorld.elements.map(v => v.toFixed(4)).join(', '));
                     }
 
-                    const icpResult = runICP(points3D, points3DCount, splatSample.points, splatSample.count);
+                    // Pre-transform points3D by colmapGroup's current transform (copied
+                    // from splatMesh on load).  This puts them approximately into world
+                    // space so the ICP only needs to find a small correction (e.g. the
+                    // rotation baked in by Supersplat), not the entire transform chain.
+                    const colmapGrp = sceneManager?.colmapGroup;
+                    let preTransformedPts = points3D;
+                    let initialMatrix: THREE.Matrix4 | null = null;
+
+                    if (colmapGrp) {
+                        colmapGrp.updateMatrixWorld(true);
+                        initialMatrix = colmapGrp.matrixWorld.clone();
+                        preTransformedPts = new Float64Array(points3DCount * 3);
+                        for (let i = 0; i < points3DCount; i++) {
+                            const v = new THREE.Vector3(
+                                points3D[i * 3], points3D[i * 3 + 1], points3D[i * 3 + 2]
+                            ).applyMatrix4(initialMatrix);
+                            preTransformedPts[i * 3] = v.x;
+                            preTransformedPts[i * 3 + 1] = v.y;
+                            preTransformedPts[i * 3 + 2] = v.z;
+                        }
+                        console.log('[ICP-DEBUG] Pre-transformed points3D by colmapGroup matrix');
+                    }
+
+                    const icpResult = runICP(preTransformedPts, points3DCount, splatSample.points, splatSample.count);
                     if (!icpResult) {
                         notify.error('Alignment failed — insufficient point overlap');
                         return;
@@ -992,11 +1015,23 @@ function createEventWiringDeps(): EventWiringDeps {
                         console.log(`[ICP-DEBUG] Translation: (${icpResult.translation.x.toFixed(4)}, ${icpResult.translation.y.toFixed(4)}, ${icpResult.translation.z.toFixed(4)})`);
                     }
 
-                    const colmapGrp = sceneManager?.colmapGroup;
+                    // Compose: final = ICP_correction × initial_transform
                     if (colmapGrp) {
-                        colmapGrp.quaternion.copy(icpResult.rotation);
-                        colmapGrp.scale.setScalar(icpResult.scale);
-                        colmapGrp.position.copy(icpResult.translation);
+                        const correctionMatrix = new THREE.Matrix4().compose(
+                            icpResult.translation,
+                            icpResult.rotation,
+                            new THREE.Vector3(icpResult.scale, icpResult.scale, icpResult.scale)
+                        );
+                        const finalMatrix = correctionMatrix.multiply(initialMatrix ?? new THREE.Matrix4());
+
+                        const pos = new THREE.Vector3();
+                        const rot = new THREE.Quaternion();
+                        const scl = new THREE.Vector3();
+                        finalMatrix.decompose(pos, rot, scl);
+
+                        colmapGrp.position.copy(pos);
+                        colmapGrp.quaternion.copy(rot);
+                        colmapGrp.scale.copy(scl);
                         colmapGrp.updateMatrix();
                         colmapGrp.updateMatrixWorld(true);
                     }
