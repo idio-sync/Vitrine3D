@@ -884,6 +884,7 @@ async function handleDelete(archive: Archive): Promise<void> {
     try {
         await deleteArchive(archive.hash);
         archives = archives.filter(a => a.hash !== archive.hash);
+        mediaCache.delete(archive.hash);
         if (selectedHash === archive.hash) {
             selectedHash = null;
             showDetailEmpty();
