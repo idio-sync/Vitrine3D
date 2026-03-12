@@ -628,6 +628,11 @@ body.kiosk-mode.kiosk-editorial .editorial-info-overlay.open {
     pointer-events: auto;
 }
 
+/* Mobile info content — hidden at all widths, shown only via .mobile-open parent in Tier 3 */
+body.kiosk-mode.kiosk-editorial .editorial-mobile-info-content {
+    display: none;
+}
+
 /* Panel interior — flex row: image-strip | accent | content */
 
 body.kiosk-mode.kiosk-editorial .editorial-panel-inner {
@@ -2731,6 +2736,17 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
         width: 40px;
         height: 40px;
     }
+
+    /* Capsule buttons — larger touch targets */
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-btn {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip-btn {
+        min-width: 44px;
+        min-height: 44px;
+    }
 }
 
 /* =================================================================
@@ -2951,7 +2967,7 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
 
     /* Compact title block — single-line, tight padding */
     body.kiosk-mode.kiosk-editorial .editorial-title-block {
-        padding: 12px 20px 10px 14px;
+        padding: calc(12px + env(safe-area-inset-top)) 20px 10px calc(14px + env(safe-area-inset-left));
         max-width: 70%;
     }
 
@@ -2967,157 +2983,332 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
         display: none;
     }
 
-    /* Hide ribbon and info panel — floating pill replaces ribbon */
+    /* Hide ribbon and desktop info overlay — floating capsule replaces them */
     body.kiosk-mode.kiosk-editorial .editorial-bottom-ribbon,
     body.kiosk-mode.kiosk-editorial .editorial-info-overlay {
         display: none !important;
     }
 
-    /* Show pill as full-width anchored toolbar — flat top distinguishes it from the sheet above */
+    /* Hide metadata sidebar — mobile info overlay replaces it */
+    body.kiosk-mode.kiosk-editorial #metadata-sidebar {
+        display: none !important;
+    }
+
+    /* Floating capsule — centered, compact, frosted glass */
     body.kiosk-mode.kiosk-editorial .editorial-mobile-pill {
         display: flex !important;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        transform: none;
-        max-width: 100%;
-        height: 58px;
-        border-radius: 0;
-        border-left: none;
-        border-right: none;
-        border-bottom: none;
-        border-top: 1px solid rgba(var(--kiosk-accent-rgb), 0.25);
+        bottom: calc(12px + env(safe-area-inset-bottom));
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        max-width: calc(100vw - 32px);
+        height: 38px;
+        border-radius: 20px;
+        border: 1px solid rgba(var(--kiosk-accent-rgb), 0.2);
+        background: rgba(22, 24, 29, 0.88);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         padding: 0 4px;
-        justify-content: flex-start;
-        gap: 0;
-        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.35);
-        animation: editorialBarIn 0.45s cubic-bezier(0.33, 1, 0.68, 1) 0.3s both;
-    }
-
-    /* Details button — grows to fill left side, primary tap target */
-    body.kiosk-mode.kiosk-editorial .editorial-bar-details-btn {
-        flex: 1;
-        flex-direction: row !important;
-        justify-content: flex-start;
-        gap: 8px;
-        border-right: 1px solid rgba(var(--kiosk-accent-rgb), 0.15);
-        padding: 0 16px 0 12px;
-        color: var(--kiosk-text-primary) !important;
-        min-width: 0;
-    }
-
-    body.kiosk-mode.kiosk-editorial .editorial-bar-details-btn svg {
-        flex-shrink: 0;
-        color: var(--kiosk-accent);
-    }
-
-    /* Annotation count badge on details button */
-    body.kiosk-mode.kiosk-editorial .editorial-bar-anno-badge {
-        display: inline-flex;
-        align-items: center;
         justify-content: center;
-        min-width: 16px;
-        height: 16px;
-        padding: 0 4px;
-        border-radius: 8px;
-        background: rgba(var(--kiosk-accent-rgb), 0.2);
-        color: var(--kiosk-accent);
-        font-size: 0.58rem;
-        font-weight: 700;
-        flex-shrink: 0;
+        align-items: center;
+        gap: 0;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.15);
+        z-index: 220;
+        animation: editorialPillIn 0.5s cubic-bezier(0.33, 1, 0.68, 1) 0.4s both;
     }
 
-    /* Base icon toolbar button — icon stacked over small label */
-    body.kiosk-mode.kiosk-editorial .editorial-bar-btn {
+    @keyframes editorialPillIn {
+        from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+        to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    /* Capsule button — icon + tiny label */
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-btn {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 3px;
-        background: none;
+        gap: 0;
+        width: 34px;
+        height: 34px;
         border: none;
-        color: var(--kiosk-text-secondary);
+        background: none;
+        color: rgba(200, 204, 212, 0.6);
+        border-radius: 50%;
+        font-size: 5.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
         cursor: pointer;
-        min-width: 52px;
-        height: 100%;
-        padding: 0 4px;
-        border-radius: 0;
-        transition: color 0.15s, background 0.15s;
         -webkit-tap-highlight-color: transparent;
+        transition: color 0.15s;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-btn svg {
+        width: 13px;
+        height: 13px;
         flex-shrink: 0;
-        position: relative;
     }
 
-    body.kiosk-mode.kiosk-editorial .editorial-bar-btn:active {
-        background: rgba(var(--kiosk-accent-rgb), 0.08);
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-btn.active {
         color: var(--kiosk-accent);
     }
 
-    body.kiosk-mode.kiosk-editorial .editorial-bar-btn.active {
-        color: var(--kiosk-accent);
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-btn.off {
+        color: rgba(200, 204, 212, 0.3);
     }
 
-    body.kiosk-mode.kiosk-editorial .editorial-bar-btn.active::after {
-        content: '';
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-sep {
+        width: 1px;
+        height: 18px;
+        background: rgba(var(--kiosk-accent-rgb), 0.15);
+        flex-shrink: 0;
+        margin: 0 2px;
+    }
+
+    /* Annotation count badge on capsule button */
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-badge {
         position: absolute;
+        top: 1px;
+        right: 1px;
+        min-width: 12px;
+        height: 12px;
+        padding: 0 3px;
+        border-radius: 6px;
+        background: var(--kiosk-accent);
+        color: var(--kiosk-surface);
+        font-size: 7px;
+        font-weight: 700;
+        line-height: 12px;
+        text-align: center;
+    }
+
+    /* Mobile info overlay — full viewport, 82% opacity */
+    body.kiosk-mode.kiosk-editorial .editorial-info-overlay {
+        display: none;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-info-overlay.mobile-open {
+        display: flex !important;
+        position: fixed;
         top: 0;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 20px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 210;
+        flex-direction: column;
+        padding: calc(32px + env(safe-area-inset-top)) 20px calc(56px + env(safe-area-inset-bottom)) 20px;
+        background: rgba(14, 16, 22, 0.82);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        overflow-y: auto;
+        animation: editorialOverlayIn 0.2s ease-out;
+    }
+
+    @keyframes editorialOverlayIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-close {
+        position: absolute;
+        top: calc(18px + env(safe-area-inset-top));
+        right: 16px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 230;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-title {
+        font-family: var(--kiosk-font-body);
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--kiosk-text-primary);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 5px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-rule {
+        width: 26px;
         height: 2px;
         background: var(--kiosk-accent);
-        border-radius: 0 0 2px 2px;
+        margin-bottom: 10px;
     }
 
-    body.kiosk-mode.kiosk-editorial .editorial-bar-btn.off {
-        color: var(--kiosk-text-muted);
-        opacity: 0.5;
-    }
-
-    /* Small label under icon */
-    body.kiosk-mode.kiosk-editorial .editorial-bar-label {
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-desc {
         font-family: var(--kiosk-font-body);
-        font-size: 0.55rem;
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        line-height: 1;
-        white-space: nowrap;
+        font-size: 0.75rem;
+        color: var(--kiosk-text-muted);
+        line-height: 1.65;
+        margin-bottom: 10px;
     }
 
-    /* Vertical rule between details and tool buttons */
-    body.kiosk-mode.kiosk-editorial .editorial-bar-divider {
-        width: 1px;
-        height: 28px;
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-divider {
+        height: 1px;
         background: rgba(var(--kiosk-accent-rgb), 0.15);
-        align-self: center;
-        flex-shrink: 0;
+        margin: 8px 0;
     }
 
-    /* View mode popover — floats upward from the View button */
-    body.kiosk-mode.kiosk-editorial .editorial-bar-popover {
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 3px 0;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-label {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.6rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: rgba(200, 204, 212, 0.35);
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-value {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.65rem;
+        color: var(--kiosk-text-primary);
+        text-align: right;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin-top: 10px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-stat {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        border-radius: 6px;
+        padding: 6px 8px;
+        text-align: center;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-stat-num {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--kiosk-text-primary);
+        font-variant-numeric: tabular-nums;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-stat-label {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.5rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: rgba(200, 204, 212, 0.35);
+        margin-top: 1px;
+    }
+
+    /* Annotation navigation strip — above capsule */
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip {
+        position: fixed;
+        bottom: calc(56px + env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 32px;
+        padding: 0 10px;
+        background: rgba(22, 24, 29, 0.88);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(var(--kiosk-accent-rgb), 0.15);
+        border-radius: 16px;
+        z-index: 200;
+        animation: editorialStripIn 0.15s ease-out;
+        max-width: calc(100vw - 48px);
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip.fade-out {
+        opacity: 0;
+        transition: opacity 0.2s ease-out;
+    }
+
+    @keyframes editorialStripIn {
+        from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+        to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border: none;
+        background: none;
+        color: var(--kiosk-text-muted);
+        cursor: pointer;
+        border-radius: 50%;
+        font-size: 0.7rem;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip-btn:active {
+        color: var(--kiosk-accent);
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip-label {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.6rem;
+        color: var(--kiosk-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 120px;
+        letter-spacing: 0.02em;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip-counter {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.6rem;
+        font-weight: 600;
+        color: var(--kiosk-accent);
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* More menu — popover above capsule */
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover {
         display: none;
         position: absolute;
         bottom: calc(100% + 8px);
         right: 0;
-        background: rgba(var(--kiosk-surface-rgb), 0.96);
+        background: rgba(var(--kiosk-surface-rgb), 0.92);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
         border: 1px solid rgba(var(--kiosk-accent-rgb), 0.2);
         border-radius: 8px;
         padding: 6px 0;
         min-width: 140px;
-        z-index: 300;
+        z-index: 250;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
     }
 
-    body.kiosk-mode.kiosk-editorial .editorial-bar-popover.open {
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover.open {
         display: flex;
         flex-direction: column;
         animation: editorialPillMenuIn 0.15s ease-out;
     }
 
-    body.kiosk-mode.kiosk-editorial .editorial-bar-popover-item {
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover-item {
         font-family: var(--kiosk-font-body);
         font-size: 0.72rem;
         font-weight: 400;
@@ -3134,143 +3325,13 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
         -webkit-tap-highlight-color: transparent;
     }
 
-    body.kiosk-mode.kiosk-editorial .editorial-bar-popover-item:active {
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover-item:active {
         background: rgba(var(--kiosk-accent-rgb), 0.1);
     }
 
-    body.kiosk-mode.kiosk-editorial .editorial-bar-popover-item.active {
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover-item.active {
         color: var(--kiosk-accent);
         font-weight: 600;
-    }
-
-    /* Revert viewer to block layout for sidebar fallback */
-    body.kiosk-mode.kiosk-editorial #viewer-container {
-        display: block !important;
-    }
-
-    body.kiosk-mode.kiosk-editorial #viewer-canvas {
-        width: 100% !important;
-        flex: none;
-    }
-
-    /* Show sidebar for metadata access; hide generic view switcher */
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar {
-        display: block !important;
-    }
-
-    /* Hide tab bar and settings tab on mobile — sheet is info-only */
-    body.kiosk-mode.kiosk-editorial .sidebar-mode-tabs {
-        display: none !important;
-    }
-
-    body.kiosk-mode.kiosk-editorial #sidebar-settings {
-        display: none !important;
-    }
-
-    /* Ensure Info view is always the visible content */
-    body.kiosk-mode.kiosk-editorial #sidebar-view {
-        display: block !important;
-    }
-
-    body.kiosk-mode.kiosk-editorial .kiosk-view-switcher {
-        display: none !important;
-    }
-
-    /* --- Editorial-styled bottom sheet --- */
-
-    /* Sheet sits above the anchored bar — always leaves bar accessible */
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar {
-        bottom: 58px;
-        height: calc(90dvh - 58px);
-        max-height: calc(90dvh - 58px);
-        border-radius: 16px 16px 0 0;
-        border-top-color: rgba(var(--kiosk-accent-rgb), 0.3);
-        background: rgba(var(--kiosk-surface-rgb), 0.96);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        transform: translateY(calc(100% - 44px));
-    }
-
-    /* Peek: just drag handle (44px) peeks above the bar */
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar.sheet-peek {
-        transform: translateY(calc(100% - 44px));
-    }
-
-    /* Half: ~40dvh of content visible above bar — less intrusive than default 45dvh */
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar.sheet-half {
-        transform: translateY(calc(100% - 40dvh));
-    }
-
-    /* Full: sheet fully open above bar */
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar.sheet-full {
-        transform: translateY(0);
-    }
-
-    /* Gold drag handle */
-    body.kiosk-mode.kiosk-editorial .drag-handle-bar {
-        background: rgba(var(--kiosk-accent-rgb), 0.4);
-    }
-
-    body.kiosk-mode.kiosk-editorial #sidebar-drag-handle:hover .drag-handle-bar,
-    body.kiosk-mode.kiosk-editorial #sidebar-drag-handle:active .drag-handle-bar {
-        background: rgba(var(--kiosk-accent-rgb), 0.7);
-    }
-
-    /* Editorial typography in sidebar */
-    body.kiosk-mode.kiosk-editorial #sidebar-view .display-title {
-        font-family: var(--kiosk-font-display);
-        font-size: 1.3rem;
-        letter-spacing: 0.01em;
-    }
-
-    body.kiosk-mode.kiosk-editorial #sidebar-view .display-description {
-        font-family: var(--kiosk-font-body);
-        font-size: 0.88rem;
-        line-height: 1.65;
-    }
-
-    /* Gold tab accents */
-    body.kiosk-mode.kiosk-editorial .sidebar-mode-tab.active {
-        color: var(--kiosk-accent);
-        border-bottom-color: var(--kiosk-accent);
-    }
-
-    /* Gold dividers in sidebar content */
-    body.kiosk-mode.kiosk-editorial #sidebar-view .display-divider {
-        background: rgba(var(--kiosk-accent-rgb), 0.2);
-    }
-
-    /* Gold scrollbar for sidebar */
-    body.kiosk-mode.kiosk-editorial #sidebar-view::-webkit-scrollbar {
-        width: 4px;
-    }
-
-    body.kiosk-mode.kiosk-editorial #sidebar-view::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
-    body.kiosk-mode.kiosk-editorial #sidebar-view::-webkit-scrollbar-thumb {
-        background: rgba(var(--kiosk-accent-rgb), 0.3);
-        border-radius: 2px;
-    }
-
-    body.kiosk-mode.kiosk-editorial #sidebar-view::-webkit-scrollbar-thumb:hover {
-        background: rgba(var(--kiosk-accent-rgb), 0.5);
-    }
-
-    /* Metadata field labels — editorial style */
-    body.kiosk-mode.kiosk-editorial .display-field-label {
-        font-family: var(--kiosk-font-body);
-        text-transform: uppercase;
-        font-size: 0.65rem;
-        letter-spacing: 0.06em;
-        color: var(--kiosk-text-muted);
-    }
-
-    body.kiosk-mode.kiosk-editorial .display-field-value {
-        font-family: var(--kiosk-font-body);
-        font-size: 0.85rem;
-        color: var(--kiosk-text-primary);
     }
 
     /* --- Editorial mobile annotation detail --- */
@@ -3529,35 +3590,23 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
 /* --- Phone landscape: tighter chrome, hide title --- */
 
 @media (max-width: 699px) and (orientation: landscape) {
-    /* Compact pill for landscape */
-    body.kiosk-mode.kiosk-editorial .editorial-mobile-pill {
-        height: 50px;
-        border-radius: 12px 12px 0 0;
-    }
-
     /* Hide title block — too little vertical room */
     body.kiosk-mode.kiosk-editorial .editorial-title-block {
         display: none !important;
     }
 
-    /* Shorter bottom sheet in landscape — sits above 50px bar */
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar {
-        height: calc(60dvh - 50px);
-        max-height: calc(60dvh - 50px);
-        bottom: 50px;
-        transform: translateY(calc(100% - 44px));
+    /* Capsule: icon-only in landscape to save vertical space */
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-btn span {
+        display: none;
     }
 
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar.sheet-peek {
-        transform: translateY(calc(100% - 44px));
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-pill {
+        height: 34px;
     }
 
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar.sheet-half {
-        transform: translateY(calc(100% - 26dvh));
-    }
-
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar.sheet-full {
-        transform: translateY(0);
+    /* Annotation strip closer to capsule (34px capsule + 12px bottom) */
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip {
+        bottom: calc(52px + env(safe-area-inset-bottom));
     }
 }
 
