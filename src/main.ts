@@ -1875,6 +1875,11 @@ async function init() {
             if (pipRow) pipRow.style.display = '';
             const telemDiv = document.getElementById('fp-telemetry');
             if (telemDiv) telemDiv.style.display = 'none';
+            const pipOverlay = document.getElementById('fp-pip-overlay');
+            if (pipOverlay) pipOverlay.style.display = 'none';
+            const pipToggle = document.getElementById('fp-pip-toggle') as HTMLInputElement | null;
+            if (pipToggle) { pipToggle.checked = false; }
+            flightPathManager?.setPipEnabled(false);
         });
 
         addListener('fp-speed', 'change', (e: Event) => {
@@ -1911,6 +1916,15 @@ async function init() {
         // Re-center button
         addListener('fp-recenter-btn', 'click', () => {
             flightPathManager?.recenterFreeLook();
+        });
+
+        // PiP toggle
+        addListener('fp-pip-toggle', 'change', (e: Event) => {
+            if (!flightPathManager) return;
+            const enabled = (e.target as HTMLInputElement).checked;
+            flightPathManager.setPipEnabled(enabled);
+            const overlay = document.getElementById('fp-pip-overlay');
+            if (overlay) overlay.style.display = enabled ? '' : 'none';
         });
 
         // Playback callbacks
@@ -3671,6 +3685,11 @@ function animate() {
 
             // Update annotation popup position to follow marker
             updateAnnotationPopupPosition();
+        }
+
+        // Render PiP viewport (must be after all DOM position updates)
+        if (flightPathManager?.pipEnabled) {
+            flightPathManager.renderPiP(renderer, scene);
         }
 
         sceneManager.updateFPS(fpsElement);
