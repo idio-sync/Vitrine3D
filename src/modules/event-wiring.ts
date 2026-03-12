@@ -31,6 +31,8 @@ import {
     updateModelTextures
 } from './file-handlers.js';
 import * as postProcessing from './post-processing.js';
+import { RENDERING_PRESETS, applyPreset } from './rendering-presets.js';
+import type { ApplyPresetDeps } from './rendering-presets.js';
 import type { EventWiringDeps, AppState } from '@/types.js';
 
 const log = Logger.getLogger('event-wiring');
@@ -325,6 +327,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         const valueEl = document.getElementById('ambient-intensity-value');
         if (valueEl) valueEl.textContent = intensity.toFixed(1);
         if (sceneRefs.ambientLight) sceneRefs.ambientLight.intensity = intensity;
+        markPresetAsCustom();
     });
 
     addListener('hemisphere-intensity', 'input', (e: Event) => {
@@ -332,6 +335,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         const valueEl = document.getElementById('hemisphere-intensity-value');
         if (valueEl) valueEl.textContent = intensity.toFixed(1);
         if (sceneRefs.hemisphereLight) sceneRefs.hemisphereLight.intensity = intensity;
+        markPresetAsCustom();
     });
 
     addListener('directional1-intensity', 'input', (e: Event) => {
@@ -339,6 +343,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         const valueEl = document.getElementById('directional1-intensity-value');
         if (valueEl) valueEl.textContent = intensity.toFixed(1);
         if (sceneRefs.directionalLight1) sceneRefs.directionalLight1.intensity = intensity;
+        markPresetAsCustom();
     });
 
     addListener('directional2-intensity', 'input', (e: Event) => {
@@ -346,6 +351,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         const valueEl = document.getElementById('directional2-intensity-value');
         if (valueEl) valueEl.textContent = intensity.toFixed(1);
         if (sceneRefs.directionalLight2) sceneRefs.directionalLight2.intensity = intensity;
+        markPresetAsCustom();
     });
 
     // ─── Transform controls ─────────────────────────────────
@@ -719,12 +725,14 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     // ─── Scene settings — Tone mapping ───────────────────────
     addListener('tone-mapping-select', 'change', (e: Event) => {
         if (sceneManager) sceneManager.setToneMapping((e.target as HTMLSelectElement).value);
+        markPresetAsCustom();
     });
 
     addListener('tone-mapping-exposure', 'input', (e: Event) => {
         const val = parseFloat((e.target as HTMLInputElement).value);
         document.getElementById('tone-mapping-exposure-value')!.textContent = val.toFixed(1);
         if (sceneManager) sceneManager.setToneMappingExposure(val);
+        markPresetAsCustom();
     });
 
     // ─── Scene settings — Post-Processing ────────────────────
@@ -872,28 +880,136 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         postProcessing.setUberEffects({ grain: { ...cfg, intensity: val } });
     });
 
+    /** Flag to suppress Custom flip during programmatic syncing from applyPreset. */
+    let _suppressPresetFlip = false;
+
+    /** Flip the rendering preset dropdown to "Custom" when any individual control changes. */
+    function markPresetAsCustom() {
+        if (_suppressPresetFlip) return;
+        if (deps.state.renderingPreset && deps.state.renderingPreset !== 'custom') {
+            deps.state.renderingPreset = 'custom';
+            const presetSelect = document.getElementById('rendering-preset-select') as HTMLSelectElement | null;
+            if (presetSelect) presetSelect.value = 'custom';
+        }
+    }
+
+    /** Sync live scene control UI elements to match a preset's values. */
+    function syncLiveControlsToPreset(preset: import('./rendering-presets.js').RenderingPreset) {
+        const setSlider = (id: string, val: number) => {
+            const el = document.getElementById(id) as HTMLInputElement | null;
+            if (el) { el.value = String(val); }
+            const valEl = document.getElementById(id + '-value');
+            if (valEl) valEl.textContent = val.toFixed(1);
+        };
+        setSlider('ambient-intensity', preset.ambientIntensity);
+        setSlider('hemisphere-intensity', preset.hemisphereIntensity);
+        setSlider('directional1-intensity', preset.directional1Intensity);
+        setSlider('directional2-intensity', preset.directional2Intensity);
+        const toneSelect = document.getElementById('tone-mapping-select') as HTMLSelectElement | null;
+        if (toneSelect) toneSelect.value = preset.toneMapping;
+        setSlider('tone-mapping-exposure', preset.toneMappingExposure);
+        const envSelect = document.getElementById('env-map-select') as HTMLSelectElement | null;
+        if (envSelect) envSelect.value = preset.hdri || '';
+        const envBgCb = document.getElementById('toggle-env-background') as HTMLInputElement | null;
+        if (envBgCb) envBgCb.checked = preset.envAsBackground;
+    }
+
+    /** Sync archived (View Settings) controls to match a preset's values. */
+    function syncArchivedControlsToPreset(preset: import('./rendering-presets.js').RenderingPreset) {
+        const setSlider = (id: string, val: number) => {
+            const el = document.getElementById(id) as HTMLInputElement | null;
+            if (el) { el.value = String(val); }
+            const valEl = document.getElementById(id + '-value');
+            if (valEl) valEl.textContent = val.toFixed(1);
+        };
+        setSlider('meta-viewer-ambient-intensity', preset.ambientIntensity);
+        setSlider('meta-viewer-hemisphere-intensity', preset.hemisphereIntensity);
+        setSlider('meta-viewer-directional1-intensity', preset.directional1Intensity);
+        setSlider('meta-viewer-directional2-intensity', preset.directional2Intensity);
+        const toneMethod = document.getElementById('meta-viewer-tone-mapping-method') as HTMLSelectElement | null;
+        if (toneMethod) toneMethod.value = preset.toneMapping;
+        setSlider('meta-viewer-tone-mapping-exposure', preset.toneMappingExposure);
+        const envPreset = document.getElementById('meta-viewer-env-preset') as HTMLSelectElement | null;
+        if (envPreset) envPreset.value = preset.hdri || '';
+        const envBg = document.getElementById('meta-viewer-env-as-background') as HTMLInputElement | null;
+        if (envBg) envBg.checked = preset.envAsBackground;
+    }
+
+    // ─── Rendering Presets ──────────────────────────────────
+    addListener('rendering-preset-select', 'change', async (e: Event) => {
+        const name = (e.target as HTMLSelectElement).value;
+        if (!name || name === 'custom') return;
+
+        showLoading('Applying rendering preset...');
+        try {
+            const presetDeps: ApplyPresetDeps = {
+                sceneManager,
+                postProcessing: deps.sceneManager?.postProcessing || null,
+                state: deps.state,
+            };
+            await applyPreset(name, presetDeps);
+
+            // Auto-check the "save with archive" checkboxes
+            const lightingCb = document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement | null;
+            const toneCb = document.getElementById('meta-viewer-tone-mapping-enabled') as HTMLInputElement | null;
+            const envCb = document.getElementById('meta-viewer-env-enabled') as HTMLInputElement | null;
+            if (lightingCb) { lightingCb.checked = true; lightingCb.dispatchEvent(new Event('change')); }
+            if (toneCb) { toneCb.checked = true; toneCb.dispatchEvent(new Event('change')); }
+            if (envCb) { envCb.checked = true; envCb.dispatchEvent(new Event('change')); }
+
+            // Sync all live controls to preset values (suppress Custom flip during sync)
+            const preset = RENDERING_PRESETS[name];
+            if (preset) {
+                _suppressPresetFlip = true;
+                try {
+                    syncLiveControlsToPreset(preset);
+                    syncArchivedControlsToPreset(preset);
+                } finally {
+                    _suppressPresetFlip = false;
+                }
+            }
+
+            notify.success(`Preset "${RENDERING_PRESETS[name]?.label || name}" applied`);
+        } catch (err: any) {
+            notify.error('Failed to apply preset: ' + err.message);
+        } finally {
+            hideLoading();
+        }
+    });
+
     // ─── Scene settings — Environment map (IBL) ─────────────
     addListener('env-map-select', 'change', async (e: Event) => {
         const value = (e.target as HTMLSelectElement).value;
         if (!value) {
             if (sceneManager) sceneManager.clearEnvironment();
+            deps.state.environmentBlob = null;
+            markPresetAsCustom();
             return;
         }
-        if (value.startsWith('preset:')) {
-            const index = parseInt(value.split(':')[1]);
-            const presets = ENVIRONMENT.PRESETS.filter((p: any) => p.url);
-            if (presets[index]) {
-                showLoading('Loading HDR environment...');
+        const preset = ENVIRONMENT.PRESETS.find((p: any) => p.name === value);
+        if (preset?.url) {
+            showLoading('Loading HDR environment...');
+            try {
+                // Fetch raw blob for archive bundling
+                const response = await fetch(preset.url);
+                const blob = await response.blob();
+                deps.state.environmentBlob = blob;
+
+                // Load into Three.js via blob URL
+                const blobUrl = URL.createObjectURL(blob);
                 try {
-                    await sceneManager.loadHDREnvironment(presets[index].url);
-                    notify.success('Environment loaded');
-                } catch (err: any) {
-                    notify.error('Failed to load environment: ' + err.message);
+                    await sceneManager.loadHDREnvironment(blobUrl);
                 } finally {
-                    hideLoading();
+                    URL.revokeObjectURL(blobUrl);
                 }
+                notify.success('Environment loaded');
+            } catch (err: any) {
+                notify.error('Failed to load environment: ' + err.message);
+            } finally {
+                hideLoading();
             }
         }
+        markPresetAsCustom();
     });
 
     addListener('hdr-file-input', 'change', async (e: Event) => {
@@ -907,6 +1023,11 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             const select = document.getElementById('env-map-select') as HTMLSelectElement | null;
             if (select) select.value = '';
             notify.success('Environment loaded from file');
+            // Store blob for archive bundling
+            deps.state.environmentBlob = file;
+            deps.state.renderingPreset = 'custom';
+            const presetSelect = document.getElementById('rendering-preset-select') as HTMLSelectElement | null;
+            if (presetSelect) presetSelect.value = 'custom';
         } catch (err: any) {
             notify.error('Failed to load HDR: ' + err.message);
         } finally {
@@ -927,6 +1048,14 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             const select = document.getElementById('env-map-select') as HTMLSelectElement | null;
             if (select) select.value = '';
             notify.success('Environment loaded from URL');
+            // Fetch and store blob for archive bundling
+            try {
+                const resp = await fetch(url);
+                deps.state.environmentBlob = await resp.blob();
+            } catch { /* non-critical — archive just won't include HDR */ }
+            deps.state.renderingPreset = 'custom';
+            const presetSelect = document.getElementById('rendering-preset-select') as HTMLSelectElement | null;
+            if (presetSelect) presetSelect.value = 'custom';
         } catch (err: any) {
             notify.error('Failed to load HDR: ' + err.message);
         } finally {
@@ -937,6 +1066,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     // ─── Scene settings — Environment as background ──────────
     addListener('toggle-env-background', 'change', (e: Event) => {
         if (sceneManager) sceneManager.setEnvironmentAsBackground((e.target as HTMLInputElement).checked);
+        markPresetAsCustom();
     });
 
     // ─── Scene settings — Shadows ────────────────────────────
