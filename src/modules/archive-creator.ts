@@ -2101,8 +2101,10 @@ export class ArchiveCreator {
         }
 
         // Check that all referenced files exist
+        // Skip directory-prefix entries (trailing /) — multi-file assets like colmap
+        // store individual files under the directory, not the directory itself
         for (const entry of Object.values(this.manifest.data_entries)) {
-            if (!this.files.has(entry.file_name)) {
+            if (!entry.file_name.endsWith('/') && !this.files.has(entry.file_name)) {
                 errors.push(`Missing file: ${entry.file_name}`);
             }
         }

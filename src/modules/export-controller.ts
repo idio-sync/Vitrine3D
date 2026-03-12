@@ -275,8 +275,8 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
 
     // Add splat if loaded and selected
     log.info(' Checking splat:', { splatBlob: !!assets.splatBlob, splatLoaded: state.splatLoaded });
-    // If viewing a proxy (SD device) the full-res blob was not pre-fetched — extract it on demand now
-    if (includeSplat && state.splatLoaded && !assets.splatBlob && state.viewingProxy && state.archiveLoader) {
+    // If the full-res blob is missing (SD proxy, or blob was reset), extract it on demand now
+    if (includeSplat && state.splatLoaded && !assets.splatBlob && state.archiveLoader) {
         const sceneEntry = state.archiveLoader.getSceneEntry();
         if (sceneEntry) {
             const fullData = await state.archiveLoader.extractFile(sceneEntry.file_name);
@@ -334,8 +334,8 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
 
     // Add mesh if loaded and selected
     log.info(' Checking mesh:', { meshBlob: !!assets.meshBlob, modelLoaded: state.modelLoaded });
-    // If viewing a proxy and full-res blob hasn't been extracted yet, extract now
-    if (includeModel && state.modelLoaded && !assets.meshBlob && state.viewingProxy && state.archiveLoader) {
+    // If the full-res blob is missing (SD proxy, or blob was reset), extract it on demand now
+    if (includeModel && state.modelLoaded && !assets.meshBlob && state.archiveLoader) {
         const meshEntry = state.archiveLoader.getMeshEntry();
         if (meshEntry) {
             const fullData = await state.archiveLoader.extractFile(meshEntry.file_name);
