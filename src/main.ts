@@ -716,6 +716,22 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
                 }
             }
             if (flightPathManager.hasData) {
+                // Restore transform from manifest (round-trip preservation)
+                if (state.archiveLoader) {
+                    const fpEntries = state.archiveLoader.getFlightPathEntries();
+                    if (fpEntries.length > 0) {
+                        const t = state.archiveLoader.getEntryTransform(fpEntries[0].entry);
+                        const group = sceneManager?.flightPathGroup;
+                        if (group && (t.position.some((v: number) => v !== 0) ||
+                            t.rotation.some((v: number) => v !== 0) ||
+                            (typeof t.scale === 'number' ? t.scale : 1) !== 1)) {
+                            group.position.fromArray(t.position);
+                            group.rotation.set(...(t.rotation as [number, number, number]));
+                            const s = typeof t.scale === 'number' ? t.scale : 1;
+                            group.scale.setScalar(s);
+                        }
+                    }
+                }
                 // Apply settings from prefilled UI (set by prefillMetadataFromArchive)
                 const colorModeEl = document.getElementById('flight-color-mode') as HTMLSelectElement | null;
                 const endpointsEl = document.getElementById('flight-show-endpoints') as HTMLInputElement | null;
@@ -866,13 +882,23 @@ function createEventWiringDeps(): EventWiringDeps {
                     camerasBlob: new Blob([camerasBuffer]),
                     imagesBlob: new Blob([imagesBuffer]),
                 });
-                // Cameras are in Colmap space (same as the splat). Copy the splat's
-                // current transform so cameras align with the splat in the scene.
+                // Restore saved transform from archive if available; otherwise copy
+                // the splat's current transform (initial import — cameras share splat space).
                 const colmapGrp = sceneManager?.colmapGroup;
-                if (colmapGrp && splatMesh) {
-                    colmapGrp.position.copy(splatMesh.position);
-                    colmapGrp.rotation.copy(splatMesh.rotation);
-                    colmapGrp.scale.copy(splatMesh.scale);
+                if (colmapGrp) {
+                    const manifest = state.archiveManifest as any;
+                    const colmapEntry = manifest?.data_entries &&
+                        Object.values(manifest.data_entries).find((e: any) => e.role === 'colmap_sfm');
+                    const params = (colmapEntry as any)?._parameters;
+                    if (params?.position || params?.rotation || params?.scale != null) {
+                        if (params.position) colmapGrp.position.set(...(params.position as [number, number, number]));
+                        if (params.rotation) colmapGrp.rotation.set(...(params.rotation as [number, number, number]));
+                        if (params.scale != null) colmapGrp.scale.setScalar(typeof params.scale === 'number' ? params.scale : 1);
+                    } else if (splatMesh) {
+                        colmapGrp.position.copy(splatMesh.position);
+                        colmapGrp.rotation.copy(splatMesh.rotation);
+                        colmapGrp.scale.copy(splatMesh.scale);
+                    }
                 }
                 state.colmapLoaded = true;
                 // Apply view defaults: visibility and display mode
