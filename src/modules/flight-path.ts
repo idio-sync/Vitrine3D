@@ -178,6 +178,9 @@ export class FlightPathManager {
     // Callback for when camera mode changes (main.ts uses to toggle controls.enabled)
     private _onCameraModeChange: ((mode: FlightCameraMode) => void) | null = null;
     private _onPlaybackUpdate: ((currentMs: number, totalMs: number) => void) | null = null;
+    // PiP state
+    private _pipEnabled = false;
+    private _pipCamera: THREE.PerspectiveCamera | null = null;
     private _onPlaybackEnd: (() => void) | null = null;
 
     constructor(group: THREE.Group, _scene: THREE.Scene, camera: THREE.Camera, renderer: THREE.WebGLRenderer) {
@@ -898,6 +901,80 @@ export class FlightPathManager {
         this._onCameraModeChange = cb;
     }
 
+    /** Enable/disable PiP mode. Creates PiP camera on first enable. */
+    setPipEnabled(enabled: boolean): void {
+        this._pipEnabled = enabled;
+        if (enabled && !this._pipCamera) {
+            this._pipCamera = new THREE.PerspectiveCamera(
+                60, 16 / 9, 0.1, 1000
+            );
+        }
+        log.info(`PiP ${enabled ? 'enabled' : 'disabled'}`);
+    }
+
+    get pipEnabled(): boolean {
+        return this._pipEnabled;
+    }
+
+    /** Update PiP camera to match current playback position with FPV orientation. */
+    private updatePipCamera(): void {
+        if (!this._pipEnabled || !this._pipCamera || !this._playbackMarker) return;
+
+        const pos = this._playbackMarker.position;
+        this._pipCamera.position.copy(pos);
+
+        const pathData = this._playbackPathId ? this.paths.find(p => p.id === this._playbackPathId) : null;
+        const points = pathData ? this.getTrimmedPoints(pathData) : [];
+        if (points.length > 0) {
+            const targetQuat = this.computeFpvOrientation(points, this._playbackTime);
+            this._pipCamera.quaternion.copy(targetQuat);
+        }
+    }
+
+    /** Render PiP viewport. Call from main animate loop AFTER all other updates.
+     *  Saves and restores renderer viewport/scissor state. */
+    renderPiP(renderer: THREE.WebGLRenderer, scene: THREE.Scene): void {
+        if (!this._pipEnabled || !this._pipCamera || !this._playing || this._cameraMode !== 'orbit') return;
+
+        this.updatePipCamera();
+
+        // Save current renderer state
+        const currentViewport = new THREE.Vector4();
+        const currentScissor = new THREE.Vector4();
+        renderer.getViewport(currentViewport);
+        renderer.getScissor(currentScissor);
+        const scissorTestWas = renderer.getScissorTest();
+
+        // Compute PiP viewport (bottom-right, 25% width, 16:9)
+        const canvas = renderer.domElement;
+        const pipWidth = Math.round(canvas.width * 0.25);
+        const pipHeight = Math.round(pipWidth * (9 / 16));
+        const pipX = canvas.width - pipWidth - 16; // 16px padding
+        const pipY = 16; // bottom-left origin in WebGL, so 16px from bottom
+
+        this._pipCamera.aspect = pipWidth / pipHeight;
+        this._pipCamera.updateProjectionMatrix();
+
+        renderer.setViewport(pipX, pipY, pipWidth, pipHeight);
+        renderer.setScissor(pipX, pipY, pipWidth, pipHeight);
+        renderer.setScissorTest(true);
+
+        // Clear only the PiP region
+        renderer.setClearColor(0x000000, 0.3);
+        renderer.clear(true, true, false);
+
+        // Render scene with PiP camera.
+        // NOTE: SparkRenderer dual-render spike needed — if splats render incorrectly
+        // (sort artifacts, flickering), add splatMesh.visible = false before this call
+        // and restore after. See spec "PiP rendering" section for full mitigation plan.
+        renderer.render(scene, this._pipCamera);
+
+        // Restore state
+        renderer.setViewport(currentViewport);
+        renderer.setScissor(currentScissor);
+        renderer.setScissorTest(scissorTestWas);
+    }
+
     get isPlaying(): boolean {
         return this._playing;
     }
@@ -1072,6 +1149,9 @@ export class FlightPathManager {
             const finalQuat = this._smoothedQuaternion.clone().multiply(this._freeLookOffset);
             this.camera.quaternion.copy(finalQuat);
         }
+
+        // Update PiP camera
+        this.updatePipCamera();
     }
 
     /** Get heading angle at the current playback time. */
@@ -1364,6 +1444,8 @@ export class FlightPathManager {
         if (this._onMouseMove) {
             this.renderer.domElement.removeEventListener('mousemove', this._onMouseMove);
         }
+        this._pipCamera = null;
+        this._pipEnabled = false;
         for (const entry of this.meshes.values()) {
             entry.line.geometry.dispose();
             (entry.line.material as THREE.Material).dispose();
