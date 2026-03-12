@@ -143,10 +143,7 @@ export interface ApplyPresetDeps {
         clearEnvironment: () => void;
         setToneMapping: (type: string) => void;
         setToneMappingExposure: (value: number) => void;
-        setAmbientLightIntensity: (value: number) => void;
-        setHemisphereLightIntensity: (value: number) => void;
-        setDirectionalLight1Intensity: (value: number) => void;
-        setDirectionalLight2Intensity: (value: number) => void;
+        setLightIntensity: (lightType: string, intensity: number) => void;
         setEnvironmentAsBackground: (show: boolean) => void;
         setBackgroundColor: (hex: string) => void;
     };
@@ -208,10 +205,10 @@ export async function applyPreset(
     deps.sceneManager.setToneMappingExposure(preset.toneMappingExposure);
 
     // 3. Lighting
-    deps.sceneManager.setAmbientLightIntensity(preset.ambientIntensity);
-    deps.sceneManager.setHemisphereLightIntensity(preset.hemisphereIntensity);
-    deps.sceneManager.setDirectionalLight1Intensity(preset.directional1Intensity);
-    deps.sceneManager.setDirectionalLight2Intensity(preset.directional2Intensity);
+    deps.sceneManager.setLightIntensity('ambient', preset.ambientIntensity);
+    deps.sceneManager.setLightIntensity('hemisphere', preset.hemisphereIntensity);
+    deps.sceneManager.setLightIntensity('directional1', preset.directional1Intensity);
+    deps.sceneManager.setLightIntensity('directional2', preset.directional2Intensity);
 
     // 4. Environment as background
     deps.sceneManager.setEnvironmentAsBackground(preset.envAsBackground);
