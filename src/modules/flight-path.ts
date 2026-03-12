@@ -946,6 +946,17 @@ export class FlightPathManager {
             }
         }
 
+        // Update free-look recenter animation
+        if (this._recentering) {
+            this._recenterProgress += deltaTime / FlightPathManager.RECENTER_DURATION;
+            if (this._recenterProgress >= 1) {
+                this._freeLookOffset.identity();
+                this._recentering = false;
+            } else {
+                this._freeLookOffset.copy(this._recenterStartQuat).slerp(new THREE.Quaternion(), this._recenterProgress);
+            }
+        }
+
         if (!this._playing || !this._playbackPathId) return;
 
         const pathData = this.paths.find(p => p.id === this._playbackPathId);
@@ -1094,6 +1105,68 @@ export class FlightPathManager {
             return Math.atan2(points[i2].x - points[i1].x, points[i2].z - points[i1].z);
         }
         return Math.atan2(tx, tz);
+    }
+
+    // ─── Free-Look ───────────────────────────────────────────────────
+
+    private _freeLookStartX = 0;
+    private _freeLookStartY = 0;
+    private _onPointerDown: ((e: PointerEvent) => void) | null = null;
+    private _onPointerMove: ((e: PointerEvent) => void) | null = null;
+    private _onPointerUp: ((e: PointerEvent) => void) | null = null;
+    private _onDblClick: ((e: MouseEvent) => void) | null = null;
+
+    /** Set up free-look event handlers on the renderer canvas. */
+    setupFreeLook(): void {
+        const canvas = this.renderer.domElement;
+
+        this._onPointerDown = (e: PointerEvent) => {
+            if (this._cameraMode !== 'fpv' || e.button !== 0) return;
+            this._freeLookActive = true;
+            this._freeLookStartX = e.clientX;
+            this._freeLookStartY = e.clientY;
+            e.stopPropagation();
+        };
+
+        this._onPointerMove = (e: PointerEvent) => {
+            if (!this._freeLookActive || this._cameraMode !== 'fpv') return;
+            const dx = (e.clientX - this._freeLookStartX) * 0.003;
+            const dy = (e.clientY - this._freeLookStartY) * 0.003;
+            this._freeLookStartX = e.clientX;
+            this._freeLookStartY = e.clientY;
+
+            // Apply yaw (Y-axis) and pitch (X-axis) to offset quaternion
+            const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -dx);
+            const pitchQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -dy);
+            this._freeLookOffset.premultiply(yawQuat).multiply(pitchQuat);
+
+            e.stopPropagation();
+        };
+
+        this._onPointerUp = (_e: PointerEvent) => {
+            this._freeLookActive = false;
+        };
+
+        this._onDblClick = (e: MouseEvent) => {
+            if (this._cameraMode !== 'fpv') return;
+            this.recenterFreeLook();
+            e.stopPropagation();
+        };
+
+        // Use capture phase so free-look fires BEFORE annotation/measurement/gizmo handlers
+        canvas.addEventListener('pointerdown', this._onPointerDown, { capture: true });
+        canvas.addEventListener('pointermove', this._onPointerMove, { capture: true });
+        canvas.addEventListener('pointerup', this._onPointerUp);
+        canvas.addEventListener('dblclick', this._onDblClick, { capture: true });
+    }
+
+    /** Smoothly recenter free-look to the base gimbal/heading orientation. */
+    recenterFreeLook(): void {
+        if (this._freeLookOffset.equals(new THREE.Quaternion())) return; // already centered
+        this._recentering = true;
+        this._recenterStartQuat.copy(this._freeLookOffset);
+        this._recenterProgress = 0;
+        log.info('Re-centering free-look');
     }
 
     // ─── Tooltip ──────────────────────────────────────────────────────
@@ -1251,6 +1324,12 @@ export class FlightPathManager {
             this.group.remove(this._playbackMarker);
             this._playbackMarker = null;
         }
+        const canvas = this.renderer.domElement;
+        // Must match capture phase used in setupFreeLook()
+        if (this._onPointerDown) canvas.removeEventListener('pointerdown', this._onPointerDown, { capture: true });
+        if (this._onPointerMove) canvas.removeEventListener('pointermove', this._onPointerMove, { capture: true });
+        if (this._onPointerUp) canvas.removeEventListener('pointerup', this._onPointerUp);
+        if (this._onDblClick) canvas.removeEventListener('dblclick', this._onDblClick, { capture: true });
         if (this._onMouseMove) {
             this.renderer.domElement.removeEventListener('mousemove', this._onMouseMove);
         }
