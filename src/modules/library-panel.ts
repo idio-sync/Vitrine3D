@@ -143,7 +143,17 @@ async function fetchCsrfToken(): Promise<void> {
 
 async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> {
     const headers = { ...authHeaders(), ...(opts.headers as Record<string, string> || {}) };
-    return fetch(url, { ...opts, headers, credentials: 'include' });
+    const res = await fetch(url, { ...opts, headers, credentials: 'include' });
+    // Auto-retry once on CSRF failure for state-changing requests
+    if (res.status === 403 && opts.method && opts.method !== 'GET') {
+        const body = await res.clone().json().catch(() => ({})) as { error?: string };
+        if (body.error?.includes('CSRF')) {
+            await fetchCsrfToken();
+            const retryHeaders = { ...authHeaders(), ...(opts.headers as Record<string, string> || {}) };
+            return fetch(url, { ...opts, headers: retryHeaders, credentials: 'include' });
+        }
+    }
+    return res;
 }
 
 async function fetchArchives(): Promise<ArchiveListResponse> {
