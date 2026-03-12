@@ -1971,7 +1971,28 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 renderer.toneMappingExposure = manifest.viewer_settings.tone_mapping_exposure;
             }
 
-            // NOTE: environment_preset IBL would require async HDR loading; skipped here.
+            // Load bundled HDR environment from archive
+            if (archiveLoader) {
+                const envEntry = archiveLoader.getEnvironmentEntry();
+                if (envEntry) {
+                    try {
+                        const envData = await archiveLoader.extractFile(envEntry.entry.file_name);
+                        if (envData) {
+                            try {
+                                await sceneManager!.loadHDREnvironment(envData.url);
+                                if (manifest.viewer_settings.environment_as_background) {
+                                    sceneManager!.setEnvironmentAsBackground(true);
+                                }
+                            } finally {
+                                URL.revokeObjectURL(envData.url);
+                            }
+                            log.info('Loaded HDR environment from archive');
+                        }
+                    } catch (err: any) {
+                        log.warn('Failed to load HDR from archive:', err.message);
+                    }
+                }
+            }
 
             // Apply saved measurement calibration
             if (manifest.viewer_settings.measurement_scale != null &&
