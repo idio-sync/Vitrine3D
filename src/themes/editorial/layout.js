@@ -1765,6 +1765,101 @@ export function setup(manifest, deps) {
     const overlay = createInfoOverlay(manifest, deps);
     viewerContainer.appendChild(overlay);
 
+    // --- Mobile info overlay: curated content for mobile tier ---
+    // Build curated mobile content inside the existing overlay element.
+    // On mobile, the .mobile-open class shows this content; on desktop, .open shows the full panel.
+    const mobileInfoContent = document.createElement('div');
+    mobileInfoContent.className = 'editorial-mobile-info-content';
+    // Hidden by default via CSS (.editorial-mobile-info-content { display: none; })
+    // Shown when parent has .mobile-open class — do NOT use inline style.display here
+    // because inline styles defeat CSS !important rules.
+
+    const mobileCloseBtn = document.createElement('button');
+    mobileCloseBtn.className = 'editorial-mobile-info-close';
+    mobileCloseBtn.innerHTML = '&times;';
+    mobileCloseBtn.addEventListener('click', () => {
+        overlay.classList.remove('mobile-open');
+        if (syncInfoOverlayState) syncInfoOverlayState(false);
+    });
+
+    // Title
+    const title = manifest?.title || manifest?.project?.title || 'Untitled';
+    const mobileTitle = document.createElement('div');
+    mobileTitle.className = 'editorial-mobile-info-title';
+    mobileTitle.textContent = title;
+
+    const mobileRule = document.createElement('div');
+    mobileRule.className = 'editorial-mobile-info-rule';
+
+    // Close button appended directly to overlay (not mobileInfoContent) so position:absolute
+    // works correctly within the fixed-position overlay.
+    mobileInfoContent.appendChild(mobileTitle);
+    mobileInfoContent.appendChild(mobileRule);
+
+    // Description
+    const desc = manifest?.description || manifest?.project?.description || '';
+    if (desc) {
+        const mobileDesc = document.createElement('div');
+        mobileDesc.className = 'editorial-mobile-info-desc';
+        mobileDesc.textContent = desc.replace(/<[^>]+>/g, '').substring(0, 300);
+        mobileInfoContent.appendChild(mobileDesc);
+
+        const divider = document.createElement('div');
+        divider.className = 'editorial-mobile-info-divider';
+        mobileInfoContent.appendChild(divider);
+    }
+
+    // Detail rows: Creator, Date, Location
+    const detailFields = [
+        ['Creator', manifest?.creator || manifest?.project?.creator || ''],
+        ['Date', manifest?.date || manifest?.project?.date || ''],
+        ['Location', manifest?.coverage || manifest?.project?.coverage || '']
+    ];
+    detailFields.forEach(([label, value]) => {
+        if (!value) return;
+        const row = document.createElement('div');
+        row.className = 'editorial-mobile-info-row';
+        row.innerHTML = '<span class="editorial-mobile-info-label">' + escapeHtml(label) + '</span><span class="editorial-mobile-info-value">' + escapeHtml(String(value)) + '</span>';
+        mobileInfoContent.appendChild(row);
+    });
+
+    // Stats grid
+    const statsGrid = document.createElement('div');
+    statsGrid.className = 'editorial-mobile-info-stats';
+    const fmt = (n) => n >= 1000000 ? (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M' : n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K' : String(n);
+
+    if (modelGroup && modelGroup.children.length > 0) {
+        let vertexCount = 0;
+        modelGroup.traverse(child => {
+            if (child.isMesh && child.geometry && child.geometry.attributes.position) {
+                vertexCount += child.geometry.attributes.position.count;
+            }
+        });
+        if (vertexCount > 0) {
+            const vertStat = document.createElement('div');
+            vertStat.className = 'editorial-mobile-info-stat';
+            vertStat.innerHTML = '<div class="editorial-mobile-info-stat-num">' + fmt(vertexCount) + '</div><div class="editorial-mobile-info-stat-label">Vertices</div>';
+            statsGrid.appendChild(vertStat);
+        }
+    }
+
+    // Gaussian count from manifest
+    const gaussianCount = manifest?.splat_count || manifest?.project?.splat_count || 0;
+    if (gaussianCount > 0) {
+        const gaussStat = document.createElement('div');
+        gaussStat.className = 'editorial-mobile-info-stat';
+        gaussStat.innerHTML = '<div class="editorial-mobile-info-stat-num">' + fmt(gaussianCount) + '</div><div class="editorial-mobile-info-stat-label">Gaussians</div>';
+        statsGrid.appendChild(gaussStat);
+    }
+
+    if (statsGrid.children.length > 0) {
+        mobileInfoContent.appendChild(statsGrid);
+    }
+
+    // Close button is a direct child of overlay (the scroll container) for absolute positioning
+    overlay.appendChild(mobileCloseBtn);
+    overlay.appendChild(mobileInfoContent);
+
     // Wire details link to panel
     detailsLink.addEventListener('click', () => {
         const isOpen = overlay.classList.toggle('open');

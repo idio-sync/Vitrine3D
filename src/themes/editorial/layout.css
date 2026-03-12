@@ -3215,6 +3215,14 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
         margin-top: 1px;
     }
 
+    body.kiosk-mode.kiosk-editorial .editorial-info-overlay.mobile-open .editorial-mobile-info-content {
+        display: block !important;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-info-overlay.mobile-open .editorial-panel-inner {
+        display: none !important;
+    }
+
     /* Annotation navigation strip — above capsule */
     body.kiosk-mode.kiosk-editorial .editorial-anno-strip {
         position: fixed;
