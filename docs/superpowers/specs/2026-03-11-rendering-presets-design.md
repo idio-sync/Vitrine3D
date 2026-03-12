@@ -8,7 +8,7 @@
 
 Vitrine3D has all the individual rendering controls needed for museum-quality presentation (HDR environment maps, 6 tone mapping algorithms, 7 post-processing effects, per-light intensity), but:
 
-1. **HDR environments are not bundled into `.ddim` archives.** The `environment_preset` field is saved to the manifest but never applied on load — both `archive-pipeline.ts:975` and `kiosk-main.ts:1969` have `// NOTE: environment_preset IBL would require async HDR loading; skipped here.` Clients opening archives in kiosk mode get no environment lighting.
+1. **HDR environments are not bundled into `.ddim` archives.** The `environment_preset` field is saved to the manifest but never applied on load — both `archive-pipeline.ts:978` and `kiosk-main.ts:1974` have `// NOTE: environment_preset IBL would require async HDR loading; skipped here.` Clients opening archives in kiosk mode get no environment lighting.
 
 2. **No unified "look" presets.** Users must manually configure HDR, tone mapping, exposure, lighting, and post-processing individually. There's no way to apply a curated combination in one click.
 
@@ -99,7 +99,7 @@ export const ENVIRONMENT = {
 } as const;
 ```
 
-The `local` flag is removed — locality is implicit (absolute URLs starting with `/` are local, `https://` are CDN). The `isLocalPreset(preset)` helper in `rendering-presets.ts` derives this from the URL.
+Locality is implicit from the URL format: paths starting with `/` are local, `https://` are CDN. The `isLocalPreset(preset)` helper in `rendering-presets.ts` derives this from the URL. The entry shape is unchanged — only `name` and `url` fields.
 
 **Breaking change: `preset:N` index scheme → name-based values.** All three `<select>` elements that use `env-map-select` or `meta-viewer-env-preset` must switch from `value="preset:0"` to `value="Studio"` etc. The `event-wiring.ts` handler must look up by name instead of filtering + indexing:
 
@@ -123,18 +123,18 @@ if (preset?.url) { ... }
 
 **New `addEnvironment()` method on ArchiveCreator:**
 ```typescript
-addEnvironment(blob: Blob, fileName: string): void
+addEnvironment(blob: Blob, fileName: string): string
 ```
-Follows the same pattern as `addMesh()`, `addCad()`, etc. — handles key naming, path construction, and manifest entry creation.
+Follows the same pattern as `addMesh()`, `addCad()`, etc. — handles key naming, path construction, and manifest entry creation. Returns the entry key string (e.g., `"environment_0"`).
 
 **New `getEnvironmentEntry()` method on ArchiveLoader:**
 ```typescript
-getEnvironmentEntry(): { entry: ZipEntry; key: string } | null
+getEnvironmentEntry(): { entry: ManifestDataEntry; key: string } | null
 ```
 Uses `findEntriesByPrefix('environment_')`. Add `hasEnvironment: boolean` to `ContentInfo` interface.
 
 **HDR blob capture strategy:**
-When an HDR is loaded (via preset, file upload, or URL), the raw HDR bytes are captured by fetching the URL with `fetch()` before passing it to `sceneManager.loadHDREnvironment()`. This is necessary because Three.js's `RGBELoader` does not expose the raw file bytes. The blob is stored in `state.environmentBlob` (or `AssetStore.environmentBlob`) for later archive bundling.
+When an HDR is loaded (via preset, file upload, or URL), the raw HDR bytes are captured by fetching the URL with `fetch()` before passing it to `sceneManager.loadHDREnvironment()`. This is necessary because Three.js's `RGBELoader` does not expose the raw file bytes. The blob is stored in `state.environmentBlob` for later archive bundling (consistent with existing patterns like `originalMeshBlob` and `manualPreviewBlob` in `AppState`).
 
 For built-in presets: `fetch('/hdri/studio_small_09_1k.hdr')` → store blob → pass blob URL to RGBELoader.
 For custom file uploads: the `File` object is already a blob — store directly.
@@ -214,6 +214,10 @@ renderingPreset: string | null;      // current preset name or 'custom'
 rendering_preset: string | null;     // preset name that was active at export time
 ```
 
+**Coexistence with `environment_preset`:** The existing `environment_preset` field (stores env map select value like `"preset:0"`) is retained for backward compatibility but its format changes from index-based (`"preset:0"`) to name-based (`"Studio"`). When `rendering_preset` is set, it takes precedence — the individual `environment_preset`, tone mapping, lighting, and post-processing fields serve as the actual applied values. `rendering_preset` is informational (records which preset was active), while the individual fields are authoritative. Old archives with `environment_preset: "preset:0"` are handled by a migration fallback in the loader.
+
+**`metadata-manager.ts` impact:** The existing `collectMetadata()` reads `meta-viewer-env-preset` select value as `environmentPreset`. After the value format change from `"preset:0"` to `"Studio"`, this read path produces name strings automatically — no code change needed beyond updating the HTML option values. `prefillMetadataFromArchive()` sets the select value from `manifest.viewer_settings.environment_preset` — this also works with name strings. Add `rendering_preset` read/write alongside the existing fields.
+
 ### Backward Compatibility
 
 | Scenario | Behavior |
@@ -235,7 +239,7 @@ rendering_preset: string | null;     // preset name that was active at export ti
 | `src/modules/archive-pipeline.ts` | Extract + load HDR on archive open, store blob for re-export, replace skip comment |
 | `src/modules/kiosk-main.ts` | Extract + load HDR on archive open, replace skip comment |
 | `src/modules/archive-loader.ts` | Add `getEnvironmentEntry()` using `findEntriesByPrefix('environment_')`, add `hasEnvironment` to `ContentInfo` |
-| `src/modules/event-wiring.ts` | Wire up `rendering-preset-select` change handler, detect manual overrides → flip to Custom, **refactor env-map-select handler from index-based to name-based lookup** |
+| `src/modules/event-wiring.ts` | Wire up `rendering-preset-select` change handler, detect manual overrides → flip to Custom, **refactor env-map-select handler from index-based to name-based lookup**, update `hdr-file-input` and `btn-load-hdr-url` handlers to also flip `rendering-preset-select` to `'custom'` when a custom HDR is loaded |
 | `src/main.ts` | Add `environmentBlob` + `renderingPreset` to state, import preset module, update deps factory, capture HDR blob on load (fetch + store) |
 | `src/editor/index.html` | Add "Rendering Preset" archived section in View Settings pane, **update both `env-map-select` (line ~1026) and `meta-viewer-env-preset` (line ~695) to name-based option values** |
 | `src/index.html` | Update `env-map-select` options to name-based values matching new preset list |
