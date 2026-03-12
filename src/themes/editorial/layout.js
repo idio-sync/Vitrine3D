@@ -234,8 +234,10 @@ function createInfoOverlay(manifest, deps) {
     closeBtn.innerHTML = '&times;';
     closeBtn.addEventListener('click', () => {
         overlay.classList.remove('open');
+        overlay.classList.remove('mobile-open');
         const detailsBtn = document.querySelector('.editorial-details-link');
         if (detailsBtn) detailsBtn.classList.remove('active');
+        if (syncInfoOverlayState) syncInfoOverlayState(false);
     });
     panelInner.appendChild(closeBtn);
 
@@ -710,7 +712,8 @@ const EDITORIAL_ROOT_CLASSES = [
     'editorial-title-block',
     'editorial-bottom-ribbon',
     'editorial-mobile-pill',
-    'editorial-info-overlay'
+    'editorial-info-overlay',
+    'editorial-anno-strip'
 ];
 
 export function cleanup() {
@@ -723,6 +726,7 @@ export function cleanup() {
     wtTitleEl = null;
     if (wtMobileControls) { wtMobileControls.remove(); wtMobileControls = null; }
     wtTotalStops = 0;
+    syncInfoOverlayState = null;
 }
 
 // ---- Main setup entry point ----
@@ -1520,46 +1524,31 @@ export function setup(manifest, deps) {
     }
     viewerContainer.appendChild(ribbon);
 
-    // --- 4b. Floating Pill (replaces mobile nav at <700px) ---
+    // --- 4b. Floating Capsule (replaces mobile nav at <700px) ---
     const mobilePill = document.createElement('div');
     mobilePill.className = 'editorial-mobile-pill';
 
-    // --- Details button: chevron-up + label, opens/collapses the info sheet ---
-    const barDetailsBtn = document.createElement('button');
-    barDetailsBtn.className = 'editorial-bar-btn editorial-bar-details-btn';
-    barDetailsBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg><span class="editorial-bar-label">Info</span>';
-    if (annotations.length > 0) {
-        const barAnnoBadge = document.createElement('span');
-        barAnnoBadge.className = 'editorial-bar-anno-badge';
-        barAnnoBadge.textContent = String(annotations.length);
-        barDetailsBtn.appendChild(barAnnoBadge);
-    }
-    barDetailsBtn.addEventListener('click', () => {
-        const sidebar = document.getElementById('metadata-sidebar');
-        if (!sidebar) return;
-        if (sidebar.classList.contains('sheet-half') || sidebar.classList.contains('sheet-full')) {
-            sidebar.classList.remove('sheet-half', 'sheet-full');
-            sidebar.classList.add('sheet-peek');
-        } else {
-            sidebar.classList.remove('sheet-peek');
-            sidebar.classList.add('sheet-half');
-        }
-    });
-    mobilePill.appendChild(barDetailsBtn);
+    const createCapsuleBtn = (iconSvg, label, extraClass) => {
+        const btn = document.createElement('button');
+        btn.className = 'editorial-capsule-btn' + (extraClass ? ' ' + extraClass : '');
+        btn.innerHTML = iconSvg + '<span>' + label + '</span>';
+        return btn;
+    };
 
-    // --- Tool icon buttons (texture + view mode) — only when mesh is present ---
+    const createSep = () => {
+        const sep = document.createElement('div');
+        sep.className = 'editorial-capsule-sep';
+        return sep;
+    };
+
+    // --- Tool buttons (texture + material views) — only when mesh is present ---
     const hasMeshContent = contentInfo && contentInfo.hasMesh;
     if (hasMeshContent) {
-        // Vertical divider between details and tools
-        const barDivider = document.createElement('div');
-        barDivider.className = 'editorial-bar-divider';
-        mobilePill.appendChild(barDivider);
-
-        // Texture toggle button (assign to outer barTexBtn for cross-sync with desktop ribbon)
-        barTexBtn = document.createElement('button');
-        barTexBtn.className = 'editorial-bar-btn';
-        barTexBtn.title = 'Toggle textures';
-        barTexBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span class="editorial-bar-label">Texture</span>';
+        // Texture toggle button
+        barTexBtn = createCapsuleBtn(
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>',
+            'Tex'
+        );
         barTexBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             texturesVisible = !texturesVisible;
@@ -1569,76 +1558,208 @@ export function setup(manifest, deps) {
         });
         mobilePill.appendChild(barTexBtn);
 
-        // View mode button + upward popover
-        const barViewBtn = document.createElement('button');
-        barViewBtn.className = 'editorial-bar-btn';
-        barViewBtn.title = 'View mode';
-        barViewBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><ellipse cx="12" cy="12" rx="4" ry="10"/><path d="M2 12h20"/></svg><span class="editorial-bar-label">View</span>';
+        // Matcap button
+        const capsuleMatBtn = createCapsuleBtn(
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>',
+            'Mat'
+        );
+        // Normals button
+        const capsuleNrmBtn = createCapsuleBtn(
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
+            'Nrm'
+        );
+        // Wireframe button
+        const capsuleWireBtn = createCapsuleBtn(
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l10 6v8l-10 6L2 16V8z"/></svg>',
+            'Wire'
+        );
 
-        const barViewPopover = document.createElement('div');
-        barViewPopover.className = 'editorial-bar-popover';
+        capsuleMatBtn.addEventListener('click', (e) => { e.stopPropagation(); setMaterialView('matcap:clay'); });
+        capsuleNrmBtn.addEventListener('click', (e) => { e.stopPropagation(); setMaterialView('normals'); });
+        capsuleWireBtn.addEventListener('click', (e) => { e.stopPropagation(); setMaterialView('wireframe'); });
 
-        const barSetView = (view) => {
-            setMaterialView(view);
-            barViewPopover.classList.remove('open');
-        };
         syncMobileView = (view) => {
-            barViewBtn.classList.toggle('active', !!view);
-            barViewPopover.querySelectorAll('.editorial-bar-popover-item').forEach(el => {
-                el.classList.toggle('active', el.dataset.view === view);
-            });
+            capsuleMatBtn.classList.toggle('active', view === 'matcap:clay');
+            capsuleNrmBtn.classList.toggle('active', view === 'normals');
+            capsuleWireBtn.classList.toggle('active', view === 'wireframe');
         };
 
-        [['Wireframe', 'wireframe'], ['Normals', 'normals'], ['Roughness', 'roughness'], ['Metalness', 'metalness']].forEach(([label, key]) => {
-            const item = document.createElement('button');
-            item.className = 'editorial-bar-popover-item';
-            item.dataset.view = key;
-            item.textContent = label;
-            item.addEventListener('click', (e) => { e.stopPropagation(); barSetView(key); });
-            barViewPopover.appendChild(item);
-        });
-        const popDivider = document.createElement('div');
-        popDivider.className = 'editorial-pill-menu-divider';
-        barViewPopover.appendChild(popDivider);
-        const resetItem = document.createElement('button');
-        resetItem.className = 'editorial-bar-popover-item editorial-pill-menu-off';
-        resetItem.textContent = 'Reset';
-        resetItem.addEventListener('click', (e) => { e.stopPropagation(); barSetView(null); barViewPopover.classList.remove('open'); });
-        barViewPopover.appendChild(resetItem);
-
-        barViewBtn.addEventListener('click', (e) => { e.stopPropagation(); barViewPopover.classList.toggle('open'); });
-        document.addEventListener('click', () => barViewPopover.classList.remove('open'));
-
-        const barViewWrapper = document.createElement('div');
-        barViewWrapper.style.cssText = 'position:relative;display:flex;';
-        barViewWrapper.appendChild(barViewBtn);
-        barViewWrapper.appendChild(barViewPopover);
-        mobilePill.appendChild(barViewWrapper);
+        mobilePill.appendChild(capsuleMatBtn);
+        mobilePill.appendChild(capsuleNrmBtn);
+        mobilePill.appendChild(capsuleWireBtn);
+        mobilePill.appendChild(createSep());
     }
 
-    // --- Annotations toggle — shown in bar when annotations exist ---
+    // --- Info button (always shown) ---
+    const capsuleInfoBtn = createCapsuleBtn(
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+        'Info'
+    );
+    capsuleInfoBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const overlay = document.querySelector('.editorial-info-overlay');
+        if (!overlay) return;
+        const isOpen = overlay.classList.toggle('mobile-open');
+        capsuleInfoBtn.classList.toggle('active', isOpen);
+    });
+
+    syncInfoOverlayState = (isOpen) => {
+        capsuleInfoBtn.classList.toggle('active', isOpen);
+    };
+
+    mobilePill.appendChild(capsuleInfoBtn);
+
+    // --- Annotation button + strip (only when annotations exist) ---
+    let annoStrip = null;
+    let annoStripTimeout = null;
+    let capsuleAnnoIndex = 0;
+
     if (annotations.length > 0) {
-        const barAnnoDivider = document.createElement('div');
-        barAnnoDivider.className = 'editorial-bar-divider';
-        mobilePill.appendChild(barAnnoDivider);
+        mobilePill.appendChild(createSep());
 
-        const barAnnoBtn = document.createElement('button');
-        barAnnoBtn.className = 'editorial-bar-btn';
-        barAnnoBtn.title = 'Toggle annotation markers';
-        barAnnoBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="editorial-bar-label">Markers</span>';
-        barAnnoBtn.addEventListener('click', (e) => {
+        const capsuleAnnoBtn = createCapsuleBtn(
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+            'Anno'
+        );
+        capsuleAnnoBtn.style.position = 'relative';
+
+        // Badge
+        const annoBadge = document.createElement('span');
+        annoBadge.className = 'editorial-capsule-badge';
+        annoBadge.textContent = String(annotations.length);
+        capsuleAnnoBtn.appendChild(annoBadge);
+
+        // Annotation strip
+        annoStrip = document.createElement('div');
+        annoStrip.className = 'editorial-anno-strip';
+        annoStrip.style.display = 'none';
+
+        const stripPrev = document.createElement('button');
+        stripPrev.className = 'editorial-anno-strip-btn';
+        stripPrev.innerHTML = '&#9664;';
+
+        const stripCounter = document.createElement('span');
+        stripCounter.className = 'editorial-anno-strip-counter';
+
+        const stripLabel = document.createElement('span');
+        stripLabel.className = 'editorial-anno-strip-label';
+
+        const stripNext = document.createElement('button');
+        stripNext.className = 'editorial-anno-strip-btn';
+        stripNext.innerHTML = '&#9654;';
+
+        const updateStripUI = () => {
+            const anno = annotations[capsuleAnnoIndex];
+            stripCounter.textContent = (capsuleAnnoIndex + 1) + '/' + annotations.length;
+            stripLabel.textContent = anno ? (anno.title || anno.label || '') : '';
+        };
+
+        const navigateAnno = (index) => {
+            capsuleAnnoIndex = ((index % annotations.length) + annotations.length) % annotations.length;
+            updateStripUI();
+            const anno = annotations[capsuleAnnoIndex];
+            if (anno && anno.id) {
+                // Trigger annotation selection via the existing system
+                const marker = document.querySelector('.annotation-marker[data-annotation-id="' + anno.id + '"]');
+                if (marker) marker.click();
+            }
+            // Reset auto-hide timer
+            clearTimeout(annoStripTimeout);
+            annoStripTimeout = setTimeout(() => {
+                if (annoStrip) {
+                    annoStrip.classList.add('fade-out');
+                    setTimeout(() => { if (annoStrip) annoStrip.style.display = 'none'; annoStrip.classList.remove('fade-out'); }, 200);
+                }
+            }, 5000);
+        };
+
+        stripPrev.addEventListener('click', (e) => { e.stopPropagation(); navigateAnno(capsuleAnnoIndex - 1); });
+        stripNext.addEventListener('click', (e) => { e.stopPropagation(); navigateAnno(capsuleAnnoIndex + 1); });
+
+        annoStrip.appendChild(stripPrev);
+        annoStrip.appendChild(stripCounter);
+        annoStrip.appendChild(stripLabel);
+        annoStrip.appendChild(stripNext);
+
+        capsuleAnnoBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            setMarkersVisible(!markersVisible);
-            barAnnoBtn.classList.toggle('off', !markersVisible);
+            if (annoStrip.style.display === 'none') {
+                annoStrip.style.display = 'flex';
+                annoStrip.classList.remove('fade-out');
+                updateStripUI();
+                navigateAnno(capsuleAnnoIndex);
+            } else {
+                clearTimeout(annoStripTimeout);
+                annoStrip.classList.add('fade-out');
+                setTimeout(() => { annoStrip.style.display = 'none'; annoStrip.classList.remove('fade-out'); }, 200);
+            }
         });
-        mobilePill.appendChild(barAnnoBtn);
+
+        mobilePill.appendChild(capsuleAnnoBtn);
+        viewerContainer.appendChild(annoStrip);
     }
+
+    // --- More button (kebab ⋮) ---
+    const moreWrapper = document.createElement('div');
+    moreWrapper.style.cssText = 'position:relative;display:flex;';
+
+    const capsuleMoreBtn = createCapsuleBtn(
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="17" r="1"/></svg>',
+        ''
+    );
+    capsuleMoreBtn.title = 'More';
+
+    const morePopover = document.createElement('div');
+    morePopover.className = 'editorial-capsule-popover';
+
+    // Note: Share is listed in the spec's More menu but editorial layout.js has no
+    // share dialog in its deps interface. Share can be added later when a share
+    // module is wired into the editorial theme deps. For now, only Fullscreen + Quality.
+
+    // Fullscreen item
+    const fsItem = document.createElement('button');
+    fsItem.className = 'editorial-capsule-popover-item';
+    fsItem.textContent = document.fullscreenElement ? 'Exit Fullscreen' : 'Fullscreen';
+    fsItem.addEventListener('click', (e) => {
+        e.stopPropagation();
+        morePopover.classList.remove('open');
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+            fsItem.textContent = 'Fullscreen';
+        } else {
+            document.documentElement.requestFullscreen();
+            fsItem.textContent = 'Exit Fullscreen';
+        }
+    });
+    morePopover.appendChild(fsItem);
+
+    // Quality toggle item (uses deps.qualityResolved + deps.switchQualityTier — same pattern as ribbon)
+    if (deps.switchQualityTier) {
+        let currentTier = deps.qualityResolved || 'sd';
+        const qualItem = document.createElement('button');
+        qualItem.className = 'editorial-capsule-popover-item';
+        qualItem.textContent = 'Quality: ' + currentTier.toUpperCase();
+        qualItem.addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentTier = currentTier === 'sd' ? 'hd' : 'sd';
+            deps.switchQualityTier(currentTier);
+            qualItem.textContent = 'Quality: ' + currentTier.toUpperCase();
+        });
+        morePopover.appendChild(qualItem);
+    }
+
+    capsuleMoreBtn.addEventListener('click', (e) => { e.stopPropagation(); morePopover.classList.toggle('open'); });
+    document.addEventListener('click', () => morePopover.classList.remove('open'));
+
+    moreWrapper.appendChild(capsuleMoreBtn);
+    moreWrapper.appendChild(morePopover);
+    mobilePill.appendChild(moreWrapper);
 
     viewerContainer.appendChild(mobilePill);
 
-    // Keep legacy reference for walkthrough swap (uses .editorial-mobile-nav)
-    // Walkthrough mode creates controls inside this element
-    const mobileNav = mobilePill;
+    // Keep legacy reference — walkthrough uses querySelector('.editorial-mobile-pill') not this var,
+    // but other downstream code between here and section 5 may reference mobileNav.
+    const mobileNav = mobilePill; // eslint-disable-line no-unused-vars
 
     // --- 5. Info Panel (side panel) ---
     const overlay = createInfoOverlay(manifest, deps);
@@ -1841,16 +1962,39 @@ function onKeyboardShortcut(key) {
         const panel = document.querySelector('.editorial-info-overlay');
         const btn = document.querySelector('.editorial-details-link');
         if (panel) {
-            const isOpen = panel.classList.toggle('open');
-            if (btn) btn.classList.toggle('active', isOpen);
+            // Toggle both desktop and mobile open states
+            const isMobileOpen = panel.classList.contains('mobile-open');
+            const isDesktopOpen = panel.classList.contains('open');
+            if (isMobileOpen) {
+                panel.classList.remove('mobile-open');
+                if (syncInfoOverlayState) syncInfoOverlayState(false);
+            } else if (isDesktopOpen) {
+                panel.classList.remove('open');
+                if (btn) btn.classList.remove('active');
+            } else {
+                // Open — detect if mobile tier
+                const isMobile = window.matchMedia('(max-width: 699px)').matches;
+                if (isMobile) {
+                    panel.classList.add('mobile-open');
+                    if (syncInfoOverlayState) syncInfoOverlayState(true);
+                } else {
+                    panel.classList.add('open');
+                    if (btn) btn.classList.add('active');
+                }
+            }
         }
         return true;
     }
     if (key === 'escape') {
         const panel = document.querySelector('.editorial-info-overlay');
-        const btn = document.querySelector('.editorial-details-link');
+        if (panel && panel.classList.contains('mobile-open')) {
+            panel.classList.remove('mobile-open');
+            if (syncInfoOverlayState) syncInfoOverlayState(false);
+            return true;
+        }
         if (panel && panel.classList.contains('open')) {
             panel.classList.remove('open');
+            const btn = document.querySelector('.editorial-details-link');
             if (btn) btn.classList.remove('active');
             return true;
         }
@@ -1859,6 +2003,8 @@ function onKeyboardShortcut(key) {
 }
 
 // ---- Walkthrough hooks ----
+
+let syncInfoOverlayState = null; // late-bound: assigned inside setup() capsule creation, called from module-level createInfoOverlay()
 
 let wtStopDots = null;
 let wtTitleEl = null;
