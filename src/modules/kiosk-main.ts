@@ -574,6 +574,11 @@ function setupSidebarTransitionObserver(): void {
     };
 
     const classObserver = new MutationObserver(() => {
+        // Mobile uses .mobile-open with position:fixed — no margin-right transition,
+        // so the sidebar freeze/slide animation is not applicable. Skip entirely.
+        if (overlay.classList.contains('mobile-open') || window.matchMedia('(max-width: 699px)').matches) {
+            return;
+        }
         const isOpening = overlay.classList.contains('open');
 
         // If already transitioning (rapid toggle), clean up previous

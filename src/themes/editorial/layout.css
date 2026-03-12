@@ -3689,9 +3689,19 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
 /* --- Tier 4: Micro Embed (<480px) --- */
 
 @media (max-width: 479px) {
-    /* Hide title block — too much chrome for micro embeds */
+    /* Compact title block — minimal chrome for narrow screens */
     body.kiosk-mode.kiosk-editorial .editorial-title-block {
-        display: none !important;
+        padding: calc(8px + env(safe-area-inset-top)) 14px 6px calc(10px + env(safe-area-inset-left));
+        max-width: 60%;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-title-block h1 {
+        font-size: 0.82rem;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-title-block .editorial-title-rule {
+        width: 18px;
+        margin: 4px 0;
     }
 
     /* Smaller annotation markers */
