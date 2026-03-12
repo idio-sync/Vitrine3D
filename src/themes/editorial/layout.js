@@ -1320,24 +1320,10 @@ export function setup(manifest, deps) {
         if (sliceWrapper) toolsGroup.appendChild(sliceWrapper);
     }
 
-    // Flight path toggle — shown only when flight data is loaded
+    // Flight log dropdown — inserted late via onFlightPathLoaded since
+    // flightPathManager is null at setup() time (loaded after layout init)
     if (flightPathManager && flightPathManager.hasData) {
-        const fpRule = document.createElement('div');
-        fpRule.className = 'editorial-ribbon-rule';
-        toolsGroup.appendChild(fpRule);
-
-        const fpBtn = document.createElement('button');
-        fpBtn.className = 'editorial-marker-toggle active';
-        fpBtn.title = 'Toggle Flight Path';
-        fpBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 2.8L21 6l-3.2 3.2"/><path d="M21 6H7.5a4.5 4.5 0 0 0 0 9H12"/><circle cx="17" cy="17" r="3"/><path d="M14 17h-4"/></svg>';
-        let fpVisible = true;
-        fpBtn.addEventListener('click', () => {
-            fpVisible = !fpVisible;
-            flightPathManager.setVisible(fpVisible);
-            fpBtn.classList.toggle('active', fpVisible);
-            fpBtn.classList.toggle('off', !fpVisible);
-        });
-        toolsGroup.appendChild(fpBtn);
+        buildFlightDropdown(flightPathManager, toolsGroup);
     }
 
     // Rule separator between annotation and visualization groups
@@ -2020,6 +2006,203 @@ function initFilePicker(container, deps) {
     `;
 }
 
+// ---- Flight log dropdown builder (reusable from setup + onFlightPathLoaded) ----
+
+function buildFlightDropdown(fpm, container) {
+    // Guard: already inserted
+    if (container.querySelector('.editorial-flight-wrapper')) return;
+
+    const fpRule = document.createElement('div');
+    fpRule.className = 'editorial-ribbon-rule';
+    container.appendChild(fpRule);
+
+    const fpWrapper = document.createElement('div');
+    fpWrapper.className = 'editorial-flight-wrapper';
+
+    const fpBtn = document.createElement('button');
+    fpBtn.className = 'editorial-marker-toggle editorial-flight-btn active';
+    fpBtn.title = 'Flight Log';
+    fpBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 2.8L21 6l-3.2 3.2"/><path d="M21 6H7.5a4.5 4.5 0 0 0 0 9H12"/><circle cx="17" cy="17" r="3"/><path d="M14 17h-4"/></svg>';
+
+    const fpDropdown = document.createElement('div');
+    fpDropdown.className = 'editorial-flight-dropdown';
+
+    // --- Stats section ---
+    const statsGrid = document.createElement('div');
+    statsGrid.className = 'editorial-flight-stats';
+
+    const stats = fpm.getStats();
+    if (stats) {
+        [
+            ['Duration', stats.duration],
+            ['Distance', stats.distance],
+            ['Max Alt', stats.maxAlt],
+            ['Max Speed', stats.maxSpeed],
+            ['Avg Speed', stats.avgSpeed],
+            ['Points', stats.points],
+        ].forEach(([label, value]) => {
+            const lbl = document.createElement('span');
+            lbl.className = 'editorial-flight-stat-label';
+            lbl.textContent = label;
+            const val = document.createElement('span');
+            val.className = 'editorial-flight-stat-value';
+            val.textContent = value;
+            statsGrid.appendChild(lbl);
+            statsGrid.appendChild(val);
+        });
+    }
+    fpDropdown.appendChild(statsGrid);
+
+    // --- Divider ---
+    const div1 = document.createElement('div');
+    div1.className = 'editorial-flight-divider';
+    fpDropdown.appendChild(div1);
+
+    // --- Color mode selector ---
+    const colorSection = document.createElement('div');
+    colorSection.className = 'editorial-flight-section';
+
+    const colorLabel = document.createElement('span');
+    colorLabel.className = 'editorial-flight-section-label';
+    colorLabel.textContent = 'Color';
+    colorSection.appendChild(colorLabel);
+
+    const colorSeg = document.createElement('div');
+    colorSeg.className = 'editorial-flight-seg';
+
+    const currentSettings = fpm.getSettings();
+    const colorModes = [
+        { key: 'speed', label: 'Spd' },
+        { key: 'altitude', label: 'Alt' },
+        { key: 'climbrate', label: 'Climb' },
+    ];
+    const colorBtns = [];
+    colorModes.forEach(({ key, label }) => {
+        const btn = document.createElement('button');
+        btn.className = 'editorial-flight-seg-btn';
+        btn.textContent = label;
+        btn.dataset.colorMode = key;
+        if (currentSettings.colorMode === key) btn.classList.add('active');
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fpm.setColorMode(key);
+            colorBtns.forEach(b => b.classList.toggle('active', b.dataset.colorMode === key));
+        });
+        colorBtns.push(btn);
+        colorSeg.appendChild(btn);
+    });
+    colorSection.appendChild(colorSeg);
+    fpDropdown.appendChild(colorSection);
+
+    // --- Marker density selector ---
+    const markerSection = document.createElement('div');
+    markerSection.className = 'editorial-flight-section';
+
+    const markerLabel = document.createElement('span');
+    markerLabel.className = 'editorial-flight-section-label';
+    markerLabel.textContent = 'Markers';
+    markerSection.appendChild(markerLabel);
+
+    const markerSeg = document.createElement('div');
+    markerSeg.className = 'editorial-flight-seg';
+
+    let currentDensity = 'sparse';
+    const densityModes = [
+        { key: 'off', label: 'Off' },
+        { key: 'sparse', label: 'Few' },
+        { key: 'all', label: 'All' },
+    ];
+    const densityBtns = [];
+    densityModes.forEach(({ key, label }) => {
+        const btn = document.createElement('button');
+        btn.className = 'editorial-flight-seg-btn';
+        btn.textContent = label;
+        btn.dataset.density = key;
+        if (currentDensity === key) btn.classList.add('active');
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentDensity = key;
+            fpm.setMarkerDensity(key);
+            densityBtns.forEach(b => b.classList.toggle('active', b.dataset.density === key));
+        });
+        densityBtns.push(btn);
+        markerSeg.appendChild(btn);
+    });
+    markerSection.appendChild(markerSeg);
+    fpDropdown.appendChild(markerSection);
+
+    // --- Line opacity slider ---
+    const opacitySection = document.createElement('div');
+    opacitySection.className = 'editorial-flight-section';
+
+    const opacityLabel = document.createElement('span');
+    opacityLabel.className = 'editorial-flight-section-label';
+    opacityLabel.textContent = 'Opacity';
+    opacitySection.appendChild(opacityLabel);
+
+    const sliderRow = document.createElement('div');
+    sliderRow.className = 'editorial-flight-slider-row';
+    sliderRow.style.padding = '0';
+    sliderRow.style.flex = '1';
+
+    const opacitySlider = document.createElement('input');
+    opacitySlider.type = 'range';
+    opacitySlider.min = '0.1';
+    opacitySlider.max = '1';
+    opacitySlider.step = '0.05';
+    opacitySlider.value = '1';
+    opacitySlider.className = 'editorial-flight-slider';
+    opacitySlider.addEventListener('input', (e) => {
+        e.stopPropagation();
+        fpm.setLineOpacity(parseFloat(opacitySlider.value));
+    });
+    sliderRow.appendChild(opacitySlider);
+    opacitySection.appendChild(sliderRow);
+    fpDropdown.appendChild(opacitySection);
+
+    // --- Bottom action: Hide / Show ---
+    const actions = document.createElement('div');
+    actions.className = 'editorial-flight-actions';
+
+    let fpVisible = true;
+    const hideBtn = document.createElement('button');
+    hideBtn.className = 'editorial-flight-action';
+    hideBtn.textContent = 'Hide Path';
+    hideBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fpVisible = !fpVisible;
+        fpm.setVisible(fpVisible);
+        fpBtn.classList.toggle('active', fpVisible);
+        fpBtn.classList.toggle('off', !fpVisible);
+        hideBtn.textContent = fpVisible ? 'Hide Path' : 'Show Path';
+        fpDropdown.classList.remove('open');
+    });
+    actions.appendChild(hideBtn);
+    fpDropdown.appendChild(actions);
+
+    // Open/close dropdown
+    fpBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fpDropdown.classList.toggle('open');
+    });
+    document.addEventListener('click', () => { fpDropdown.classList.remove('open'); });
+    fpDropdown.addEventListener('click', (e) => { e.stopPropagation(); });
+
+    fpWrapper.appendChild(fpBtn);
+    fpWrapper.appendChild(fpDropdown);
+    container.appendChild(fpWrapper);
+}
+
+// ---- Late-bind hook: flight path loaded after layout setup ----
+
+function onFlightPathLoaded(fpm) {
+    if (!fpm || !fpm.hasData) return;
+    // Find the tools group in the already-rendered ribbon
+    const toolsGroup = document.querySelector('.editorial-ribbon-tools');
+    if (!toolsGroup) return;
+    buildFlightDropdown(fpm, toolsGroup);
+}
+
 // ---- Layout module hooks (called by kiosk-main.ts) ----
 
 function onAnnotationSelect(annotationId) {
@@ -2265,6 +2448,7 @@ window.__KIOSK_LAYOUTS__['editorial'] = {
     setup, cleanup, initLoadingScreen, initClickGate, initFilePicker,
     onAnnotationSelect, onAnnotationDeselect, onViewModeChange, onKeyboardShortcut,
     onWalkthroughStart, onWalkthroughStopChange, onWalkthroughEnd,
+    onFlightPathLoaded,
     hasOwnInfoPanel: true,
     hasOwnQualityToggle: true
 };

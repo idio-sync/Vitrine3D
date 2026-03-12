@@ -2476,6 +2476,214 @@ body.kiosk-mode.kiosk-editorial .editorial-slice-btn.active {
     opacity: 1;
 }
 
+/* --- Flight Log Dropdown Panel --- */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    align-self: stretch;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-dropdown {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: -12px;
+    background: rgba(var(--kiosk-surface-rgb), 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--kiosk-border-subtle);
+    border-radius: 4px;
+    padding: 0;
+    min-width: 240px;
+    width: 260px;
+    z-index: 200;
+    flex-direction: column;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-dropdown.open {
+    display: flex;
+    animation: editorialDropdownIn 0.15s ease-out;
+}
+
+/* Stats grid — two-column key/value layout */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-stats {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1px 12px;
+    padding: 10px 14px 8px;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-stat-label {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.56rem;
+    font-weight: 500;
+    color: var(--kiosk-text-faint);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    line-height: 1.8;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-stat-value {
+    font-family: var(--kiosk-font-mono, var(--kiosk-font-body));
+    font-size: 0.62rem;
+    font-weight: 400;
+    color: var(--kiosk-text-primary);
+    letter-spacing: 0.02em;
+    text-align: right;
+    line-height: 1.8;
+}
+
+/* Section divider */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-divider {
+    height: 1px;
+    background: var(--kiosk-border-subtle);
+    margin: 0;
+}
+
+/* Color mode selector row */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-section {
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-section-label {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.54rem;
+    font-weight: 500;
+    color: var(--kiosk-text-faint);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-seg {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-left: auto;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-seg-btn {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.56rem;
+    font-weight: 400;
+    color: var(--kiosk-text-muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    padding: 3px 7px;
+    cursor: pointer;
+    transition: color 0.1s, background 0.1s;
+    white-space: nowrap;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-seg-btn:hover {
+    color: var(--kiosk-text-primary);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-seg-btn.active {
+    color: var(--kiosk-accent);
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+    font-weight: 600;
+}
+
+/* Opacity slider row */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 14px 6px;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--kiosk-accent);
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-slider::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--kiosk-accent);
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Bottom actions row */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-actions {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 4px 14px 6px;
+    border-top: 1px solid var(--kiosk-border-subtle);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-action {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.56rem;
+    font-weight: 400;
+    color: var(--kiosk-text-faint);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    padding: 3px 0;
+    cursor: pointer;
+    transition: color 0.1s;
+    flex: 1;
+    text-align: center;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-action:hover {
+    color: var(--kiosk-text-secondary);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-action-sep {
+    width: 1px;
+    height: 10px;
+    background: var(--kiosk-border-subtle);
+    flex-shrink: 0;
+}
+
+/* Active state on the ribbon button */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-btn.active {
+    color: var(--kiosk-accent);
+    opacity: 1;
+}
+
 /* =================================================================
    Floating Pill — hidden by default, shown at Tier 3 (<700px)
    Replaces the old mobile bottom nav with a minimal capsule.

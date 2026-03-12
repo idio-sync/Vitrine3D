@@ -1671,6 +1671,9 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                             toggleBtn.classList.toggle('active', fpVisible);
                         });
                     }
+
+                    // Notify layout module so it can add flight log UI to its ribbon
+                    getLayoutModule()?.onFlightPathLoaded?.(flightPathManager);
                 }
             }
         }

@@ -57,6 +57,8 @@ export interface LayoutModule {
     onWalkthroughStopChange?(stopIndex: number, stop: import('../types.js').WalkthroughStop): void;
     /** Called when the walkthrough ends or is stopped. */
     onWalkthroughEnd?(): void;
+    /** Called after flight paths are loaded from an archive (flightPathManager is null at setup time). */
+    onFlightPathLoaded?(flightPathManager: any): void;
 }
 
 interface ThemeMeta {
