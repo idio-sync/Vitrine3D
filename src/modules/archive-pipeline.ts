@@ -741,10 +741,8 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
             deps.annotations.loadAnnotationsFromArchive(annotations);
         }
 
-        // Render flight paths loaded from archive
-        if (deps.renderFlightPaths) {
-            await deps.renderFlightPaths();
-        }
+        // NOTE: Flight path rendering is deferred to Phase 3 — blobs aren't
+        // extracted until ensureAssetLoaded('flightpath') runs there.
 
         // Load colmap SfM data
         const colmapEntries = Object.entries(manifest.data_entries || {})
@@ -863,6 +861,10 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
                     // Re-apply viewer settings to newly loaded meshes
                     if (type === 'mesh' && manifest.viewer_settings) {
                         applyViewerSettings(manifest.viewer_settings, deps);
+                    }
+                    // Render flight paths now that blobs are in the store
+                    if (type === 'flightpath' && loaded && deps.renderFlightPaths) {
+                        await deps.renderFlightPaths();
                     }
                 }));
                 // Release raw ZIP data after all assets are extracted,
