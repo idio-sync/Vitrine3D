@@ -640,8 +640,14 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         return null;
     }
 
+    // Strip any existing archive extension from the ID to prevent double extensions
+    // (e.g., "project.ddim" → "project" so the final name is "project.ddim" not "project.ddim.ddim")
+    const rawFilename = metadata.project.id || 'archive';
+    const archiveExts = /\.(ddim|a3d|a3z|zip)$/i;
+    const filename = rawFilename.replace(archiveExts, '');
+
     return {
-        filename: metadata.project.id || 'archive',
+        filename,
         format,
         includeHashes
     };
