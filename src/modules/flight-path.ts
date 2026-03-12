@@ -154,6 +154,16 @@ export class FlightPathManager {
     private _playbackMarker: THREE.Mesh | null = null;
     private _cameraMode: FlightCameraMode = 'orbit';
     private _transitioning = false;
+    // FPV state
+    private _fpvQuaternion = new THREE.Quaternion();       // target orientation (gimbal or heading)
+    private _smoothedQuaternion = new THREE.Quaternion();   // smoothed orientation (slerp'd each frame)
+    private _freeLookOffset = new THREE.Quaternion();       // user drag offset from base orientation
+    private _freeLookActive = false;
+    private _recentering = false;
+    private _recenterStartQuat = new THREE.Quaternion();
+    private _recenterProgress = 0;
+    private static readonly SLERP_ALPHA = 0.15;  // low-pass filter: 15% convergence per frame = heavy smoothing for noisy gimbal data
+    private static readonly RECENTER_DURATION = 0.5; // seconds
     private _onPlaybackUpdate: ((currentMs: number, totalMs: number) => void) | null = null;
     private _onPlaybackEnd: (() => void) | null = null;
 
@@ -870,7 +880,7 @@ export class FlightPathManager {
         }
 
         // Follow camera
-        if (this._cameraMode === 'chase' && this.camera instanceof THREE.PerspectiveCamera) {
+        if (this._cameraMode === 'chase' && this.camera instanceof THREE.PerspectiveCamera && !this._transitioning) {
             const pos = this._playbackMarker.position;
             // Position camera slightly behind and above
             const heading = this.getPlaybackHeading(points, t);
@@ -880,6 +890,27 @@ export class FlightPathManager {
             const camZ = pos.z - Math.cos(heading) * camDist;
             this.camera.position.set(camX, pos.y + camHeight, camZ);
             this.camera.lookAt(pos);
+        }
+
+        // FPV camera
+        if (this._cameraMode === 'fpv' && this.camera instanceof THREE.PerspectiveCamera && !this._transitioning) {
+            const pos = this._playbackMarker.position;
+            this.camera.position.copy(pos);
+
+            // Compute target orientation
+            this._fpvQuaternion.copy(this.computeFpvOrientation(points, t));
+
+            // Smooth the base orientation (low-pass filter: small alpha = heavy smoothing)
+            this._smoothedQuaternion.slerp(this._fpvQuaternion, FlightPathManager.SLERP_ALPHA);
+
+            // Apply free-look offset (or recenter it)
+            if (this._recentering) {
+                // Handled in updateRecenter() called from updatePlayback()
+            }
+
+            // Compose: smoothed base * free-look offset
+            const finalQuat = this._smoothedQuaternion.clone().multiply(this._freeLookOffset);
+            this.camera.quaternion.copy(finalQuat);
         }
     }
 
@@ -895,6 +926,56 @@ export class FlightPathManager {
             return Math.atan2(points[i + 1].x - points[i].x, points[i + 1].z - points[i].z);
         }
         return 0;
+    }
+
+    /** Compute the FPV camera orientation quaternion for the current playback position. */
+    private computeFpvOrientation(points: FlightPoint[], timeMs: number): THREE.Quaternion {
+        let i = 0;
+        while (i < points.length - 1 && points[i + 1].timestamp <= timeMs) i++;
+
+        const point = points[i];
+        const hasGimbal = point.gimbalPitch !== undefined && point.gimbalYaw !== undefined;
+
+        if (hasGimbal) {
+            // Gimbal-locked: use gimbal yaw + pitch
+            const euler = new THREE.Euler(
+                (point.gimbalPitch! * Math.PI) / 180, // pitch (X)
+                (point.gimbalYaw! * Math.PI) / 180,   // yaw (Y)
+                0,                                       // roll (Z) — assumed 0
+                'YXZ'
+            );
+            return new THREE.Quaternion().setFromEuler(euler);
+        }
+
+        // Heading-forward fallback
+        let heading: number;
+        if (points.length < 50) {
+            // Sparse path (typical KML waypoints): use Catmull-Rom interpolated direction
+            heading = this.getCatmullRomHeading(points, i);
+        } else {
+            heading = this.getPlaybackHeading(points, timeMs);
+        }
+        const pitchRad = (-15 * Math.PI) / 180; // -15° downward pitch
+        const euler = new THREE.Euler(pitchRad, heading, 0, 'YXZ');
+        return new THREE.Quaternion().setFromEuler(euler);
+    }
+
+    /** Compute heading using Catmull-Rom tangent for smooth direction on sparse paths. */
+    private getCatmullRomHeading(points: FlightPoint[], index: number): number {
+        const i0 = Math.max(0, index - 1);
+        const i1 = index;
+        const i2 = Math.min(points.length - 1, index + 1);
+        const i3 = Math.min(points.length - 1, index + 2);
+
+        // Catmull-Rom tangent at i1: 0.5 * (P2 - P0)
+        const tx = 0.5 * (points[i2].x - points[i0].x);
+        const tz = 0.5 * (points[i2].z - points[i0].z);
+
+        if (tx === 0 && tz === 0) {
+            // Degenerate — fall back to point-to-point
+            return Math.atan2(points[i2].x - points[i1].x, points[i2].z - points[i1].z);
+        }
+        return Math.atan2(tx, tz);
     }
 
     // ─── Tooltip ──────────────────────────────────────────────────────
