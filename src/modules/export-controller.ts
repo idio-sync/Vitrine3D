@@ -295,7 +295,7 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         let splatBlobToArchive = assets.splatBlob;
         let archiveFileName = fileName;
 
-        if (state.splatLodEnabled && lodCompatible) {
+        if (state.splatLodEnabled && lodCompatible && splatExt !== 'spz') {
             try {
                 log.info('Generating splat LOD for archive export...');
                 deps.ui.showLoading('Generating splat LOD...', true);
@@ -305,16 +305,23 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
                     inputs: [{ fileBytes, fileType: splatExt }],
                 });
 
+                if (!spzBytes || spzBytes.length === 0) {
+                    throw new Error('transcodeSpz returned empty output');
+                }
+
                 splatBlobToArchive = new Blob([spzBytes], { type: 'application/octet-stream' });
                 // Change extension to .spz for the archive
                 archiveFileName = fileName.replace(/\.[^.]+$/, '.spz');
                 log.info(`Splat LOD generated: ${fileBytes.length} -> ${spzBytes.length} bytes (${archiveFileName})`);
-            } catch (lodError: any) {
-                log.warn('Splat LOD generation failed, using original file:', lodError.message);
+            } catch (lodError: unknown) {
+                const message = lodError instanceof Error ? lodError.message : String(lodError);
+                log.warn('Splat LOD generation failed, using original file:', message);
                 notify.warning('Splat LOD generation failed — exporting original file.');
             } finally {
                 deps.ui.hideLoading();
             }
+        } else if (state.splatLodEnabled && splatExt === 'spz') {
+            log.info('Splat LOD skipped: input is already .spz');
         } else if (state.splatLodEnabled && !lodCompatible) {
             log.info(`Splat LOD skipped: .${splatExt} not supported (use .spz or .ply)`);
         }

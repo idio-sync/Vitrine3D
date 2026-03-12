@@ -22,3 +22,6 @@ src-tauri/tauri.conf.json.bak
 .env
 docker-compose.override.yml
 docs/plans/
+
+# Agent instructions (per-directory, not committed)
+AGENTS.md
