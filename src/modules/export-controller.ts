@@ -188,6 +188,11 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         metadata.viewerSettings.measurementUnit = ms.getUnit();
     }
 
+    // Inject current rendering preset into viewer settings
+    if (deps.state.renderingPreset) {
+        metadata.viewerSettings.renderingPreset = deps.state.renderingPreset;
+    }
+
     // Get export options
     const formatRadio = document.querySelector('input[name="export-format"]:checked') as HTMLInputElement | null;
     const format = formatRadio?.value || 'ddim';
@@ -903,6 +908,11 @@ export async function exportMetadataManifest(deps: ExportDeps): Promise<void> {
     if (ms && ms.isCalibrated && ms.isCalibrated()) {
         metadata.viewerSettings.measurementScale = ms.getScale();
         metadata.viewerSettings.measurementUnit = ms.getUnit();
+    }
+
+    // Inject current rendering preset into viewer settings
+    if (deps.state.renderingPreset) {
+        metadata.viewerSettings.renderingPreset = deps.state.renderingPreset;
     }
 
     tempCreator.applyMetadata(metadata);

@@ -134,6 +134,7 @@ export interface ViewerSettings {
     toneMappingExposure?: number | null;
     environmentPreset?: string | null;
     environmentAsBackground?: boolean | null;
+    renderingPreset?: string | null;
     measurementScale?: number | null;
     measurementUnit?: string | null;
     postProcessing?: PostProcessingEffectConfig | null;
@@ -329,6 +330,7 @@ export interface Manifest {
         tone_mapping_exposure: number | null;
         environment_preset: string | null;
         environment_as_background: boolean | null;
+        rendering_preset: string | null;
         measurement_scale: number | null;
         measurement_unit: string | null;
         post_processing: PostProcessingEffectConfig | null;
@@ -680,6 +682,7 @@ export class ArchiveCreator {
                 tone_mapping_exposure: null,
                 environment_preset: null,
                 environment_as_background: null,
+                rendering_preset: null,
                 measurement_scale: null,
                 measurement_unit: null,
                 post_processing: null,
@@ -1166,6 +1169,7 @@ export class ArchiveCreator {
         if (settings.toneMappingExposure !== undefined) this.manifest.viewer_settings.tone_mapping_exposure = settings.toneMappingExposure;
         if (settings.environmentPreset !== undefined) this.manifest.viewer_settings.environment_preset = settings.environmentPreset;
         if (settings.environmentAsBackground !== undefined) this.manifest.viewer_settings.environment_as_background = settings.environmentAsBackground;
+        if (settings.renderingPreset !== undefined) this.manifest.viewer_settings.rendering_preset = settings.renderingPreset;
         if (settings.measurementScale !== undefined) this.manifest.viewer_settings.measurement_scale = settings.measurementScale;
         if (settings.measurementUnit !== undefined) this.manifest.viewer_settings.measurement_unit = settings.measurementUnit;
         if (settings.postProcessing !== undefined) this.manifest.viewer_settings.post_processing = settings.postProcessing;
@@ -1473,6 +1477,26 @@ export class ArchiveCreator {
                 ...(options.parameters || {})
             },
             _flight_meta: options.flightMeta || {},
+        };
+
+        return entryKey;
+    }
+
+    addEnvironment(blob: Blob, fileName: string): string {
+        const entryKey = 'environment_0';
+        const ext = fileName.split('.').pop()?.toLowerCase() || 'hdr';
+        const archivePath = `assets/environment_0.${ext}`;
+
+        this.files.set(archivePath, { blob, originalName: fileName });
+
+        this.manifest.data_entries[entryKey] = {
+            file_name: archivePath,
+            created_by: "vitrine3d",
+            _created_by_version: "",
+            _source_notes: "",
+            role: 'environment',
+            original_name: fileName,
+            _parameters: {},
         };
 
         return entryKey;

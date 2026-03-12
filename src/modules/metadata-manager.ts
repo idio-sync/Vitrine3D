@@ -230,6 +230,7 @@ export interface ViewerSettings {
     flightLineOpacity?: number;
     flightShowMarkers?: boolean;
     flightMarkerDensity?: string;
+    renderingPreset?: string | null;
 }
 
 export interface VersionHistoryEntry {
@@ -2152,6 +2153,12 @@ export function prefillMetadataFromArchive(manifest: any): void {
             if (envPresetEl) envPresetEl.value = manifest.viewer_settings.environment_preset || '';
             const envBgEl = document.getElementById('meta-viewer-env-as-background') as HTMLInputElement | null;
             if (envBgEl && manifest.viewer_settings.environment_as_background != null) envBgEl.checked = manifest.viewer_settings.environment_as_background;
+        }
+
+        // Rendering preset
+        const presetSelect = document.getElementById('rendering-preset-select') as HTMLSelectElement | null;
+        if (presetSelect && manifest.viewer_settings.rendering_preset) {
+            presetSelect.value = manifest.viewer_settings.rendering_preset;
         }
 
         // Drone flight settings
