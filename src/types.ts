@@ -124,6 +124,7 @@ export interface AppState {
     splatFormat: string | null;
     splatLodEnabled: boolean;             // "Generate Splat LOD at archive export" checkbox
     viewDefaults: ViewDefaults;           // Archive-embeddable overlay display defaults
+    meshFaceCount: number;                 // Total face count of loaded mesh (for web-opt validation)
     meshVertexCount?: number;              // Dynamically set by file-handlers.js after mesh load
     meshTextureInfo?: import('./modules/utilities.js').TextureInfo;  // Dynamically set after mesh load
     // Environment / rendering preset state

@@ -163,6 +163,9 @@ async function loadModelFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
             if (texRow) texRow.style.display = '';
         }
 
+        // Store face count on state for web-opt validation
+        state.meshFaceCount = faceCount;
+
         // Show web optimization section (same as onModelLoaded in main.ts)
         const webOptSection = document.getElementById('web-opt-section');
         if (webOptSection) webOptSection.classList.remove('hidden');

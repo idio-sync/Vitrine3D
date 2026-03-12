@@ -1286,6 +1286,33 @@ function setupDecimationPanel(): void {
     });
 
     // ── HD Web Optimization ──
+    // Web-opt mode toggle — switch between face count and ratio inputs
+    const webOptModeSelect = document.getElementById('web-opt-mode') as HTMLSelectElement | null;
+    const webOptFacesRow = document.getElementById('web-opt-faces-row');
+    const webOptRatioRow = document.getElementById('web-opt-ratio-row');
+    const webOptRatioInput = document.getElementById('web-opt-target-ratio') as HTMLInputElement | null;
+    const webOptRatioEstimate = document.getElementById('web-opt-ratio-estimate');
+    if (webOptModeSelect) {
+        webOptModeSelect.addEventListener('change', () => {
+            const isRatio = webOptModeSelect.value === 'ratio';
+            if (webOptFacesRow) webOptFacesRow.style.display = isRatio ? 'none' : '';
+            if (webOptRatioRow) webOptRatioRow.style.display = isRatio ? '' : 'none';
+            // Update estimate when switching to ratio
+            if (isRatio && webOptRatioInput && webOptRatioEstimate && state.meshFaceCount > 0) {
+                const est = Math.round(state.meshFaceCount * parseFloat(webOptRatioInput.value));
+                webOptRatioEstimate.textContent = `~${est.toLocaleString()} faces`;
+            }
+        });
+    }
+    if (webOptRatioInput && webOptRatioEstimate) {
+        webOptRatioInput.addEventListener('input', () => {
+            if (state.meshFaceCount > 0) {
+                const est = Math.round(state.meshFaceCount * parseFloat(webOptRatioInput.value));
+                webOptRatioEstimate.textContent = `~${est.toLocaleString()} faces`;
+            }
+        });
+    }
+
     addListener('btn-web-opt-generate', 'click', async () => {
         const assets = getStore();
         if (!modelGroup || !assets.meshBlob) {
@@ -1293,14 +1320,30 @@ function setupDecimationPanel(): void {
             return;
         }
 
+        const modeEl = document.getElementById('web-opt-mode') as HTMLSelectElement | null;
         const targetFacesEl = document.getElementById('web-opt-target-faces') as HTMLInputElement;
+        const targetRatioEl = document.getElementById('web-opt-target-ratio') as HTMLInputElement;
         const dracoEl = document.getElementById('web-opt-draco') as HTMLInputElement;
-        const targetFaces = parseInt(targetFacesEl?.value || '1000000', 10);
         const dracoEnabled = dracoEl?.checked ?? true;
+        const mode = modeEl?.value || 'faces';
 
-        if (targetFaces >= state.meshFaceCount) {
-            notify.warning('Target face count must be less than current faces');
-            return;
+        let targetFaces: number;
+        let targetRatio: number;
+
+        if (mode === 'ratio') {
+            targetRatio = parseFloat(targetRatioEl?.value || '0.5');
+            if (targetRatio <= 0 || targetRatio >= 1) {
+                notify.warning('Target ratio must be between 0 and 1');
+                return;
+            }
+            targetFaces = Math.round(state.meshFaceCount * targetRatio);
+        } else {
+            targetFaces = parseInt(targetFacesEl?.value || '1000000', 10);
+            if (targetFaces >= state.meshFaceCount) {
+                notify.warning('Target face count must be less than current faces');
+                return;
+            }
+            targetRatio = targetFaces / state.meshFaceCount;
         }
 
         // Save originals for revert (only if not already optimized)
@@ -1323,8 +1366,7 @@ function setupDecimationPanel(): void {
 
             const { decimateScene, exportAsGLB, dracoCompressGLB } = await import('./modules/mesh-decimator.js');
 
-            // Decimation options — use target face count, no texture downscaling
-            const targetRatio = targetFaces / state.meshFaceCount;
+            // Decimation options
             const result = await decimateScene(modelGroup, {
                 targetRatio: Math.min(targetRatio, 1),
                 targetFaceCount: targetFaces,
