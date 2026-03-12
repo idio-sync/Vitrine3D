@@ -12,7 +12,7 @@ import { Logger } from './utilities.js';
 import { FLIGHT_LOG } from './constants.js';
 import { parseDjiCsv, parseKml, parseSrt, detectFormat } from './flight-parsers.js';
 import { parseDjiTxt } from './dji-txt-parser.js';
-import type { FlightPoint, FlightPathData } from '@/types.js';
+import type { FlightPoint, FlightPathData, FlightCameraMode } from '@/types.js';
 
 const log = Logger.getLogger('flight-path');
 
@@ -152,7 +152,8 @@ export class FlightPathManager {
     private _playbackTime = 0; // ms into the flight
     private _playbackPathId: string | null = null;
     private _playbackMarker: THREE.Mesh | null = null;
-    private _followCamera = false;
+    private _cameraMode: FlightCameraMode = 'orbit';
+    private _transitioning = false;
     private _onPlaybackUpdate: ((currentMs: number, totalMs: number) => void) | null = null;
     private _onPlaybackEnd: (() => void) | null = null;
 
@@ -766,13 +767,28 @@ export class FlightPathManager {
         this.updatePlaybackPosition();
     }
 
-    /** Toggle follow-camera mode. */
+    /** Toggle follow-camera mode. @deprecated Use setCameraMode() instead. */
     setFollowCamera(follow: boolean): void {
-        this._followCamera = follow;
+        this._cameraMode = follow ? 'chase' : 'orbit';
     }
 
     get followCamera(): boolean {
-        return this._followCamera;
+        return this._cameraMode === 'chase';
+    }
+
+    /** Set camera mode: orbit, chase, or fpv. */
+    setCameraMode(mode: FlightCameraMode): void {
+        if (this._cameraMode === mode) return;
+        this._cameraMode = mode;
+        log.info(`Camera mode changed to: ${mode}`);
+    }
+
+    get cameraMode(): FlightCameraMode {
+        return this._cameraMode;
+    }
+
+    get isTransitioning(): boolean {
+        return this._transitioning;
     }
 
     get isPlaying(): boolean {
@@ -854,7 +870,7 @@ export class FlightPathManager {
         }
 
         // Follow camera
-        if (this._followCamera && this.camera instanceof THREE.PerspectiveCamera) {
+        if (this._cameraMode === 'chase' && this.camera instanceof THREE.PerspectiveCamera) {
             const pos = this._playbackMarker.position;
             // Position camera slightly behind and above
             const heading = this.getPlaybackHeading(points, t);

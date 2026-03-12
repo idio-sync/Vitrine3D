@@ -19,6 +19,7 @@ export type RotationPivot = 'object' | 'origin';
 export type QualityTier = 'sd' | 'hd';
 export type AssetStateValue = 'unloaded' | 'loading' | 'loaded' | 'error';
 export type MarkerDensity = 'off' | 'sparse' | 'all';
+export type FlightCameraMode = 'orbit' | 'chase' | 'fpv';
 export type SfmDisplayMode = 'frustums' | 'markers';
 
 export interface ViewDefaults {
