@@ -717,9 +717,11 @@ const EDITORIAL_ROOT_CLASSES = [
 ];
 
 export function cleanup() {
+    // Remove from both viewerContainer and body (mobile portals fixed elements to body)
     const viewerContainer = document.getElementById('viewer-container') || document.body;
     EDITORIAL_ROOT_CLASSES.forEach(cls => {
         viewerContainer.querySelectorAll('.' + cls).forEach(el => el.remove());
+        document.body.querySelectorAll('.' + cls).forEach(el => el.remove());
     });
     // Reset walkthrough module state
     wtStopDots = null;
@@ -792,7 +794,13 @@ export function setup(manifest, deps) {
         <div class="editorial-title-rule"></div>
         ${metaParts.length > 0 ? `<span class="editorial-title-meta">${escapeHtml(metaParts.join(' \u00B7 '))}</span>` : ''}
     `;
-    viewerContainer.appendChild(titleBlock);
+    // On mobile, append fixed-position elements to document.body so position:fixed
+    // works correctly. Chrome Android doesn't break fixed elements out of overflow:hidden
+    // flex containers reliably.
+    const isMobileTier = window.matchMedia('(max-width: 699px)').matches;
+    const fixedRoot = isMobileTier ? document.body : viewerContainer;
+
+    fixedRoot.appendChild(titleBlock);
 
     // Auto-fade behavior for title block
     setupAutoFade(titleBlock, null);
@@ -1742,7 +1750,7 @@ export function setup(manifest, deps) {
     moreWrapper.appendChild(morePopover);
     mobilePill.appendChild(moreWrapper);
 
-    viewerContainer.appendChild(mobilePill);
+    fixedRoot.appendChild(mobilePill);
 
     // Keep legacy reference — walkthrough uses querySelector('.editorial-mobile-pill') not this var,
     // but other downstream code between here and section 5 may reference mobileNav.
@@ -1750,7 +1758,13 @@ export function setup(manifest, deps) {
 
     // --- 5. Info Panel (side panel) ---
     const overlay = createInfoOverlay(manifest, deps);
-    viewerContainer.appendChild(overlay);
+    // On desktop, overlay is a flex child of viewerContainer (slides in from right).
+    // On mobile, portal to body so position:fixed works correctly.
+    if (isMobileTier) {
+        fixedRoot.appendChild(overlay);
+    } else {
+        viewerContainer.appendChild(overlay);
+    }
 
     // --- Mobile info overlay: curated content for mobile tier ---
     // Build curated mobile content inside the existing overlay element.
