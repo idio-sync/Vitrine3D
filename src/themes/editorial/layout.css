@@ -3303,6 +3303,13 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
         left: 0;
         right: 0;
         bottom: 0;
+        width: 100% !important;
+        height: 100% !important;
+        margin-right: 0 !important;
+        border-left: none !important;
+        box-shadow: none !important;
+        transition: none !important;
+        pointer-events: auto !important;
         z-index: 210;
         flex-direction: column;
         padding: calc(32px + env(safe-area-inset-top)) 20px calc(56px + env(safe-area-inset-bottom)) 20px;
