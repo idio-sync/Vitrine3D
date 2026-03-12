@@ -923,6 +923,37 @@ export class FlightPathManager {
         this._onPlaybackEnd = cb;
     }
 
+    /** Get interpolated telemetry data at current playback position. */
+    getCurrentTelemetry(): { alt: number; speed: number; heading: number } | null {
+        if (!this._playbackPathId) return null;
+        const pathData = this.paths.find(p => p.id === this._playbackPathId);
+        if (!pathData) return null;
+
+        const points = this.getTrimmedPoints(pathData);
+        if (points.length === 0) return null;
+        const t = this._playbackTime;
+
+        // Find surrounding points
+        let i = 0;
+        while (i < points.length - 1 && points[i + 1].timestamp <= t) i++;
+
+        if (i >= points.length - 1) {
+            const p = points[points.length - 1];
+            return { alt: p.alt, speed: p.speed ?? 0, heading: p.heading ?? 0 };
+        }
+
+        const p0 = points[i];
+        const p1 = points[i + 1];
+        const dt = p1.timestamp - p0.timestamp;
+        const f = dt > 0 ? (t - p0.timestamp) / dt : 0;
+
+        return {
+            alt: p0.alt + (p1.alt - p0.alt) * f,
+            speed: (p0.speed ?? 0) + ((p1.speed ?? 0) - (p0.speed ?? 0)) * f,
+            heading: p0.heading ?? 0, // Not interpolated: linear lerp is wrong for angles (359→1 goes through 180)
+        };
+    }
+
     /** Called each frame from the animate loop. deltaTime in seconds. */
     updatePlayback(deltaTime: number): void {
         // Always update transition even when not playing (fly-out on stop)
