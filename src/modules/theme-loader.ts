@@ -20,6 +20,8 @@ const log = Logger.getLogger('theme-loader');
 export interface LayoutModule {
     /** Main UI setup — called after archive loads (or for direct-file loads). */
     setup(manifest: any, deps: any): void;
+    /** Remove all DOM elements created by setup(). Called before re-setup or on scene cleanup. */
+    cleanup?(): void;
     /** Customize the loading overlay before archive loading begins. */
     initLoadingScreen?(container: HTMLElement, deps: any): void;
     /** Customize the click-to-load gate. */

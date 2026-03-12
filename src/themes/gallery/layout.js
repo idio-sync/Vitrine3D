@@ -569,6 +569,35 @@ var _letterboxTop = null;
 var _letterboxBottom = null;
 var _chapterTimer = null;
 
+// ---- Cleanup — remove all DOM elements created by setup() ----
+
+var GALLERY_ROOT_CLASSES = [
+    'gallery-title-card',
+    'gallery-tool-pill',
+    'gallery-letterbox-top',
+    'gallery-letterbox-bottom',
+    'gallery-chapter-card',
+    'gallery-info-overlay',
+    'gallery-timeline'
+];
+
+function cleanup() {
+    var viewerContainer = document.getElementById('viewer-container') || document.body;
+    GALLERY_ROOT_CLASSES.forEach(function(cls) {
+        viewerContainer.querySelectorAll('.' + cls).forEach(function(el) { el.remove(); });
+    });
+    _fadeElements = [];
+    if (_fadeTimer) { clearTimeout(_fadeTimer); _fadeTimer = null; }
+    _walkthroughActive = false;
+    _timelineDots = null;
+    _timelineDashes = null;
+    _timelineEl = null;
+    _chapterCard = null;
+    _letterboxTop = null;
+    _letterboxBottom = null;
+    if (_chapterTimer) { clearTimeout(_chapterTimer); _chapterTimer = null; }
+}
+
 // ---- Main setup ----
 
 function setup(manifest, deps) {
@@ -588,6 +617,9 @@ function setup(manifest, deps) {
 
     var log = Logger.getLogger('gallery-layout');
     log.info('Setting up gallery layout');
+
+    // Remove any previously-created gallery layout elements (re-entry safe)
+    cleanup();
 
     var viewerContainer = document.getElementById('viewer-container') || document.body;
 
@@ -1013,6 +1045,7 @@ function onWalkthroughEnd() {
 if (!window.__KIOSK_LAYOUTS__) window.__KIOSK_LAYOUTS__ = {};
 window.__KIOSK_LAYOUTS__['gallery'] = {
     setup: setup,
+    cleanup: cleanup,
     initLoadingScreen: initLoadingScreen,
     initClickGate: initClickGate,
     initFilePicker: initFilePicker,

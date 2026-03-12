@@ -621,6 +621,37 @@ var _wtPrev = null;
 var _wtNext = null;
 var _walkthroughActive = false;
 
+// ---- Cleanup — remove all DOM elements created by setup() ----
+
+var EXHIBIT_ROOT_CLASSES = [
+    'exhibit-plaque',
+    'exhibit-toolbar',
+    'exhibit-info-overlay',
+    'exhibit-anno-strip',
+    'exhibit-wt-card',
+    'exhibit-wt-strip',
+    'exhibit-wt-prev',
+    'exhibit-wt-next'
+];
+
+function cleanup() {
+    var viewerContainer = document.getElementById('viewer-container') || document.body;
+    EXHIBIT_ROOT_CLASSES.forEach(function(cls) {
+        viewerContainer.querySelectorAll('.' + cls).forEach(function(el) { el.remove(); });
+    });
+    if (_attractTimer) { clearTimeout(_attractTimer); _attractTimer = null; }
+    if (_attractCycleTimer) { clearTimeout(_attractCycleTimer); _attractCycleTimer = null; }
+    _attractActive = false;
+    _walkthroughActive = false;
+    _wtStripEl = null;
+    _wtSteps = null;
+    _wtConnectors = null;
+    _wtCard = null;
+    if (_wtCardTimer) { clearTimeout(_wtCardTimer); _wtCardTimer = null; }
+    _wtPrev = null;
+    _wtNext = null;
+}
+
 // ---- Main setup ----
 
 function setup(manifest, deps) {
@@ -640,6 +671,9 @@ function setup(manifest, deps) {
 
     var log = Logger.getLogger('exhibit-layout');
     log.info('Setting up exhibit layout');
+
+    // Remove any previously-created exhibit layout elements (re-entry safe)
+    cleanup();
 
     var viewerContainer = document.getElementById('viewer-container') || document.body;
 
@@ -1149,6 +1183,7 @@ function onWalkthroughEnd() {
 if (!window.__KIOSK_LAYOUTS__) window.__KIOSK_LAYOUTS__ = {};
 window.__KIOSK_LAYOUTS__['exhibit'] = {
     setup: setup,
+    cleanup: cleanup,
     initLoadingScreen: initLoadingScreen,
     initClickGate: initClickGate,
     initFilePicker: initFilePicker,

@@ -702,6 +702,29 @@ function createInfoOverlay(manifest, deps) {
     return overlay;
 }
 
+// ---- Cleanup — remove all DOM elements created by setup() ----
+
+/** Top-level CSS classes appended to viewerContainer by setup(). */
+const EDITORIAL_ROOT_CLASSES = [
+    'editorial-spine',
+    'editorial-title-block',
+    'editorial-bottom-ribbon',
+    'editorial-mobile-pill',
+    'editorial-info-overlay'
+];
+
+export function cleanup() {
+    const viewerContainer = document.getElementById('viewer-container') || document.body;
+    EDITORIAL_ROOT_CLASSES.forEach(cls => {
+        viewerContainer.querySelectorAll('.' + cls).forEach(el => el.remove());
+    });
+    // Reset walkthrough module state
+    wtStopDots = null;
+    wtTitleEl = null;
+    if (wtMobileControls) { wtMobileControls.remove(); wtMobileControls = null; }
+    wtTotalStops = 0;
+}
+
 // ---- Main setup entry point ----
 
 export function setup(manifest, deps) {
@@ -719,6 +742,9 @@ export function setup(manifest, deps) {
 
     const log = Logger.getLogger('editorial-layout');
     log.info('Setting up editorial layout');
+
+    // Remove any previously-created editorial layout elements (re-entry safe)
+    cleanup();
 
     // Hide orbit-reset when the archive locks the orbit pivot (pan disabled)
     const vs = manifest && manifest.viewer_settings;
@@ -1997,7 +2023,7 @@ function onWalkthroughEnd() {
 // ---- Self-register for offline kiosk discovery ----
 if (!window.__KIOSK_LAYOUTS__) window.__KIOSK_LAYOUTS__ = {};
 window.__KIOSK_LAYOUTS__['editorial'] = {
-    setup, initLoadingScreen, initClickGate, initFilePicker,
+    setup, cleanup, initLoadingScreen, initClickGate, initFilePicker,
     onAnnotationSelect, onAnnotationDeselect, onViewModeChange, onKeyboardShortcut,
     onWalkthroughStart, onWalkthroughStopChange, onWalkthroughEnd,
     hasOwnInfoPanel: true,

@@ -2611,6 +2611,9 @@ function cleanupCurrentScene(): void {
         state.archiveLoader.dispose();
         state.archiveLoader = null;
     }
+    // Clean up layout module DOM elements (titles, ribbons, overlays, etc.)
+    getLayoutModule()?.cleanup?.();
+
     // Reset relevant state
     state.splatLoaded = false;
     state.modelLoaded = false;
