@@ -170,7 +170,7 @@ import {
 } from './modules/event-wiring.js';
 import { UndoManager } from './modules/undo-manager.js';
 import type { MatrixSnapshot } from './modules/undo-manager.js';
-import type { AppState, SceneRefs, ExportDeps, ArchivePipelineDeps, EventWiringDeps, DisplayMode, SelectedObject, TransformMode, DecimationOptions, EditorAlignmentDeps, FileHandlerDeps, AlignmentIODeps } from './types.js';
+import type { AppState, SceneRefs, ExportDeps, ArchivePipelineDeps, EventWiringDeps, DisplayMode, SelectedObject, TransformMode, DecimationOptions, EditorAlignmentDeps, FileHandlerDeps, AlignmentIODeps, FlightCameraMode } from './types.js';
 import type { AnnotationControllerDeps } from './modules/annotation-controller.js';
 import type { MetadataDeps } from './modules/metadata-manager.js';
 import type { LoadCADDeps } from './modules/cad-loader.js';
@@ -1864,6 +1864,17 @@ async function init() {
             if (scrubber) scrubber.value = '0';
             const timeCur = document.getElementById('fp-time-current');
             if (timeCur) timeCur.textContent = '00:00';
+            // Reset camera mode UI to orbit
+            ['fp-cam-orbit', 'fp-cam-chase', 'fp-cam-fpv'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('active', id === 'fp-cam-orbit');
+            });
+            const recenterBtn = document.getElementById('fp-recenter-btn');
+            if (recenterBtn) recenterBtn.style.display = 'none';
+            const pipRow = document.getElementById('fp-pip-row');
+            if (pipRow) pipRow.style.display = '';
+            const telemDiv = document.getElementById('fp-telemetry');
+            if (telemDiv) telemDiv.style.display = 'none';
         });
 
         addListener('fp-speed', 'change', (e: Event) => {
@@ -1877,9 +1888,29 @@ async function init() {
             flightPathManager.seekTo(val / 1000);
         });
 
-        addListener('fp-follow-camera', 'change', (e: Event) => {
-            if (!flightPathManager) return;
-            flightPathManager.setFollowCamera((e.target as HTMLInputElement).checked);
+        // Camera mode buttons
+        const camBtns = ['fp-cam-orbit', 'fp-cam-chase', 'fp-cam-fpv'] as const;
+        const camModes: FlightCameraMode[] = ['orbit', 'chase', 'fpv'];
+        camBtns.forEach((btnId, idx) => {
+            addListener(btnId, 'click', () => {
+                if (!flightPathManager) return;
+                flightPathManager.setCameraMode(camModes[idx]);
+                // Update active state
+                camBtns.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.toggle('active', id === btnId);
+                });
+                // Show/hide recenter (FPV only) and PiP (orbit only)
+                const recenterBtn = document.getElementById('fp-recenter-btn');
+                if (recenterBtn) recenterBtn.style.display = camModes[idx] === 'fpv' ? '' : 'none';
+                const pipRow = document.getElementById('fp-pip-row');
+                if (pipRow) pipRow.style.display = camModes[idx] === 'orbit' ? '' : 'none';
+            });
+        });
+
+        // Re-center button
+        addListener('fp-recenter-btn', 'click', () => {
+            flightPathManager?.recenterFreeLook();
         });
 
         // Playback callbacks
@@ -1891,11 +1922,25 @@ async function init() {
                 const s = Math.floor(currentMs / 1000);
                 timeCur.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
             }
+
+            // Telemetry readout
+            const telem = flightPathManager!.getCurrentTelemetry();
+            const telemDiv = document.getElementById('fp-telemetry');
+            if (telemDiv) telemDiv.style.display = telem ? '' : 'none';
+            if (telem) {
+                const altEl = document.getElementById('fp-telem-alt');
+                const spdEl = document.getElementById('fp-telem-speed');
+                const hdgEl = document.getElementById('fp-telem-heading');
+                if (altEl) altEl.textContent = `${telem.alt.toFixed(1)}m`;
+                if (spdEl) spdEl.textContent = `${telem.speed.toFixed(1)}m/s`;
+                if (hdgEl) hdgEl.textContent = `${telem.heading.toFixed(0)}°`;
+            }
         });
 
         flightPathManager.onPlaybackEnd(() => {
             const btn = document.getElementById('fp-play-btn');
             if (btn) btn.textContent = '\u25B6';
+            // Camera stays frozen at last position per spec — user must hit Stop to restore
         });
     }
 
