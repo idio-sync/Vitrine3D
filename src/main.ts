@@ -2180,6 +2180,10 @@ function enableRemoveBtn(id: string, enabled: boolean) {
 }
 
 function removeAssetGroup(group: THREE.Group, stateKey: keyof AppState, filenameId: string, defaultHint: string, blobKey?: keyof ReturnType<typeof getStore>) {
+    // Detach transform controls if attached to this group
+    if (transformControls?.object === group) {
+        setSelectedObject('none' as SelectedObject);
+    }
     while (group.children.length > 0) {
         const child = group.children[0];
         disposeObject(child);
@@ -2197,6 +2201,10 @@ function removeAssetGroup(group: THREE.Group, stateKey: keyof AppState, filename
 
 function removeSplat() {
     if (!state.splatLoaded) return;
+    // Detach transform controls if attached to the splat
+    if (transformControls?.object === splatMesh) {
+        setSelectedObject('none' as SelectedObject);
+    }
     if (splatMesh) {
         scene.remove(splatMesh);
         if (splatMesh.dispose) splatMesh.dispose();
