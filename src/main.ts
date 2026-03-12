@@ -1346,10 +1346,11 @@ function setupDecimationPanel(): void {
             targetRatio = targetFaces / state.meshFaceCount;
         }
 
-        // Save originals for revert (only if not already optimized)
+        // Save originals for revert (only if not already optimized).
+        // Clone must happen before decimation which disposes geometry/material refs.
+        // We re-load from the original blob on revert to guarantee fresh GPU data.
         if (!state.meshOptimized) {
             state.originalMeshBlob = assets.meshBlob;
-            state.originalMeshGroup = modelGroup.clone(true);
         }
 
         // Show progress
@@ -1449,52 +1450,69 @@ function setupDecimationPanel(): void {
 
     addListener('btn-web-opt-revert', 'click', async () => {
         const assets = getStore();
-        if (!state.originalMeshBlob || !state.originalMeshGroup) {
+        if (!state.originalMeshBlob) {
             notify.warning('No original mesh to revert to');
             return;
         }
 
-        // Restore original mesh in scene
-        while (modelGroup.children.length > 0) {
-            const child = modelGroup.children[0];
-            modelGroup.remove(child);
-            if ((child as any).geometry) (child as any).geometry.dispose();
-            if ((child as any).material) {
-                const mat = (child as any).material;
-                if (Array.isArray(mat)) mat.forEach((m: any) => m.dispose());
-                else mat.dispose();
+        try {
+            showLoading('Reverting to original mesh...');
+
+            // Re-load the original mesh from the saved blob (guarantees fresh GPU data)
+            const { loadGLTF } = await import('./modules/loaders/mesh-loader.js');
+            const blobUrl = URL.createObjectURL(state.originalMeshBlob);
+
+            // Clear current decimated mesh
+            while (modelGroup.children.length > 0) {
+                const child = modelGroup.children[0];
+                disposeObject(child);
+                modelGroup.remove(child);
             }
+
+            // Determine format from blob type or state
+            const ext = (state.meshFormat || 'glb').toLowerCase();
+            let loadedObject: THREE.Object3D;
+            if (ext === 'obj') {
+                const { loadOBJFromUrl } = await import('./modules/loaders/mesh-loader.js');
+                loadedObject = await loadOBJFromUrl(blobUrl);
+            } else {
+                loadedObject = await loadGLTF(blobUrl);
+            }
+            URL.revokeObjectURL(blobUrl);
+
+            modelGroup.add(loadedObject);
+
+            // Restore blob
+            assets.meshBlob = state.originalMeshBlob;
+
+            // Restore face count
+            const originalFaces = state.meshOptimizationSettings?.originalFaces ?? 0;
+            state.meshFaceCount = originalFaces;
+
+            // Clear optimization state
+            state.meshOptimized = false;
+            state.meshOptimizationSettings = null;
+            state.originalMeshBlob = null;
+
+            // Update UI
+            const statusEl = document.getElementById('web-opt-status');
+            if (statusEl) statusEl.classList.add('hidden');
+            const revertBtn = document.getElementById('btn-web-opt-revert');
+            if (revertBtn) revertBtn.classList.add('hidden');
+            const webOptFaces = document.getElementById('web-opt-current-faces');
+            if (webOptFaces) webOptFaces.textContent = `Current faces: ${originalFaces.toLocaleString()}`;
+
+            // Update SD proxy face count display
+            const hdFacesEl = document.getElementById('decimation-hd-faces');
+            if (hdFacesEl) hdFacesEl.textContent = originalFaces.toLocaleString();
+
+            notify.success('Reverted to original mesh');
+        } catch (err) {
+            log.error('Revert failed:', err);
+            notify.error('Revert failed: ' + (err as Error).message);
+        } finally {
+            hideLoading();
         }
-        for (const child of state.originalMeshGroup.children) {
-            modelGroup.add(child.clone(true));
-        }
-
-        // Restore blob
-        assets.meshBlob = state.originalMeshBlob;
-
-        // Restore face count
-        const originalFaces = state.meshOptimizationSettings?.originalFaces ?? 0;
-        state.meshFaceCount = originalFaces;
-
-        // Clear optimization state
-        state.meshOptimized = false;
-        state.meshOptimizationSettings = null;
-        state.originalMeshBlob = null;
-        state.originalMeshGroup = null;
-
-        // Update UI
-        const statusEl = document.getElementById('web-opt-status');
-        if (statusEl) statusEl.classList.add('hidden');
-        const revertBtn = document.getElementById('btn-web-opt-revert');
-        if (revertBtn) revertBtn.classList.add('hidden');
-        const webOptFaces = document.getElementById('web-opt-current-faces');
-        if (webOptFaces) webOptFaces.textContent = `Current faces: ${originalFaces.toLocaleString()}`;
-
-        // Update SD proxy face count display
-        const hdFacesEl = document.getElementById('decimation-hd-faces');
-        if (hdFacesEl) hdFacesEl.textContent = originalFaces.toLocaleString();
-
-        notify.success('Reverted to original mesh');
     });
 }
 
