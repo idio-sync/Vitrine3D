@@ -1415,7 +1415,7 @@ function backupAndReplace(existingRow, tmpPath, filename, req) {
             title: metaRaw.title || null,
             description: metaRaw.description || null,
             thumbnail: thumbExists ? thumbPath : null,
-            asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+            asset_types: (metaRaw.asset_types || metaRaw.assets) ? JSON.stringify(metaRaw.asset_types || metaRaw.assets) : null,
             metadata_raw: JSON.stringify(metaRaw),
             size: newSize,
         });
@@ -1500,7 +1500,7 @@ async function handleUploadArchive(req, res) {
             title: metaRaw.title || null,
             description: metaRaw.description || null,
             thumbnail: thumbExists ? thumbPath : null,
-            asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+            asset_types: (metaRaw.asset_types || metaRaw.assets) ? JSON.stringify(metaRaw.asset_types || metaRaw.assets) : null,
             metadata_raw: JSON.stringify(metaRaw),
             size: fs.statSync(finalPath).size,
         });
@@ -1603,7 +1603,7 @@ function handleRegenerateArchive(req, res, hash) {
         title: metaRaw.title || null,
         description: metaRaw.description || null,
         thumbnail: thumbExists ? thumbPath : null,
-        asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+        asset_types: (metaRaw.asset_types || metaRaw.assets) ? JSON.stringify(metaRaw.asset_types || metaRaw.assets) : null,
         metadata_raw: JSON.stringify(metaRaw),
         hash,
     });
@@ -1715,7 +1715,7 @@ function handleRenameArchive(req, res, hash) {
                     title: metaRaw.title || null,
                     description: metaRaw.description || null,
                     thumbnail: thumbExists ? thumbPath : null,
-                    asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+                    asset_types: (metaRaw.asset_types || metaRaw.assets) ? JSON.stringify(metaRaw.asset_types || metaRaw.assets) : null,
                     metadata_raw: JSON.stringify(metaRaw),
                     oldHash: hash,
                 });
@@ -2690,7 +2690,7 @@ async function handleCompleteChunk(req, res, uploadId) {
             title: metaRaw.title || null,
             description: metaRaw.description || null,
             thumbnail: thumbExists ? thumbPath : null,
-            asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+            asset_types: (metaRaw.asset_types || metaRaw.assets) ? JSON.stringify(metaRaw.asset_types || metaRaw.assets) : null,
             metadata_raw: JSON.stringify(metaRaw),
             size: fs.statSync(finalPath).size,
         });
