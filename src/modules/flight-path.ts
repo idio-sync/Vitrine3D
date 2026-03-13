@@ -348,23 +348,17 @@ export class FlightPathManager {
         const lineMat = new THREE.LineBasicMaterial({
             vertexColors: true,
             depthTest: true,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.85,
+            depthWrite: true,
         });
         const line = new THREE.Line(lineGeom, lineMat);
-        line.renderOrder = 998;
 
         // Instanced markers with per-instance colors
         const sphereGeom = new THREE.SphereGeometry(FLIGHT_LOG.MARKER_RADIUS, 8, 6);
         const markerMat = new THREE.MeshBasicMaterial({
             depthTest: true,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.7,
+            depthWrite: true,
         });
         const markers = new THREE.InstancedMesh(sphereGeom, markerMat, renderPoints.length);
-        markers.renderOrder = 999;
         const dummy = new THREE.Object3D();
         const color = new THREE.Color();
         for (let i = 0; i < renderPoints.length; i++) {
@@ -421,20 +415,18 @@ export class FlightPathManager {
         const geom = new THREE.SphereGeometry(radius, 12, 8);
 
         // Takeoff — green
-        const takeoffMat = new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.9, depthWrite: false });
+        const takeoffMat = new THREE.MeshBasicMaterial({ color: 0x22c55e, depthWrite: true });
         const takeoff = new THREE.Mesh(geom, takeoffMat);
         const p0 = renderPoints[0];
         takeoff.position.set(p0.x, p0.y, p0.z);
-        takeoff.renderOrder = 1000;
         takeoff.name = 'takeoff';
         group.add(takeoff);
 
         // Landing — red
-        const landingMat = new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.9, depthWrite: false });
+        const landingMat = new THREE.MeshBasicMaterial({ color: 0xef4444, depthWrite: true });
         const landing = new THREE.Mesh(geom, landingMat);
         const pN = renderPoints[renderPoints.length - 1];
         landing.position.set(pN.x, pN.y, pN.z);
-        landing.renderOrder = 1000;
         landing.name = 'landing';
         group.add(landing);
 
@@ -454,10 +446,8 @@ export class FlightPathManager {
 
         const coneMat = new THREE.MeshBasicMaterial({
             color: 0xffffff,
-            transparent: true,
-            opacity: 0.6,
             depthTest: true,
-            depthWrite: false,
+            depthWrite: true,
         });
 
         for (let i = interval; i < renderPoints.length - 1; i += interval) {
