@@ -1309,178 +1309,171 @@
                     </div>
                 </div>
 
-                <!-- HD Web Optimization -->
-                <div class="prop-section hidden" id="web-opt-section">
+                <!-- Optimization (unified) -->
+                <div class="prop-section hidden" id="optimization-section">
                     <div class="prop-section-hd">
-                        <span class="prop-section-title">Web Optimization</span>
+                        <span class="prop-section-title">Optimization</span>
                         <span class="prop-section-chevron">&#9654;</span>
                     </div>
                     <div class="prop-section-body">
-                        <div class="prop-hint" id="web-opt-current-faces">
-                            Current faces: &mdash;
-                        </div>
 
-                        <label class="prop-label mt4">Target mode</label>
-                        <select class="prop-select" id="web-opt-mode">
-                            <option value="faces">Face count</option>
-                            <option value="ratio">Ratio</option>
-                        </select>
-
-                        <div id="web-opt-faces-row" class="mt4">
-                            <label class="prop-label">Target face count</label>
-                            <input type="number" class="prop-input" id="web-opt-target-faces"
-                                   min="1000" step="1000" value="1000000" />
-                        </div>
-                        <div id="web-opt-ratio-row" class="mt4" style="display:none">
-                            <label class="prop-label">Target ratio</label>
-                            <input type="number" class="prop-input" id="web-opt-target-ratio"
-                                   min="0.01" max="0.99" step="0.01" value="0.5" />
-                            <span class="prop-hint" id="web-opt-ratio-estimate"></span>
-                        </div>
-
-                        <label class="prop-label mt4">
-                            <input type="checkbox" id="web-opt-draco" checked />
-                            Draco compression
-                        </label>
-
-                        <div class="mt4" style="display: flex; gap: 4px;">
-                            <button class="prop-btn" id="btn-web-opt-generate">Optimize</button>
-                            <button class="prop-btn small danger hidden" id="btn-web-opt-revert">Revert</button>
-                        </div>
-
-                        <div id="web-opt-status" class="prop-hint mt4 hidden"></div>
-
-                        <!-- Progress bar -->
-                        <div id="web-opt-progress" class="hidden mt4">
-                            <div class="progress-bar">
-                                <div class="progress-bar-fill" id="web-opt-progress-fill"></div>
-                            </div>
-                            <span class="prop-hint" id="web-opt-progress-text">Preparing...</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- SD Proxy (Decimation) -->
-                <div class="prop-section" id="proxy-section">
-                    <div class="prop-section-hd">
-                        <span class="prop-section-title">SD Proxy</span>
-                        <span class="prop-section-chevron">&#9654;</span>
-                    </div>
-                    <div class="prop-section-body">
-                        <!-- Preset selector -->
-                        <label class="prop-label">Preset</label>
-                        <select class="prop-select" id="decimation-preset">
-                            <option value="ultra-light">Ultra Light</option>
-                            <option value="light">Light</option>
-                            <option value="medium" selected>Medium</option>
-                            <option value="high">High</option>
+                        <!-- Object Profile selector -->
+                        <label class="prop-label">Object Profile</label>
+                        <select class="prop-select" id="object-profile-select">
+                            <option value="small">Small Object</option>
+                            <option value="medium" selected>Medium Object</option>
+                            <option value="large">Large Object</option>
+                            <option value="massive">Massive / Building</option>
                             <option value="custom">Custom</option>
                         </select>
 
-                        <label class="prop-label">
-                            <input type="checkbox" id="decimation-draco" checked /> Draco compress
-                        </label>
+                        <!-- Web Optimization sub-section -->
+                        <div class="prop-section hidden" id="web-opt-subsection" style="margin-top:8px;">
+                            <div class="prop-section-hd">
+                                <span class="prop-section-title">Web Optimization</span>
+                                <span class="prop-section-chevron">&#9654;</span>
+                            </div>
+                            <div class="prop-section-body">
+                                <div class="prop-hint" id="web-opt-current-faces">
+                                    Current faces: &mdash;
+                                </div>
 
-                        <!-- Face count display -->
-                        <div id="decimation-face-counts" class="prop-hint mt4">
-                            <div>HD: <span id="decimation-hd-faces">&mdash;</span> faces</div>
-                            <div>SD: ~<span id="decimation-sd-faces">&mdash;</span> faces (est.)</div>
-                        </div>
+                                <div id="web-opt-faces-row" class="mt4">
+                                    <label class="prop-label">Target face count</label>
+                                    <input type="number" class="prop-input" id="web-opt-target-faces"
+                                           min="1000" step="1000" value="500000" />
+                                </div>
 
-                        <!-- Advanced geometry settings (collapsed) -->
-                        <div class="prop-subsection-toggle mt4" id="decimation-advanced-toggle">
-                            <span class="prop-subsection-chevron">&#9654;</span> Advanced
-                        </div>
-                        <div class="prop-subsection-body hidden" id="decimation-advanced-body">
-                            <label class="prop-label">Target Ratio</label>
-                            <input type="number" class="prop-input" id="decimation-target-ratio"
-                                   min="0.001" max="1" step="0.01" value="0.10" />
+                                <!-- Ratio mode (shown only for Custom profile) -->
+                                <div id="web-opt-ratio-row" class="mt4" style="display:none">
+                                    <label class="prop-label">Target mode</label>
+                                    <select class="prop-select" id="web-opt-mode">
+                                        <option value="faces">Face count</option>
+                                        <option value="ratio">Ratio</option>
+                                    </select>
+                                    <div id="web-opt-ratio-input-row" class="mt4" style="display:none">
+                                        <label class="prop-label">Target ratio</label>
+                                        <input type="number" class="prop-input" id="web-opt-target-ratio"
+                                               min="0.01" max="0.99" step="0.01" value="0.5" />
+                                        <span class="prop-hint" id="web-opt-ratio-estimate"></span>
+                                    </div>
+                                </div>
 
-                            <label class="prop-label mt4">Target Face Count (override)</label>
-                            <input type="number" class="prop-input" id="decimation-target-faces"
-                                   min="0" step="1000" placeholder="Leave empty for ratio-based" />
+                                <div class="mt4">
+                                    <label class="prop-label">Texture max resolution</label>
+                                    <select class="prop-select" id="web-opt-texture-res">
+                                        <option value="1024">1024</option>
+                                        <option value="2048">2048</option>
+                                        <option value="4096" selected>4096</option>
+                                        <option value="8192">8192</option>
+                                    </select>
+                                </div>
 
-                            <label class="prop-label mt4">Max Error Threshold</label>
-                            <input type="number" class="prop-input" id="decimation-error-threshold"
-                                   min="0.001" max="1" step="0.001" value="0.1" />
+                                <label class="prop-label mt4">
+                                    <input type="checkbox" id="web-opt-draco" checked />
+                                    Draco compression
+                                </label>
 
-                            <label class="prop-label mt4">
-                                <input type="checkbox" id="decimation-lock-border" checked /> Lock border edges
-                            </label>
+                                <div class="mt4" style="display: flex; gap: 4px;">
+                                    <button class="prop-btn" id="btn-web-opt-generate">Optimize</button>
+                                    <button class="prop-btn small danger hidden" id="btn-web-opt-revert">Revert</button>
+                                </div>
 
-                            <label class="prop-label">
-                                <input type="checkbox" id="decimation-preserve-uvs" checked /> Preserve UV seams
-                            </label>
-                        </div>
+                                <div id="web-opt-status" class="prop-hint mt4 hidden"></div>
 
-                        <!-- Texture settings (collapsed) -->
-                        <div class="prop-subsection-toggle mt4" id="decimation-texture-toggle">
-                            <span class="prop-subsection-chevron">&#9654;</span> Texture Settings
-                        </div>
-                        <div class="prop-subsection-body hidden" id="decimation-texture-body">
-                            <label class="prop-label">Max Resolution</label>
-                            <select class="prop-select" id="decimation-texture-res">
-                                <option value="256">256</option>
-                                <option value="512">512</option>
-                                <option value="1024" selected>1024</option>
-                                <option value="2048">2048</option>
-                                <option value="4096">4096</option>
-                            </select>
-
-                            <label class="prop-label mt4">Format</label>
-                            <select class="prop-select" id="decimation-texture-format">
-                                <option value="jpeg" selected>JPEG</option>
-                                <option value="png">PNG</option>
-                                <option value="keep">Keep Original</option>
-                            </select>
-
-                            <label class="prop-label mt4">JPEG Quality</label>
-                            <input type="range" class="prop-range" id="decimation-texture-quality"
-                                   min="0.1" max="1" step="0.05" value="0.85" />
-                            <span class="prop-hint" id="decimation-texture-quality-label">85%</span>
-                        </div>
-
-                        <!-- Action buttons -->
-                        <button class="prop-btn mt4" id="btn-generate-proxy">Generate SD Proxy</button>
-
-                        <!-- Status area (hidden until proxy exists) -->
-                        <div id="decimation-status" class="hidden mt4">
-                            <span class="prop-hint" id="decimation-status-text"></span>
-                            <div class="mt4">
-                                <button class="prop-btn small" id="btn-preview-proxy">Preview SD</button>
-                                <button class="prop-btn small danger" id="btn-remove-proxy">Remove Proxy</button>
+                                <div id="web-opt-progress" class="hidden mt4">
+                                    <div class="progress-bar">
+                                        <div class="progress-bar-fill" id="web-opt-progress-fill"></div>
+                                    </div>
+                                    <span class="prop-hint" id="web-opt-progress-text">Preparing...</span>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Progress bar (hidden until generating) -->
-                        <div id="decimation-progress" class="hidden mt4">
-                            <div class="progress-bar">
-                                <div class="progress-bar-fill" id="decimation-progress-fill"></div>
+                        <!-- SD Proxy sub-section -->
+                        <div class="prop-section hidden" id="sd-proxy-subsection" style="margin-top:8px;">
+                            <div class="prop-section-hd">
+                                <span class="prop-section-title">SD Proxy</span>
+                                <span class="prop-section-chevron">&#9654;</span>
                             </div>
-                            <span class="prop-hint" id="decimation-progress-text">Preparing...</span>
+                            <div class="prop-section-body">
+                                <div id="decimation-face-counts" class="prop-hint">
+                                    <div>HD: <span id="decimation-hd-faces">&mdash;</span> faces</div>
+                                    <div>SD target: <span id="decimation-sd-faces">&mdash;</span> faces</div>
+                                </div>
+                                <div id="decimation-below-target" class="prop-hint hidden" style="color: var(--accent-color);">
+                                    Mesh already below target.
+                                </div>
+
+                                <div class="mt4">
+                                    <label class="prop-label">Target face count</label>
+                                    <input type="number" class="prop-input" id="decimation-target-faces"
+                                           min="1000" step="1000" value="100000" />
+                                </div>
+
+                                <div class="mt4">
+                                    <label class="prop-label">Texture max resolution</label>
+                                    <select class="prop-select" id="decimation-texture-res">
+                                        <option value="256">256</option>
+                                        <option value="512">512</option>
+                                        <option value="1024" selected>1024</option>
+                                        <option value="2048">2048</option>
+                                        <option value="4096">4096</option>
+                                    </select>
+                                </div>
+
+                                <label class="prop-label mt4">
+                                    <input type="checkbox" id="decimation-draco" checked /> Draco compress
+                                </label>
+
+                                <button class="prop-btn mt4" id="btn-generate-proxy">Generate SD Proxy</button>
+
+                                <div id="decimation-status" class="hidden mt4">
+                                    <span class="prop-hint" id="decimation-status-text"></span>
+                                    <div class="mt4">
+                                        <button class="prop-btn small" id="btn-preview-proxy">Preview SD</button>
+                                        <button class="prop-btn small danger" id="btn-remove-proxy">Remove Proxy</button>
+                                    </div>
+                                </div>
+
+                                <div id="decimation-progress" class="hidden mt4">
+                                    <div class="progress-bar">
+                                        <div class="progress-bar-fill" id="decimation-progress-fill"></div>
+                                    </div>
+                                    <span class="prop-hint" id="decimation-progress-text">Preparing...</span>
+                                </div>
+
+                                <!-- Manual proxy upload -->
+                                <div class="prop-subsection-toggle mt4" id="decimation-manual-toggle">
+                                    <span class="prop-subsection-chevron">&#9654;</span> Manual Proxy Upload
+                                </div>
+                                <div class="prop-subsection-body hidden" id="decimation-manual-body">
+                                    <label for="proxy-mesh-input" class="prop-btn" style="font-size:10px; cursor:pointer;">Mesh Proxy (.glb, .obj)</label>
+                                    <input type="file" id="proxy-mesh-input" accept=".glb,.gltf,.obj,.mtl,.png,.jpg,.jpeg,.tga,.bmp,.webp" multiple style="display:none" />
+                                    <span id="proxy-mesh-filename" class="prop-hint">No proxy loaded</span>
+
+                                    <label for="proxy-splat-input" class="prop-btn mt4" style="font-size:10px; cursor:pointer;">Splat Proxy (.ply, .spz)</label>
+                                    <input type="file" id="proxy-splat-input" accept=".ply,.spz,.ksplat,.sog,.splat" style="display:none" />
+                                    <span id="proxy-splat-filename" class="prop-hint">No proxy loaded</span>
+                                </div>
+                            </div>
                         </div>
 
-                        <!-- Manual proxy upload (collapsed, for backwards compat) -->
-                        <div class="prop-subsection-toggle mt4" id="decimation-manual-toggle">
-                            <span class="prop-subsection-chevron">&#9654;</span> Manual Proxy Upload
+                        <!-- Splat Quality sub-section -->
+                        <div class="prop-section hidden" id="splat-quality-subsection" style="margin-top:8px;">
+                            <div class="prop-section-hd">
+                                <span class="prop-section-title">Splat Quality</span>
+                                <span class="prop-section-chevron">&#9654;</span>
+                            </div>
+                            <div class="prop-section-body">
+                                <label style="font-size: 10px; display: flex; align-items: flex-start; gap: 4px; cursor: pointer;">
+                                    <input type="checkbox" id="chk-splat-lod" checked style="margin-top: 2px;" />
+                                    <span>Generate Splat LOD at archive export</span>
+                                </label>
+                                <span class="prop-hint" style="font-size: 9px; margin-left: 18px; display: block;">Requires .spz or .ply input. .sog files use runtime LOD instead.</span>
+                            </div>
                         </div>
-                        <div class="prop-subsection-body hidden" id="decimation-manual-body">
-                            <label for="proxy-mesh-input" class="prop-btn" style="font-size:10px; cursor:pointer;">Mesh Proxy (.glb, .obj)</label>
-                            <input type="file" id="proxy-mesh-input" accept=".glb,.gltf,.obj,.mtl,.png,.jpg,.jpeg,.tga,.bmp,.webp" multiple style="display:none" />
-                            <span id="proxy-mesh-filename" class="prop-hint">No proxy loaded</span>
 
-                            <label for="proxy-splat-input" class="prop-btn mt4" style="font-size:10px; cursor:pointer;">Splat Proxy (.ply, .spz)</label>
-                            <input type="file" id="proxy-splat-input" accept=".ply,.spz,.ksplat,.sog,.splat" style="display:none" />
-                            <span id="proxy-splat-filename" class="prop-hint">No proxy loaded</span>
-                        </div>
-
-                        <div class="mt4" style="padding: 4px 0;">
-                            <label style="font-size: 10px; display: flex; align-items: flex-start; gap: 4px; cursor: pointer;">
-                                <input type="checkbox" id="chk-splat-lod" checked style="margin-top: 2px;" />
-                                <span>Generate Splat LOD at archive export</span>
-                            </label>
-                            <span class="prop-hint" style="font-size: 9px; margin-left: 18px; display: block;">Requires .spz or .ply input. .sog files use runtime LOD instead.</span>
-                        </div>
                     </div>
                 </div>
 
