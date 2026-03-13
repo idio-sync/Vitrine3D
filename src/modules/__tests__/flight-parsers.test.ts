@@ -4,6 +4,8 @@ import {
     parseDjiCsv,
     parseKml,
     parseSrt,
+    parseGpx,
+    flightPointsToGpx,
     detectFormat,
     gpsToLocal,
 } from '../flight-parsers.js';
@@ -195,5 +197,63 @@ describe('parseSrt', () => {
         const srt = '1\n00:00:00,000 --> 00:00:01,000\n<font size="28">[latitude: 39.329024] [longitude: -76.636289] [rel_alt: 0.900 abs_alt: 114.268]</font>\n';
         const points = parseSrt(srt);
         expect(points[0].alt).toBeCloseTo(0.9, 1);
+    });
+});
+
+describe('detectFormat — GPX', () => {
+    it('detects GPX by extension', () => {
+        expect(detectFormat('flight.gpx', '')).toBe('gpx');
+    });
+});
+
+describe('GPX round-trip', () => {
+    it('serializes and parses back preserving GPS coordinates', () => {
+        const csv = 'time(millisecond),latitude,longitude,altitude(m),speed(m/s),heading(°),gimbal_pitch(°),gimbal_yaw(°)\n' +
+            '0,39.329024,-76.636289,45.2,5.1,180,,-10\n' +
+            '1000,39.329100,-76.636200,50.0,6.3,185,15,-5\n';
+        const original = parseDjiCsv(csv);
+        expect(original.length).toBe(2);
+
+        const gpxStr = flightPointsToGpx(original, 'test-flight');
+        const parsed = parseGpx(gpxStr);
+
+        expect(parsed.length).toBe(2);
+        expect(parsed[0].lat).toBeCloseTo(39.329024, 5);
+        expect(parsed[0].lon).toBeCloseTo(-76.636289, 5);
+        expect(parsed[0].alt).toBeCloseTo(45.2, 1);
+        expect(parsed[1].alt).toBeCloseTo(50.0, 1);
+    });
+
+    it('preserves speed and heading in extensions', () => {
+        const csv = 'time(millisecond),latitude,longitude,altitude(m),speed(m/s),heading(°)\n' +
+            '0,39.329024,-76.636289,45.2,5.1,180\n';
+        const original = parseDjiCsv(csv);
+        const gpxStr = flightPointsToGpx(original);
+        const parsed = parseGpx(gpxStr);
+
+        expect(parsed[0].speed).toBeCloseTo(5.1, 1);
+        expect(parsed[0].heading).toBeCloseTo(180, 0);
+    });
+
+    it('preserves gimbal pitch/yaw in extensions', () => {
+        const csv = 'time(millisecond),latitude,longitude,altitude(m),gimbal_pitch(°),gimbal_yaw(°)\n' +
+            '0,39.329024,-76.636289,45.2,-30,90\n';
+        const original = parseDjiCsv(csv);
+        const gpxStr = flightPointsToGpx(original);
+        const parsed = parseGpx(gpxStr);
+
+        expect(parsed[0].gimbalPitch).toBeCloseTo(-30, 0);
+        expect(parsed[0].gimbalYaw).toBeCloseTo(90, 0);
+    });
+
+    it('preserves timestamp deltas', () => {
+        const csv = 'time(millisecond),latitude,longitude,altitude(m)\n' +
+            '0,39.329024,-76.636289,45.2\n' +
+            '5000,39.329100,-76.636200,50.0\n';
+        const original = parseDjiCsv(csv);
+        const gpxStr = flightPointsToGpx(original);
+        const parsed = parseGpx(gpxStr);
+
+        expect(parsed[1].timestamp - parsed[0].timestamp).toBe(5000);
     });
 });

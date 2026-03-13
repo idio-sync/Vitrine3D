@@ -702,6 +702,11 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
                     if (ext === 'txt') {
                         const buffer = await fp.blob.arrayBuffer();
                         data = await flightPathManager.importBinary(buffer, fp.fileName, 'dji-txt');
+                        // Convert stored blob from DJI binary to GPX so re-exports don't need keychains
+                        const { flightPointsToGpx } = await import('./modules/flight-parsers.js');
+                        const gpxStr = flightPointsToGpx(data.points, fp.fileName);
+                        fp.blob = new Blob([gpxStr], { type: 'application/gpx+xml' });
+                        fp.fileName = fp.fileName.replace(/\.txt$/i, '.gpx');
                     } else {
                         const text = await fp.blob.text();
                         data = flightPathManager.importFromText(text, fp.fileName);
@@ -1799,7 +1804,17 @@ async function init() {
             try {
                 const data = await flightPathManager.importFile(file);
                 const fpStore = getStore();
-                fpStore.flightPathBlobs.push({ blob: file, fileName: file.name });
+                // For DJI binary .txt logs, store as GPX so archives don't need keychains on re-import
+                const ext = file.name.split('.').pop()?.toLowerCase() || '';
+                let storeBlob: Blob = file;
+                let storeName = file.name;
+                if (ext === 'txt') {
+                    const { flightPointsToGpx } = await import('./modules/flight-parsers.js');
+                    const gpxStr = flightPointsToGpx(data.points, file.name);
+                    storeBlob = new Blob([gpxStr], { type: 'application/gpx+xml' });
+                    storeName = file.name.replace(/\.txt$/i, '.gpx');
+                }
+                fpStore.flightPathBlobs.push({ blob: storeBlob, fileName: storeName });
                 state.flightPathLoaded = true;
                 updateObjectSelectButtons();
                 updateFlightPathUI();

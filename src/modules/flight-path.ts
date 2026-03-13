@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { Logger } from './utilities.js';
 import { FLIGHT_LOG } from './constants.js';
-import { parseDjiCsv, parseKml, parseSrt, detectFormat } from './flight-parsers.js';
+import { parseDjiCsv, parseKml, parseSrt, parseGpx, detectFormat } from './flight-parsers.js';
 import { parseDjiTxt } from './dji-txt-parser.js';
 import type { FlightPoint, FlightPathData, FlightCameraMode } from '@/types.js';
 
@@ -225,6 +225,9 @@ export class FlightPathManager {
                 break;
             case 'srt':
                 points = parseSrt(text);
+                break;
+            case 'gpx':
+                points = parseGpx(text);
                 break;
             default:
                 throw new Error(`Unsupported format: ${format}`);
@@ -1399,6 +1402,12 @@ export class FlightPathManager {
     /** Check if any flight paths are loaded. */
     get hasData(): boolean {
         return this.paths.length > 0;
+    }
+
+    /** Get the parsed FlightPathData for a given path ID (or the first path if no ID). */
+    getPathData(id?: string): FlightPathData | null {
+        if (!id) return this.paths[0] ?? null;
+        return this.paths.find(p => p.id === id) ?? null;
     }
 
     /** Serialize paths for manifest export. Returns array of manifest entry data. */
