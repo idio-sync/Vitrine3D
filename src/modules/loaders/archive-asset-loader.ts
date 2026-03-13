@@ -18,6 +18,7 @@ import { createSplatMesh, getSplatFileType, loadSplatFromBlobUrl } from './splat
 import { loadGLTF, loadOBJFromUrl, loadSTLFromUrl, loadDRC, loadModelFromBlobUrl } from './mesh-loader.js';
 import { loadPointcloudFromBlobUrl } from './pointcloud-loader.js';
 import { loadDrawingFromBlobUrl } from './drawing-loader.js';
+import { yieldToRenderer } from '../background-loader.js';
 
 const log = Logger.getLogger('archive-asset-loader');
 
@@ -572,6 +573,9 @@ export async function loadArchiveFullResMesh(archiveLoader: ArchiveLoader, deps:
         return { loaded: false, blob: null, error: 'Failed to parse full-resolution mesh' };
     }
 
+    // Yield before swap so the renderer gets a frame before the GPU upload
+    await yieldToRenderer();
+
     // In-place swap: synchronous, no empty frames
     if (modelGroup && modelGroup.children.length > 0) {
         swapMeshChildren(modelGroup, parsed.object);
@@ -581,6 +585,9 @@ export async function loadArchiveFullResMesh(archiveLoader: ArchiveLoader, deps:
             modelGroup.add(parsed.object);
         }
     }
+
+    // Yield after swap so the renderer can present the new geometry
+    await yieldToRenderer();
 
     state.modelLoaded = true;
 
@@ -624,6 +631,9 @@ async function swapSplatAsset(
     const newSplat = await createSplatMesh(blobUrl, fileType);
     newSplat.rotation.x = Math.PI;
     newSplat.frustumCulled = false;
+
+    // Yield before GPU texture upload so the renderer stays responsive
+    await yieldToRenderer();
     await newSplat.initialized;
 
     // Atomic swap: remove old, add new in the same synchronous block
