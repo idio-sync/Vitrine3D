@@ -379,6 +379,7 @@ export interface QualityStats {
     texture_count?: number;
     texture_max_resolution?: number;
     texture_maps?: Array<{ type: string; width: number; height: number }>;
+    objectProfile?: string;
 }
 
 export interface FileInfo {
@@ -1671,6 +1672,7 @@ export class ArchiveCreator {
         if (stats.texture_count !== undefined) this.manifest._meta.quality.texture_count = stats.texture_count;
         if (stats.texture_max_resolution !== undefined) this.manifest._meta.quality.texture_max_resolution = stats.texture_max_resolution;
         if (stats.texture_maps !== undefined) this.manifest._meta.quality.texture_maps = stats.texture_maps;
+        if (stats.objectProfile !== undefined) this.manifest._meta.quality.objectProfile = stats.objectProfile;
     }
 
     getQualityStats(): QualityStats {
