@@ -500,6 +500,11 @@ function createInfoOverlay(manifest, deps) {
         contentWrapper.appendChild(section);
     }
 
+    // === Flight Log placeholder (populated by onFlightPathLoaded) ===
+    const flightLogPlaceholder = document.createElement('div');
+    flightLogPlaceholder.id = 'editorial-flight-log-section';
+    contentWrapper.appendChild(flightLogPlaceholder);
+
     // === Collapsible: Processing ===
     if (prov && shouldShow('Processing')) {
         const hasSoftware = Array.isArray(prov.processing_software) && prov.processing_software.length > 0;
@@ -2042,37 +2047,6 @@ function buildFlightDropdown(fpm, container) {
     const fpDropdown = document.createElement('div');
     fpDropdown.className = 'editorial-flight-dropdown';
 
-    // --- Stats section ---
-    const statsGrid = document.createElement('div');
-    statsGrid.className = 'editorial-flight-stats';
-
-    const stats = fpm.getStats();
-    if (stats) {
-        [
-            ['Duration', stats.duration],
-            ['Distance', stats.distance],
-            ['Max Alt', stats.maxAlt],
-            ['Max Speed', stats.maxSpeed],
-            ['Avg Speed', stats.avgSpeed],
-            ['Points', stats.points],
-        ].forEach(([label, value]) => {
-            const lbl = document.createElement('span');
-            lbl.className = 'editorial-flight-stat-label';
-            lbl.textContent = label;
-            const val = document.createElement('span');
-            val.className = 'editorial-flight-stat-value';
-            val.textContent = value;
-            statsGrid.appendChild(lbl);
-            statsGrid.appendChild(val);
-        });
-    }
-    fpDropdown.appendChild(statsGrid);
-
-    // --- Divider ---
-    const div1 = document.createElement('div');
-    div1.className = 'editorial-flight-divider';
-    fpDropdown.appendChild(div1);
-
     // --- Playback controls section ---
     const playSection = document.createElement('div');
     playSection.className = 'editorial-flight-playback';
@@ -2180,31 +2154,6 @@ function buildFlightDropdown(fpm, container) {
     });
     camRow.appendChild(camSeg);
     playSection.appendChild(camRow);
-
-    // PiP toggle
-    const pipRow = document.createElement('div');
-    pipRow.className = 'editorial-flight-section';
-    pipRow.style.paddingTop = '0';
-    pipRow.style.paddingBottom = '8px';
-
-    const pipLabel = document.createElement('span');
-    pipLabel.className = 'editorial-flight-section-label';
-    pipLabel.textContent = 'PiP';
-    pipRow.appendChild(pipLabel);
-
-    const pipToggle = document.createElement('button');
-    pipToggle.className = 'editorial-flight-seg-btn editorial-flight-pip-toggle';
-    pipToggle.textContent = fpm.pipEnabled ? 'On' : 'Off';
-    if (fpm.pipEnabled) pipToggle.classList.add('active');
-    pipToggle.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const next = !fpm.pipEnabled;
-        fpm.setPipEnabled(next);
-        pipToggle.textContent = next ? 'On' : 'Off';
-        pipToggle.classList.toggle('active', next);
-    });
-    pipRow.appendChild(pipToggle);
-    playSection.appendChild(pipRow);
 
     fpDropdown.appendChild(playSection);
 
@@ -2314,43 +2263,6 @@ function buildFlightDropdown(fpm, container) {
     colorSection.appendChild(colorSeg);
     fpDropdown.appendChild(colorSection);
 
-    // --- Marker density selector ---
-    const markerSection = document.createElement('div');
-    markerSection.className = 'editorial-flight-section';
-
-    const markerLabel = document.createElement('span');
-    markerLabel.className = 'editorial-flight-section-label';
-    markerLabel.textContent = 'Markers';
-    markerSection.appendChild(markerLabel);
-
-    const markerSeg = document.createElement('div');
-    markerSeg.className = 'editorial-flight-seg';
-
-    let currentDensity = 'sparse';
-    const densityModes = [
-        { key: 'off', label: 'Off' },
-        { key: 'sparse', label: 'Few' },
-        { key: 'all', label: 'All' },
-    ];
-    const densityBtns = [];
-    densityModes.forEach(({ key, label }) => {
-        const btn = document.createElement('button');
-        btn.className = 'editorial-flight-seg-btn';
-        btn.textContent = label;
-        btn.dataset.density = key;
-        if (currentDensity === key) btn.classList.add('active');
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            currentDensity = key;
-            fpm.setMarkerDensity(key);
-            densityBtns.forEach(b => b.classList.toggle('active', b.dataset.density === key));
-        });
-        densityBtns.push(btn);
-        markerSeg.appendChild(btn);
-    });
-    markerSection.appendChild(markerSeg);
-    fpDropdown.appendChild(markerSection);
-
     // --- Line opacity slider ---
     const opacitySection = document.createElement('div');
     opacitySection.className = 'editorial-flight-section';
@@ -2421,6 +2333,38 @@ function onFlightPathLoaded(fpm) {
     const toolsGroup = document.querySelector('.editorial-ribbon-tools');
     if (!toolsGroup) return;
     buildFlightDropdown(fpm, toolsGroup);
+
+    // Populate the Flight Log section in the info sidebar
+    const placeholder = document.getElementById('editorial-flight-log-section');
+    if (placeholder && !placeholder.hasChildNodes()) {
+        const stats = fpm.getStats();
+        if (stats) {
+            const { section, content } = createCollapsible('Flight Log', false);
+
+            const statsGrid = document.createElement('div');
+            statsGrid.className = 'editorial-flight-info-stats';
+            [
+                ['Duration', stats.duration],
+                ['Distance', stats.distance],
+                ['Max Alt', stats.maxAlt],
+                ['Max Speed', stats.maxSpeed],
+                ['Avg Speed', stats.avgSpeed],
+                ['Points', stats.points],
+            ].forEach(([label, value]) => {
+                const lbl = document.createElement('span');
+                lbl.className = 'editorial-flight-info-label';
+                lbl.textContent = label;
+                const val = document.createElement('span');
+                val.className = 'editorial-flight-info-value';
+                val.textContent = value;
+                statsGrid.appendChild(lbl);
+                statsGrid.appendChild(val);
+            });
+            content.appendChild(statsGrid);
+
+            placeholder.appendChild(section);
+        }
+    }
 }
 
 // ---- Layout module hooks (called by kiosk-main.ts) ----

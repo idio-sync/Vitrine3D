@@ -2773,6 +2773,32 @@ body.kiosk-mode.kiosk-editorial .editorial-flight-btn.active {
     opacity: 1;
 }
 
+/* --- Flight Log Info Section (inside info sidebar) --- */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-info-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 20px;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-info-label {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.58rem;
+    font-weight: 500;
+    color: var(--kiosk-text-muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-info-value {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--kiosk-text-primary);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
 /* =================================================================
    Floating Pill — hidden by default, shown at Tier 3 (<700px)
    Replaces the old mobile bottom nav with a minimal capsule.
