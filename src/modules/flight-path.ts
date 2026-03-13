@@ -1,7 +1,7 @@
 /**
  * Flight Path Manager — Import, render, and interact with drone flight paths.
  *
- * Renders flight paths as THREE.Line + THREE.InstancedMesh markers.
+ * Renders flight paths as THREE.Mesh (TubeGeometry) + THREE.InstancedMesh markers.
  * Supports hover telemetry tooltips via raycasting.
  * Color modes: speed, altitude, climb rate.
  * Takeoff/landing markers, direction indicators, playback animation.
@@ -112,7 +112,7 @@ function computeGpsDistanceM(points: FlightPoint[]): number {
 }
 
 interface PathMeshes {
-    line: THREE.Line;
+    line: THREE.Mesh;
     markers: THREE.InstancedMesh;
     renderPoints: FlightPoint[];
     endpointGroup: THREE.Group;
@@ -316,7 +316,7 @@ export class FlightPathManager {
     }
 
     /** Build colored line + instanced markers based on current color mode. */
-    private buildColoredPath(renderPoints: FlightPoint[]): { line: THREE.Line; markers: THREE.InstancedMesh } {
+    private buildColoredPath(renderPoints: FlightPoint[]): { line: THREE.Mesh; markers: THREE.InstancedMesh } {
         // Compute value range for the active color mode
         const values = renderPoints.map((p, i) => this.getColorValue(p, renderPoints, i));
         let minVal = Infinity, maxVal = -Infinity;
@@ -328,29 +328,32 @@ export class FlightPathManager {
 
         const ramp = this.getColorRamp();
 
-        // Line with per-vertex colors
-        const positions = new Float32Array(renderPoints.length * 3);
-        const colors = new Float32Array(renderPoints.length * 3);
-        for (let i = 0; i < renderPoints.length; i++) {
-            positions[i * 3] = renderPoints[i].x;
-            positions[i * 3 + 1] = renderPoints[i].y;
-            positions[i * 3 + 2] = renderPoints[i].z;
+        // Tube mesh with per-vertex colors (real 3D geometry for proper depth occlusion by splats)
+        const curvePoints = renderPoints.map(p => new THREE.Vector3(p.x, p.y, p.z));
+        const curve = new THREE.CatmullRomCurve3(curvePoints, false, 'centripetal');
+        const radialSegments = 4;
+        const tubeGeom = new THREE.TubeGeometry(curve, renderPoints.length - 1, FLIGHT_LOG.MARKER_RADIUS * 0.6, radialSegments, false);
 
-            const t = (values[i] - minVal) / range;
+        // Map per-vertex colors: each ring of (radialSegments + 1) verts shares one path point's color
+        const vertCount = tubeGeom.attributes.position.count;
+        const tubeColors = new Float32Array(vertCount * 3);
+        const ringSize = radialSegments + 1;
+        for (let i = 0; i < vertCount; i++) {
+            const segIndex = Math.min(Math.floor(i / ringSize), renderPoints.length - 1);
+            const t = (values[segIndex] - minVal) / range;
             const [r, g, b] = rampColor(ramp, t);
-            colors[i * 3] = r;
-            colors[i * 3 + 1] = g;
-            colors[i * 3 + 2] = b;
+            tubeColors[i * 3] = r;
+            tubeColors[i * 3 + 1] = g;
+            tubeColors[i * 3 + 2] = b;
         }
-        const lineGeom = new THREE.BufferGeometry();
-        lineGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        lineGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        const lineMat = new THREE.LineBasicMaterial({
+        tubeGeom.setAttribute('color', new THREE.BufferAttribute(tubeColors, 3));
+
+        const lineMat = new THREE.MeshBasicMaterial({
             vertexColors: true,
             depthTest: true,
             depthWrite: true,
         });
-        const line = new THREE.Line(lineGeom, lineMat);
+        const line = new THREE.Mesh(tubeGeom, lineMat);
 
         // Instanced markers with per-instance colors
         const sphereGeom = new THREE.SphereGeometry(FLIGHT_LOG.MARKER_RADIUS, 8, 6);
@@ -1363,7 +1366,7 @@ export class FlightPathManager {
     /** Update the line opacity for all flight paths. */
     setLineOpacity(opacity: number): void {
         for (const [, entry] of this.meshes) {
-            const mat = entry.line.material as THREE.LineBasicMaterial;
+            const mat = entry.line.material as THREE.MeshBasicMaterial;
             mat.opacity = opacity;
             mat.transparent = opacity < 1;
             mat.needsUpdate = true;
