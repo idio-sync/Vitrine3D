@@ -348,6 +348,10 @@ export class AnnotationSystem {
 
         this.markerContainer?.appendChild(markerEl);
 
+        if (annotation.detail_asset_key) {
+            markerEl.classList.add('has-detail');
+        }
+
         const markerObj: MarkerObject = {
             element: markerEl,
             annotation: annotation,

@@ -2751,6 +2751,28 @@ export function showAnnotationPopup(annotation: Annotation, imageAssets?: Map<st
         });
     }
 
+    // Detail model inspect button
+    const inspectContainer = popup.querySelector('.annotation-detail-inspect');
+    if (inspectContainer) {
+        if (annotation.detail_asset_key) {
+            const label = annotation.detail_button_label || 'Inspect Detail';
+
+            let html = '';
+            if (annotation.detail_thumbnail && imageAssets) {
+                const thumbUrl = imageAssets.get(annotation.detail_thumbnail);
+                if (thumbUrl) {
+                    html += `<img class="detail-thumbnail" src="${thumbUrl}" alt="Detail preview">`;
+                }
+            }
+            html += `<button class="detail-inspect-btn" data-detail-key="${annotation.detail_asset_key}">${label}</button>`;
+            inspectContainer.innerHTML = html;
+            (inspectContainer as HTMLElement).style.display = 'block';
+        } else {
+            inspectContainer.innerHTML = '';
+            (inspectContainer as HTMLElement).style.display = 'none';
+        }
+    }
+
     popup.classList.remove('hidden');
 
     return annotation.id;
