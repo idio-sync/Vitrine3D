@@ -333,6 +333,9 @@ const state: AppState = {
     },
     environmentBlob: null,
     renderingPreset: null,
+    // Detail model inspection
+    detailAssetIndex: new Map(),
+    loadedDetailBlobs: new Map(),
 };
 
 // Scene manager instance (handles scene, camera, renderer, controls, lighting)
@@ -3643,8 +3646,12 @@ const _prevCamQuat = new THREE.Quaternion();
 let _markersDirty = true; // Start dirty so first frame always updates
 const _clock = new THREE.Clock();
 
+let _animFrameId: number = 0;
+let _renderPaused = false;
+
 function animate() {
-    requestAnimationFrame(animate);
+    if (_renderPaused) return;
+    _animFrameId = requestAnimationFrame(animate);
 
     try {
         // Update flight path playback BEFORE camera controls and render
@@ -3741,6 +3748,20 @@ function animate() {
             log.error(' Suppressing further animation errors...');
         }
     }
+}
+
+function pauseRenderLoop(): void {
+    _renderPaused = true;
+    if (_animFrameId) {
+        cancelAnimationFrame(_animFrameId);
+        _animFrameId = 0;
+    }
+}
+
+function resumeRenderLoop(): void {
+    if (!_renderPaused) return;
+    _renderPaused = false;
+    animate();
 }
 
 // Initialize when DOM is ready

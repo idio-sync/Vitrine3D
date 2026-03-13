@@ -98,6 +98,8 @@ interface KioskState {
     meshBackgroundColor: string | null;
     splatBackgroundColor: string | null;
     archiveSourceUrl?: string | null;
+    detailAssetIndex: Map<string, { filename: string }>;
+    loadedDetailBlobs: Map<string, string>;
 }
 
 interface AppConfig {
@@ -237,7 +239,9 @@ const state: KioskState = {
     qualityTier: QUALITY_TIER.AUTO,
     qualityResolved: QUALITY_TIER.HD,
     meshBackgroundColor: null,
-    splatBackgroundColor: null
+    splatBackgroundColor: null,
+    detailAssetIndex: new Map(),
+    loadedDetailBlobs: new Map(),
 };
 
 /** Tracks in-flight asset load promises so concurrent callers await the same operation. */
@@ -5371,8 +5375,12 @@ function hideAnnotationLine(): void {
 // ANIMATION LOOP
 // =============================================================================
 
+let _kioskAnimFrameId: number = 0;
+let _kioskRenderPaused = false;
+
 function animate(): void {
-    requestAnimationFrame(animate);
+    if (_kioskRenderPaused) return;
+    _kioskAnimFrameId = requestAnimationFrame(animate);
 
     try {
         if (state.flyModeActive) {
@@ -5429,4 +5437,18 @@ function animate(): void {
     } catch (e) {
         log.warn('Frame error:', e);
     }
+}
+
+function pauseRender(): void {
+    _kioskRenderPaused = true;
+    if (_kioskAnimFrameId) {
+        cancelAnimationFrame(_kioskAnimFrameId);
+        _kioskAnimFrameId = 0;
+    }
+}
+
+function resumeRender(): void {
+    if (!_kioskRenderPaused) return;
+    _kioskRenderPaused = false;
+    animate();
 }
