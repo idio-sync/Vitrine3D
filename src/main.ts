@@ -689,6 +689,8 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
         sourceFiles: {
             updateSourceFilesUI
         },
+        sparkRenderer,
+        onResize: onWindowResize,
         measurementSystem,
         renderFlightPaths: async () => {
             if (!flightPathManager) return;
