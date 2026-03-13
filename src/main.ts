@@ -4,6 +4,8 @@ import { SplatMesh, createSparkRenderer } from './modules/spark-compat.js';
 import { ArchiveLoader } from './modules/archive-loader.js';
 // hasAnyProxy moved to archive-pipeline.ts (Phase 2.2)
 import { AnnotationSystem } from './modules/annotation-system.js';
+import { DetailViewer } from './modules/detail-viewer.js';
+import type { DetailViewerDeps } from './modules/detail-viewer.js';
 import { CrossSectionTool } from './modules/cross-section.js';
 import { MeasurementSystem } from './modules/measurement-system.js';
 import { FlightPathManager } from './modules/flight-path.js';
@@ -1742,6 +1744,44 @@ async function init() {
     annotationSystem.onAnnotationSelected = onAnnotationSelected;
     annotationSystem.onPlacementModeChanged = onPlacementModeChanged;
     log.info(' Annotation system initialized:', !!annotationSystem);
+
+    // Detail inspect button click (event delegation on popup)
+    const detailPopup = document.getElementById('annotation-info-popup');
+    if (detailPopup) {
+        detailPopup.addEventListener('click', async (e) => {
+            const btn = (e.target as HTMLElement).closest('.detail-inspect-btn') as HTMLElement;
+            if (!btn) return;
+            const key = btn.dataset.detailKey;
+            if (!key) return;
+
+            // Get or extract the blob
+            let blob: Blob | null = null;
+            const cached = state.loadedDetailBlobs.get(key);
+            if (cached) {
+                blob = await fetch(cached).then(r => r.blob());
+            } else {
+                const entry = state.detailAssetIndex.get(key);
+                if (entry && state.archiveLoader) {
+                    const result = await state.archiveLoader.extractFile(entry.filename);
+                    if (result) {
+                        blob = result.blob;
+                        state.loadedDetailBlobs.set(key, result.url);
+                    }
+                }
+            }
+
+            if (!blob) {
+                notify('Could not load detail model', 'error');
+                return;
+            }
+
+            const anno = annotationSystem?.getAnnotations().find((a: any) => a.detail_asset_key === key);
+            if (!anno) return;
+
+            const viewer = new DetailViewer(createDetailViewerDeps());
+            await viewer.open(anno, blob);
+        });
+    }
 
     // Initialize walkthrough controller
     initWalkthroughController({
@@ -3762,6 +3802,28 @@ function resumeRenderLoop(): void {
     if (!_renderPaused) return;
     _renderPaused = false;
     animate();
+}
+
+function createDetailViewerDeps(): DetailViewerDeps {
+    return {
+        extractDetailAsset: async (key: string) => {
+            if (!state.archiveLoader) return null;
+            const entry = state.detailAssetIndex.get(key);
+            if (!entry) return null;
+            const result = await state.archiveLoader.extractFile(entry.filename);
+            return result ? result.blob : null;
+        },
+        parentRenderLoop: { pause: pauseRenderLoop, resume: resumeRenderLoop },
+        theme: null,
+        isEditor: true,
+        imageAssets: state.imageAssets,
+        onDetailAnnotationsChanged: (key: string, annotations: any[]) => {
+            const parentAnno = annotationSystem?.getAnnotations().find((a: any) => a.detail_asset_key === key);
+            if (parentAnno) {
+                parentAnno.detail_annotations = annotations;
+            }
+        }
+    };
 }
 
 // Initialize when DOM is ready

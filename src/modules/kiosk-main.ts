@@ -403,6 +403,43 @@ async function _doInit(): Promise<void> {
         }
     };
 
+    // Detail inspect button click (event delegation on popup)
+    const detailPopupEl = document.getElementById('annotation-info-popup');
+    if (detailPopupEl) {
+        detailPopupEl.addEventListener('click', async (e) => {
+            const btn = (e.target as HTMLElement).closest('.detail-inspect-btn') as HTMLElement;
+            if (!btn) return;
+            const key = btn.dataset.detailKey;
+            if (!key) return;
+
+            const entry = state.detailAssetIndex.get(key);
+            if (!entry || !state.archiveLoader) return;
+
+            showLoading('Loading detail model…');
+            const result = await state.archiveLoader.extractFile(entry.filename);
+            hideLoading();
+            if (!result) return;
+
+            const { DetailViewer } = await import('./detail-viewer.js');
+            const anno = annotationSystem?.getAnnotations().find((a: any) => a.detail_asset_key === key);
+            if (!anno) return;
+
+            const viewer = new DetailViewer({
+                extractDetailAsset: async (k: string) => {
+                    const e2 = state.detailAssetIndex.get(k);
+                    if (!e2 || !state.archiveLoader) return null;
+                    const r = await state.archiveLoader.extractFile(e2.filename);
+                    return r ? r.blob : null;
+                },
+                parentRenderLoop: { pause: pauseRender, resume: resumeRender },
+                theme: state.theme || null,
+                isEditor: false,
+                imageAssets: state.imageAssets
+            });
+            await viewer.open(anno, result.blob);
+        });
+    }
+
     // Create measurement system
     measurementSystem = new MeasurementSystem(scene, camera, renderer, controls);
     measurementSystem.onMeasurementChanged = () => { getLayoutModule()?.onMeasurementChanged?.(); };
