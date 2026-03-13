@@ -32,7 +32,7 @@ interface LocalAssetStore {
     pointcloudBlob: Blob | null;
     cadBlob: Blob | null;
     cadFileName: string | null;
-    flightPathBlobs: Array<{ blob: Blob; fileName: string }>;
+    flightPathBlobs: Array<{ blob: Blob; fileName: string; trimStart?: number; trimEnd?: number }>;
     colmapBlobs: Array<{ camerasBlob: Blob; imagesBlob: Blob; points3DBuffer?: ArrayBuffer }>;
     sourceFiles: SourceFileEntry[];
 }

@@ -119,6 +119,8 @@ export interface AppState {
         originalFaces: number;
         resultFaces: number;
     } | null;
+    // Internal: original mesh filename preserved across GLB conversions (set by mesh-loader)
+    _meshFileName?: string;
     // Detected asset format extensions (set during file load)
     meshFormat: string | null;
     pointcloudFormat: string | null;
