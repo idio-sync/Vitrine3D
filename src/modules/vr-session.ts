@@ -545,21 +545,232 @@ function disposeTeleport(): void {
 }
 
 // =============================================================================
-// Wrist Menu (Chunk 5 — stubs)
+// Wrist Menu UI
 // =============================================================================
 
+const WRIST_MENU_WIDTH = 0.3;
+const WRIST_MENU_HEIGHT = 0.25;
+const WRIST_CANVAS_SIZE = 256;
+
+interface WristMenuButton {
+    label: string;
+    key: string;
+    type: 'toggle' | 'action';
+    active: boolean;
+    y: number;
+    height: number;
+}
+
+function createMenuButtons(): WristMenuButton[] {
+    const h = 30;
+    const s = 10;
+    return [
+        { label: 'Splat',       key: 'splat',       type: 'toggle', active: true,  y: s,       height: h },
+        { label: 'Mesh',        key: 'mesh',        type: 'toggle', active: true,  y: s + 32,  height: h },
+        { label: 'Point Cloud', key: 'pointcloud',  type: 'toggle', active: true,  y: s + 64,  height: h },
+        { label: 'CAD',         key: 'cad',         type: 'toggle', active: true,  y: s + 96,  height: h },
+        { label: 'Flight Path', key: 'flightpath',  type: 'toggle', active: true,  y: s + 128, height: h },
+        { label: 'Teleport',    key: 'locomotion',  type: 'toggle', active: true,  y: s + 170, height: h },
+        { label: 'Exit VR',     key: 'exit',        type: 'action', active: false, y: s + 212, height: h },
+    ];
+}
+
+function renderWristMenuCanvas(menuGroup: THREE.Group): void {
+    const canvas = menuGroup.userData.canvas as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d')!;
+    const buttons = menuGroup.userData.buttons as WristMenuButton[];
+    const hovered = menuGroup.userData.hoveredButton as string | null;
+
+    // Background
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, canvas.width, canvas.height, 8);
+    ctx.fill();
+
+    for (const btn of buttons) {
+        const isHover = hovered === btn.key;
+
+        // Button background
+        ctx.fillStyle = isHover ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)';
+        ctx.fillRect(8, btn.y, canvas.width - 16, btn.height);
+
+        // Label
+        ctx.fillStyle = '#fff';
+        ctx.font = '14px sans-serif';
+        ctx.fillText(btn.label, 16, btn.y + 20);
+
+        // Toggle indicator
+        if (btn.type === 'toggle') {
+            ctx.fillStyle = btn.active ? '#00ff88' : '#ff4444';
+            ctx.beginPath();
+            ctx.arc(canvas.width - 24, btn.y + 15, 6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    const texture = menuGroup.userData.texture as THREE.CanvasTexture;
+    texture.needsUpdate = true;
+}
+
 function initWristMenu(): void {
-    // Populated in Chunk 5
+    if (!deps) return;
+
+    const group = new THREE.Group();
+    group.visible = false;
+    group.name = 'vr-wrist-menu';
+
+    // Canvas for rendering menu
+    const canvas = document.createElement('canvas');
+    canvas.width = WRIST_CANVAS_SIZE;
+    canvas.height = WRIST_CANVAS_SIZE;
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        side: THREE.DoubleSide,
+    });
+    const geometry = new THREE.PlaneGeometry(WRIST_MENU_WIDTH, WRIST_MENU_HEIGHT);
+    const panel = new THREE.Mesh(geometry, material);
+    group.add(panel);
+
+    // Store refs for interaction
+    group.userData.canvas = canvas;
+    group.userData.texture = texture;
+    group.userData.panel = panel;
+    group.userData.buttons = createMenuButtons();
+    group.userData.hoveredButton = null;
+
+    // Sync button state with actual asset visibility
+    if (deps) {
+        const vis = deps.getAssetVisibility();
+        const buttons = group.userData.buttons as WristMenuButton[];
+        for (const btn of buttons) {
+            if (btn.key in vis) btn.active = vis[btn.key];
+        }
+    }
+
+    renderWristMenuCanvas(group);
+    deps.scene.add(group);
+    wristMenu = group;
+    log.info('Wrist menu initialized');
 }
 
 function updateWristMenu(): void {
-    // Populated in Chunk 5
+    if (!wristMenu || !deps) return;
+
+    const session = deps.renderer.xr.getSession();
+    if (!session) return;
+
+    // Get left controller for menu position
+    const leftController = deps.renderer.xr.getController(0);
+    if (!leftController) {
+        wristMenu.visible = false;
+        return;
+    }
+
+    // Position menu above left wrist
+    const controllerPos = new THREE.Vector3();
+    const controllerQuat = new THREE.Quaternion();
+    leftController.getWorldPosition(controllerPos);
+    leftController.getWorldQuaternion(controllerQuat);
+
+    wristMenu.position.copy(controllerPos);
+    wristMenu.position.y += 0.1;
+    wristMenu.quaternion.copy(controllerQuat);
+
+    // Check gaze direction — show menu when user looks at wrist
+    const xrCamera = deps.renderer.xr.getCamera();
+    const headForward = new THREE.Vector3(0, 0, -1).applyQuaternion(xrCamera.quaternion);
+    const headPos = new THREE.Vector3();
+    xrCamera.getWorldPosition(headPos);
+    const toWrist = controllerPos.clone().sub(headPos).normalize();
+    const dot = headForward.dot(toWrist);
+
+    wristMenu.visible = dot > VR.WRIST_MENU_LOOK_THRESHOLD;
+
+    // Handle right controller ray interaction with menu
+    if (wristMenu.visible) {
+        handleWristMenuInteraction();
+    }
+}
+
+function handleWristMenuInteraction(): void {
+    if (!wristMenu || !deps) return;
+
+    const session = deps.renderer.xr.getSession();
+    if (!session) return;
+
+    // Get right controller for ray pointing
+    const rightController = deps.renderer.xr.getController(1);
+    if (!rightController) return;
+
+    // Build raycaster from right controller
+    const raycaster = new THREE.Raycaster();
+    const controllerPos = new THREE.Vector3();
+    const controllerDir = new THREE.Vector3(0, 0, -1);
+    rightController.getWorldPosition(controllerPos);
+    rightController.getWorldDirection(controllerDir);
+    controllerDir.negate();
+    raycaster.set(controllerPos, controllerDir);
+
+    const panel = wristMenu.userData.panel as THREE.Mesh;
+    const intersects = raycaster.intersectObject(panel);
+
+    if (intersects.length === 0) {
+        if (wristMenu.userData.hoveredButton !== null) {
+            wristMenu.userData.hoveredButton = null;
+            renderWristMenuCanvas(wristMenu);
+        }
+        return;
+    }
+
+    // Map UV coordinates to button
+    const uv = intersects[0].uv;
+    if (!uv) return;
+
+    const buttons = wristMenu.userData.buttons as WristMenuButton[];
+    const canvasY = (1 - uv.y) * WRIST_CANVAS_SIZE;
+    const hitButton = buttons.find(b => canvasY >= b.y && canvasY <= b.y + b.height);
+
+    // Update hover state
+    const prevHover = wristMenu.userData.hoveredButton;
+    wristMenu.userData.hoveredButton = hitButton?.key ?? null;
+    if (prevHover !== wristMenu.userData.hoveredButton) {
+        renderWristMenuCanvas(wristMenu);
+    }
+
+    // Check for trigger press on right controller
+    let triggerPressed = false;
+    for (const source of session.inputSources) {
+        if (source.handedness === 'right' && source.gamepad) {
+            triggerPressed = source.gamepad.buttons[0]?.pressed ?? false;
+            break;
+        }
+    }
+
+    if (!hitButton || !triggerPressed) return;
+
+    // Handle button press
+    if (hitButton.key === 'exit') {
+        sparkXr?.toggleXr();
+    } else if (hitButton.key === 'locomotion') {
+        locomotionMode = locomotionMode === 'teleport' ? 'smooth' : 'teleport';
+        hitButton.label = locomotionMode === 'teleport' ? 'Teleport' : 'Smooth';
+        hitButton.active = locomotionMode === 'teleport';
+        renderWristMenuCanvas(wristMenu);
+        log.info('Locomotion mode: %s', locomotionMode);
+    } else {
+        // Asset toggle
+        deps.toggleAsset(hitButton.key);
+        hitButton.active = !hitButton.active;
+        renderWristMenuCanvas(wristMenu);
+    }
 }
 
 function disposeWristMenu(): void {
     if (wristMenu) {
-        wristMenu.removeFromParent();
-        // Dispose all children
         wristMenu.traverse((child) => {
             if (child instanceof THREE.Mesh) {
                 child.geometry.dispose();
@@ -568,8 +779,11 @@ function disposeWristMenu(): void {
                 } else {
                     child.material.dispose();
                 }
+                const map = (child.material as THREE.MeshBasicMaterial).map;
+                if (map) map.dispose();
             }
         });
+        wristMenu.removeFromParent();
         wristMenu = null;
     }
 }
