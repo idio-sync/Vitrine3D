@@ -1771,6 +1771,38 @@ export function setup(manifest, deps) {
         viewerContainer.appendChild(overlay);
     }
 
+    // Populate the Flight Log sidebar section if data is already available at setup time
+    if (flightPathManager && flightPathManager.hasData) {
+        const flightPlaceholder = document.getElementById('editorial-flight-log-section');
+        if (flightPlaceholder && !flightPlaceholder.hasChildNodes()) {
+            const fStats = flightPathManager.getStats();
+            if (fStats) {
+                const { section: fSection, content: fContent } = createCollapsible('Flight Log', false);
+                const fGrid = document.createElement('div');
+                fGrid.className = 'editorial-flight-info-stats';
+                [
+                    ['Duration', fStats.duration],
+                    ['Distance', fStats.distance],
+                    ['Max Alt', fStats.maxAlt],
+                    ['Max Speed', fStats.maxSpeed],
+                    ['Avg Speed', fStats.avgSpeed],
+                    ['Points', fStats.points],
+                ].forEach(([label, value]) => {
+                    const lbl = document.createElement('span');
+                    lbl.className = 'editorial-flight-info-label';
+                    lbl.textContent = label;
+                    const val = document.createElement('span');
+                    val.className = 'editorial-flight-info-value';
+                    val.textContent = value;
+                    fGrid.appendChild(lbl);
+                    fGrid.appendChild(val);
+                });
+                fContent.appendChild(fGrid);
+                flightPlaceholder.appendChild(fSection);
+            }
+        }
+    }
+
     // --- Mobile info overlay: curated content for mobile tier ---
     // Build curated mobile content inside the existing overlay element.
     // On mobile, the .mobile-open class shows this content; on desktop, .open shows the full panel.
