@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { Logger } from './utilities.js';
 import { AnnotationSystem } from './annotation-system.js';
 import type { Annotation, DetailViewSettings } from '../types.js';
@@ -175,6 +176,10 @@ export class DetailViewer {
         try {
             const url = URL.createObjectURL(assetBlob);
             const loader = new GLTFLoader();
+            const dracoLoader = new DRACOLoader();
+            dracoLoader.setDecoderPath('/draco/');
+            dracoLoader.setDecoderConfig({ type: 'js' });
+            loader.setDRACOLoader(dracoLoader);
             const gltf = await new Promise<any>((resolve, reject) => {
                 loader.load(url, resolve, undefined, reject);
             });

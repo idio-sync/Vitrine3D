@@ -1801,6 +1801,10 @@ async function init() {
                 const key = archiveCreator.addDetailModel(file, file.name);
                 if (annotationSystem?.selectedAnnotation) {
                     annotationSystem.selectedAnnotation.detail_asset_key = key;
+                } else {
+                    // During annotation creation, selectedAnnotation is null —
+                    // store key to apply after confirmAnnotation()
+                    _pendingDetailKey = key;
                 }
                 // Persist blob URL so it survives archiveCreator.reset() during export
                 const ext = file.name.split('.').pop()?.toLowerCase() || 'glb';
@@ -1816,17 +1820,21 @@ async function init() {
     if (removeBtn) {
         removeBtn.addEventListener('click', () => {
             const anno = annotationSystem?.selectedAnnotation;
-            if (anno?.detail_asset_key) {
-                const oldUrl = state.loadedDetailBlobs.get(anno.detail_asset_key);
+            const keyToRemove = anno?.detail_asset_key || _pendingDetailKey;
+            if (keyToRemove) {
+                const oldUrl = state.loadedDetailBlobs.get(keyToRemove);
                 if (oldUrl) URL.revokeObjectURL(oldUrl);
-                state.loadedDetailBlobs.delete(anno.detail_asset_key);
-                state.detailAssetIndex.delete(anno.detail_asset_key);
-                sceneRefs.archiveCreator?.removeDetailModel(anno.detail_asset_key);
-                anno.detail_asset_key = undefined;
-                anno.detail_button_label = undefined;
-                anno.detail_thumbnail = undefined;
-                anno.detail_annotations = undefined;
-                anno.detail_view_settings = undefined;
+                state.loadedDetailBlobs.delete(keyToRemove);
+                state.detailAssetIndex.delete(keyToRemove);
+                sceneRefs.archiveCreator?.removeDetailModel(keyToRemove);
+                if (anno) {
+                    anno.detail_asset_key = undefined;
+                    anno.detail_button_label = undefined;
+                    anno.detail_thumbnail = undefined;
+                    anno.detail_annotations = undefined;
+                    anno.detail_view_settings = undefined;
+                }
+                _pendingDetailKey = null;
             }
             if (filenameSpan) filenameSpan.textContent = '';
             if (removeBtn) removeBtn.style.display = 'none';
@@ -1844,12 +1852,12 @@ async function init() {
         });
     }
 
-    // Preview detail model in the detail viewer
+    // Preview detail model in the detail viewer (creation popup)
     const previewBtn = document.getElementById('btn-preview-detail');
     if (previewBtn) {
         previewBtn.addEventListener('click', async () => {
             const anno = annotationSystem?.selectedAnnotation;
-            const key = anno?.detail_asset_key;
+            const key = anno?.detail_asset_key || _pendingDetailKey;
             if (!key) return;
 
             let blob: Blob | null = null;
@@ -3036,11 +3044,24 @@ function toggleAnnotationMode() {
 // Save the pending annotation
 function saveAnnotation() {
     saveAnnotationHandler(createAnnotationControllerDeps());
+
+    // Apply pending detail model key to the newly-created annotation
+    if (_pendingDetailKey) {
+        const annotations = annotationSystem?.toJSON() || [];
+        const newest = annotations[annotations.length - 1];
+        if (newest) {
+            newest.detail_asset_key = _pendingDetailKey;
+            const labelInput = document.getElementById('detail-button-label') as HTMLInputElement | null;
+            if (labelInput?.value) newest.detail_button_label = labelInput.value;
+        }
+        _pendingDetailKey = null;
+    }
 }
 
 // Cancel annotation placement
 function cancelAnnotation() {
     cancelAnnotationHandler(createAnnotationControllerDeps());
+    _pendingDetailKey = null;
 }
 
 // Update camera for selected annotation
@@ -3895,6 +3916,7 @@ const _clock = new THREE.Clock();
 
 let _animFrameId: number = 0;
 let _renderPaused = false;
+let _pendingDetailKey: string | null = null;
 
 function animate() {
     if (_renderPaused) return;
