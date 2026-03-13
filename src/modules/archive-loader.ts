@@ -1129,12 +1129,15 @@ export class ArchiveLoader {
      * Call this after all needed assets have been extracted and cached.
      * After calling this, only previously cached files and Range-based
      * extraction (via _url) remain available. Files not yet in _fileCache
-     * can still be extracted if the archive was loaded via loadRemoteIndex().
+     * can still be extracted if the archive was loaded via loadRemoteIndex()
+     * or via the original File handle (file picker).
      */
     releaseRawData(): void {
         const hadData = this._hasData;
         this._rawData = null;
-        this._file = null;
+        // Preserve _file — it's a lightweight handle, not raw data in memory.
+        // Nulling it would prevent future extraction (e.g. HD quality switch)
+        // for file-picker-loaded archives that have no _url fallback.
         if (hadData) {
             log.info('Raw archive data released to free memory');
         }
