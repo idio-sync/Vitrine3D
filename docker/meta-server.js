@@ -2769,6 +2769,72 @@ function finishTranscode(mediaId, mp4Path, gifPath, thumbPath, mediaDir, rawPath
 }
 
 /**
+ * Resolve FFmpeg encoder + args based on video.codec setting and GPU capabilities.
+ * Returns { encoder, args, isHardware } or throws if requested hardware is unavailable.
+ */
+function resolveEncoder() {
+    const codec = getSetting('video.codec') || 'auto';
+    const quality = getSetting('video.crf') || '18';
+    const preset = getSetting('video.preset') || 'fast';
+    const vaDevice = getSetting('video.vaapi_device') || '/dev/dri/renderD128';
+
+    const hwEncoderMap = {
+        'av1':     'av1_vaapi',
+        'hevc':    'hevc_vaapi',
+        'h264-hw': 'h264_vaapi',
+    };
+
+    // Auto mode: pick best available
+    if (codec === 'auto') {
+        if (gpuCapabilities.vaapi && gpuCapabilities.encoders.includes('av1_vaapi')) {
+            return {
+                encoder: 'av1_vaapi',
+                isHardware: true,
+                preInputArgs: ['-vaapi_device', vaDevice],
+                vf: 'format=nv12,pad=ceil(iw/2)*2:ceil(ih/2)*2,hwupload',
+                codecArgs: ['-c:v', 'av1_vaapi', '-global_quality', quality],
+            };
+        }
+        // Fallback: software H.264
+        return {
+            encoder: 'libx264',
+            isHardware: false,
+            preInputArgs: [],
+            vf: 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
+            codecArgs: ['-c:v', 'libx264', '-preset', preset, '-crf', quality, '-movflags', '+faststart'],
+        };
+    }
+
+    // Software H.264 — always available
+    if (codec === 'h264') {
+        return {
+            encoder: 'libx264',
+            isHardware: false,
+            preInputArgs: [],
+            vf: 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
+            codecArgs: ['-c:v', 'libx264', '-preset', preset, '-crf', quality, '-movflags', '+faststart'],
+        };
+    }
+
+    // Explicit hardware codec
+    const hwEncoder = hwEncoderMap[codec];
+    if (!hwEncoder) {
+        throw new Error('Unknown video.codec setting: ' + codec);
+    }
+    if (!gpuCapabilities.vaapi || !gpuCapabilities.encoders.includes(hwEncoder)) {
+        throw new Error('Hardware encoder ' + hwEncoder + ' requested but not available. GPU detected: ' + gpuCapabilities.vaapi);
+    }
+
+    return {
+        encoder: hwEncoder,
+        isHardware: true,
+        preInputArgs: ['-vaapi_device', vaDevice],
+        vf: 'format=nv12,pad=ceil(iw/2)*2:ceil(ih/2)*2,hwupload',
+        codecArgs: ['-c:v', hwEncoder, '-global_quality', quality],
+    };
+}
+
+/**
  * Run ffmpeg transcode pipeline for a media record (non-blocking, callback-based).
  * Steps: MP4 conversion → thumbnail → GIF palette → GIF encode → DB update.
  */
