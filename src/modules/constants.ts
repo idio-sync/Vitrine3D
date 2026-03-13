@@ -319,6 +319,72 @@ export const DECIMATION_PRESETS: Record<string, DecimationPreset> = {
 export const DEFAULT_DECIMATION_PRESET = 'medium';
 
 // =============================================================================
+// OBJECT PROFILES (size-aware optimization presets)
+// =============================================================================
+
+export interface ObjectProfileTier {
+    targetFaces: number;
+    textureMaxRes: number;
+    errorThreshold: number;
+    lockBorder: boolean;
+    preserveUVSeams: boolean;
+    textureFormat: 'jpeg' | 'png' | 'keep';
+    textureQuality: number;
+}
+
+export interface ObjectProfile {
+    name: string;
+    description: string;
+    hd: ObjectProfileTier;
+    sd: ObjectProfileTier;
+}
+
+export const OBJECT_PROFILES: Record<string, ObjectProfile> = {
+    'small': {
+        name: 'Small Object',
+        description: 'Jewelry, shoes, pottery',
+        hd: { targetFaces: 300_000, textureMaxRes: 2048, errorThreshold: 0.05,
+               lockBorder: true, preserveUVSeams: true, textureFormat: 'jpeg', textureQuality: 0.90 },
+        sd: { targetFaces: 50_000,  textureMaxRes: 1024, errorThreshold: 0.2,
+               lockBorder: true, preserveUVSeams: false, textureFormat: 'jpeg', textureQuality: 0.80 },
+    },
+    'medium': {
+        name: 'Medium Object',
+        description: 'Furniture, busts, sculptures',
+        hd: { targetFaces: 500_000, textureMaxRes: 4096, errorThreshold: 0.05,
+               lockBorder: true, preserveUVSeams: true, textureFormat: 'jpeg', textureQuality: 0.90 },
+        sd: { targetFaces: 100_000, textureMaxRes: 1024, errorThreshold: 0.15,
+               lockBorder: true, preserveUVSeams: true, textureFormat: 'jpeg', textureQuality: 0.85 },
+    },
+    'large': {
+        name: 'Large Object',
+        description: 'Monuments, room interiors',
+        hd: { targetFaces: 1_000_000, textureMaxRes: 4096, errorThreshold: 0.03,
+               lockBorder: true, preserveUVSeams: true, textureFormat: 'jpeg', textureQuality: 0.90 },
+        sd: { targetFaces: 250_000,   textureMaxRes: 2048, errorThreshold: 0.1,
+               lockBorder: true, preserveUVSeams: true, textureFormat: 'jpeg', textureQuality: 0.85 },
+    },
+    'massive': {
+        name: 'Massive / Building',
+        description: 'Full buildings, complexes',
+        hd: { targetFaces: 2_000_000, textureMaxRes: 4096, errorThreshold: 0.02,
+               lockBorder: true, preserveUVSeams: true, textureFormat: 'jpeg', textureQuality: 0.90 },
+        sd: { targetFaces: 500_000,   textureMaxRes: 2048, errorThreshold: 0.08,
+               lockBorder: true, preserveUVSeams: true, textureFormat: 'jpeg', textureQuality: 0.85 },
+    },
+    'custom': {
+        name: 'Custom',
+        description: 'Set values manually',
+        hd: { targetFaces: 1_000_000, textureMaxRes: 4096, errorThreshold: 0.05,
+               lockBorder: true, preserveUVSeams: true, textureFormat: 'jpeg', textureQuality: 0.90 },
+        sd: { targetFaces: 100_000,   textureMaxRes: 1024, errorThreshold: 0.1,
+               lockBorder: true, preserveUVSeams: true, textureFormat: 'jpeg', textureQuality: 0.85 },
+    },
+};
+
+export const DEFAULT_OBJECT_PROFILE = 'medium';
+
+// =============================================================================
 // FLIGHT LOG (drone telemetry import)
 // =============================================================================
 
