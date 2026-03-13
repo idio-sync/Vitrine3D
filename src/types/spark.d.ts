@@ -113,6 +113,27 @@ declare module '@sparkjsdev/spark' {
     }): Promise<{ packedArray: Uint32Array; numSplats: number; extra?: any }>;
 
     /**
+     * Transcode splat data to LOD-ordered SPZ format.
+     * CPU-heavy — prefer running in a Web Worker for large files.
+     */
+    export function transcodeSpz(input: {
+        inputs: Array<{
+            fileBytes: Uint8Array;
+            fileType?: string;
+            pathOrUrl?: string;
+            transform?: {
+                scale?: number;
+                quaternion?: [number, number, number, number];
+                translate?: [number, number, number];
+            };
+        }>;
+        clipXyz?: { min: [number, number, number]; max: [number, number, number] };
+        maxSh?: number;
+        fractionalBits?: number;
+        opacityThreshold?: number;
+    }): Promise<{ fileBytes: Uint8Array }>;
+
+    /**
      * Legacy 0.1 renderer, renamed in 2.0. No LOD support.
      * Use via spark-compat.ts adapter with VITE_SPARK_VERSION=0.1.
      */

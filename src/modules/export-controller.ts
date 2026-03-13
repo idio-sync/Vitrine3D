@@ -15,9 +15,36 @@ import { getStore } from './asset-store.js';
 import { captureWalkthroughForArchive } from './walkthrough-controller.js';
 import { getAuthCredentials, getCsrfToken, fetchCsrfToken, refreshLibrary } from './library-panel.js';
 import type { ExportDeps } from '@/types.js';
-import { transcodeSpz } from '@sparkjsdev/spark';
+import type { TranscodeResponse, TranscodeError } from './workers/transcode-spz.worker.js';
 
 const log = Logger.getLogger('export-controller');
+
+/**
+ * Run transcodeSpz in a Web Worker to avoid blocking the main thread.
+ * Transfers the input buffer to the worker and receives the SPZ bytes back.
+ */
+function transcodeSpzInWorker(fileBytes: Uint8Array, fileType: string): Promise<Uint8Array> {
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(
+            new URL('./workers/transcode-spz.worker.ts', import.meta.url),
+            { type: 'module' },
+        );
+        worker.onmessage = (e: MessageEvent<TranscodeResponse | TranscodeError>) => {
+            worker.terminate();
+            if (e.data.success === true) {
+                resolve((e.data as TranscodeResponse).spzBytes);
+            } else {
+                reject(new Error((e.data as TranscodeError).error));
+            }
+        };
+        worker.onerror = (e) => {
+            worker.terminate();
+            reject(new Error(`Worker error: ${e.message}`));
+        };
+        // Transfer the buffer to avoid a copy
+        worker.postMessage({ fileBytes, fileType }, { transfer: [fileBytes.buffer] });
+    });
+}
 
 const CHUNK_SIZE = 50 * 1024 * 1024; // 50 MB — safely under Cloudflare's 100 MB request limit
 const CHUNK_CONCURRENCY = 1;          // sequential — concurrent uploads cause HTTP/2 protocol errors behind Cloudflare
@@ -301,13 +328,7 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
                 deps.ui.showLoading('Generating splat LOD...', true);
 
                 const fileBytes = new Uint8Array(await assets.splatBlob.arrayBuffer());
-                const { fileBytes: spzBytes } = await transcodeSpz({
-                    inputs: [{ fileBytes, fileType: splatExt }],
-                });
-
-                if (!spzBytes || spzBytes.length === 0) {
-                    throw new Error('transcodeSpz returned empty output');
-                }
+                const spzBytes = await transcodeSpzInWorker(fileBytes, splatExt);
 
                 splatBlobToArchive = new Blob([spzBytes], { type: 'application/octet-stream' });
                 // Change extension to .spz for the archive
