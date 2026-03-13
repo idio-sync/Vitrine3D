@@ -852,6 +852,14 @@ export class ArchiveLoader {
         return { blob, url, name: safeFilename };
     }
 
+    async extractDetailAsset(key: string, manifest: any): Promise<Blob | null> {
+        const entry = manifest?.data_entries?.[key];
+        if (!entry || !entry.file_name) return null;
+
+        const result = await this.extractFile(entry.file_name);
+        return result ? result.blob : null;
+    }
+
     /**
      * Get transform/alignment data for an entry
      */

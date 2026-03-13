@@ -742,6 +742,18 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
             deps.annotations.loadAnnotationsFromArchive(annotations);
         }
 
+        // Index detail model entries (lazy — not extracted until user clicks inspect)
+        const detailIndex = new Map<string, { filename: string }>();
+        if (manifest.data_entries) {
+            for (const [key, entry] of Object.entries(manifest.data_entries)) {
+                if (key.startsWith('detail_') && (entry as any).role === 'detail') {
+                    detailIndex.set(key, { filename: (entry as any).file_name });
+                }
+            }
+        }
+        deps.state.detailAssetIndex = detailIndex;
+        deps.state.loadedDetailBlobs = new Map();
+
         // NOTE: Flight path rendering is deferred to Phase 3 — blobs aren't
         // extracted until ensureAssetLoaded('flightpath') runs there.
 
