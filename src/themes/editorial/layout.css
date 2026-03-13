@@ -4151,33 +4151,240 @@ body.kiosk-mode.kiosk-editorial .editorial-wt-stop-title {
     transition: opacity 0.4s ease;
 }
 
-/* Detail viewer — Editorial sidebar layout */
-body.kiosk-mode[data-theme="editorial"] #detail-viewer-overlay {
-    display: grid;
-    grid-template-columns: 38.2% 1fr;
-    grid-template-rows: auto 1fr;
-}
+/* ── Detail Viewer — Editorial split-push layout ──
+   When a detail model is opened, the main canvas becomes a frozen preview
+   on the left (38.2%, golden ratio). The detail canvas fills the right.
+   Info panel pushes both: frozen preview compresses to 15%, detail adjusts.
+   ──────────────────────────────────────────────────────────────────────── */
 
-body.kiosk-mode[data-theme="editorial"] #detail-viewer-overlay.detail-viewer-entering {
-    display: grid;
-}
-
-body.kiosk-mode[data-theme="editorial"] .detail-viewer-header {
-    grid-column: 1;
-    grid-row: 1 / -1;
+/* Detail overlay: positioned within editorial frame, not full-viewport */
+body.kiosk-mode.kiosk-editorial #detail-viewer-overlay {
+    left: 38.2%;
+    bottom: 32px;
+    z-index: 80;
+    border-left: 1px solid var(--kiosk-border-subtle);
+    display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    padding: 20px;
-    background: var(--editorial-sidebar-bg, var(--bg-panel, #16181d));
+    transition: left 0.55s cubic-bezier(0.33, 1, 0.68, 1),
+                right 0.55s cubic-bezier(0.33, 1, 0.68, 1),
+                opacity 0.4s ease;
 }
 
-body.kiosk-mode[data-theme="editorial"] #detail-viewer-canvas {
-    grid-column: 2;
-    grid-row: 1 / -1;
+body.kiosk-mode.kiosk-editorial #detail-viewer-overlay.detail-viewer-entering {
+    display: flex;
+    transform: translateX(40px);
 }
 
-body.kiosk-mode[data-theme="editorial"] #detail-annotation-markers {
-    grid-column: 2;
-    grid-row: 1 / -1;
+body.kiosk-mode.kiosk-editorial #detail-viewer-overlay.detail-viewer-visible {
+    transform: translateX(0);
+}
+
+/* Hide the detail viewer's own header — editorial title block handles titles */
+body.kiosk-mode.kiosk-editorial .detail-viewer-header {
+    display: none !important;
+}
+
+/* Canvas fills the overlay */
+body.kiosk-mode.kiosk-editorial #detail-viewer-canvas {
+    flex: 1;
+    width: 100%;
+}
+
+/* Annotation markers cover the detail canvas area */
+body.kiosk-mode.kiosk-editorial #detail-annotation-markers {
+    position: absolute;
+    inset: 0;
     pointer-events: auto;
+}
+
+/* Top accent line on detail canvas edge */
+body.kiosk-mode.kiosk-editorial #detail-viewer-overlay::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(to right, var(--kiosk-accent), transparent 60%);
+    opacity: 0.35;
+    z-index: 5;
+    pointer-events: none;
+}
+
+/* ── Frozen preview — main canvas dims when detail is active ── */
+
+body.kiosk-mode.kiosk-editorial.detail-active #viewer-canvas {
+    flex: 0 0 38.2%;
+    max-width: 38.2%;
+    filter: brightness(0.5) saturate(0.3);
+    transition: flex-basis 0.55s cubic-bezier(0.33, 1, 0.68, 1),
+                max-width 0.55s cubic-bezier(0.33, 1, 0.68, 1),
+                filter 0.55s ease;
+}
+
+/* Frozen preview click target — overlays the dimmed canvas area */
+body.kiosk-mode.kiosk-editorial .editorial-frozen-click-target {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 38.2%;
+    bottom: 32px;
+    z-index: 85;
+    cursor: pointer;
+    transition: width 0.55s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+/* Frozen preview label */
+body.kiosk-mode.kiosk-editorial .editorial-frozen-label {
+    position: fixed;
+    bottom: 44px;
+    left: 24px;
+    font-family: var(--kiosk-font-body);
+    font-size: 0.55rem;
+    font-weight: 600;
+    color: var(--kiosk-text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    z-index: 86;
+    opacity: 0;
+    transition: opacity 0.4s ease 0.3s;
+    pointer-events: none;
+}
+
+body.kiosk-mode.kiosk-editorial.detail-active .editorial-frozen-label {
+    opacity: 1;
+}
+
+/* ── Detail subtitle — appears in title block when detail is active ── */
+
+body.kiosk-mode.kiosk-editorial .editorial-detail-subtitle {
+    display: block;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(var(--kiosk-accent-rgb), 0.25);
+    font-family: var(--kiosk-font-body);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--kiosk-accent);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transform: translateY(-6px);
+    transition: opacity 0.4s ease 0.2s,
+                transform 0.4s ease 0.2s,
+                max-height 0.4s ease 0.2s,
+                font-size 0.4s ease;
+    text-shadow:
+        0 1px 2px rgba(0,0,0,0.9),
+        0 0 10px rgba(0,0,0,0.5);
+    pointer-events: none;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-detail-subtitle .detail-label {
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--kiosk-text-muted);
+    letter-spacing: 0.06em;
+    display: block;
+    margin-bottom: 3px;
+    transition: font-size 0.4s ease, opacity 0.3s ease, margin 0.3s ease;
+}
+
+body.kiosk-mode.kiosk-editorial.detail-active .editorial-detail-subtitle {
+    opacity: 1;
+    max-height: 80px;
+    transform: translateY(0);
+}
+
+/* ── Dim view mode links when in detail mode ── */
+
+body.kiosk-mode.kiosk-editorial.detail-active .editorial-view-modes {
+    opacity: 0.3;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+/* ── Back to scene link in ribbon ── */
+
+body.kiosk-mode.kiosk-editorial .editorial-detail-back {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--kiosk-accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding-bottom: 2px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease 0.1s, color 0.15s;
+    display: none;
+}
+
+body.kiosk-mode.kiosk-editorial.detail-active .editorial-detail-back {
+    opacity: 1;
+    pointer-events: auto;
+    display: inline;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-detail-back:hover {
+    color: var(--kiosk-text-primary);
+}
+
+/* ── Info push — when info panel opens during detail mode ── */
+
+body.kiosk-mode.kiosk-editorial.detail-active:has(.editorial-info-overlay.open) #detail-viewer-overlay {
+    left: 15%;
+    right: min(38.2%, 720px);
+}
+
+body.kiosk-mode.kiosk-editorial.detail-active:has(.editorial-info-overlay.open) #viewer-canvas {
+    flex-basis: 15%;
+    max-width: 15%;
+}
+
+body.kiosk-mode.kiosk-editorial.detail-active:has(.editorial-info-overlay.open) .editorial-frozen-click-target {
+    width: 15%;
+}
+
+/* Title block compression when info + detail are both open */
+
+body.kiosk-mode.kiosk-editorial.detail-active:has(.editorial-info-overlay.open) .editorial-title-block {
+    max-width: 15%;
+    transition: max-width 0.55s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+body.kiosk-mode.kiosk-editorial.detail-active:has(.editorial-info-overlay.open) .editorial-title-block h1 {
+    font-size: 0.85rem;
+    transition: font-size 0.45s ease;
+}
+
+body.kiosk-mode.kiosk-editorial.detail-active:has(.editorial-info-overlay.open) .editorial-title-rule {
+    width: 24px;
+    transition: width 0.4s ease;
+}
+
+body.kiosk-mode.kiosk-editorial.detail-active:has(.editorial-info-overlay.open) .editorial-title-meta {
+    opacity: 0;
+    font-size: 0;
+    margin: 0;
+    overflow: hidden;
+    transition: opacity 0.3s ease, font-size 0.3s ease;
+}
+
+body.kiosk-mode.kiosk-editorial.detail-active:has(.editorial-info-overlay.open) .editorial-detail-subtitle {
+    font-size: 0.62rem;
+    margin-top: 6px;
+    padding-top: 6px;
+}
+
+body.kiosk-mode.kiosk-editorial.detail-active:has(.editorial-info-overlay.open) .editorial-detail-subtitle .detail-label {
+    font-size: 0;
+    margin: 0;
+    overflow: hidden;
+    opacity: 0;
 }

@@ -83,6 +83,9 @@ export class DetailViewer {
     private escapeHandler: ((e: KeyboardEvent) => void) | null = null;
     private loadedObjects: THREE.Object3D[] = [];
     private heightClampCleanup: (() => void) | null = null;
+    private resizeObserver: ResizeObserver | null = null;
+    private frozenClickTarget: HTMLDivElement | null = null;
+    private detailBackHandler: (() => void) | null = null;
 
     constructor(deps: DetailViewerDeps) {
         this.deps = deps;
@@ -116,11 +119,37 @@ export class DetailViewer {
             this.overlay?.classList.add('detail-viewer-visible');
         });
 
-        // Set up header
+        // Set up header (used by non-editorial themes)
         const titleEl = this.overlay.querySelector('.detail-viewer-title');
         const scaleEl = this.overlay.querySelector('.detail-viewer-scale');
         if (titleEl) titleEl.textContent = settings.description || annotation.title;
         if (scaleEl) scaleEl.textContent = settings.scale_reference || '';
+
+        // Editorial mode: signal detail-active state and populate subtitle
+        const isEditorial = this.deps.theme === 'editorial';
+        if (isEditorial) {
+            document.body.classList.add('detail-active');
+
+            // Populate editorial detail subtitle
+            const detailName = document.querySelector('.editorial-detail-subtitle .detail-name');
+            if (detailName) {
+                detailName.textContent = settings.description || annotation.title;
+            }
+
+            // Create frozen preview click target
+            this.frozenClickTarget = document.createElement('div');
+            this.frozenClickTarget.className = 'editorial-frozen-click-target';
+            this.frozenClickTarget.title = 'Click to return to scene';
+            this.frozenClickTarget.addEventListener('click', () => this.close());
+            document.body.appendChild(this.frozenClickTarget);
+
+            // Wire "Back to Scene" button in ribbon
+            const backBtn = document.querySelector('.editorial-detail-back');
+            if (backBtn) {
+                this.detailBackHandler = () => this.close();
+                backBtn.addEventListener('click', this.detailBackHandler);
+            }
+        }
 
         // Create renderer
         this.renderer = new THREE.WebGLRenderer({
@@ -152,8 +181,11 @@ export class DetailViewer {
             this.controls.autoRotateSpeed = settings.auto_rotate_speed ?? 2;
         }
 
-        // Resize
+        // Resize — use ResizeObserver to catch CSS layout changes (info panel push)
         this._handleResize();
+        this.resizeObserver = new ResizeObserver(() => this._handleResize());
+        this.resizeObserver.observe(this.overlay);
+        // Also listen for window resize as fallback
         this.resizeHandler = () => this._handleResize();
         window.addEventListener('resize', this.resizeHandler);
 
@@ -278,6 +310,10 @@ export class DetailViewer {
         this.camera = null;
 
         // Remove event listeners
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+            this.resizeObserver = null;
+        }
         if (this.resizeHandler) {
             window.removeEventListener('resize', this.resizeHandler);
             this.resizeHandler = null;
@@ -285,6 +321,28 @@ export class DetailViewer {
         if (this.escapeHandler) {
             window.removeEventListener('keydown', this.escapeHandler);
             this.escapeHandler = null;
+        }
+
+        // Clean up editorial mode additions
+        if (this.deps.theme === 'editorial') {
+            document.body.classList.remove('detail-active');
+
+            // Clear detail subtitle text
+            const detailName = document.querySelector('.editorial-detail-subtitle .detail-name');
+            if (detailName) detailName.textContent = '';
+
+            // Remove frozen preview click target
+            if (this.frozenClickTarget) {
+                this.frozenClickTarget.remove();
+                this.frozenClickTarget = null;
+            }
+
+            // Remove back button handler
+            if (this.detailBackHandler) {
+                const backBtn = document.querySelector('.editorial-detail-back');
+                if (backBtn) backBtn.removeEventListener('click', this.detailBackHandler);
+                this.detailBackHandler = null;
+            }
         }
 
         // Hide settings panel

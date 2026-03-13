@@ -805,7 +805,19 @@ export function setup(manifest, deps) {
     const isMobileTier = window.matchMedia('(max-width: 699px)').matches;
     const fixedRoot = isMobileTier ? document.body : viewerContainer;
 
+    // Detail subtitle — shown when detail viewer is active (CSS-driven visibility)
+    const detailSubtitle = document.createElement('div');
+    detailSubtitle.className = 'editorial-detail-subtitle';
+    detailSubtitle.innerHTML = '<span class="detail-label">Inspecting Detail</span><span class="detail-name"></span>';
+    titleBlock.appendChild(detailSubtitle);
+
+    // Frozen preview label — appears over dimmed main canvas in detail mode
+    const frozenLabel = document.createElement('div');
+    frozenLabel.className = 'editorial-frozen-label';
+    frozenLabel.textContent = 'Main Scene';
+
     fixedRoot.appendChild(titleBlock);
+    fixedRoot.appendChild(frozenLabel);
 
     // Auto-fade behavior for title block
     setupAutoFade(titleBlock, null);
@@ -1133,6 +1145,12 @@ export function setup(manifest, deps) {
     }
 
     ribbon.appendChild(viewModes);
+
+    // Detail back button — shown in detail mode, hidden otherwise (CSS-driven)
+    const detailBackBtn = document.createElement('button');
+    detailBackBtn.className = 'editorial-detail-back';
+    detailBackBtn.innerHTML = '\u2190\u00a0Back to Scene';
+    ribbon.appendChild(detailBackBtn);
 
     // Separator after Info / before tools
     const infoToolsRule = document.createElement('div');
