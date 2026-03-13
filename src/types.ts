@@ -113,6 +113,7 @@ export interface AppState {
     originalMeshBlob: Blob | null;
     originalMeshGroup: any | null;
     meshOptimized: boolean;
+    objectProfile: string | null;
     meshOptimizationSettings: {
         targetFaces: number;
         dracoEnabled: boolean;

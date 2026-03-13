@@ -324,6 +324,7 @@ const state: AppState = {
     originalMeshGroup: null,
     meshOptimized: false,
     meshOptimizationSettings: null,
+    objectProfile: null,
     // Detected asset format extensions (set during file load)
     meshFormat: null,
     pointcloudFormat: null,
