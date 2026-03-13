@@ -594,12 +594,16 @@ body.kiosk-mode.kiosk-editorial #viewer-container {
     flex-direction: row;
 }
 
-/* Canvas becomes flex child — shrinks when panel opens */
+/* Canvas becomes flex child — shrinks when panel opens.
+   Transition here enables reverse animation when leaving detail mode. */
 body.kiosk-mode.kiosk-editorial #viewer-canvas {
     flex: 1;
     min-width: 0;
     width: auto !important;
     overflow: hidden;
+    transition: flex-basis 0.55s cubic-bezier(0.33, 1, 0.68, 1),
+                max-width 0.55s cubic-bezier(0.33, 1, 0.68, 1),
+                filter 0.55s ease;
 }
 
 body.kiosk-mode.kiosk-editorial .editorial-info-overlay {
@@ -4162,11 +4166,13 @@ body.kiosk-mode.kiosk-editorial #detail-viewer-overlay {
     left: 38.2%;
     bottom: 32px;
     z-index: 80;
-    border-left: 1px solid var(--kiosk-border-subtle);
+    border-left: 2px solid rgba(var(--kiosk-accent-rgb), 0.35);
+    box-shadow: -12px 0 32px rgba(0,0,0,0.5), -2px 0 8px rgba(0,0,0,0.3);
     display: flex;
     flex-direction: column;
     transition: left 0.55s cubic-bezier(0.33, 1, 0.68, 1),
                 right 0.55s cubic-bezier(0.33, 1, 0.68, 1),
+                transform 0.4s cubic-bezier(0.33, 1, 0.68, 1),
                 opacity 0.4s ease;
 }
 
@@ -4190,11 +4196,12 @@ body.kiosk-mode.kiosk-editorial #detail-viewer-canvas {
     width: 100%;
 }
 
-/* Annotation markers cover the detail canvas area */
+/* Annotation markers cover the detail canvas area — container is pass-through,
+   individual markers get pointer-events via their own styles */
 body.kiosk-mode.kiosk-editorial #detail-annotation-markers {
     position: absolute;
     inset: 0;
-    pointer-events: auto;
+    pointer-events: none;
 }
 
 /* Top accent line on detail canvas edge */
@@ -4205,8 +4212,8 @@ body.kiosk-mode.kiosk-editorial #detail-viewer-overlay::after {
     left: 0;
     right: 0;
     height: 2px;
-    background: linear-gradient(to right, var(--kiosk-accent), transparent 60%);
-    opacity: 0.35;
+    background: linear-gradient(to right, var(--kiosk-accent), transparent 50%);
+    opacity: 0.6;
     z-index: 5;
     pointer-events: none;
 }
@@ -4231,7 +4238,16 @@ body.kiosk-mode.kiosk-editorial .editorial-frozen-click-target {
     bottom: 32px;
     z-index: 85;
     cursor: pointer;
-    transition: width 0.55s cubic-bezier(0.33, 1, 0.68, 1);
+    transition: width 0.55s cubic-bezier(0.33, 1, 0.68, 1),
+                background 0.25s ease;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-frozen-click-target:hover {
+    background: rgba(var(--kiosk-accent-rgb), 0.06);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-frozen-click-target:active {
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
 }
 
 /* Frozen preview label */
@@ -4242,17 +4258,17 @@ body.kiosk-mode.kiosk-editorial .editorial-frozen-label {
     font-family: var(--kiosk-font-body);
     font-size: 0.55rem;
     font-weight: 600;
-    color: var(--kiosk-text-faint);
+    color: var(--kiosk-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.1em;
     z-index: 86;
     opacity: 0;
-    transition: opacity 0.4s ease 0.3s;
+    transition: opacity 0.4s ease 0.3s, color 0.2s ease;
     pointer-events: none;
 }
 
 body.kiosk-mode.kiosk-editorial.detail-active .editorial-frozen-label {
-    opacity: 1;
+    opacity: 0.7;
 }
 
 /* ── Detail subtitle — appears in title block when detail is active ── */
