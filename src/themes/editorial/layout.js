@@ -2034,7 +2034,8 @@ function buildFlightDropdown(fpm, container) {
     fpWrapper.className = 'editorial-flight-wrapper';
 
     const fpBtn = document.createElement('button');
-    fpBtn.className = 'editorial-marker-toggle editorial-flight-btn active';
+    const fpIsVisible = fpm.group.visible;
+    fpBtn.className = 'editorial-marker-toggle editorial-flight-btn' + (fpIsVisible ? ' active' : ' off');
     fpBtn.title = 'Flight Log';
     fpBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 2.8L21 6l-3.2 3.2"/><path d="M21 6H7.5a4.5 4.5 0 0 0 0 9H12"/><circle cx="17" cy="17" r="3"/><path d="M14 17h-4"/></svg>';
 
@@ -2383,10 +2384,10 @@ function buildFlightDropdown(fpm, container) {
     const actions = document.createElement('div');
     actions.className = 'editorial-flight-actions';
 
-    let fpVisible = true;
+    let fpVisible = fpm.group.visible;
     const hideBtn = document.createElement('button');
     hideBtn.className = 'editorial-flight-action';
-    hideBtn.textContent = 'Hide Path';
+    hideBtn.textContent = fpVisible ? 'Hide Path' : 'Show Path';
     hideBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         fpVisible = !fpVisible;
