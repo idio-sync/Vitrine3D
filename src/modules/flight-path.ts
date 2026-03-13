@@ -1193,16 +1193,22 @@ export class FlightPathManager {
 
         if (hasGimbal) {
             // Gimbal-locked: use gimbal yaw + pitch
+            // DJI gimbal yaw is compass bearing (0=N, 90=E). Three.js Euler Y=0 looks
+            // down -Z (south in our local coords where Z+=north). Add PI to convert.
+            // DJI gimbal pitch is negative-down (-90=nadir). Three.js 'YXZ' X rotation
+            // is positive-down. Negate to convert.
             const euler = new THREE.Euler(
-                (point.gimbalPitch! * Math.PI) / 180, // pitch (X)
-                (point.gimbalYaw! * Math.PI) / 180,   // yaw (Y)
-                0,                                       // roll (Z) — assumed 0
+                (-point.gimbalPitch! * Math.PI) / 180,          // pitch (X) — negated
+                (point.gimbalYaw! * Math.PI) / 180 + Math.PI,   // yaw (Y) — +PI offset
+                0,                                                  // roll (Z) — assumed 0
                 'YXZ'
             );
             return new THREE.Quaternion().setFromEuler(euler);
         }
 
         // Heading-forward fallback
+        // Heading uses compass bearing or atan2(dx,dz) — same convention as gimbal yaw,
+        // so also needs +PI offset to convert to Three.js forward direction.
         let heading: number;
         if (points.length < 50) {
             // Sparse path (typical KML waypoints): use Catmull-Rom interpolated direction
@@ -1211,7 +1217,7 @@ export class FlightPathManager {
             heading = this.getPlaybackHeading(points, timeMs);
         }
         const pitchRad = (-15 * Math.PI) / 180; // -15° downward pitch
-        const euler = new THREE.Euler(pitchRad, heading, 0, 'YXZ');
+        const euler = new THREE.Euler(pitchRad, heading + Math.PI, 0, 'YXZ');
         return new THREE.Quaternion().setFromEuler(euler);
     }
 
