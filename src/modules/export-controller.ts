@@ -618,7 +618,7 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
                     if (data) blob = data.blob;
                 }
                 if (blob) {
-                    archiveCreator.addDetailModel(blob, filename.split('/').pop() || filename);
+                    archiveCreator.addDetailModel(blob, filename.split('/').pop() || filename, { key });
                 }
             } catch (e: any) {
                 log.warn('Failed to re-add detail model:', filename, e.message);

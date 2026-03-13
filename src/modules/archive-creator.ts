@@ -1482,11 +1482,10 @@ export class ArchiveCreator {
         return entryKey;
     }
 
-    addDetailModel(blob: Blob, fileName: string, options: AddAssetOptions = {}): string {
-        const index = this._countEntriesOfType('detail_');
-        const entryKey = `detail_${index}`;
+    addDetailModel(blob: Blob, fileName: string, options: AddAssetOptions & { key?: string } = {}): string {
+        const entryKey = options.key || `detail_${this._countEntriesOfType('detail_')}`;
         const ext = fileName.split('.').pop()?.toLowerCase() || '';
-        const archivePath = `assets/detail_${index}.${ext}`;
+        const archivePath = `assets/${entryKey}.${ext}`;
 
         this.files.set(archivePath, { blob, originalName: fileName });
 

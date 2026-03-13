@@ -1690,6 +1690,22 @@
                                 <label for="sidebar-edit-anno-body">Description</label>
                                 <textarea class="prop-input" id="sidebar-edit-anno-body" rows="3" placeholder="Annotation description..."></textarea>
                             </div>
+                            <div class="detail-model-section" id="sidebar-detail-section">
+                                <label>Detail Model</label>
+                                <div class="detail-attach-area">
+                                    <input type="file" id="sidebar-detail-file" accept=".glb" style="display:none">
+                                    <button type="button" id="btn-sidebar-attach-detail" class="prop-btn small">Attach .glb</button>
+                                    <span id="sidebar-detail-filename" class="detail-filename"></span>
+                                    <button type="button" id="btn-sidebar-remove-detail" class="prop-btn danger small" style="display:none">Remove</button>
+                                </div>
+                                <div id="sidebar-detail-customize" style="display:none">
+                                    <div class="metadata-field">
+                                        <label for="sidebar-detail-label">Button Label</label>
+                                        <input type="text" class="prop-input" id="sidebar-detail-label" placeholder="Inspect Detail">
+                                    </div>
+                                    <button type="button" id="btn-sidebar-preview-detail" class="prop-btn small">Preview in Detail Viewer</button>
+                                </div>
+                            </div>
                             <div class="button-row" style="display:flex; gap:6px; margin-top:8px;">
                                 <button class="prop-btn small" id="btn-sidebar-update-anno-camera" title="Update camera position for this annotation">Update Camera</button>
                                 <button class="prop-btn danger small" id="btn-sidebar-delete-anno" title="Delete this annotation">Delete</button>

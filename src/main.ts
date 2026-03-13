@@ -1844,6 +1844,132 @@ async function init() {
         });
     }
 
+    // Preview detail model in the detail viewer
+    const previewBtn = document.getElementById('btn-preview-detail');
+    if (previewBtn) {
+        previewBtn.addEventListener('click', async () => {
+            const anno = annotationSystem?.selectedAnnotation;
+            const key = anno?.detail_asset_key;
+            if (!key) return;
+
+            let blob: Blob | null = null;
+            const cachedUrl = state.loadedDetailBlobs.get(key);
+            if (cachedUrl) {
+                blob = await fetch(cachedUrl).then(r => r.blob());
+            } else {
+                const entry = state.detailAssetIndex.get(key);
+                if (entry && state.archiveLoader) {
+                    const result = await state.archiveLoader.extractFile(entry.filename);
+                    if (result) {
+                        blob = result.blob;
+                        state.loadedDetailBlobs.set(key, result.url);
+                    }
+                }
+            }
+
+            if (!blob) {
+                notify.error('Could not load detail model');
+                return;
+            }
+
+            const viewer = new DetailViewer(createDetailViewerDeps());
+            await viewer.open(anno, blob);
+        });
+    }
+
+    // Sidebar detail model controls (for editing existing annotations)
+    const sidebarDetailFile = document.getElementById('sidebar-detail-file') as HTMLInputElement;
+    const sidebarAttachBtn = document.getElementById('btn-sidebar-attach-detail');
+    const sidebarFilenameSpan = document.getElementById('sidebar-detail-filename');
+    const sidebarRemoveBtn = document.getElementById('btn-sidebar-remove-detail');
+    const sidebarCustomizeDiv = document.getElementById('sidebar-detail-customize');
+    const sidebarLabelInput = document.getElementById('sidebar-detail-label') as HTMLInputElement;
+    const sidebarPreviewBtn = document.getElementById('btn-sidebar-preview-detail');
+
+    if (sidebarAttachBtn && sidebarDetailFile) {
+        sidebarAttachBtn.addEventListener('click', () => sidebarDetailFile.click());
+        sidebarDetailFile.addEventListener('change', (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+            const archiveCreator = sceneRefs.archiveCreator;
+            if (archiveCreator && annotationSystem?.selectedAnnotation) {
+                const anno = annotationSystem.selectedAnnotation;
+                // Remove old detail if replacing
+                if (anno.detail_asset_key) {
+                    const oldUrl = state.loadedDetailBlobs.get(anno.detail_asset_key);
+                    if (oldUrl) URL.revokeObjectURL(oldUrl);
+                    state.loadedDetailBlobs.delete(anno.detail_asset_key);
+                    state.detailAssetIndex.delete(anno.detail_asset_key);
+                    archiveCreator.removeDetailModel(anno.detail_asset_key);
+                }
+                const key = archiveCreator.addDetailModel(file, file.name);
+                anno.detail_asset_key = key;
+                const ext = file.name.split('.').pop()?.toLowerCase() || 'glb';
+                state.detailAssetIndex.set(key, { filename: `assets/${key}.${ext}` });
+                state.loadedDetailBlobs.set(key, URL.createObjectURL(file));
+                if (sidebarFilenameSpan) sidebarFilenameSpan.textContent = file.name;
+                if (sidebarRemoveBtn) sidebarRemoveBtn.style.display = '';
+                if (sidebarCustomizeDiv) sidebarCustomizeDiv.style.display = '';
+            }
+        });
+    }
+
+    if (sidebarRemoveBtn) {
+        sidebarRemoveBtn.addEventListener('click', () => {
+            const anno = annotationSystem?.selectedAnnotation;
+            if (anno?.detail_asset_key) {
+                const oldUrl = state.loadedDetailBlobs.get(anno.detail_asset_key);
+                if (oldUrl) URL.revokeObjectURL(oldUrl);
+                state.loadedDetailBlobs.delete(anno.detail_asset_key);
+                state.detailAssetIndex.delete(anno.detail_asset_key);
+                sceneRefs.archiveCreator?.removeDetailModel(anno.detail_asset_key);
+                anno.detail_asset_key = undefined;
+                anno.detail_button_label = undefined;
+                anno.detail_thumbnail = undefined;
+                anno.detail_annotations = undefined;
+                anno.detail_view_settings = undefined;
+            }
+            if (sidebarFilenameSpan) sidebarFilenameSpan.textContent = '';
+            if (sidebarRemoveBtn) sidebarRemoveBtn.style.display = 'none';
+            if (sidebarCustomizeDiv) sidebarCustomizeDiv.style.display = 'none';
+        });
+    }
+
+    if (sidebarLabelInput) {
+        sidebarLabelInput.addEventListener('change', () => {
+            const anno = annotationSystem?.selectedAnnotation;
+            if (anno) anno.detail_button_label = sidebarLabelInput.value || undefined;
+        });
+    }
+
+    if (sidebarPreviewBtn) {
+        sidebarPreviewBtn.addEventListener('click', async () => {
+            const anno = annotationSystem?.selectedAnnotation;
+            const key = anno?.detail_asset_key;
+            if (!key) return;
+            let blob: Blob | null = null;
+            const cachedUrl = state.loadedDetailBlobs.get(key);
+            if (cachedUrl) {
+                blob = await fetch(cachedUrl).then(r => r.blob());
+            } else {
+                const entry = state.detailAssetIndex.get(key);
+                if (entry && state.archiveLoader) {
+                    const result = await state.archiveLoader.extractFile(entry.filename);
+                    if (result) {
+                        blob = result.blob;
+                        state.loadedDetailBlobs.set(key, result.url);
+                    }
+                }
+            }
+            if (!blob) {
+                notify.error('Could not load detail model');
+                return;
+            }
+            const viewer = new DetailViewer(createDetailViewerDeps());
+            await viewer.open(anno, blob);
+        });
+    }
+
     // Initialize walkthrough controller
     initWalkthroughController({
         camera,
@@ -2876,22 +3002,24 @@ function onAnnotationPlaced(position: any, cameraState: any) {
 function onAnnotationSelected(annotation: any) {
     onAnnotationSelectedHandler(annotation, createAnnotationControllerDeps());
 
-    // Reflect existing detail model in the UI
-    const filenameSpan = document.getElementById('detail-model-filename');
-    const removeBtn = document.getElementById('btn-remove-detail');
-    const customizeDiv = document.getElementById('detail-model-customize');
-    const labelInput = document.getElementById('detail-button-label') as HTMLInputElement | null;
-    if (annotation.detail_asset_key) {
-        const entry = state.detailAssetIndex.get(annotation.detail_asset_key);
-        if (filenameSpan) filenameSpan.textContent = entry?.filename?.split('/').pop() ?? annotation.detail_asset_key;
-        if (removeBtn) removeBtn.style.display = '';
-        if (customizeDiv) customizeDiv.style.display = '';
-        if (labelInput) labelInput.value = annotation.detail_button_label || '';
-    } else {
-        if (filenameSpan) filenameSpan.textContent = '';
-        if (removeBtn) removeBtn.style.display = 'none';
-        if (customizeDiv) customizeDiv.style.display = 'none';
-        if (labelInput) labelInput.value = '';
+    // Reflect existing detail model in both sidebar and creation popup UI
+    const detailUIs = [
+        { filename: document.getElementById('detail-model-filename'), remove: document.getElementById('btn-remove-detail'), customize: document.getElementById('detail-model-customize'), label: document.getElementById('detail-button-label') as HTMLInputElement | null },
+        { filename: document.getElementById('sidebar-detail-filename'), remove: document.getElementById('btn-sidebar-remove-detail'), customize: document.getElementById('sidebar-detail-customize'), label: document.getElementById('sidebar-detail-label') as HTMLInputElement | null },
+    ];
+    for (const ui of detailUIs) {
+        if (annotation.detail_asset_key) {
+            const entry = state.detailAssetIndex.get(annotation.detail_asset_key);
+            if (ui.filename) ui.filename.textContent = entry?.filename?.split('/').pop() ?? annotation.detail_asset_key;
+            if (ui.remove) (ui.remove as HTMLElement).style.display = '';
+            if (ui.customize) (ui.customize as HTMLElement).style.display = '';
+            if (ui.label) ui.label.value = annotation.detail_button_label || '';
+        } else {
+            if (ui.filename) ui.filename.textContent = '';
+            if (ui.remove) (ui.remove as HTMLElement).style.display = 'none';
+            if (ui.customize) (ui.customize as HTMLElement).style.display = 'none';
+            if (ui.label) ui.label.value = '';
+        }
     }
 }
 
