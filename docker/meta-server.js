@@ -59,8 +59,10 @@ const DB_PATH = process.env.DB_PATH || '/data/vitrine.db';
 // --- Settings defaults registry ---
 // Resolution: SQLite row → env var → hardcoded default
 const SETTINGS_DEFAULTS = {
-    'video.crf':              { default: '18',      type: 'number', label: 'Video CRF',              group: 'Video Transcode',  description: 'H.264 quality (0=lossless, 51=worst)', min: 0, max: 51 },
+    'video.crf':              { default: '18',      type: 'number', label: 'Quality',                 group: 'Video Transcode',  description: 'Encoding quality — maps to CRF (software) or ICQ (hardware). Lower = better.', min: 0, max: 51 },
     'video.preset':           { default: 'fast',    type: 'select', label: 'Encoding Preset',         group: 'Video Transcode',  description: 'FFmpeg speed/quality tradeoff', options: ['ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'] },
+    'video.codec':            { default: 'auto',              type: 'select', label: 'Video Codec',            group: 'Video Transcode',  description: 'auto = AV1 if GPU available, else H.264 software', options: ['auto','av1','hevc','h264-hw','h264'] },
+    'video.vaapi_device':     { default: '/dev/dri/renderD128', type: 'string', label: 'VAAPI Device Path',    group: 'Video Transcode',  description: 'Render node for hardware encoding' },
     'recording.bitrate':      { default: '16000000', type: 'number', label: 'Recording Bitrate (bps)', group: 'Video Recording',  description: 'WebM capture bitrate' },
     'recording.framerate':    { default: '30',      type: 'number', label: 'Recording FPS',           group: 'Video Recording',  description: 'Capture frame rate', min: 15, max: 60 },
     'recording.maxDuration':  { default: '60',      type: 'number', label: 'Max Recording Duration (s)', group: 'Video Recording', description: 'Maximum recording length', min: 10, max: 300 },
@@ -84,6 +86,8 @@ const SETTINGS_ENV_MAP = {
     'gif.width':        'GIF_WIDTH',
     'thumbnail.size':   'THUMBNAIL_SIZE',
     'flight.djiApiKey': 'DJI_API_KEY',
+    'video.codec':        'VIDEO_CODEC',
+    'video.vaapi_device': 'VAAPI_DEVICE',
 };
 
 // --- GPU capability probe ---
