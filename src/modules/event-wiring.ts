@@ -145,12 +145,6 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('flight-line-color', 'input', () => {
         deps.state.viewDefaults.flightPath.lineColor = (document.getElementById('flight-line-color') as HTMLInputElement)?.value ?? '#00ffff';
     });
-    addListener('flight-line-opacity', 'input', () => {
-        const val = parseInt((document.getElementById('flight-line-opacity') as HTMLInputElement)?.value ?? '100', 10);
-        deps.state.viewDefaults.flightPath.lineOpacity = val / 100;
-        const label = document.getElementById('flight-line-opacity-value');
-        if (label) label.textContent = `${val}%`;
-    });
     addListener('flight-show-markers', 'change', () => {
         const checked = (document.getElementById('flight-show-markers') as HTMLInputElement)?.checked ?? true;
         deps.state.viewDefaults.flightPath.showMarkers = checked;
@@ -1309,7 +1303,6 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     // ─── SfM Camera settings ─────────────────────────────────
     let pendingCamerasBin: ArrayBuffer | null = null;
     let pendingImagesBin: ArrayBuffer | null = null;
-    let pendingPoints3DBin: ArrayBuffer | null = null;
 
     const updateColmapStatus = () => {
         const camEl = document.getElementById('colmap-status-cameras');

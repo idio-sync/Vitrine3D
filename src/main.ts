@@ -14,7 +14,6 @@ import { alignCamerasToFlightPath, computeSimilarityTransform, matchCamerasToFli
 import { runICP, sampleSplatPoints } from './modules/icp-alignment.js';
 import { ArchiveCreator, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
 import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS, OBJECT_PROFILES, DEFAULT_OBJECT_PROFILE, SPARK_DEFAULTS } from './modules/constants.js';
-import type { ObjectProfileTier } from './modules/constants.js';
 import { getLodBudget } from './modules/quality-tier.js';
 import { Logger, notify, disposeObject } from './modules/utilities.js';
 import { FlyControls } from './modules/fly-controls.js';
@@ -334,7 +333,7 @@ const state: AppState = {
     splatLodEnabled: true,
     viewDefaults: {
         sfmCameras: { visible: false, displayMode: 'frustums' },
-        flightPath: { visible: false, lineColor: '#00ffff', lineOpacity: 1.0, showMarkers: true, markerDensity: 'all' },
+        flightPath: { visible: false, lineColor: '#00ffff', showMarkers: true, markerDensity: 'all' },
     },
     environmentBlob: null,
     renderingPreset: null,
@@ -767,7 +766,6 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
                 });
                 // Apply view defaults: visibility, line styling, marker density
                 flightPathManager.setVisible(state.viewDefaults.flightPath.visible);
-                if (flightPathManager.setLineOpacity) flightPathManager.setLineOpacity(state.viewDefaults.flightPath.lineOpacity);
                 if (flightPathManager.setMarkerDensity) {
                     const density = state.viewDefaults.flightPath.showMarkers ? state.viewDefaults.flightPath.markerDensity : 'off';
                     flightPathManager.setMarkerDensity(density);
@@ -1170,22 +1168,6 @@ function updateSdFaceEstimate(): void {
     }
     const hdFacesEl = document.getElementById('decimation-hd-faces');
     if (hdFacesEl) hdFacesEl.textContent = (state.meshFaceCount || 0).toLocaleString();
-}
-
-/** Build a DecimationOptions from an ObjectProfileTier + UI checkbox state. */
-function buildDecimationOptions(tier: ObjectProfileTier, dracoCompress: boolean): DecimationOptions {
-    return {
-        preset: 'custom',
-        targetRatio: 0,
-        targetFaceCount: tier.targetFaces,
-        errorThreshold: tier.errorThreshold,
-        lockBorder: tier.lockBorder,
-        preserveUVSeams: tier.preserveUVSeams,
-        textureMaxRes: tier.textureMaxRes,
-        textureFormat: tier.textureFormat,
-        textureQuality: tier.textureQuality,
-        dracoCompress,
-    };
 }
 
 /** Wire up the Optimization panel events. */

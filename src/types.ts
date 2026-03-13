@@ -30,7 +30,6 @@ export interface ViewDefaults {
     flightPath: {
         visible: boolean;
         lineColor: string;
-        lineOpacity: number;
         showMarkers: boolean;
         markerDensity: MarkerDensity;
     };

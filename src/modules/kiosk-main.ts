@@ -415,7 +415,10 @@ async function _doInit(): Promise<void> {
             if (!key) return;
 
             const entry = state.detailAssetIndex.get(key);
-            if (!entry || !state.archiveLoader) return;
+            if (!entry || !state.archiveLoader) {
+                log.warn(`Detail inspect: key "${key}" not found in detailAssetIndex (${state.detailAssetIndex.size} entries) or archiveLoader missing (${!!state.archiveLoader})`);
+                return;
+            }
 
             showLoading('Loading detail model…');
             const result = await state.archiveLoader.extractFile(entry.filename);
@@ -1753,9 +1756,6 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
 
                 // Apply view defaults from manifest
                 const vs = manifest.viewer_settings || {};
-                if (flightPathManager.setLineOpacity && vs.flight_line_opacity !== undefined) {
-                    flightPathManager.setLineOpacity(vs.flight_line_opacity);
-                }
                 if (flightPathManager.setMarkerDensity) {
                     if (vs.flight_show_markers === false) {
                         flightPathManager.setMarkerDensity('off');

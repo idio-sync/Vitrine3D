@@ -1182,7 +1182,6 @@ export class ArchiveCreator {
         if (settings.sfmDisplayMode !== undefined) this.manifest.viewer_settings.sfm_display_mode = settings.sfmDisplayMode;
         if (settings.flightVisible !== undefined) this.manifest.viewer_settings.flight_visible = settings.flightVisible;
         if (settings.flightLineColor !== undefined) this.manifest.viewer_settings.flight_line_color = settings.flightLineColor;
-        if (settings.flightLineOpacity !== undefined) this.manifest.viewer_settings.flight_line_opacity = settings.flightLineOpacity;
         if (settings.flightShowMarkers !== undefined) this.manifest.viewer_settings.flight_show_markers = settings.flightShowMarkers;
         if (settings.flightMarkerDensity !== undefined) this.manifest.viewer_settings.flight_marker_density = settings.flightMarkerDensity;
     }

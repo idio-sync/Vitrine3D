@@ -1085,13 +1085,6 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
         const el = document.getElementById('flight-line-color') as HTMLInputElement | null;
         if (el) el.value = settings.flight_line_color;
     }
-    if (settings.flight_line_opacity !== undefined) {
-        state.viewDefaults.flightPath.lineOpacity = settings.flight_line_opacity;
-        const slider = document.getElementById('flight-line-opacity') as HTMLInputElement | null;
-        const label = document.getElementById('flight-line-opacity-value');
-        if (slider) slider.value = String(Math.round(settings.flight_line_opacity * 100));
-        if (label) label.textContent = `${Math.round(settings.flight_line_opacity * 100)}%`;
-    }
     if (settings.flight_show_markers !== undefined) {
         state.viewDefaults.flightPath.showMarkers = settings.flight_show_markers;
         const el = document.getElementById('flight-show-markers') as HTMLInputElement | null;

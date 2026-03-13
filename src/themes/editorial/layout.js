@@ -2295,35 +2295,6 @@ function buildFlightDropdown(fpm, container) {
     colorSection.appendChild(colorSeg);
     fpDropdown.appendChild(colorSection);
 
-    // --- Line opacity slider ---
-    const opacitySection = document.createElement('div');
-    opacitySection.className = 'editorial-flight-section';
-
-    const opacityLabel = document.createElement('span');
-    opacityLabel.className = 'editorial-flight-section-label';
-    opacityLabel.textContent = 'Opacity';
-    opacitySection.appendChild(opacityLabel);
-
-    const sliderRow = document.createElement('div');
-    sliderRow.className = 'editorial-flight-slider-row';
-    sliderRow.style.padding = '0';
-    sliderRow.style.flex = '1';
-
-    const opacitySlider = document.createElement('input');
-    opacitySlider.type = 'range';
-    opacitySlider.min = '0.1';
-    opacitySlider.max = '1';
-    opacitySlider.step = '0.05';
-    opacitySlider.value = '1';
-    opacitySlider.className = 'editorial-flight-slider';
-    opacitySlider.addEventListener('input', (e) => {
-        e.stopPropagation();
-        fpm.setLineOpacity(parseFloat(opacitySlider.value));
-    });
-    sliderRow.appendChild(opacitySlider);
-    opacitySection.appendChild(sliderRow);
-    fpDropdown.appendChild(opacitySection);
-
     // --- Bottom action: Hide / Show ---
     const actions = document.createElement('div');
     actions.className = 'editorial-flight-actions';

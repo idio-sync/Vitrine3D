@@ -1541,7 +1541,6 @@ export function collectMetadata(): CollectedMetadata {
             sfmDisplayMode: (document.getElementById('sfm-display-mode') as HTMLSelectElement)?.value || 'frustums',
             flightVisible: (document.getElementById('flight-show-on-load') as HTMLInputElement)?.checked ?? false,
             flightLineColor: (document.getElementById('flight-line-color') as HTMLInputElement)?.value || '#00ffff',
-            flightLineOpacity: parseInt((document.getElementById('flight-line-opacity') as HTMLInputElement)?.value || '100', 10) / 100,
             flightShowMarkers: (document.getElementById('flight-show-markers') as HTMLInputElement)?.checked ?? true,
             flightMarkerDensity: (document.getElementById('flight-marker-density') as HTMLSelectElement)?.value || 'all',
         }

@@ -1376,17 +1376,9 @@ export class FlightPathManager {
         this.group.visible = visible;
     }
 
-    /** Update the line opacity for all flight paths. */
-    setLineOpacity(opacity: number): void {
-        for (const [, entry] of this.meshes) {
-            const mat = entry.line.material as THREE.Material;
-            mat.opacity = opacity;
-            mat.transparent = opacity < 1;
-            // Keep depthWrite enabled even when transparent so splats can
-            // occlude the line via their painter's-algorithm compositing.
-            mat.depthWrite = true;
-            mat.needsUpdate = true;
-        }
+    /** @deprecated Line opacity removed to ensure proper splat depth occlusion. */
+    setLineOpacity(_opacity: number): void {
+        // No-op: flight path lines must remain opaque for splat depth occlusion.
     }
 
     /** Set marker density: 'off' hides all markers, 'sparse' shows ~200, 'all' shows everything. */
