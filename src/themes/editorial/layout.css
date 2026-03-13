@@ -4126,7 +4126,7 @@ body.kiosk-mode[data-theme="editorial"] .detail-viewer-header {
     flex-direction: column;
     align-items: flex-start;
     padding: 20px;
-    background: var(--editorial-sidebar-bg, #1a1a2e);
+    background: var(--editorial-sidebar-bg, var(--bg-panel, #16181d));
 }
 
 body.kiosk-mode[data-theme="editorial"] #detail-viewer-canvas {

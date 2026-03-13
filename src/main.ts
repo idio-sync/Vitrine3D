@@ -13,7 +13,8 @@ import { ColmapManager } from './modules/colmap-loader.js';
 import { alignCamerasToFlightPath, computeSimilarityTransform, matchCamerasToFlightPoints } from './modules/colmap-alignment.js';
 import { runICP, sampleSplatPoints } from './modules/icp-alignment.js';
 import { ArchiveCreator, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
-import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS, DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET, SPARK_DEFAULTS } from './modules/constants.js';
+import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS, OBJECT_PROFILES, DEFAULT_OBJECT_PROFILE, SPARK_DEFAULTS } from './modules/constants.js';
+import type { ObjectProfileTier } from './modules/constants.js';
 import { getLodBudget } from './modules/quality-tier.js';
 import { Logger, notify, disposeObject } from './modules/utilities.js';
 import { FlyControls } from './modules/fly-controls.js';
@@ -179,7 +180,7 @@ import type { LoadCADDeps } from './modules/cad-loader.js';
 import type { ControlsPanelDeps } from './modules/ui-controller.js';
 import type { FileInputDeps } from './modules/file-input-handlers.js';
 import type { LoadPointcloudDeps } from './modules/file-handlers.js';
-import { generateProxy, estimateFaceCount } from './modules/mesh-decimator.js';
+import { generateProxy } from './modules/mesh-decimator.js';
 
 declare global {
     interface Window {
@@ -461,6 +462,11 @@ function createFileHandlerDeps(): FileHandlerDeps {
                 storeLastPositions();
                 updateObjectSelectButtons();
                 assets.splatBlob = file;
+                // Show optimization section + splat quality subsection
+                const optSectionSplat = document.getElementById('optimization-section');
+                if (optSectionSplat) optSectionSplat.classList.remove('hidden');
+                const splatQualitySub = document.getElementById('splat-quality-subsection');
+                if (splatQualitySub) splatQualitySub.classList.remove('hidden');
                 const splatVertEl = document.getElementById('splat-vertices');
                 if (splatVertEl) {
                     splatVertEl.textContent = 'Loaded';
@@ -502,15 +508,8 @@ function createFileHandlerDeps(): FileHandlerDeps {
                     const facesRow = document.getElementById('model-faces-row');
                     if (facesRow) facesRow.style.display = '';
                 }
-                // Update decimation panel estimate
-                const hdFacesEl = document.getElementById('decimation-hd-faces');
-                if (hdFacesEl) hdFacesEl.textContent = (faceCount || 0).toLocaleString();
-                const sdFacesEl = document.getElementById('decimation-sd-faces');
-                if (sdFacesEl) {
-                    const presetSelect = document.getElementById('decimation-preset') as HTMLSelectElement | null;
-                    const est = estimateFaceCount(faceCount, { preset: presetSelect?.value || DEFAULT_DECIMATION_PRESET });
-                    sdFacesEl.textContent = est.toLocaleString();
-                }
+                // Update decimation panel
+                updateSdFaceEstimate();
                 // Update texture info display
                 if (state.meshTextureInfo) {
                     const texEl = document.getElementById('model-textures');
@@ -521,11 +520,13 @@ function createFileHandlerDeps(): FileHandlerDeps {
                     }
                 }
                 showQualityToggleIfNeeded();
-                // Show web optimization section
-                const webOptSection = document.getElementById('web-opt-section');
-                if (webOptSection) {
-                    webOptSection.classList.remove('hidden');
-                }
+                // Show optimization section + mesh subsections
+                const optSection = document.getElementById('optimization-section');
+                if (optSection) optSection.classList.remove('hidden');
+                const webOptSub = document.getElementById('web-opt-subsection');
+                if (webOptSub) webOptSub.classList.remove('hidden');
+                const sdProxySub = document.getElementById('sd-proxy-subsection');
+                if (sdProxySub) sdProxySub.classList.remove('hidden');
                 const webOptFaces = document.getElementById('web-opt-current-faces');
                 if (webOptFaces) {
                     webOptFaces.textContent = `Current faces: ${state.meshFaceCount.toLocaleString()}`;
@@ -1146,26 +1147,39 @@ function createEventWiringDeps(): EventWiringDeps {
     };
 }
 
-/** Wire up the SD Proxy / Decimation panel events. */
-function setupDecimationPanel(): void {
-    const presetSelect = document.getElementById('decimation-preset') as HTMLSelectElement | null;
+function updateSdFaceEstimate(): void {
     const sdFacesEl = document.getElementById('decimation-sd-faces');
-    const advancedToggle = document.getElementById('decimation-advanced-toggle');
-    const advancedBody = document.getElementById('decimation-advanced-body');
-    const textureToggle = document.getElementById('decimation-texture-toggle');
-    const textureBody = document.getElementById('decimation-texture-body');
-    const manualToggle = document.getElementById('decimation-manual-toggle');
-    const manualBody = document.getElementById('decimation-manual-body');
-    const ratioInput = document.getElementById('decimation-target-ratio') as HTMLInputElement | null;
-    const facesInput = document.getElementById('decimation-target-faces') as HTMLInputElement | null;
-    const errorInput = document.getElementById('decimation-error-threshold') as HTMLInputElement | null;
-    const lockBorderInput = document.getElementById('decimation-lock-border') as HTMLInputElement | null;
-    const preserveUvsInput = document.getElementById('decimation-preserve-uvs') as HTMLInputElement | null;
-    const texResSelect = document.getElementById('decimation-texture-res') as HTMLSelectElement | null;
-    const texFormatSelect = document.getElementById('decimation-texture-format') as HTMLSelectElement | null;
-    const texQualityInput = document.getElementById('decimation-texture-quality') as HTMLInputElement | null;
-    const texQualityLabel = document.getElementById('decimation-texture-quality-label');
-    const dracoInput = document.getElementById('decimation-draco') as HTMLInputElement | null;
+    const sdTargetInput = document.getElementById('decimation-target-faces') as HTMLInputElement | null;
+    const belowTargetEl = document.getElementById('decimation-below-target');
+    if (sdFacesEl && sdTargetInput) {
+        const target = parseInt(sdTargetInput.value) || 0;
+        sdFacesEl.textContent = target.toLocaleString();
+        if (belowTargetEl) {
+            belowTargetEl.classList.toggle('hidden', !(state.meshFaceCount > 0 && state.meshFaceCount <= target));
+        }
+    }
+    const hdFacesEl = document.getElementById('decimation-hd-faces');
+    if (hdFacesEl) hdFacesEl.textContent = (state.meshFaceCount || 0).toLocaleString();
+}
+
+/** Build a DecimationOptions from an ObjectProfileTier + UI checkbox state. */
+function buildDecimationOptions(tier: ObjectProfileTier, dracoCompress: boolean): DecimationOptions {
+    return {
+        preset: 'custom',
+        targetRatio: 0,
+        targetFaceCount: tier.targetFaces,
+        errorThreshold: tier.errorThreshold,
+        lockBorder: tier.lockBorder,
+        preserveUVSeams: tier.preserveUVSeams,
+        textureMaxRes: tier.textureMaxRes,
+        textureFormat: tier.textureFormat,
+        textureQuality: tier.textureQuality,
+        dracoCompress,
+    };
+}
+
+/** Wire up the Optimization panel events. */
+function setupOptimizationPanel(): void {
     const generateBtn = document.getElementById('btn-generate-proxy') as HTMLButtonElement | null;
     const statusDiv = document.getElementById('decimation-status');
     const statusText = document.getElementById('decimation-status-text');
@@ -1173,81 +1187,42 @@ function setupDecimationPanel(): void {
     const progressFill = document.getElementById('decimation-progress-fill');
     const progressText = document.getElementById('decimation-progress-text');
     const previewBtn = document.getElementById('btn-preview-proxy');
-    const _removeBtn = document.getElementById('btn-remove-proxy');
 
-    function readOptionsFromUI(): Partial<DecimationOptions> {
-        return {
-            preset: presetSelect?.value || DEFAULT_DECIMATION_PRESET,
-            targetRatio: ratioInput ? parseFloat(ratioInput.value) : undefined,
-            targetFaceCount: facesInput?.value ? parseInt(facesInput.value, 10) : null,
-            errorThreshold: errorInput ? parseFloat(errorInput.value) : undefined,
-            lockBorder: lockBorderInput?.checked,
-            preserveUVSeams: preserveUvsInput?.checked,
-            textureMaxRes: texResSelect ? parseInt(texResSelect.value, 10) : undefined,
-            textureFormat: texFormatSelect?.value as DecimationOptions['textureFormat'],
-            textureQuality: texQualityInput ? parseFloat(texQualityInput.value) : undefined,
-            dracoCompress: dracoInput?.checked ?? true,
-        };
-    }
+    // ── Object Profile dropdown ──
+    const profileSelect = document.getElementById('object-profile-select') as HTMLSelectElement | null;
+    if (profileSelect) {
+        profileSelect.value = DEFAULT_OBJECT_PROFILE;
+        state.objectProfile = DEFAULT_OBJECT_PROFILE;
 
-    function updateEstimate(): void {
-        const hdFaces = state.meshFaceCount || 0;
-        if (!hdFaces || !sdFacesEl) return;
-        const opts = readOptionsFromUI();
-        const est = estimateFaceCount(hdFaces, opts);
-        sdFacesEl.textContent = est.toLocaleString();
-    }
+        profileSelect.addEventListener('change', () => {
+            const key = profileSelect.value;
+            state.objectProfile = key;
 
-    function applyPresetToUI(presetKey: string): void {
-        const preset = DECIMATION_PRESETS[presetKey];
-        if (!preset) return;
-        if (ratioInput) ratioInput.value = String(preset.targetRatio);
-        if (facesInput) facesInput.value = '';
-        if (errorInput) errorInput.value = String(preset.errorThreshold);
-        if (lockBorderInput) lockBorderInput.checked = preset.lockBorder;
-        if (preserveUvsInput) preserveUvsInput.checked = preset.preserveUVSeams;
-        if (texResSelect) texResSelect.value = String(preset.textureMaxRes);
-        if (texFormatSelect) texFormatSelect.value = preset.textureFormat;
-        if (texQualityInput) texQualityInput.value = String(preset.textureQuality);
-        if (texQualityLabel) texQualityLabel.textContent = `${Math.round(preset.textureQuality * 100)}%`;
-        updateEstimate();
-    }
+            // Show/hide ratio mode row
+            const ratioRow = document.getElementById('web-opt-ratio-row');
+            if (ratioRow) ratioRow.style.display = key === 'custom' ? '' : 'none';
 
-    // Collapsible subsections
-    function wireToggle(toggle: HTMLElement | null, body: HTMLElement | null): void {
-        if (!toggle || !body) return;
-        toggle.addEventListener('click', () => {
-            toggle.classList.toggle('open');
-            body.classList.toggle('hidden');
+            const profile = OBJECT_PROFILES[key];
+            if (!profile || key === 'custom') return;
+
+            // Fill HD (web-opt) fields
+            const hdFaces = document.getElementById('web-opt-target-faces') as HTMLInputElement | null;
+            const hdTexRes = document.getElementById('web-opt-texture-res') as HTMLSelectElement | null;
+            if (hdFaces) hdFaces.value = String(profile.hd.targetFaces);
+            if (hdTexRes) hdTexRes.value = String(profile.hd.textureMaxRes);
+
+            // Fill SD (proxy) fields
+            const sdFaces = document.getElementById('decimation-target-faces') as HTMLInputElement | null;
+            const sdTexRes = document.getElementById('decimation-texture-res') as HTMLSelectElement | null;
+            if (sdFaces) sdFaces.value = String(profile.sd.targetFaces);
+            if (sdTexRes) sdTexRes.value = String(profile.sd.textureMaxRes);
+
+            updateSdFaceEstimate();
         });
+
+        // Trigger initial fill
+        profileSelect.dispatchEvent(new Event('change'));
     }
-    wireToggle(advancedToggle, advancedBody);
-    wireToggle(textureToggle, textureBody);
-    wireToggle(manualToggle, manualBody);
-
-    // Preset change
-    presetSelect?.addEventListener('change', () => {
-        const key = presetSelect.value;
-        if (key !== 'custom') applyPresetToUI(key);
-        updateEstimate();
-    });
-
-    // Advanced field changes -> switch to Custom
-    const advancedInputs = [ratioInput, facesInput, errorInput, lockBorderInput, preserveUvsInput,
-                            texResSelect, texFormatSelect, texQualityInput];
-    for (const input of advancedInputs) {
-        input?.addEventListener('change', () => {
-            if (presetSelect && presetSelect.value !== 'custom') {
-                presetSelect.value = 'custom';
-            }
-            updateEstimate();
-        });
-    }
-
-    // Texture quality label
-    texQualityInput?.addEventListener('input', () => {
-        if (texQualityLabel) texQualityLabel.textContent = `${Math.round(parseFloat(texQualityInput.value) * 100)}%`;
-    });
 
     // Splat LOD checkbox
     const splatLodCheckbox = document.getElementById('chk-splat-lod') as HTMLInputElement | null;
@@ -1258,121 +1233,42 @@ function setupDecimationPanel(): void {
         });
     }
 
-    // Generate SD Proxy
-    addListener('btn-generate-proxy', 'click', async () => {
-        if (!modelGroup || !state.modelLoaded) {
-            notify.warning('No mesh loaded to decimate');
-            return;
+    // Collapsible subsections
+    function wireToggle(toggle: HTMLElement | null, body: HTMLElement | null): void {
+        if (!toggle || !body) return;
+        toggle.addEventListener('click', () => {
+            toggle.classList.toggle('open');
+            body.classList.toggle('hidden');
+        });
+    }
+
+    // Wire sub-section toggles
+    for (const id of ['web-opt-subsection', 'sd-proxy-subsection', 'splat-quality-subsection']) {
+        const section = document.getElementById(id);
+        if (section) {
+            const hd = section.querySelector('.prop-section-hd') as HTMLElement | null;
+            const body = section.querySelector('.prop-section-body') as HTMLElement | null;
+            wireToggle(hd, body);
         }
+    }
 
-        progressDiv?.classList.remove('hidden');
-        statusDiv?.classList.add('hidden');
-        if (generateBtn) generateBtn.disabled = true;
-
-        try {
-            const userOpts = readOptionsFromUI();
-            const result = await generateProxy(modelGroup, userOpts, (stage, pct) => {
-                if (progressFill) (progressFill as HTMLElement).style.width = `${pct}%`;
-                if (progressText) progressText.textContent = stage;
-            });
-
-            // Store result
-            const assets = getStore();
-            assets.proxyMeshBlob = result.blob;
-            state.proxyMeshSettings = result.options;
-            state.proxyMeshFaceCount = result.faceCount;
-
-            // Update proxy filename so export-controller uses a valid .glb extension
-            const proxyFilenameEl = document.getElementById('proxy-mesh-filename');
-            if (proxyFilenameEl) proxyFilenameEl.textContent = 'mesh_proxy.glb';
-
-            // Clean up old proxy preview
-            if (state.proxyMeshGroup) {
-                scene.remove(state.proxyMeshGroup);
-                disposeObject(state.proxyMeshGroup);
-                state.proxyMeshGroup = null;
-            }
-
-            // Load the decimated GLB as a preview group
-            const blobUrl = URL.createObjectURL(result.blob);
-            try {
-                const { loadGLTF } = await import('./modules/file-handlers.js');
-                const loaded = await loadGLTF(blobUrl);
-                state.proxyMeshGroup = loaded;
-                // Copy transform from full-res model (proxy GLB is in local space)
-                if (modelGroup) {
-                    loaded.position.copy(modelGroup.position);
-                    loaded.rotation.copy(modelGroup.rotation);
-                    loaded.scale.copy(modelGroup.scale);
-                }
-                state.proxyMeshGroup.visible = false;
-                scene.add(state.proxyMeshGroup);
-            } finally {
-                URL.revokeObjectURL(blobUrl);
-            }
-
-            // Update UI
-            if (statusText) statusText.textContent = `Proxy ready (${result.faceCount.toLocaleString()} faces, ${(result.blob.size / 1024 / 1024).toFixed(1)} MB)`;
-            statusDiv?.classList.remove('hidden');
-            if (previewBtn) previewBtn.textContent = 'Preview SD';
-            showQualityToggleIfNeeded();
-            notify.success(`SD proxy generated: ${result.faceCount.toLocaleString()} faces`);
-        } catch (err: any) {
-            log.error('Decimation failed:', err);
-            notify.error(`Decimation failed: ${err.message}`);
-        } finally {
-            progressDiv?.classList.add('hidden');
-            if (generateBtn) generateBtn.disabled = false;
-        }
-    });
-
-    // Preview toggle
-    addListener('btn-preview-proxy', 'click', () => {
-        if (!state.proxyMeshGroup || !modelGroup) return;
-        const showingProxy = state.proxyMeshGroup.visible;
-        if (showingProxy) {
-            state.proxyMeshGroup.visible = false;
-            modelGroup.visible = true;
-            if (previewBtn) previewBtn.textContent = 'Preview SD';
-        } else {
-            state.proxyMeshGroup.visible = true;
-            modelGroup.visible = false;
-            if (previewBtn) previewBtn.textContent = 'Preview HD';
-        }
-    });
-
-    // Remove proxy
-    addListener('btn-remove-proxy', 'click', () => {
-        const assets = getStore();
-        assets.proxyMeshBlob = null;
-        if (state.proxyMeshGroup) {
-            scene.remove(state.proxyMeshGroup);
-            disposeObject(state.proxyMeshGroup);
-            state.proxyMeshGroup = null;
-        }
-        state.proxyMeshSettings = null;
-        state.proxyMeshFaceCount = null;
-        modelGroup.visible = true;
-        state.viewingProxy = false;
-        updateQualityButtonStates('hd');
-        statusDiv?.classList.add('hidden');
-        showQualityToggleIfNeeded();
-        notify.info('SD proxy removed');
-    });
+    // Manual proxy upload toggle
+    const manualToggle = document.getElementById('decimation-manual-toggle');
+    const manualBody = document.getElementById('decimation-manual-body');
+    wireToggle(manualToggle, manualBody);
 
     // ── HD Web Optimization ──
-    // Web-opt mode toggle — switch between face count and ratio inputs
+    // Web-opt mode toggle — switch between face count and ratio inputs (Custom profile)
     const webOptModeSelect = document.getElementById('web-opt-mode') as HTMLSelectElement | null;
     const webOptFacesRow = document.getElementById('web-opt-faces-row');
-    const webOptRatioRow = document.getElementById('web-opt-ratio-row');
+    const webOptRatioInputRow = document.getElementById('web-opt-ratio-input-row');
     const webOptRatioInput = document.getElementById('web-opt-target-ratio') as HTMLInputElement | null;
     const webOptRatioEstimate = document.getElementById('web-opt-ratio-estimate');
     if (webOptModeSelect) {
         webOptModeSelect.addEventListener('change', () => {
             const isRatio = webOptModeSelect.value === 'ratio';
             if (webOptFacesRow) webOptFacesRow.style.display = isRatio ? 'none' : '';
-            if (webOptRatioRow) webOptRatioRow.style.display = isRatio ? '' : 'none';
-            // Update estimate when switching to ratio
+            if (webOptRatioInputRow) webOptRatioInputRow.style.display = isRatio ? '' : 'none';
             if (isRatio && webOptRatioInput && webOptRatioEstimate && state.meshFaceCount > 0) {
                 const est = Math.round(state.meshFaceCount * parseFloat(webOptRatioInput.value));
                 webOptRatioEstimate.textContent = `~${est.toLocaleString()} faces`;
@@ -1430,8 +1326,8 @@ function setupDecimationPanel(): void {
 
         // Show progress
         const progressEl = document.getElementById('web-opt-progress');
-        const progressFill = document.getElementById('web-opt-progress-fill') as HTMLElement;
-        const progressText = document.getElementById('web-opt-progress-text');
+        const webOptProgressFill = document.getElementById('web-opt-progress-fill') as HTMLElement;
+        const webOptProgressText = document.getElementById('web-opt-progress-text');
         if (progressEl) progressEl.classList.remove('hidden');
 
         const btnGenerate = document.getElementById('btn-web-opt-generate') as HTMLButtonElement;
@@ -1442,6 +1338,10 @@ function setupDecimationPanel(): void {
 
             const { decimateScene, exportAsGLB, dracoCompressGLB } = await import('./modules/mesh-decimator.js');
 
+            // Read texture resolution from UI
+            const texResEl = document.getElementById('web-opt-texture-res') as HTMLSelectElement | null;
+            const textureMaxRes = texResEl ? parseInt(texResEl.value, 10) : 4096;
+
             // Decimation options
             const result = await decimateScene(modelGroup, {
                 targetRatio: Math.min(targetRatio, 1),
@@ -1449,20 +1349,20 @@ function setupDecimationPanel(): void {
                 errorThreshold: 0.1,
                 lockBorder: true,
                 preserveUVSeams: true,
-                textureMaxRes: 4096,
+                textureMaxRes,
                 textureFormat: 'keep',
                 textureQuality: 1.0,
                 dracoCompress: false,
                 preset: 'custom',
             }, (stage: string, pct: number) => {
-                if (progressFill) progressFill.style.width = `${pct * 100}%`;
-                if (progressText) progressText.textContent = stage;
+                if (webOptProgressFill) webOptProgressFill.style.width = `${pct * 100}%`;
+                if (webOptProgressText) webOptProgressText.textContent = stage;
             });
 
             // Export as GLB blob (with or without Draco)
             let blob = await exportAsGLB(result.group, false);
             if (dracoEnabled) {
-                if (progressText) progressText.textContent = 'Applying Draco compression...';
+                if (webOptProgressText) webOptProgressText.textContent = 'Applying Draco compression...';
                 blob = await dracoCompressGLB(blob);
             }
 
@@ -1588,6 +1488,127 @@ function setupDecimationPanel(): void {
         } finally {
             hideLoading();
         }
+    });
+
+    // ── SD Proxy Generate ──
+    addListener('btn-generate-proxy', 'click', async () => {
+        if (!modelGroup || !state.modelLoaded) {
+            notify.warning('No mesh loaded to decimate');
+            return;
+        }
+
+        progressDiv?.classList.remove('hidden');
+        statusDiv?.classList.add('hidden');
+        if (generateBtn) generateBtn.disabled = true;
+
+        try {
+            const sdFacesInput = document.getElementById('decimation-target-faces') as HTMLInputElement | null;
+            const sdTexResSelect = document.getElementById('decimation-texture-res') as HTMLSelectElement | null;
+            const sdDracoInput = document.getElementById('decimation-draco') as HTMLInputElement | null;
+            const targetFaces = sdFacesInput ? parseInt(sdFacesInput.value, 10) : 100000;
+            const textureMaxRes = sdTexResSelect ? parseInt(sdTexResSelect.value, 10) : 1024;
+            const dracoCompress = sdDracoInput?.checked ?? true;
+
+            const userOpts: DecimationOptions = {
+                preset: 'custom',
+                targetRatio: targetFaces / (state.meshFaceCount || 1),
+                targetFaceCount: targetFaces,
+                errorThreshold: 0.1,
+                lockBorder: true,
+                preserveUVSeams: true,
+                textureMaxRes,
+                textureFormat: 'jpeg',
+                textureQuality: 0.85,
+                dracoCompress,
+            };
+
+            const result = await generateProxy(modelGroup, userOpts, (stage, pct) => {
+                if (progressFill) (progressFill as HTMLElement).style.width = `${pct}%`;
+                if (progressText) progressText.textContent = stage;
+            });
+
+            // Store result
+            const assets = getStore();
+            assets.proxyMeshBlob = result.blob;
+            state.proxyMeshSettings = result.options;
+            state.proxyMeshFaceCount = result.faceCount;
+
+            // Update proxy filename so export-controller uses a valid .glb extension
+            const proxyFilenameEl = document.getElementById('proxy-mesh-filename');
+            if (proxyFilenameEl) proxyFilenameEl.textContent = 'mesh_proxy.glb';
+
+            // Clean up old proxy preview
+            if (state.proxyMeshGroup) {
+                scene.remove(state.proxyMeshGroup);
+                disposeObject(state.proxyMeshGroup);
+                state.proxyMeshGroup = null;
+            }
+
+            // Load the decimated GLB as a preview group
+            const blobUrl = URL.createObjectURL(result.blob);
+            try {
+                const { loadGLTF } = await import('./modules/file-handlers.js');
+                const loaded = await loadGLTF(blobUrl);
+                state.proxyMeshGroup = loaded;
+                // Copy transform from full-res model (proxy GLB is in local space)
+                if (modelGroup) {
+                    loaded.position.copy(modelGroup.position);
+                    loaded.rotation.copy(modelGroup.rotation);
+                    loaded.scale.copy(modelGroup.scale);
+                }
+                state.proxyMeshGroup.visible = false;
+                scene.add(state.proxyMeshGroup);
+            } finally {
+                URL.revokeObjectURL(blobUrl);
+            }
+
+            // Update UI
+            if (statusText) statusText.textContent = `Proxy ready (${result.faceCount.toLocaleString()} faces, ${(result.blob.size / 1024 / 1024).toFixed(1)} MB)`;
+            statusDiv?.classList.remove('hidden');
+            if (previewBtn) previewBtn.textContent = 'Preview SD';
+            showQualityToggleIfNeeded();
+            notify.success(`SD proxy generated: ${result.faceCount.toLocaleString()} faces`);
+        } catch (err: any) {
+            log.error('Decimation failed:', err);
+            notify.error(`Decimation failed: ${err.message}`);
+        } finally {
+            progressDiv?.classList.add('hidden');
+            if (generateBtn) generateBtn.disabled = false;
+        }
+    });
+
+    // Preview toggle
+    addListener('btn-preview-proxy', 'click', () => {
+        if (!state.proxyMeshGroup || !modelGroup) return;
+        const showingProxy = state.proxyMeshGroup.visible;
+        if (showingProxy) {
+            state.proxyMeshGroup.visible = false;
+            modelGroup.visible = true;
+            if (previewBtn) previewBtn.textContent = 'Preview SD';
+        } else {
+            state.proxyMeshGroup.visible = true;
+            modelGroup.visible = false;
+            if (previewBtn) previewBtn.textContent = 'Preview HD';
+        }
+    });
+
+    // Remove proxy
+    addListener('btn-remove-proxy', 'click', () => {
+        const assets = getStore();
+        assets.proxyMeshBlob = null;
+        if (state.proxyMeshGroup) {
+            scene.remove(state.proxyMeshGroup);
+            disposeObject(state.proxyMeshGroup);
+            state.proxyMeshGroup = null;
+        }
+        state.proxyMeshSettings = null;
+        state.proxyMeshFaceCount = null;
+        modelGroup.visible = true;
+        state.viewingProxy = false;
+        updateQualityButtonStates('hd');
+        statusDiv?.classList.add('hidden');
+        showQualityToggleIfNeeded();
+        notify.info('SD proxy removed');
     });
 }
 
@@ -1882,7 +1903,12 @@ async function init() {
             }
 
             const viewer = new DetailViewer(createDetailViewerDeps());
-            await viewer.open(anno, blob);
+            const target = anno || {
+                id: 'preview', title: 'Preview', body: '',
+                position: { x: 0, y: 0, z: 0 },
+                detail_asset_key: key,
+            } as any;
+            await viewer.open(target, blob);
         });
     }
 
@@ -2265,8 +2291,8 @@ async function init() {
     // Initialize library panel (shows rail button if libraryEnabled)
     initLibraryPanel();
 
-    // Wire up SD Proxy / Decimation panel
-    setupDecimationPanel();
+    // Wire up Optimization panel
+    setupOptimizationPanel();
 
     // Apply initial controls visibility and mode
     applyControlsVisibility();
