@@ -33,12 +33,19 @@ let savedControlsEnabled = true;
 /** DOM elements hidden during VR. */
 const hiddenElements: Array<{ el: HTMLElement; prevDisplay: string }> = [];
 
-// Teleport state (populated in Chunk 4)
+// Teleport state
 let teleportArc: THREE.Line | null = null;
-let teleportMarker: THREE.Group | null = null;
-let teleportRaycaster: THREE.Raycaster | null = null;
+let teleportLandingMarker: THREE.Mesh | null = null;
 let teleportTarget: THREE.Vector3 | null = null;
 let teleportValid = false;
+let isTeleporting = false;
+
+// Snap turn state
+let lastSnapTime = 0;
+const SNAP_COOLDOWN_MS = 300;
+
+// Fade callback for teleport transition
+let fadeCallback: (() => void) | null = null;
 
 // Locomotion mode
 let locomotionMode: 'teleport' | 'smooth' = 'teleport';
@@ -293,15 +300,229 @@ export function updateVR(): void {
 }
 
 // =============================================================================
-// Teleport Locomotion (Chunk 4 — stubs)
+// Teleport Locomotion
 // =============================================================================
 
+const TELEPORT_ARC_SEGMENTS = 30;
+const TELEPORT_GRAVITY = 9.8;
+const TELEPORT_VELOCITY = 6.0;
+
 function initTeleport(): void {
-    // Populated in Chunk 4
+    if (!deps) return;
+
+    // Arc line
+    const arcGeometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(TELEPORT_ARC_SEGMENTS * 3);
+    arcGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const arcMaterial = new THREE.LineBasicMaterial({ color: 0x00ff88, linewidth: 2 });
+    teleportArc = new THREE.Line(arcGeometry, arcMaterial);
+    teleportArc.visible = false;
+    teleportArc.frustumCulled = false;
+    deps.scene.add(teleportArc);
+
+    // Landing target — ring
+    const targetGeometry = new THREE.RingGeometry(0.15, 0.25, 32);
+    targetGeometry.rotateX(-Math.PI / 2);
+    const targetMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ff88,
+        transparent: true,
+        opacity: 0.6,
+        side: THREE.DoubleSide,
+    });
+    teleportLandingMarker = new THREE.Mesh(targetGeometry, targetMaterial);
+    teleportLandingMarker.visible = false;
+    deps.scene.add(teleportLandingMarker);
+
+    log.info('Teleport system initialized');
+}
+
+/** Calculate parabolic arc points from controller position/direction */
+export function calculateArc(
+    origin: THREE.Vector3,
+    direction: THREE.Vector3,
+    velocity: number = TELEPORT_VELOCITY,
+): THREE.Vector3[] {
+    const points: THREE.Vector3[] = [];
+    const pos = origin.clone();
+    const vel = direction.clone().multiplyScalar(velocity);
+    const dt = 0.05;
+
+    for (let i = 0; i < TELEPORT_ARC_SEGMENTS; i++) {
+        points.push(pos.clone());
+        pos.add(vel.clone().multiplyScalar(dt));
+        vel.y -= TELEPORT_GRAVITY * dt;
+    }
+    return points;
+}
+
+/** Raycast arc segments against scene meshes to find walkable landing point */
+export function findTeleportLanding(
+    points: THREE.Vector3[],
+    scene: THREE.Scene,
+    maxDistance: number,
+): THREE.Vector3 | null {
+    const raycaster = new THREE.Raycaster();
+
+    for (let i = 0; i < points.length - 1; i++) {
+        const from = points[i];
+        const to = points[i + 1];
+        const dir = to.clone().sub(from);
+        const len = dir.length();
+        dir.normalize();
+
+        raycaster.set(from, dir);
+        raycaster.far = len;
+
+        const intersects = raycaster.intersectObjects(scene.children, true);
+        for (const hit of intersects) {
+            // Check distance from origin
+            if (hit.point.distanceTo(points[0]) > maxDistance) continue;
+            // Check surface normal is walkable (< 45° from up)
+            if (hit.face && hit.face.normal.y > 0.7) {
+                return hit.point;
+            }
+        }
+    }
+    return null;
 }
 
 function updateTeleport(): void {
-    // Populated in Chunk 4
+    if (!deps || !cameraRig || locomotionMode !== 'teleport') return;
+
+    const session = deps.renderer.xr.getSession();
+    if (!session) return;
+
+    // Run fade callback if active
+    if (fadeCallback) {
+        fadeCallback();
+    }
+
+    // Get right controller (index 1) for teleport
+    const controller = deps.renderer.xr.getController(1);
+    if (!controller) return;
+
+    // Read gamepad for trigger and thumbstick
+    const sources = session.inputSources;
+    let triggerPressed = false;
+    let thumbstickX = 0;
+    let rightSource: XRInputSource | null = null;
+
+    for (const source of sources) {
+        if (source.handedness === 'right' && source.gamepad) {
+            rightSource = source;
+            // Trigger is typically axes/buttons[0] (select)
+            triggerPressed = source.gamepad.buttons[0]?.pressed ?? false;
+            // Thumbstick X for snap turn (axes[2] is typically right thumbstick X)
+            thumbstickX = source.gamepad.axes[2] ?? 0;
+            break;
+        }
+    }
+
+    // Snap turn on right thumbstick
+    handleSnapTurn(thumbstickX);
+
+    // Teleport arc on trigger hold
+    if (rightSource && triggerPressed && !isTeleporting) {
+        // Calculate arc from controller position/direction
+        const controllerPos = new THREE.Vector3();
+        const controllerDir = new THREE.Vector3(0, 0, -1);
+        controller.getWorldPosition(controllerPos);
+        controller.getWorldDirection(controllerDir);
+        controllerDir.negate(); // getWorldDirection returns -Z
+
+        const arcPoints = calculateArc(controllerPos, controllerDir);
+        const landing = findTeleportLanding(arcPoints, deps.scene, VR.TELEPORT_MAX_DISTANCE);
+
+        // Update arc visual
+        if (teleportArc) {
+            const posAttr = teleportArc.geometry.getAttribute('position') as THREE.BufferAttribute;
+            for (let i = 0; i < arcPoints.length && i < TELEPORT_ARC_SEGMENTS; i++) {
+                posAttr.setXYZ(i, arcPoints[i].x, arcPoints[i].y, arcPoints[i].z);
+            }
+            posAttr.needsUpdate = true;
+            teleportArc.visible = true;
+
+            // Color: green if valid, red if invalid
+            (teleportArc.material as THREE.LineBasicMaterial).color.setHex(landing ? 0x00ff88 : 0xff4444);
+        }
+
+        // Update landing marker
+        if (teleportLandingMarker) {
+            if (landing) {
+                teleportLandingMarker.position.copy(landing);
+                teleportLandingMarker.position.y += 0.01; // Slight offset above ground
+                teleportLandingMarker.visible = true;
+                teleportTarget = landing;
+                teleportValid = true;
+            } else {
+                teleportLandingMarker.visible = false;
+                teleportValid = false;
+            }
+        }
+    } else if (!triggerPressed) {
+        // Trigger released — execute teleport if valid
+        if (teleportValid && teleportTarget && !isTeleporting) {
+            executeTeleport(teleportTarget);
+        }
+
+        // Hide arc and marker
+        if (teleportArc) teleportArc.visible = false;
+        if (teleportLandingMarker) teleportLandingMarker.visible = false;
+        teleportValid = false;
+    }
+}
+
+function handleSnapTurn(thumbstickX: number): void {
+    if (!cameraRig) return;
+    const now = performance.now();
+    if (now - lastSnapTime < SNAP_COOLDOWN_MS) return;
+
+    if (Math.abs(thumbstickX) > 0.6) {
+        const angle = thumbstickX > 0
+            ? -VR.SNAP_TURN_DEGREES * Math.PI / 180
+            : VR.SNAP_TURN_DEGREES * Math.PI / 180;
+        cameraRig.rotateY(angle);
+        lastSnapTime = now;
+    }
+}
+
+function executeTeleport(target: THREE.Vector3): void {
+    if (!deps || !cameraRig) return;
+    isTeleporting = true;
+
+    // Get current camera world position to calculate offset
+    const cameraWorldPos = new THREE.Vector3();
+    deps.camera.getWorldPosition(cameraWorldPos);
+
+    // Calculate horizontal offset (keep camera height, move rig)
+    const offset = new THREE.Vector3(
+        target.x - cameraWorldPos.x,
+        0, // Don't change Y — let target height determine floor
+        target.z - cameraWorldPos.z,
+    );
+
+    // Fade to black, teleport, fade in
+    const fadeMs = VR.TELEPORT_FADE_MS;
+    const startTime = performance.now();
+    let hasMoved = false;
+
+    fadeCallback = () => {
+        const elapsed = performance.now() - startTime;
+        const totalDuration = fadeMs * 2;
+
+        if (elapsed < fadeMs) {
+            // Fading out (not yet moved)
+        } else if (!hasMoved) {
+            // At peak darkness — execute the move
+            cameraRig!.position.add(offset);
+            cameraRig!.position.y = target.y; // Set floor height
+            hasMoved = true;
+        } else if (elapsed >= totalDuration) {
+            // Fade complete
+            fadeCallback = null;
+            isTeleporting = false;
+        }
+    };
 }
 
 function disposeTeleport(): void {
@@ -311,13 +532,16 @@ function disposeTeleport(): void {
         teleportArc.removeFromParent();
         teleportArc = null;
     }
-    if (teleportMarker) {
-        teleportMarker.removeFromParent();
-        teleportMarker = null;
+    if (teleportLandingMarker) {
+        teleportLandingMarker.geometry.dispose();
+        (teleportLandingMarker.material as THREE.Material).dispose();
+        teleportLandingMarker.removeFromParent();
+        teleportLandingMarker = null;
     }
-    teleportRaycaster = null;
     teleportTarget = null;
     teleportValid = false;
+    isTeleporting = false;
+    fadeCallback = null;
 }
 
 // =============================================================================
