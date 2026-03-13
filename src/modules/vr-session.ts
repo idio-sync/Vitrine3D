@@ -292,11 +292,14 @@ export function updateVR(): void {
         sparkXr.updateControllers(deps.camera);
     }
 
-    // Update teleport (Chunk 4)
+    // Update teleport
     updateTeleport();
 
-    // Update wrist menu visibility (Chunk 5)
+    // Update wrist menu visibility and interaction
     updateWristMenu();
+
+    // Update VR annotation marker interaction (hover + card popups)
+    updateAnnotationInteraction();
 }
 
 // =============================================================================
@@ -789,40 +792,241 @@ function disposeWristMenu(): void {
 }
 
 // =============================================================================
-// VR Annotation Markers (Chunk 6 — stubs)
+// VR Annotation Markers
 // =============================================================================
 
+let vrMarkerSprites: THREE.Sprite[] = [];
+let lastAnnotationId: string | null = null;
+
+/** Create a circular pin texture for annotation markers */
+function createPinTexture(): THREE.CanvasTexture {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d')!;
+
+    // Outer circle
+    ctx.beginPath();
+    ctx.arc(32, 32, 24, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff4444';
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Inner dot
+    ctx.beginPath();
+    ctx.arc(32, 32, 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+
+    return new THREE.CanvasTexture(canvas);
+}
+
 function createVRAnnotationMarkers(): void {
-    // Populated in Chunk 6
+    if (!deps?.annotationSystem) return;
+
+    const annotations = deps.annotationSystem.getAnnotations();
+    if (annotations.length === 0) return;
+
+    vrAnnotationMarkers = new THREE.Group();
+    vrAnnotationMarkers.name = 'vr-annotation-markers';
+
+    const pinTexture = createPinTexture();
+
+    for (const anno of annotations) {
+        const material = new THREE.SpriteMaterial({
+            map: pinTexture.clone(),
+            transparent: true,
+            depthTest: false,
+        });
+        const sprite = new THREE.Sprite(material);
+        sprite.position.set(anno.position.x, anno.position.y, anno.position.z);
+        sprite.scale.setScalar(0.1 * VR.MARKER_SCALE_VR);
+        sprite.userData.annotation = anno;
+        vrAnnotationMarkers.add(sprite);
+        vrMarkerSprites.push(sprite);
+    }
+
+    deps.scene.add(vrAnnotationMarkers);
+    log.info('Created %d VR annotation markers', annotations.length);
+}
+
+/** Create a text card popup for an annotation */
+function createAnnotationCard(annotation: import('../types.js').Annotation, position: THREE.Vector3): THREE.Mesh {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+
+    // Background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, canvas.width, canvas.height, 12);
+    ctx.fill();
+
+    // Title
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillText(annotation.title || 'Annotation', 20, 40);
+
+    // Body text — word wrap
+    ctx.font = '16px sans-serif';
+    ctx.fillStyle = '#cccccc';
+    const words = (annotation.body || '').split(' ');
+    let line = '';
+    let y = 70;
+    const maxWidth = canvas.width - 40;
+    const lineHeight = 22;
+
+    for (const word of words) {
+        const testLine = line + word + ' ';
+        if (ctx.measureText(testLine).width > maxWidth && line.length > 0) {
+            ctx.fillText(line, 20, y);
+            line = word + ' ';
+            y += lineHeight;
+            if (y > canvas.height - 20) break;
+        } else {
+            line = testLine;
+        }
+    }
+    if (y <= canvas.height - 20) {
+        ctx.fillText(line, 20, y);
+    }
+
+    // Severity indicator
+    if (annotation.severity) {
+        const colors: Record<string, string> = {
+            low: '#4CAF50', medium: '#FF9800', high: '#f44336', critical: '#9C27B0',
+        };
+        ctx.fillStyle = colors[annotation.severity] || '#666';
+        ctx.beginPath();
+        ctx.arc(canvas.width - 30, 30, 10, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        side: THREE.DoubleSide,
+    });
+    const geometry = new THREE.PlaneGeometry(0.5, 0.25);
+    const card = new THREE.Mesh(geometry, material);
+
+    // Position offset from marker
+    card.position.copy(position);
+    card.position.y += 0.2;
+    card.position.x += 0.3;
+
+    return card;
+}
+
+/** Per-frame annotation interaction — hover highlight + trigger to show/dismiss card */
+function updateAnnotationInteraction(): void {
+    if (!deps || vrMarkerSprites.length === 0) return;
+
+    const session = deps.renderer.xr.getSession();
+    if (!session) return;
+
+    // Get right controller ray
+    const rightController = deps.renderer.xr.getController(1);
+    if (!rightController) return;
+
+    const raycaster = new THREE.Raycaster();
+    const pos = new THREE.Vector3();
+    const dir = new THREE.Vector3(0, 0, -1);
+    rightController.getWorldPosition(pos);
+    rightController.getWorldDirection(dir);
+    dir.negate();
+    raycaster.set(pos, dir);
+
+    // Check trigger state
+    let triggerPressed = false;
+    for (const source of session.inputSources) {
+        if (source.handedness === 'right' && source.gamepad) {
+            triggerPressed = source.gamepad.buttons[0]?.pressed ?? false;
+            break;
+        }
+    }
+
+    const intersects = raycaster.intersectObjects(vrMarkerSprites);
+
+    // Reset all markers to default scale
+    const baseScale = 0.1 * VR.MARKER_SCALE_VR;
+    for (const marker of vrMarkerSprites) {
+        marker.scale.setScalar(baseScale);
+    }
+
+    if (intersects.length > 0) {
+        const hitMarker = intersects[0].object as THREE.Sprite;
+
+        // Hover effect — enlarge
+        hitMarker.scale.setScalar(baseScale * 1.3);
+
+        if (triggerPressed) {
+            const annotation = hitMarker.userData.annotation;
+            if (!annotation) return;
+
+            // Dismiss existing card
+            if (activeAnnotationCard) {
+                activeAnnotationCard.geometry.dispose();
+                (activeAnnotationCard.material as THREE.MeshBasicMaterial).map?.dispose();
+                (activeAnnotationCard.material as THREE.Material).dispose();
+                activeAnnotationCard.removeFromParent();
+                activeAnnotationCard = null;
+
+                // If same annotation, just dismiss
+                if (lastAnnotationId === annotation.id) {
+                    lastAnnotationId = null;
+                    return;
+                }
+            }
+
+            // Show new card
+            const card = createAnnotationCard(annotation, hitMarker.position);
+            const xrCamera = deps.renderer.xr.getCamera();
+            card.lookAt(xrCamera.position);
+            deps.scene.add(card);
+            activeAnnotationCard = card;
+            lastAnnotationId = annotation.id;
+        }
+    } else if (triggerPressed && activeAnnotationCard) {
+        // Clicking empty space dismisses card
+        activeAnnotationCard.geometry.dispose();
+        (activeAnnotationCard.material as THREE.MeshBasicMaterial).map?.dispose();
+        (activeAnnotationCard.material as THREE.Material).dispose();
+        activeAnnotationCard.removeFromParent();
+        activeAnnotationCard = null;
+        lastAnnotationId = null;
+    }
+
+    // Billboard active card toward camera
+    if (activeAnnotationCard) {
+        const xrCamera = deps.renderer.xr.getCamera();
+        activeAnnotationCard.lookAt(xrCamera.position);
+    }
 }
 
 function disposeVRAnnotationMarkers(): void {
+    for (const sprite of vrMarkerSprites) {
+        sprite.material.map?.dispose();
+        sprite.material.dispose();
+    }
+    vrMarkerSprites = [];
+
     if (vrAnnotationMarkers) {
-        vrAnnotationMarkers.traverse((child) => {
-            if (child instanceof THREE.Mesh || child instanceof THREE.Sprite) {
-                child.geometry?.dispose();
-                if (child instanceof THREE.Mesh) {
-                    if (Array.isArray(child.material)) {
-                        child.material.forEach(m => m.dispose());
-                    } else {
-                        child.material.dispose();
-                    }
-                }
-                if (child instanceof THREE.Sprite) {
-                    child.material.dispose();
-                    child.material.map?.dispose();
-                }
-            }
-        });
         vrAnnotationMarkers.removeFromParent();
         vrAnnotationMarkers = null;
     }
     if (activeAnnotationCard) {
         activeAnnotationCard.geometry.dispose();
+        (activeAnnotationCard.material as THREE.MeshBasicMaterial).map?.dispose();
         (activeAnnotationCard.material as THREE.Material).dispose();
         activeAnnotationCard.removeFromParent();
         activeAnnotationCard = null;
     }
+    lastAnnotationId = null;
 }
 
 // =============================================================================
