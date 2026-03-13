@@ -9,7 +9,7 @@
  */
 
 import * as THREE from 'three';
-import type { Annotation, DisplayMode } from '@/types.js';
+import type { Annotation, DisplayMode, VRDeps } from '@/types.js';
 import { normalizeScale } from '@/types.js';
 import { SceneManager } from './scene-manager.js';
 import { createSparkRenderer, isSparkV2 } from './spark-compat.js';
@@ -118,6 +118,7 @@ interface AppConfig {
         model?: { position?: number[]; rotation?: number[]; scale?: number };
         pointcloud?: { position?: number[]; rotation?: number[]; scale?: number };
     };
+    vr?: boolean;
     _resolvedLayout?: string;
     _themeMeta?: Record<string, unknown>;
     _layoutModule?: LayoutModule | null;
@@ -200,6 +201,7 @@ let crossSection: CrossSectionTool | null = null;
 let measurementSystem: MeasurementSystem | null = null;
 let flightPathManager: FlightPathManager | null = null;
 let sparkRenderer: SparkRenderer | null = null;
+let vrModule: typeof import('./vr-session.js') | null = null; // Lazy-loaded VR module
 let splatMesh: SplatMesh | null = null;
 let fpsElement: HTMLElement | null = null;
 let currentPopupAnnotationId: string | null = null;
@@ -559,6 +561,39 @@ async function _doInit(): Promise<void> {
     // Setup mobile bottom sheet drag (always — layout modules use sidebar as mobile fallback)
     setupBottomSheetDrag();
     if (isMobileKiosk()) setSheetSnap('peek');
+
+    // Initialize VR support (lazy — only loads module if WebXR available)
+    if (navigator.xr || window.APP_CONFIG?.vr) {
+        import('./vr-session.js').then(vr => {
+            vrModule = vr;
+            const vrDeps: VRDeps = {
+                scene,
+                camera,
+                renderer,
+                controls,
+                annotationSystem,
+                animate,
+                getAssetVisibility: () => ({
+                    splat: splatMesh?.visible ?? false,
+                    mesh: modelGroup?.visible ?? false,
+                    pointcloud: pointcloudGroup?.visible ?? false,
+                    cad: false,
+                    flightpath: false, // kiosk tracks flight path state separately
+                }),
+                toggleAsset: (type: string) => {
+                    if (type === 'splat' && splatMesh) splatMesh.visible = !splatMesh.visible;
+                    else if (type === 'mesh' && modelGroup) modelGroup.visible = !modelGroup.visible;
+                    else if (type === 'pointcloud' && pointcloudGroup) pointcloudGroup.visible = !pointcloudGroup.visible;
+                    else if (type === 'flightpath' && flightPathManager) flightPathManager.setVisible(!splatMesh?.visible);
+                },
+                getSplatBudget: () => sparkRenderer ? sparkRenderer.lodSplatCount : 0,
+                setSplatBudget: (n: number) => { if (sparkRenderer) sparkRenderer.lodSplatCount = n; },
+            };
+            vr.initVR(vrDeps);
+        }).catch(err => {
+            log.warn('VR module failed to load:', err);
+        });
+    }
 
     // Start render loop
     animate();
@@ -5424,7 +5459,10 @@ let _lastFrameTime = 0;
 
 function animate(): void {
     if (_kioskRenderPaused) return;
-    _kioskAnimFrameId = requestAnimationFrame(animate);
+    // In VR, setAnimationLoop drives frames — don't double-schedule via rAF
+    if (!renderer.xr?.isPresenting) {
+        _kioskAnimFrameId = requestAnimationFrame(animate);
+    }
 
     try {
         // Delta time for playback animation
@@ -5445,6 +5483,11 @@ function animate(): void {
             flyControls.update();
         } else if (!flightControllingCamera && !annotationSystem?.isAnimating && !walkthroughAnimating) {
             controls.update();
+        }
+
+        // Update VR systems if presenting
+        if (renderer.xr?.isPresenting && vrModule) {
+            vrModule.updateVR();
         }
 
         sceneManager.render(state.displayMode as any, splatMesh, modelGroup, pointcloudGroup, null);

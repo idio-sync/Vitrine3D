@@ -31,6 +31,7 @@ import {
     stopPreview as wtStopPreview,
     isPreviewAnimating,
 } from './modules/walkthrough-controller.js';
+import type { VRDeps } from './types.js';
 import { SceneManager } from './modules/scene-manager.js';
 import * as postProcessing from './modules/post-processing.js';
 import {
@@ -353,6 +354,7 @@ let controls: any; // OrbitControls
 let transformControls: any; // TransformControls
 let flyControls: any = null; // FlyControls (custom)
 let sparkRenderer: any = null; // SparkRenderer instance
+let vrModule: typeof import('./modules/vr-session.js') | null = null; // Lazy-loaded VR module
 let splatMesh: any = null; // SplatMesh from Spark
 let modelGroup: THREE.Group;
 let pointcloudGroup: THREE.Group;
@@ -2310,6 +2312,41 @@ async function init() {
     // Load default files if configured
     loadDefaultFiles();
 
+    // Initialize VR support (lazy — only loads module if WebXR available)
+    if (navigator.xr || window.APP_CONFIG?.vr) {
+        import('./modules/vr-session.js').then(vr => {
+            vrModule = vr;
+            const vrDeps: VRDeps = {
+                scene,
+                camera,
+                renderer,
+                controls,
+                annotationSystem,
+                animate,
+                getAssetVisibility: () => ({
+                    splat: splatMesh?.visible ?? false,
+                    mesh: modelGroup?.visible ?? false,
+                    pointcloud: pointcloudGroup?.visible ?? false,
+                    cad: cadGroup?.visible ?? false,
+                    flightpath: sceneManager?.flightPathGroup?.visible ?? false,
+                }),
+                toggleAsset: (type: string) => {
+                    const groups: Record<string, any> = {
+                        splat: splatMesh, mesh: modelGroup, pointcloud: pointcloudGroup,
+                        cad: cadGroup, flightpath: sceneManager?.flightPathGroup,
+                    };
+                    const target = groups[type];
+                    if (target) target.visible = !target.visible;
+                },
+                getSplatBudget: () => sparkRenderer ? sparkRenderer.lodSplatCount : 0,
+                setSplatBudget: (n: number) => { if (sparkRenderer) sparkRenderer.lodSplatCount = n; },
+            };
+            vr.initVR(vrDeps);
+        }).catch(err => {
+            log.warn('VR module failed to load:', err);
+        });
+    }
+
     // Start render loop
     animate();
 
@@ -3947,7 +3984,10 @@ let _pendingDetailKey: string | null = null;
 
 function animate() {
     if (_renderPaused) return;
-    _animFrameId = requestAnimationFrame(animate);
+    // In VR, setAnimationLoop drives frames — don't double-schedule via rAF
+    if (!renderer.xr?.isPresenting) {
+        _animFrameId = requestAnimationFrame(animate);
+    }
 
     try {
         // Update flight path playback BEFORE camera controls and render
@@ -3974,6 +4014,11 @@ function animate() {
 
         // Track orbit center line to current pivot point
         sceneManager.updateOrbitCenterLine(controls.target);
+
+        // Update VR systems (controllers, teleport, wrist menu) if presenting
+        if (renderer.xr?.isPresenting && vrModule) {
+            vrModule.updateVR();
+        }
 
         // Render using scene manager (handles split view)
         sceneManager.render(state.displayMode, splatMesh, modelGroup, pointcloudGroup, stlGroup);
