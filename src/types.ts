@@ -597,6 +597,22 @@ export interface EventWiringDeps {
     validateUrl?: (url: string, resourceType: string) => { valid: boolean; url: string; error: string };
 }
 
+// ===== VR Dependencies =====
+
+/** Dependencies for VR session module — uses individual scene objects (not SceneRefs) so both editor and kiosk can provide them. */
+export interface VRDeps {
+    scene: Scene;
+    camera: PerspectiveCamera;
+    renderer: WebGLRenderer;
+    controls: OrbitControls;
+    annotationSystem: AnnotationSystem | null;
+    animate: () => void;
+    getAssetVisibility: () => Record<string, boolean>;
+    toggleAsset: (type: string) => void;
+    getSplatBudget: () => number;
+    setSplatBudget: (budget: number) => void;
+}
+
 export interface PostProcessingEffectConfig {
     ssao: { enabled: boolean; radius: number; intensity: number };
     bloom: { enabled: boolean; strength: number; radius: number; threshold: number };

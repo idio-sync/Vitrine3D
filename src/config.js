@@ -232,7 +232,10 @@
         sparkVersion: '2.0',
 
         // DJI API key for decrypting v13+ binary flight logs (empty in local dev, set via admin settings or Docker env var)
-        djiApiKey: ''
+        djiApiKey: '',
+
+        // VR auto-enter mode — ?vr=true shows "tap to enter VR" overlay after scene loads
+        vr: params.get('vr') === 'true'
     };
 
     // Fetch server-managed settings (non-blocking — modules await settingsReady if needed)

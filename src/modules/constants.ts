@@ -388,6 +388,35 @@ export const DEFAULT_OBJECT_PROFILE = 'medium';
 // FLIGHT LOG (drone telemetry import)
 // =============================================================================
 
+// =============================================================================
+// VR / WebXR SETTINGS
+// =============================================================================
+
+export const VR = {
+    /** Splat budget for PC-tethered headsets (3070-class GPU) */
+    SPLAT_BUDGET_PC: 2_000_000,
+    /** Splat budget for standalone headsets (Quest 3) — future use */
+    SPLAT_BUDGET_STANDALONE: 500_000,
+    /** Reduced maxStdDev for VR (~35% cheaper than default sqrt(8)) — constructor-only */
+    MAX_STD_DEV: Math.sqrt(5),
+    /** XR framebuffer scale (0.5 = half native resolution, good perf/quality tradeoff) */
+    FRAMEBUFFER_SCALE: 0.5,
+    /** Maximum teleport distance in meters */
+    TELEPORT_MAX_DISTANCE: 20,
+    /** Fade-to-black duration per half in ms (total transition = 2x) */
+    TELEPORT_FADE_MS: 200,
+    /** Snap turn increment in degrees */
+    SNAP_TURN_DEGREES: 30,
+    /** Dot-product threshold for wrist menu visibility (0.7 ≈ 45° gaze cone) */
+    WRIST_MENU_LOOK_THRESHOLD: 0.7,
+    /** Scale multiplier for VR annotation markers vs desktop markers */
+    MARKER_SCALE_VR: 2.0,
+} as const;
+
+// =============================================================================
+// FLIGHT LOG (drone telemetry import)
+// =============================================================================
+
 export const FLIGHT_LOG = {
     EXTENSIONS: ['.csv', '.kml', '.kmz', '.srt', '.txt'],
     /** Default line color — light blue, distinct from annotation/measurement orange */

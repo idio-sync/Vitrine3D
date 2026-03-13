@@ -133,6 +133,46 @@ declare module '@sparkjsdev/spark' {
         opacityThreshold?: number;
     }): Promise<{ fileBytes: Uint8Array }>;
 
+    // =========================================================================
+    // SparkXr — WebXR session lifecycle manager
+    // =========================================================================
+
+    export interface SparkXrOptions {
+        renderer: WebGLRenderer;
+        mode?: 'vr' | 'ar' | 'arvr' | 'vrar';
+        element?: HTMLElement | null;
+        referenceSpaceType?: 'local' | 'local-floor' | 'bounded-floor' | 'unbounded';
+        frameBufferScaleFactor?: number;
+        fixedFoveation?: number;
+        enableHands?: boolean;
+        onEnterXr?: () => void;
+        onExitXr?: () => void;
+        onReady?: (supported: boolean) => void;
+        controllers?: {
+            moveSpeed?: number;
+            rotateSpeed?: number;
+            rollSpeed?: number;
+            moveHeading?: boolean;
+            getMove?: () => { x: number; y: number; z: number };
+            getRotate?: () => { x: number; y: number; z: number };
+            getFast?: () => boolean;
+            getSlow?: () => boolean;
+        };
+    }
+
+    export class SparkXr {
+        constructor(options: SparkXrOptions);
+
+        /** Toggle XR session on/off. Must be called from a user gesture. */
+        toggleXr(): void;
+
+        /** Update controller input (call once per frame while in XR). */
+        updateControllers(camera: import('three').Camera): void;
+
+        /** Dispose XR manager and clean up resources. */
+        dispose(): void;
+    }
+
     /**
      * Legacy 0.1 renderer, renamed in 2.0. No LOD support.
      * Use via spark-compat.ts adapter with VITE_SPARK_VERSION=0.1.
