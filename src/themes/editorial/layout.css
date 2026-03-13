@@ -2489,11 +2489,11 @@ body.kiosk-mode.kiosk-editorial .editorial-flight-wrapper {
 body.kiosk-mode.kiosk-editorial .editorial-flight-dropdown {
     display: none;
     position: absolute;
-    bottom: calc(100% + 8px);
+    bottom: calc(100% + 6px);
     right: -12px;
-    background: rgba(var(--kiosk-surface-rgb), 0.92);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    background: rgba(var(--kiosk-surface-rgb), 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border: 1px solid var(--kiosk-border-subtle);
     border-radius: 4px;
     padding: 0;
@@ -2505,7 +2505,12 @@ body.kiosk-mode.kiosk-editorial .editorial-flight-dropdown {
 
 body.kiosk-mode.kiosk-editorial .editorial-flight-dropdown.open {
     display: flex;
-    animation: editorialDropdownIn 0.15s ease-out;
+    animation: editorialFlightDropdownIn 0.15s ease-out;
+}
+
+@keyframes editorialFlightDropdownIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 /* Stats grid — two-column key/value layout */
