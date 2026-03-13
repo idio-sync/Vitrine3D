@@ -2859,15 +2859,24 @@ function transcodeMedia(mediaId) {
     if (trimStart > 0) { trimArgs.push('-ss', String(trimStart)); }
     if (trimEnd > trimStart && trimEnd < Infinity) { trimArgs.push('-to', String(trimEnd)); }
 
-    // Step 1: WebM → MP4
+    // Step 1: WebM → MP4 (codec-aware)
+    let enc;
+    try {
+        enc = resolveEncoder();
+    } catch (encErr) {
+        console.error('[media] Encoder selection failed:', encErr.message);
+        db.prepare("UPDATE media SET status = 'error', error_msg = ? WHERE id = ?").run(encErr.message, mediaId);
+        return;
+    }
+
+    console.log('[media] Transcoding', mediaId, 'with', enc.encoder, enc.isHardware ? '(hardware)' : '(software)');
+
     const mp4Args = [
+        ...enc.preInputArgs,
         ...trimArgs,
         '-i', rawPath,
-        '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
-        '-c:v', 'libx264',
-        '-preset', getSetting('video.preset'),
-        '-crf', getSetting('video.crf'),
-        '-movflags', '+faststart',
+        '-vf', enc.vf,
+        ...enc.codecArgs,
         '-an',
         '-y', mp4Path
     ];
