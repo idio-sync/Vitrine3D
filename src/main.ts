@@ -1802,6 +1802,10 @@ async function init() {
                 if (annotationSystem?.selectedAnnotation) {
                     annotationSystem.selectedAnnotation.detail_asset_key = key;
                 }
+                // Persist blob URL so it survives archiveCreator.reset() during export
+                const ext = file.name.split('.').pop()?.toLowerCase() || 'glb';
+                state.detailAssetIndex.set(key, { filename: `assets/${key}.${ext}` });
+                state.loadedDetailBlobs.set(key, URL.createObjectURL(file));
                 if (filenameSpan) filenameSpan.textContent = file.name;
                 if (removeBtn) removeBtn.style.display = '';
                 if (customizeDiv) customizeDiv.style.display = '';
@@ -1813,6 +1817,10 @@ async function init() {
         removeBtn.addEventListener('click', () => {
             const anno = annotationSystem?.selectedAnnotation;
             if (anno?.detail_asset_key) {
+                const oldUrl = state.loadedDetailBlobs.get(anno.detail_asset_key);
+                if (oldUrl) URL.revokeObjectURL(oldUrl);
+                state.loadedDetailBlobs.delete(anno.detail_asset_key);
+                state.detailAssetIndex.delete(anno.detail_asset_key);
                 sceneRefs.archiveCreator?.removeDetailModel(anno.detail_asset_key);
                 anno.detail_asset_key = undefined;
                 anno.detail_button_label = undefined;

@@ -605,16 +605,23 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         }
     }
 
-    // Re-extract detail models from the loaded archive
-    if (state.archiveLoader && state.detailAssetIndex && state.detailAssetIndex.size > 0) {
-        for (const [_key, { filename }] of state.detailAssetIndex) {
+    // Re-add detail models (from loaded archive OR newly-attached blobs)
+    if (state.detailAssetIndex && state.detailAssetIndex.size > 0) {
+        for (const [key, { filename }] of state.detailAssetIndex) {
             try {
-                const data = await state.archiveLoader.extractFile(filename);
-                if (data) {
-                    archiveCreator.addDetailModel(data.blob, filename.split('/').pop() || filename);
+                let blob: Blob | null = null;
+                const cachedUrl = state.loadedDetailBlobs?.get(key);
+                if (cachedUrl) {
+                    blob = await fetch(cachedUrl).then(r => r.blob());
+                } else if (state.archiveLoader) {
+                    const data = await state.archiveLoader.extractFile(filename);
+                    if (data) blob = data.blob;
+                }
+                if (blob) {
+                    archiveCreator.addDetailModel(blob, filename.split('/').pop() || filename);
                 }
             } catch (e: any) {
-                log.warn('Failed to re-extract detail model:', filename, e.message);
+                log.warn('Failed to re-add detail model:', filename, e.message);
             }
         }
     }
