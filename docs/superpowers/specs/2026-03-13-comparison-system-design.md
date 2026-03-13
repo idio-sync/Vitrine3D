@@ -29,11 +29,7 @@ interface ComparisonPair {
   id: string;               // "comparison_0"
   before: ComparisonSide;
   after: ComparisonSide;
-  alignment?: {
-    position: [number, number, number];
-    rotation: [number, number, number];
-    scale: number;
-  };
+  alignment?: Transform;  // reuses existing Transform interface from types.ts
   default_mode?: 'side-by-side' | 'slider' | 'toggle';
 }
 ```
@@ -53,11 +49,7 @@ interface Annotation {
     after_label?: string;
     after_date?: string;
     after_description?: string;
-    alignment?: {
-      position: [number, number, number];
-      rotation: [number, number, number];
-      scale: number;
-    };
+    alignment?: Transform;  // reuses existing Transform interface
     default_mode?: 'side-by-side' | 'slider' | 'toggle';
   };
 }
@@ -82,7 +74,7 @@ Scene-level comparisons reference existing mesh assets — no new key prefix nee
       "id": "comparison_0",
       "before": { "asset_key": "mesh_0", "label": "November 2025", "date": "2025-11-15" },
       "after": { "asset_key": "mesh_1", "label": "March 2026", "date": "2026-03-01", "description": "Post-restoration scan" },
-      "alignment": { "position": [0, 0, 0], "rotation": [0, 0, 0], "scale": 1 },
+      "alignment": { "position": { "x": 0, "y": 0, "z": 0 }, "rotation": { "x": 0, "y": 0, "z": 0 }, "scale": 1 },
       "default_mode": "slider"
     }
   ]
@@ -128,13 +120,12 @@ Annotation-level comparisons use existing `detail_N` keys. The comparison model 
 
 ### File: `src/modules/comparison-viewer.ts`
 
-A new full-screen overlay module following the same pattern as `DetailViewer`. It manages its own renderers, scenes, cameras, and animation loop — fully isolated from the main scene.
+A new full-screen overlay module following the same pattern as `DetailViewer`. It manages its own single renderer, two scenes, cameras, and animation loop — fully isolated from the main scene.
 
 ### Deps Interface
 
 ```typescript
 interface ComparisonViewerDeps {
-  extractAsset: (key: string) => Promise<Blob | null>;
   parentRenderLoop: { pause: () => void; resume: () => void };
   theme: string | null;
   isEditor: boolean;
@@ -142,17 +133,19 @@ interface ComparisonViewerDeps {
 }
 ```
 
+Blobs are passed directly to `open()` — the caller (kiosk-main or main.ts) is responsible for extracting them before opening the viewer. This keeps the viewer focused on rendering, not asset management.
+
 ### Internal Architecture
 
 ```
 ComparisonViewer
-  ├── sceneA (THREE.Scene)          // "before" model
-  │   ├── rendererA (WebGLRenderer)
+  ├── renderer (WebGLRenderer)      // single renderer, single canvas
+  │
+  ├── sceneA (THREE.Scene)          // "before" model + lighting
   │   ├── cameraA (PerspectiveCamera)
   │   └── controlsA (OrbitControls)
   │
-  ├── sceneB (THREE.Scene)          // "after" model
-  │   ├── rendererB (WebGLRenderer)
+  ├── sceneB (THREE.Scene)          // "after" model + lighting
   │   ├── cameraB (PerspectiveCamera)
   │   └── controlsB (OrbitControls)
   │
@@ -161,30 +154,31 @@ ComparisonViewer
   └── animationLoop (own requestAnimationFrame)
 ```
 
-Two fully independent Three.js scenes with their own lighting (matching DetailViewer's neutral environment preset). This avoids the visibility-toggling approach used by the existing main-scene split view.
+A single `WebGLRenderer` renders both scenes using `setViewport()` and `setScissor()` — the same canvas serves all three modes. This avoids creating extra WebGL contexts (browsers limit to 8-16 per page; the main scene already uses 2). Two independent `THREE.Scene` objects with their own lighting (matching DetailViewer's neutral environment preset). The main scene's renderers are paused during overlay display.
 
 ### Viewing Modes
 
 **Side-by-side:**
-- Two canvases, 50/50 width split
-- Both render independently each frame
+- Single canvas, split into left/right halves using `setViewport()` + `setScissor()`
+- Each frame: render sceneA into left half, clear scissor, render sceneB into right half
 - When `syncCameras` is true, orbiting either side updates the other's camera to match (active side = leader)
-- Labels above each viewport; date badges and expandable description below (only shown if populated)
+- Labels above each viewport region; date badges and expandable description below (only shown if populated)
+- OrbitControls for each side receive pointer events based on which half was clicked
 
 **Slider/curtain:**
-- Single canvas using rendererA
-- Both models loaded into sceneA
-- `renderer.setScissor()` clips the viewport at the divider position
+- Single canvas, two-pass rendering with scissor clipping at the divider position
+- Pass 1: render sceneA (before) with scissor set to left of divider
+- Pass 2: render sceneB (after) with scissor set to right of divider
 - Vertical divider with centered grab handle, draggable via mouse/touch
 - Keyboard: left/right arrows move divider; Home/End snap to 0%/100%
-- Single camera, single controls instance
+- Single camera (cameraA), single controls instance — cameraB synced each frame
 
 **Toggle/crossfade:**
-- Single canvas, both models in one scene
-- Crossfade slider (0.0 = fully before, 1.0 = fully after) controls material opacity
-- Toggle button or Space key for instant swap
+- Single canvas, renders one scene at a time (instant toggle) or both with opacity blending
+- Crossfade: render sceneA at full opacity, then render sceneB with `renderer.autoClear = false` and reduced material opacity. Note: material opacity may cause z-fighting with complex PBR materials — if artifacts occur, fall back to instant toggle or a screen-space fade overlay
+- Toggle button or Space key for instant swap (reliable fallback — no opacity issues)
 - Optional auto-crossfade animation (slow oscillation)
-- Single camera
+- Single camera (cameraA), cameraB synced
 
 ### Camera Sync (Side-by-Side)
 
@@ -342,7 +336,7 @@ When "Align Models" is clicked:
 
 - Opens ComparisonViewer in editor mode (side-by-side)
 - "Before" model is locked (reference frame)
-- "After" model has transform gizmo controls (translate, rotate, scale) — reuses `TransformController`
+- "After" model has transform gizmo controls (translate, rotate, scale) — creates its own `TransformControls` instance within the overlay's scene/camera (does not reuse the main scene's `TransformController` instance, but follows the same pattern)
 - "Fit to Before" button attempts auto-alignment using existing ICP algorithm from `alignment.ts`
 - "Save Alignment" writes the transform to the comparison's `alignment` field
 - "Reset" reverts to identity transform
@@ -352,7 +346,13 @@ When "Align Models" is clicked:
 `archive-creator.ts` changes:
 - Scene-level: serialize `comparisons` array to manifest. Meshes are already stored as `mesh_0`, `mesh_1` — no extra asset handling.
 - Annotation-level: `comparison_asset_key` and `comparison` metadata serialized as part of annotation JSON (same pattern as existing `detail_asset_key` / `detail_view_settings`).
-- Orphan cleanup: extend `_cleanOrphanedDetailModels()` to also check `comparison_asset_key` references.
+- Orphan cleanup: extend `_cleanOrphanedDetailModels()` to also check `comparison_asset_key` references. Specifically, add `if (anno.comparison_asset_key) referencedKeys.add(anno.comparison_asset_key);` to the annotation loop.
+
+## Scene-Level Mesh Loading Behavior
+
+When a comparison is defined in the manifest, only the "before" mesh (e.g., `mesh_0`) is loaded into the main scene on archive open. The "after" mesh (e.g., `mesh_1`) is extracted on demand when the Compare button is clicked. This avoids doubling mesh memory in the main scene and prevents visual confusion from having both models visible simultaneously. Future multi-model loading may change this behavior, but for comparisons specifically, lazy loading the second mesh is the right default.
+
+When multiple comparisons exist in the manifest, the UI uses the first entry (`comparisons[0]`). Future work may add a picker.
 
 ## Error Handling & Edge Cases
 
@@ -395,11 +395,11 @@ When "Align Models" is clicked:
 | `src/modules/archive-creator.ts` | Serialize `comparisons` to manifest; serialize annotation comparison fields; extend orphan cleanup |
 | `src/modules/archive-loader.ts` | Parse `comparisons` from manifest |
 | `src/modules/archive-pipeline.ts` | Extract and index comparison assets on archive load |
-| `src/modules/annotation-system.ts` | Serialize/deserialize `comparison_asset_key` and `comparison` fields |
-| `src/modules/metadata-manager.ts` | Render "Compare" button instead of "Inspect" when comparison exists |
+| `src/modules/annotation-system.ts` | Serialize/deserialize `comparison_asset_key` and `comparison` fields. `toJSON()` must explicitly enumerate new fields: `if (a.comparison_asset_key) obj.comparison_asset_key = a.comparison_asset_key; if (a.comparison) obj.comparison = { ...a.comparison };` |
+| `src/modules/metadata-manager.ts` | Render "Compare" button instead of "Inspect" when comparison exists. Note: kiosk annotation popup rendering in `kiosk-main.ts` also decides button label/click behavior — both locations must check for `comparison_asset_key` |
 | `src/modules/event-wiring.ts` | Wire comparison panel UI events in editor |
 | `src/modules/kiosk-main.ts` | Wire kiosk compare button; lazy-import ComparisonViewer |
-| `src/main.ts` | Wire editor comparison panel; create ComparisonViewer deps factory; update annotation popup for comparisons |
+| `src/main.ts` | Wire editor comparison panel; create ComparisonViewer deps factory; update annotation popup for comparisons. **Important:** `main.ts` has local copies of `showAnnotationPopup` that do NOT delegate to `metadata-manager.ts` — the "Compare" vs "Inspect" button logic must be updated in both `main.ts`'s local copy and `metadata-manager.ts`'s version |
 
 ## Non-Goals (Explicit Exclusions)
 
