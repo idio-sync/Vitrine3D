@@ -3875,6 +3875,12 @@ function createDetailViewerDeps(): DetailViewerDeps {
             if (parentAnno) {
                 parentAnno.detail_annotations = annotations;
             }
+        },
+        storeThumbnail: (key: string, blob: Blob) => {
+            const archiveCreator = sceneRefs.archiveCreator;
+            if (archiveCreator) {
+                archiveCreator.addImage(blob, `images/${key}_thumb.png`);
+            }
         }
     };
 }

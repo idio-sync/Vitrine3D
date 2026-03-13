@@ -139,6 +139,7 @@ export class DetailViewer {
         // Optional grid
         if (settings.show_grid) {
             const grid = new THREE.GridHelper(10, 20, 0x444444, 0x333333);
+            grid.name = 'detail-grid';
             this.scene.add(grid);
         }
 
@@ -217,6 +218,11 @@ export class DetailViewer {
         this._animate();
 
         log.info(`Detail viewer opened for ${annotation.detail_asset_key}`);
+
+        // Set up editor controls if in editor mode
+        if (this.deps.isEditor) {
+            this._setupEditorControls();
+        }
     }
 
     close(): void {
@@ -271,6 +277,10 @@ export class DetailViewer {
             this.escapeHandler = null;
         }
 
+        // Hide settings panel
+        const settingsPanel = document.getElementById('detail-view-settings-panel');
+        if (settingsPanel) settingsPanel.classList.add('hidden');
+
         // Hide overlay
         if (this.overlay) {
             this.overlay.classList.remove('detail-viewer-visible', 'detail-viewer-entering');
@@ -291,6 +301,144 @@ export class DetailViewer {
         if (!this.renderer) return null;
         this.renderer.render(this.scene!, this.camera!);
         return this.renderer.domElement.toDataURL('image/png');
+    }
+
+    private _setupEditorControls(): void {
+        const panel = document.getElementById('detail-view-settings-panel');
+        if (!panel) return;
+        panel.classList.remove('hidden');
+
+        const settings = this.currentAnnotation?.detail_view_settings || {};
+
+        // Populate current values
+        const envSelect = document.getElementById('detail-env-preset') as HTMLSelectElement;
+        const bgInput = document.getElementById('detail-bg-color') as HTMLInputElement;
+        const descInput = document.getElementById('detail-description') as HTMLInputElement;
+        const scaleInput = document.getElementById('detail-scale-ref') as HTMLInputElement;
+        const autoRotateCheck = document.getElementById('detail-auto-rotate') as HTMLInputElement;
+        const gridCheck = document.getElementById('detail-show-grid') as HTMLInputElement;
+        const zoomCursorCheck = document.getElementById('detail-zoom-cursor') as HTMLInputElement;
+
+        if (envSelect) envSelect.value = settings.environment_preset || 'neutral';
+        if (bgInput) bgInput.value = settings.background_color || '#1a1a2e';
+        if (descInput) descInput.value = settings.description || '';
+        if (scaleInput) scaleInput.value = settings.scale_reference || '';
+        if (autoRotateCheck) autoRotateCheck.checked = settings.auto_rotate || false;
+        if (gridCheck) gridCheck.checked = settings.show_grid || false;
+        if (zoomCursorCheck) zoomCursorCheck.checked = settings.zoom_to_cursor || false;
+
+        // Live-preview handlers
+        envSelect?.addEventListener('change', () => {
+            const s = this._ensureSettings();
+            s.environment_preset = envSelect.value as EnvironmentPreset;
+            this._rebuildLighting(s);
+        });
+
+        bgInput?.addEventListener('input', () => {
+            const s = this._ensureSettings();
+            s.background_color = bgInput.value;
+            this.renderer?.setClearColor(new THREE.Color(bgInput.value));
+        });
+
+        descInput?.addEventListener('change', () => {
+            const s = this._ensureSettings();
+            s.description = descInput.value || undefined;
+            const titleEl = this.overlay?.querySelector('.detail-viewer-title');
+            if (titleEl) titleEl.textContent = descInput.value || this.currentAnnotation?.title || '';
+        });
+
+        scaleInput?.addEventListener('change', () => {
+            const s = this._ensureSettings();
+            s.scale_reference = scaleInput.value || undefined;
+            const scaleEl = this.overlay?.querySelector('.detail-viewer-scale');
+            if (scaleEl) scaleEl.textContent = scaleInput.value;
+        });
+
+        autoRotateCheck?.addEventListener('change', () => {
+            const s = this._ensureSettings();
+            s.auto_rotate = autoRotateCheck.checked;
+            if (this.controls) this.controls.autoRotate = autoRotateCheck.checked;
+        });
+
+        gridCheck?.addEventListener('change', () => {
+            const s = this._ensureSettings();
+            s.show_grid = gridCheck.checked;
+            // Toggle grid visibility
+            if (this.scene) {
+                const existing = this.scene.getObjectByName('detail-grid');
+                if (gridCheck.checked && !existing) {
+                    const grid = new THREE.GridHelper(10, 20, 0x444444, 0x333333);
+                    grid.name = 'detail-grid';
+                    this.scene.add(grid);
+                } else if (!gridCheck.checked && existing) {
+                    this.scene.remove(existing);
+                }
+            }
+        });
+
+        zoomCursorCheck?.addEventListener('change', () => {
+            const s = this._ensureSettings();
+            s.zoom_to_cursor = zoomCursorCheck.checked;
+        });
+
+        // Set current view as initial camera position
+        document.getElementById('btn-detail-set-camera')?.addEventListener('click', () => {
+            if (!this.camera || !this.controls || !this.currentAnnotation) return;
+            const s = this._ensureSettings();
+            s.initial_camera_position = {
+                x: parseFloat(this.camera.position.x.toFixed(4)),
+                y: parseFloat(this.camera.position.y.toFixed(4)),
+                z: parseFloat(this.camera.position.z.toFixed(4))
+            };
+            s.initial_camera_target = {
+                x: parseFloat(this.controls.target.x.toFixed(4)),
+                y: parseFloat(this.controls.target.y.toFixed(4)),
+                z: parseFloat(this.controls.target.z.toFixed(4))
+            };
+            log.info('Saved initial camera position');
+        });
+
+        // Capture thumbnail
+        document.getElementById('btn-detail-capture-thumb')?.addEventListener('click', () => {
+            const dataUrl = this.captureThumbnail();
+            if (!dataUrl || !this.currentAnnotation) return;
+
+            fetch(dataUrl).then(r => r.blob()).then(blob => {
+                const key = this.currentAnnotation!.detail_asset_key;
+                if (!key) return;
+                const thumbPath = `images/${key}_thumb.png`;
+                this.currentAnnotation!.detail_thumbnail = thumbPath;
+
+                if (this.deps.storeThumbnail) {
+                    this.deps.storeThumbnail(key, blob);
+                }
+                log.info('Captured detail thumbnail');
+            });
+        });
+    }
+
+    private _ensureSettings(): DetailViewSettings {
+        if (!this.currentAnnotation) throw new Error('No current annotation');
+        if (!this.currentAnnotation.detail_view_settings) {
+            this.currentAnnotation.detail_view_settings = {};
+        }
+        return this.currentAnnotation.detail_view_settings;
+    }
+
+    private _rebuildLighting(settings: DetailViewSettings): void {
+        if (!this.scene) return;
+        // Remove existing lights
+        const lights = this.scene.children.filter(c =>
+            c instanceof THREE.Light ||
+            c instanceof THREE.AmbientLight ||
+            c instanceof THREE.DirectionalLight ||
+            c instanceof THREE.HemisphereLight
+        );
+        lights.forEach(l => this.scene!.remove(l));
+
+        const preset = settings.environment_preset || 'neutral';
+        const intensity = settings.ambient_intensity ?? 1.0;
+        LIGHTING_PRESETS[preset].setup(this.scene, intensity);
     }
 
     private _animate(): void {
