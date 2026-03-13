@@ -15,7 +15,7 @@
       Docker Compose
 ```
 
-The viewer is a fully client-side static application. The production deployment challenge is serving the HTML/JS/CSS viewer alongside large binary archive files (.a3d/.a3z, 100-500MB each) with CDN caching, iframe embedding support, and SSL.
+The viewer is a fully client-side static application. The production deployment challenge is serving the HTML/JS/CSS viewer alongside large binary archive files (.ddim, 100-500MB each) with CDN caching, iframe embedding support, and SSL.
 
 ### Why This Stack
 
@@ -62,6 +62,16 @@ docker compose up -d
 | `APP_TITLE` | `Vitrine3D` | Browser tab title shown in the page `<title>` tag |
 | `DEFAULT_KIOSK_THEME` | `editorial` | Default theme for clean URL kiosk views. See [Clean Archive URLs](#clean-archive-urls) |
 | `DEV_AUTH_USER` | _(empty)_ | **Local dev only.** Email injected as the Cloudflare Access header so the admin API authenticates without a real Cloudflare tunnel. Remove before production. |
+| `DJI_API_KEY` | _(empty)_ | DJI developer API key for decrypting v13+ binary flight logs (`.txt`). Register at [developer.dji.com](https://developer.dji.com). Without this, encrypted logs prompt users to export as CSV instead. Also configurable at runtime via admin settings (`flight.djiApiKey`). |
+
+#### Build-Time Variables
+
+These `VITE_*` variables are inlined by Vite during `npm run build`. Set them **before building**, not at container runtime.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_SPARK_VERSION` | `2.0` | Spark.js renderer version toggle (build-time equivalent of `SPARK_VERSION`) |
+| `VITE_APP_LIBRARY_URL` | _(empty)_ | Library API base URL for the library panel |
 
 ### 3. Docker Compose
 
@@ -85,19 +95,19 @@ services:
 
 ```
 yourcompany-scans/
-  scans/{scan-id}/{scan-id}.a3d
+  scans/{scan-id}/{scan-id}.ddim
 ```
 
 ### Upload (CLI)
 
 ```bash
 # Upload an archive
-aws s3 cp ./project-123.a3d s3://yourcompany-scans/scans/project-123/project-123.a3d \
+aws s3 cp ./project-123.ddim s3://yourcompany-scans/scans/project-123/project-123.ddim \
   --endpoint-url https://ACCOUNT_ID.r2.cloudflarestorage.com \
   --content-type application/zip
 
 # The viewer URL becomes:
-# https://viewer.yourcompany.com/?archive=https://assets.yourcompany.com/scans/project-123/project-123.a3d
+# https://viewer.yourcompany.com/?archive=https://assets.yourcompany.com/scans/project-123/project-123.ddim
 ```
 
 ### R2 CORS Configuration
@@ -120,12 +130,12 @@ Allow `GET` requests from your viewer domain with `Range` header support:
 | Content Type | Cache TTL | Rationale |
 |-------------|-----------|-----------|
 | HTML/JS/CSS (viewer) | 1 hour | Allows quick updates to viewer code |
-| .a3d/.a3z archives | 30 days + immutable | Versioned by filename, never change in place |
+| .ddim archives | 30 days + immutable | Versioned by filename, never change in place |
 | Thumbnails | 7 days | Moderate; can be regenerated |
 
 ### Disable Compression for Archive Files
 
-**Important:** Cloudflare's automatic compression (Brotli/Gzip) must be disabled for directories serving `.a3d`/`.a3z` archive files. These files are already ZIP-compressed, and CDN re-compression corrupts the binary data when the viewer's streaming download assembles response chunks.
+**Important:** Cloudflare's automatic compression (Brotli/Gzip) must be disabled for directories serving `.ddim` archive files. These files are already ZIP-compressed, and CDN re-compression corrupts the binary data when the viewer's streaming download assembles response chunks.
 
 In the Cloudflare dashboard:
 
@@ -142,7 +152,7 @@ Embed the viewer on your company website using existing URL parameters:
 
 ```html
 <iframe
-  src="https://viewer.yourcompany.com/?archive=https://assets.yourcompany.com/scans/project.a3d&controls=minimal&sidebar=view"
+  src="https://viewer.yourcompany.com/?archive=https://assets.yourcompany.com/scans/project.ddim&controls=minimal&sidebar=view"
   width="100%" height="600" frameborder="0" allow="fullscreen">
 </iframe>
 ```
@@ -208,7 +218,7 @@ services:
 
 ### Archive Directory
 
-Archives (`.a3d`/`.a3z` files) must be accessible inside the container for both serving and metadata extraction. Mount your archives directory to `/usr/share/nginx/html/archives/` (or any subdirectory under the document root):
+Archives (`.ddim` files) must be accessible inside the container for both serving and metadata extraction. Mount your archives directory to `/usr/share/nginx/html/archives/` (or any subdirectory under the document root):
 
 ```bash
 docker run -v /path/to/archives:/usr/share/nginx/html/archives:ro ...
@@ -216,10 +226,10 @@ docker run -v /path/to/archives:/usr/share/nginx/html/archives:ro ...
 
 The viewer URL becomes:
 ```
-https://viewer.yourcompany.com/?archive=/archives/scan.a3d
+https://viewer.yourcompany.com/?archive=/archives/scan.ddim
 ```
 
-On startup, the entrypoint scans the entire document root recursively for `.a3d`/`.a3z` files and extracts metadata into `/meta/` and thumbnails into `/thumbs/`. Subdirectory structure is preserved in the URL path — for example, `/archives/clients/project-123/scan.a3d` works as-is.
+On startup, the entrypoint scans the entire document root recursively for `.ddim` files (and legacy `.a3d`/`.a3z` files) and extracts metadata into `/meta/` and thumbnails into `/thumbs/`. Subdirectory structure is preserved in the URL path — for example, `/archives/clients/project-123/scan.ddim` works as-is.
 
 **Note:** If your archives are hosted externally (e.g., Cloudflare R2), the auto-extraction cannot read them. In that case, run `extract-meta.sh` manually against local copies and mount the resulting `/meta/` and `/thumbs/` directories:
 
@@ -252,7 +262,7 @@ Recommended: 1200x630px JPEG (the optimal size for Open Graph images). If no def
 
 ### Automatic Metadata Extraction
 
-On container startup (when `OG_ENABLED=true`), the entrypoint automatically scans for `.a3d`/`.a3z` files and extracts:
+On container startup (when `OG_ENABLED=true`), the entrypoint automatically scans for `.ddim` files (and legacy `.a3d`/`.a3z` files) and extracts:
 - **Title and description** from the archive's `manifest.json`
 - **Thumbnail** (`preview.jpg` or `thumbnail_0.png`) to `/thumbs/`
 - **Metadata sidecar** JSON to `/meta/`
@@ -269,7 +279,7 @@ WordPress automatically discovers oEmbed endpoints via the `<link rel="alternate
 
 The oEmbed endpoint is accessible at:
 ```
-https://viewer.yourcompany.com/oembed?url=https://viewer.yourcompany.com/?archive=/archives/scan.a3d&format=json
+https://viewer.yourcompany.com/oembed?url=https://viewer.yourcompany.com/?archive=/archives/scan.ddim&format=json
 ```
 
 ### Supported Crawlers
@@ -282,11 +292,11 @@ Unknown bots get the normal SPA (safe default — they just won't see rich previ
 
 ```bash
 # Test OG tags (simulate Slackbot)
-curl -H "User-Agent: Slackbot" "https://viewer.yourcompany.com/?archive=/archives/scan.a3d"
+curl -H "User-Agent: Slackbot" "https://viewer.yourcompany.com/?archive=/archives/scan.ddim"
 # Should return HTML with og:title, og:image, og:description
 
 # Test oEmbed endpoint
-curl "https://viewer.yourcompany.com/oembed?url=https://viewer.yourcompany.com/?archive=/archives/scan.a3d&format=json"
+curl "https://viewer.yourcompany.com/oembed?url=https://viewer.yourcompany.com/?archive=/archives/scan.ddim&format=json"
 # Should return JSON with type: "rich" and an iframe html field
 
 # Facebook Sharing Debugger
@@ -411,7 +421,15 @@ All API routes require a valid `Cf-Access-Authenticated-User-Email` header and a
 | `GET` | `/api/archives` | List all archives with metadata, sizes, thumbnails |
 | `POST` | `/api/archives` | Upload new archive (multipart/form-data) |
 | `DELETE` | `/api/archives/:hash` | Delete archive and sidecar files |
-| `PATCH` | `/api/archives/:hash` | Rename archive (JSON body: `{"filename": "new-name.a3d"}`) |
+| `PATCH` | `/api/archives/:hash` | Rename archive (JSON body: `{"filename": "new-name.ddim"}`) |
+| `GET` | `/api/collections` | List all collections with archive counts |
+| `POST` | `/api/collections` | Create a new collection (JSON body: `{"name": "..."}`) |
+| `GET` | `/api/collections/:id` | Get collection details with member archives |
+| `PATCH` | `/api/collections/:id` | Update collection name/description |
+| `DELETE` | `/api/collections/:id` | Delete a collection |
+| `POST` | `/api/collections/:id/archives` | Add an archive to a collection |
+| `DELETE` | `/api/collections/:id/archives/:hash` | Remove an archive from a collection |
+| `GET` | `/api/collections/:id/thumbnail` | Get auto-generated mosaic thumbnail for a collection |
 
 ### Security Notes
 
@@ -467,7 +485,7 @@ When `ADMIN_ENABLED=true`, the main viewer app gains a built-in **Library panel*
 
 ### Upload
 
-The Library panel includes a drag-and-drop upload zone at the bottom. Drop `.a3d`/`.a3z` files or click to browse. Uploads show real-time progress and automatically extract metadata and thumbnails on completion.
+The Library panel includes a drag-and-drop upload zone at the bottom. Drop `.ddim` files (or legacy `.a3d`/`.a3z`) or click to browse. Uploads show real-time progress and automatically extract metadata and thumbnails on completion.
 
 ### Authentication
 
@@ -499,7 +517,7 @@ When the meta-server is running (`OG_ENABLED=true` or `ADMIN_ENABLED=true`), arc
 https://viewer.yourcompany.com/view/a1b2c3d4e5f6g7h8
 ```
 
-The 16-character hex hash is a truncated SHA-256 of the archive's URL path (e.g., `/archives/scan.a3d`). The meta-server resolves this hash to the actual archive file and serves `index.html` with the archive configuration injected server-side.
+The 16-character hex hash is a truncated SHA-256 of the archive's URL path (e.g., `/archives/scan.ddim`). The meta-server resolves this hash to the actual archive file and serves `index.html` with the archive configuration injected server-side.
 
 ### Benefits
 
@@ -557,7 +575,7 @@ The Docker image includes nginx configured with:
 - GZIP compression for text-based assets
 - 1-day cache headers for static files
 - CORS headers for cross-origin file loading
-- Proper MIME types for `.a3d`, `.a3z` (`application/zip`) and `.e57` (`application/octet-stream`) files
+- Proper MIME types for `.ddim` (`application/zip`) and `.e57` (`application/octet-stream`) files
 - Content Security Policy and security headers
 
 See [`docker/nginx.conf`](../docker/nginx.conf) for the full configuration.
@@ -639,7 +657,7 @@ In Docker deployments, both share the list from `ALLOWED_DOMAINS` because `confi
 
 ### Archive Filename Sanitization
 
-When extracting files from `.a3d`/`.a3z` archives, all filenames are sanitized by `sanitizeArchiveFilename()` in `archive-loader.ts`. This prevents:
+When extracting files from `.ddim` archives (and legacy `.a3d`/`.a3z`), all filenames are sanitized by `sanitizeArchiveFilename()` in `archive-loader.ts`. This prevents:
 
 | Attack | Protection |
 |--------|-----------|
@@ -675,7 +693,7 @@ docker run -e KIOSK_LOCK=true \
 ```
 
 ```html
-<iframe src="https://viewer.example.com?archive=/archives/a8f3e2b1-4c5d/scan.a3d&autoload=false"></iframe>
+<iframe src="https://viewer.example.com?archive=/archives/a8f3e2b1-4c5d/scan.ddim&autoload=false"></iframe>
 ```
 
 **Security layers:**
@@ -692,11 +710,11 @@ docker run -e KIOSK_LOCK=true \
 **Recommended: non-guessable archive paths.** Use UUID-based directory names instead of predictable names:
 
 ```
-/archives/a8f3e2b1-4c5d-9876-abcd-1234567890ef/scan.a3d   (good)
-/archives/client-name/scan.a3d                              (bad — guessable)
+/archives/a8f3e2b1-4c5d-9876-abcd-1234567890ef/scan.ddim   (good)
+/archives/client-name/scan.ddim                              (bad — guessable)
 ```
 
-**Threat model:** Archives are served as static files. Anyone who knows the direct URL can download the raw `.a3d` file regardless of viewer UI restrictions. The lockdown controls the **UI experience** only. For true per-file access control, use non-guessable UUID paths. If stronger access control is needed (time-limited access, per-user authentication), consider signed URLs with expiry or UUID aliasing — see the [Admin Panel](#admin-panel) section.
+**Threat model:** Archives are served as static files. Anyone who knows the direct URL can download the raw `.ddim` file regardless of viewer UI restrictions. The lockdown controls the **UI experience** only. For true per-file access control, use non-guessable UUID paths. If stronger access control is needed (time-limited access, per-user authentication), consider signed URLs with expiry or UUID aliasing — see the [Admin Panel](#admin-panel) section.
 
 When all kiosk embed env vars are unset, the viewer behaves exactly as before (zero breaking changes).
 

@@ -1,11 +1,40 @@
+// ===== Three.js & Module Type Imports =====
+
+import type { Scene, PerspectiveCamera, WebGLRenderer, Group, AmbientLight, HemisphereLight, DirectionalLight, Object3D } from 'three';
+import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import type { TransformControls } from 'three/addons/controls/TransformControls.js';
+import type { SplatMesh } from '@sparkjsdev/spark';
+import type { FlyControls } from './modules/fly-controls.js';
+import type { AnnotationSystem } from './modules/annotation-system.js';
+import type { ArchiveCreator } from './modules/archive-creator.js';
+import type { MeasurementSystem } from './modules/measurement-system.js';
+import type { LandmarkAlignment } from './modules/alignment.js';
+
 // ===== Union Types =====
 
 export type DisplayMode = 'splat' | 'model' | 'pointcloud' | 'both' | 'split' | 'stl';
-export type SelectedObject = 'splat' | 'model' | 'pointcloud' | 'stl' | 'cad' | 'drawing' | 'both' | 'none';
+export type SelectedObject = 'splat' | 'mesh' | 'pointcloud' | 'stl' | 'cad' | 'drawing' | 'flightpath' | 'colmap' | 'both' | 'none';
 export type TransformMode = 'translate' | 'rotate' | 'scale';
 export type RotationPivot = 'object' | 'origin';
 export type QualityTier = 'sd' | 'hd';
 export type AssetStateValue = 'unloaded' | 'loading' | 'loaded' | 'error';
+export type MarkerDensity = 'off' | 'sparse' | 'all';
+export type FlightCameraMode = 'orbit' | 'chase' | 'fpv';
+export type SfmDisplayMode = 'frustums' | 'markers';
+
+export interface ViewDefaults {
+    sfmCameras: {
+        visible: boolean;
+        displayMode: SfmDisplayMode;
+    };
+    flightPath: {
+        visible: boolean;
+        lineColor: string;
+        lineOpacity: number;
+        showMarkers: boolean;
+        markerDensity: MarkerDensity;
+    };
+}
 
 export interface DecimationOptions {
     preset: string;
@@ -17,6 +46,7 @@ export interface DecimationOptions {
     textureMaxRes: number;
     textureFormat: 'jpeg' | 'png' | 'keep';
     textureQuality: number;
+    dracoCompress: boolean;
 }
 
 export interface DecimationResult {
@@ -42,6 +72,8 @@ export interface AppState {
     stlLoaded: boolean;
     cadLoaded: boolean;
     drawingLoaded: boolean;
+    flightPathLoaded: boolean;
+    colmapLoaded: boolean;
     currentDrawingUrl: string | null;
     currentCadUrl: string | null;
     modelOpacity: number;
@@ -77,38 +109,102 @@ export interface AppState {
     proxyMeshGroup: any | null;
     proxyMeshSettings: DecimationOptions | null;
     proxyMeshFaceCount: number | null;
+    // HD web optimization (revert support)
+    originalMeshBlob: Blob | null;
+    originalMeshGroup: any | null;
+    meshOptimized: boolean;
+    meshOptimizationSettings: {
+        targetFaces: number;
+        dracoEnabled: boolean;
+        originalFaces: number;
+        resultFaces: number;
+    } | null;
     // Detected asset format extensions (set during file load)
     meshFormat: string | null;
     pointcloudFormat: string | null;
     splatFormat: string | null;
+    splatLodEnabled: boolean;             // "Generate Splat LOD at archive export" checkbox
+    viewDefaults: ViewDefaults;           // Archive-embeddable overlay display defaults
+    meshFaceCount: number;                 // Total face count of loaded mesh (for web-opt validation)
     meshVertexCount?: number;              // Dynamically set by file-handlers.js after mesh load
     meshTextureInfo?: import('./modules/utilities.js').TextureInfo;  // Dynamically set after mesh load
-    // Allow additional dynamic properties set by JS modules
-    [key: string]: any;
+    // Environment / rendering preset state
+    environmentBlob: Blob | null;          // raw HDR file for archive bundling
+    renderingPreset: string | null;        // current preset name or 'custom'
 }
 
 // ===== Scene References =====
 
 export interface SceneRefs {
-    readonly scene: any;              // THREE.Scene
-    readonly camera: any;             // THREE.PerspectiveCamera
-    readonly renderer: any;           // THREE.WebGLRenderer
-    readonly controls: any;           // OrbitControls
-    readonly transformControls: any;  // TransformControls
-    readonly splatMesh: any;          // SplatMesh | null
-    readonly modelGroup: any;         // THREE.Group
-    readonly pointcloudGroup: any;    // THREE.Group
-    readonly stlGroup: any;           // THREE.Group
-    readonly cadGroup: any;           // THREE.Group
-    readonly drawingGroup: any;       // THREE.Group
-    readonly flyControls: any;        // FlyControls | null
-    readonly annotationSystem: any;   // AnnotationSystem | null
-    readonly archiveCreator: any;     // ArchiveCreator | null
-    readonly landmarkAlignment: any;  // LandmarkAlignment | null
-    readonly ambientLight: any;       // THREE.AmbientLight
-    readonly hemisphereLight: any;    // THREE.HemisphereLight
-    readonly directionalLight1: any;  // THREE.DirectionalLight
-    readonly directionalLight2: any;  // THREE.DirectionalLight
+    readonly scene: Scene;
+    readonly camera: PerspectiveCamera;
+    readonly renderer: WebGLRenderer;
+    readonly controls: OrbitControls;
+    readonly transformControls: TransformControls;
+    readonly splatMesh: SplatMesh | null;
+    readonly modelGroup: Group;
+    readonly pointcloudGroup: Group;
+    readonly stlGroup: Group;
+    readonly cadGroup: Group;
+    readonly drawingGroup: Group;
+    readonly flightPathGroup: Group;
+    readonly colmapGroup: Group;
+    readonly flyControls: FlyControls | null;
+    readonly annotationSystem: AnnotationSystem | null;
+    readonly archiveCreator: ArchiveCreator | null;
+    readonly measurementSystem: MeasurementSystem | null;
+    readonly landmarkAlignment: LandmarkAlignment | null;
+    readonly ambientLight: AmbientLight;
+    readonly hemisphereLight: HemisphereLight;
+    readonly directionalLight1: DirectionalLight;
+    readonly directionalLight2: DirectionalLight;
+}
+
+// ===== Editor Deps Factory Return Types =====
+
+/** Superset deps for alignment operations (serves AutoCenterAlignDeps, FitToViewDeps, AlignmentDataDeps, ResetCameraDeps). */
+export interface EditorAlignmentDeps {
+    splatMesh: SplatMesh | null;
+    modelGroup: Group;
+    pointcloudGroup: Group;
+    camera: PerspectiveCamera;
+    controls: OrbitControls;
+    state: AppState;
+    showLoading: (msg: string) => void;
+    hideLoading: () => void;
+    updateTransformInputs: () => void;
+    storeLastPositions: () => void;
+    initialPosition: { x: number; y: number; z: number };
+}
+
+/** Superset deps for file handlers (serves LoadSplatDeps, LoadModelDeps, LoadSTLDeps, LoadDrawingDeps). */
+export interface FileHandlerDeps {
+    scene: Scene;
+    modelGroup: Group;
+    stlGroup: Group;
+    drawingGroup: Group;
+    getSplatMesh: () => SplatMesh | null;
+    setSplatMesh: (mesh: SplatMesh | null) => void;
+    getModelGroup: () => Group;
+    state: AppState;
+    sceneManager: any;
+    archiveCreator: ArchiveCreator | null;
+    callbacks: {
+        onSplatLoaded?: (mesh: SplatMesh, file: File | Blob) => void;
+        onModelLoaded?: (object: Object3D, file: File | Blob, faceCount: number) => void;
+        onSTLLoaded?: (object: Object3D, file: File | Blob, faceCount: number) => void;
+        onDrawingLoaded?: (object: Object3D, file: File | Blob) => void;
+    };
+}
+
+/** Deps for alignment I/O (save/load alignment files). */
+export interface AlignmentIODeps {
+    splatMesh: SplatMesh | null;
+    modelGroup: Group;
+    pointcloudGroup: Group;
+    tauriBridge: any | null;
+    updateTransformInputs: () => void;
+    storeLastPositions: () => void;
 }
 
 // ===== Common UI Callback Shapes =====
@@ -145,6 +241,11 @@ export interface Annotation {
     camera_position: { x: number; y: number; z: number };
     /** Camera orientation quaternion — captures exact view direction. Optional for backward compat with older archives. */
     camera_quaternion?: { x: number; y: number; z: number; w: number };
+    // QA / defect marking fields (Phase 3)
+    severity?: 'low' | 'medium' | 'high' | 'critical';
+    category?: 'surface_defect' | 'gap' | 'missing_data' | 'scan_artifact' | 'dimensional_variance' | 'other';
+    status?: 'pass' | 'fail' | 'review';
+    qa_notes?: string;
 }
 
 // ===== Walkthrough =====
@@ -179,6 +280,59 @@ export interface Walkthrough {
     loop?: boolean;
 }
 
+// ===== Flight Path =====
+
+/** A single telemetry point from a drone flight log. */
+export interface FlightPoint {
+    x: number;        // local coords (converted from GPS)
+    y: number;        // altitude mapped to Y-up
+    z: number;        // local coords
+    lat: number;      // original GPS latitude
+    lon: number;      // original GPS longitude
+    alt: number;      // altitude in meters
+    timestamp: number; // ms since flight start
+    speed?: number;    // m/s ground speed
+    gimbalPitch?: number;
+    gimbalYaw?: number;
+    heading?: number;  // drone heading degrees
+}
+
+/** Parsed flight path data with metadata, ready for rendering. */
+export interface FlightPathData {
+    id: string;              // e.g. 'flightpath_0'
+    points: FlightPoint[];   // full parsed data
+    sourceFormat: string;    // 'dji-csv' | 'kml' | 'srt' | 'dji-txt'
+    fileName: string;        // original filename
+    originGps: [number, number]; // [lat, lon] of first point
+    durationS: number;       // total flight duration in seconds
+    maxAltM: number;         // max altitude in meters
+    trimStart?: number;      // index into points[] — first visible point
+    trimEnd?: number;        // index into points[] — last visible point (inclusive)
+}
+
+// ===== Colmap =====
+
+/** Parsed Colmap camera intrinsics */
+export interface ColmapIntrinsics {
+    cameraId: number;
+    modelId: number;
+    width: number;
+    height: number;
+    focalLength: number; // fx (or f for simple models)
+    cx: number;
+    cy: number;
+}
+
+/** Parsed Colmap image (camera extrinsics + filename) */
+export interface ColmapCamera {
+    imageId: number;
+    quaternion: [number, number, number, number]; // [x, y, z, w] (Three.js order)
+    position: [number, number, number]; // world-space camera position
+    cameraId: number; // references ColmapIntrinsics
+    name: string; // image filename
+    focalLength: number; // resolved from intrinsics
+}
+
 // ===== Asset Store =====
 
 export interface AssetStore {
@@ -189,6 +343,8 @@ export interface AssetStore {
     pointcloudBlob: Blob | null;
     cadBlob: Blob | null;
     cadFileName: string | null;
+    flightPathBlobs: Array<{ blob: Blob; fileName: string; trimStart?: number; trimEnd?: number }>;
+    colmapBlobs: Array<{ camerasBlob: Blob; imagesBlob: Blob; points3DBuffer?: ArrayBuffer }>;
     sourceFiles: Array<{ name: string; blob: Blob }>;
 }
 
@@ -217,7 +373,7 @@ export interface CollectionArchive {
 // ===== Module Dependencies =====
 
 export interface ExportDeps {
-    sceneRefs: Pick<SceneRefs, 'renderer' | 'scene' | 'camera' | 'controls' | 'splatMesh' | 'modelGroup' | 'pointcloudGroup' | 'cadGroup' | 'annotationSystem' | 'archiveCreator'>;
+    sceneRefs: Pick<SceneRefs, 'renderer' | 'scene' | 'camera' | 'controls' | 'splatMesh' | 'modelGroup' | 'pointcloudGroup' | 'cadGroup' | 'flightPathGroup' | 'colmapGroup' | 'annotationSystem' | 'archiveCreator' | 'measurementSystem'>;
     state: AppState;
     tauriBridge: any | null;
     ui: {
@@ -268,6 +424,12 @@ export interface ArchivePipelineDeps {
         updateSourceFilesUI: () => void;
     };
     measurementSystem?: any;
+    renderFlightPaths?: () => Promise<void>;
+    colmap?: {
+        loadFromBuffers: (cameras: ArrayBuffer, images: ArrayBuffer) => void;
+        loadPoints3D?: (positions: Float64Array, count: number) => void;
+        points3DBuffer?: ArrayBuffer | null;
+    };
 }
 
 export interface EventWiringDeps {
@@ -285,15 +447,16 @@ export interface EventWiringDeps {
         handleCADFile: (e: Event) => void;
         handleDrawingFile: (e: Event) => void;
         handleSourceFilesInput: (e: Event) => void;
-        handleLoadSplatFromUrlPrompt: () => void;
-        handleLoadModelFromUrlPrompt: () => void;
-        handleLoadPointcloudFromUrlPrompt: () => void;
         handleLoadArchiveFromUrlPrompt: () => void;
-        handleLoadSTLFromUrlPrompt: () => void;
-        handleLoadCADFromUrlPrompt: () => void;
-        handleLoadDrawingFromUrlPrompt: () => void;
         handleLoadFullResMesh: () => void;
         switchQualityTier: (tier: string) => void;
+        removeSplat: () => void;
+        removeModel: () => void;
+        removePointcloud: () => void;
+        removeSTL: () => void;
+        removeCAD: () => void;
+        removeDrawing: () => void;
+        removeFlightPath: () => void;
     };
     display: {
         setDisplayMode: (mode: string) => void;
@@ -329,10 +492,10 @@ export interface EventWiringDeps {
     export: {
         showExportPanel: () => void;
         downloadArchive: () => void;
-        downloadGenericViewer: () => void;
         saveToLibrary: () => void;
     };
     screenshots: {
+        downloadScreenshot: () => void;
         captureScreenshotToList: () => void;
         showViewfinder: () => void;
         captureManualPreview: () => void;
@@ -344,13 +507,11 @@ export interface EventWiringDeps {
         setupMetadataSidebar: () => void;
         populateMetadataDisplay: () => void;
     };
-    share: {
-        copyShareLink: () => void;
-    };
     transform: {
         setSelectedObject: (selection: SelectedObject) => void;
         setTransformMode: (mode: TransformMode) => void;
         resetTransform: () => void;
+        updateTransformInputs: () => void;
     };
     crossSection: {
         active: boolean;
@@ -369,9 +530,35 @@ export interface EventWiringDeps {
         playPreview: () => void;
         stopPreview: () => void;
     };
+    recording?: {
+        startRecording: () => void;
+        stopRecording: () => void;
+    };
     tauri: {
         wireNativeDialogsIfAvailable: () => void;
     };
+    undo: {
+        performUndo: () => void;
+        performRedo: () => void;
+        captureBeforeNumericEdit: () => void;
+        pushAfterNumericEdit: () => void;
+    };
+    colmap: {
+        loadFromBuffers: (cameras: ArrayBuffer, images: ArrayBuffer) => void;
+        setDisplayMode: (mode: string) => void;
+        setFrustumScale: (scale: number) => void;
+        alignFlightPath: () => void;
+        hasData: boolean;
+        hasPoints3D: boolean;
+        loadPoints3D: (positions: Float64Array, count: number) => void;
+        points3DBuffer: ArrayBuffer | null;
+        alignFromCameraData: () => Promise<void>;
+    };
+    overlay?: {
+        toggleSfm: (visible: boolean) => void;
+        toggleFlightPath: (visible: boolean) => void;
+    };
+    validateUrl?: (url: string, resourceType: string) => { valid: boolean; url: string; error: string };
 }
 
 export interface PostProcessingEffectConfig {

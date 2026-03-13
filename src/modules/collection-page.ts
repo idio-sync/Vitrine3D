@@ -6,7 +6,7 @@
  * Source Sans 3 typography, gold accent rules, staggered entry animations.
  */
 
-import { Logger } from './utilities.js';
+import { Logger, formatBytes, escapeHtml, formatDate } from './utilities.js';
 
 const log = Logger.getLogger('collection-page');
 
@@ -35,26 +35,7 @@ interface CollectionData {
 }
 
 // ── Helpers ──
-
-export function formatBytes(b: number): string {
-    if (b === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(b) / Math.log(1024));
-    return (b / Math.pow(1024, i)).toFixed(i > 1 ? 1 : 0) + ' ' + units[i];
-}
-
-export function escapeHtml(s: string): string {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
-}
-
-export function formatDate(dateStr: string): string {
-    try {
-        const d = new Date(dateStr);
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    } catch { return ''; }
-}
+// formatBytes, escapeHtml, formatDate imported from utilities.ts
 
 export const ASSET_LABELS: Record<string, string> = {
     splat: 'Gaussian Splat',
@@ -67,7 +48,7 @@ export const ASSET_LABELS: Record<string, string> = {
 // ── Fetch ──
 
 async function fetchCollection(slug: string): Promise<CollectionData> {
-    const res = await fetch('/api/collections/' + encodeURIComponent(slug));
+    const res = await fetch('/collection/' + encodeURIComponent(slug) + '/data');
     if (!res.ok) throw new Error('Collection not found');
     return res.json();
 }
@@ -338,6 +319,12 @@ export function injectStyles(): void {
     color: #FEC03A;
 }
 
+.cp-type-plus {
+    font-size: 0.5rem;
+    color: rgba(190, 200, 215, 0.45);
+    margin: 0 2px;
+}
+
 /* Gold rule above info */
 .cp-card-rule {
     width: 24px;
@@ -393,13 +380,24 @@ export function getLogoSrc(): string {
 
 // ── Rendering ──
 
-export function renderCard(archive: CollectionArchive, index: number): HTMLElement {
+export function renderCard(
+    archive: CollectionArchive,
+    index: number,
+    onCardClick?: (archive: CollectionArchive) => void,
+): HTMLElement {
     const card = document.createElement('a');
     card.className = 'cp-card';
     const baseUrl = archive.uuid ? '/view/' + archive.uuid : archive.viewerUrl;
     card.href = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'autoload=true';
     // Stagger animation delay
     card.style.animationDelay = (0.15 + index * 0.06) + 's';
+
+    if (onCardClick) {
+        card.addEventListener('click', (e) => {
+            e.preventDefault();
+            onCardClick(archive);
+        });
+    }
 
     const thumbHtml = archive.thumbnail
         ? '<img src="' + escapeHtml(archive.thumbnail) + '" alt="" loading="lazy">'
@@ -408,11 +406,13 @@ export function renderCard(archive: CollectionArchive, index: number): HTMLEleme
     // Play button SVG (matches editorial click gate)
     const playSvg = '<svg viewBox="0 0 24 24" width="16" height="16"><polygon points="8,5 20,12 8,19"/></svg>';
 
-    // Asset type pills as inline labels
+    // Asset type pills as inline labels (mesh first)
     let typeMeta = '';
     if (archive.assets && archive.assets.length > 0) {
-        const types = [...new Set(archive.assets.map(a => a.type))];
-        typeMeta = types.map(t => '<span class="cp-type-pill">' + (ASSET_LABELS[t] || t) + '</span>').join('');
+        const TYPE_ORDER = ['mesh', 'splat', 'pointcloud', 'cad', 'drawing'];
+        const types = [...new Set(archive.assets.map(a => a.type))]
+            .sort((a, b) => (TYPE_ORDER.indexOf(a) === -1 ? 99 : TYPE_ORDER.indexOf(a)) - (TYPE_ORDER.indexOf(b) === -1 ? 99 : TYPE_ORDER.indexOf(b)));
+        typeMeta = types.map(t => '<span class="cp-type-pill">' + escapeHtml(ASSET_LABELS[t] || t) + '</span>').join('<span class="cp-type-plus">+</span>');
     }
 
     // Metadata parts: date, size, filename

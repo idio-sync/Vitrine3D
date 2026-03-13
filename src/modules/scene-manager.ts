@@ -38,6 +38,7 @@ import {
     DoubleSide,
     Float32BufferAttribute,
     Vector3,
+    Box3,
 } from 'three';
 import type { WebGPURenderer } from 'three/webgpu';
 
@@ -127,6 +128,8 @@ export class SceneManager {
 
     // Drawing group (DXF)
     drawingGroup: Group | null;
+    flightPathGroup: Group | null;
+    colmapGroup: Group | null;
 
     // FPS tracking
     frameCount: number;
@@ -152,7 +155,11 @@ export class SceneManager {
         this.webgpuSupported = false;
         this._canvas = null;
         this._canvasRight = null;
-        this._antialias = true;
+        // iOS/iPadOS: disable antialias — MSAA buffers double GPU memory and
+        // Spark.js splat rendering doesn't benefit from hardware AA.
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        this._antialias = !isIOS;
         this.onRendererChanged = null;
 
         // Lighting
@@ -197,6 +204,8 @@ export class SceneManager {
 
         // Drawing group (DXF)
         this.drawingGroup = null;
+        this.flightPathGroup = null;
+        this.colmapGroup = null;
 
         // FPS tracking
         this.frameCount = 0;
@@ -248,7 +257,7 @@ export class SceneManager {
         // combined with splat rendering and post-processing easily exceed that.
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
             || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        const maxRatio = isIOS ? Math.min(RENDERER.MAX_PIXEL_RATIO, 1.5) : RENDERER.MAX_PIXEL_RATIO;
+        const maxRatio = isIOS ? 1.0 : ((window as any).APP_CONFIG?.maxPixelRatio || RENDERER.MAX_PIXEL_RATIO);
         newRenderer.setPixelRatio(Math.min(window.devicePixelRatio, maxRatio));
         newRenderer.outputColorSpace = THREE.SRGBColorSpace;
         newRenderer.toneMapping = THREE.NoToneMapping;
@@ -318,7 +327,7 @@ export class SceneManager {
 
         // Choose renderer type: WebGPU if supported, else WebGL
         let useWebGPU = this.webgpuSupported;
-        let rendererTypeToCreate = useWebGPU ? 'webgpu' : 'webgl';
+        let rendererTypeToCreate: 'webgpu' | 'webgl' = useWebGPU ? 'webgpu' : 'webgl';
 
         // Main Renderer with WebGPU fallback to WebGL on init failure
         this.renderer = this._createRenderer(canvas, rendererTypeToCreate);
@@ -441,6 +450,14 @@ export class SceneManager {
         this.cadGroup = new Group();
         this.cadGroup.name = 'cadGroup';
         this.scene.add(this.cadGroup);
+
+        this.flightPathGroup = new Group();
+        this.flightPathGroup.name = 'flightPathGroup';
+        this.scene.add(this.flightPathGroup);
+
+        this.colmapGroup = new Group();
+        this.colmapGroup.name = 'colmapGroup';
+        this.scene.add(this.colmapGroup);
 
         log.info('Scene initialization complete');
         return true;
@@ -892,6 +909,8 @@ export class SceneManager {
         this.envAsBackground = false;
         this.clearBackgroundImage();
         document.documentElement.style.setProperty('--scene-bg-color', hexColor);
+        // DEBUG: trace every background color change
+        log.info(`[BG-DEBUG] setBackgroundColor("${hexColor}") called from:`, new Error().stack?.split('\n').slice(1, 4).join(' <- '));
     }
 
     // =========================================================================
@@ -1120,6 +1139,56 @@ export class SceneManager {
     }
 
     /**
+     * Fit the shadow camera frustum and ground plane to the current scene content.
+     * Call after loading models and enabling shadows so the shadow isn't clipped.
+     */
+    fitShadowToScene(): void {
+        if (!this.directionalLight1 || !this.scene) return;
+
+        const box = new Box3();
+        let hasContent = false;
+
+        if (this.modelGroup && this.modelGroup.children.length > 0) {
+            box.expandByObject(this.modelGroup);
+            hasContent = true;
+        }
+
+        if (!hasContent) return;
+
+        const size = box.getSize(new Vector3());
+        const center = box.getCenter(new Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+
+        // Only adjust if the model exceeds the default shadow frustum
+        if (maxDim <= SHADOWS.CAMERA_SIZE * 2) return;
+
+        const halfSize = maxDim * 0.75;
+        const cam = this.directionalLight1.shadow.camera;
+        cam.left = -halfSize;
+        cam.right = halfSize;
+        cam.top = halfSize;
+        cam.bottom = -halfSize;
+        cam.far = Math.max(halfSize * 4, SHADOWS.CAMERA_FAR);
+        cam.updateProjectionMatrix();
+
+        // Offset light position to keep same direction but cover the model
+        this.directionalLight1.target.position.copy(center);
+        this.directionalLight1.target.updateMatrixWorld();
+        const lightDir = this.directionalLight1.position.clone().normalize();
+        this.directionalLight1.position.copy(center).addScaledVector(lightDir, halfSize * 2);
+
+        // Scale shadow catcher to match
+        if (this.shadowCatcherPlane) {
+            const planeSize = halfSize * 3;
+            this.shadowCatcherPlane.geometry.dispose();
+            this.shadowCatcherPlane.geometry = new PlaneGeometry(planeSize, planeSize);
+        }
+
+        this.renderer!.shadowMap.needsUpdate = true;
+        this.rendererRight!.shadowMap.needsUpdate = true;
+    }
+
+    /**
      * Set shadow catcher opacity
      */
     setShadowCatcherOpacity(opacity: number): void {
@@ -1298,23 +1367,24 @@ export class SceneManager {
         if (this.rendererType === 'webgpu' && !(this.renderer as any)?._initialized) {
             return;
         }
+        // Spark.js uses custom Uint32 textures that are incompatible with
+        // EffectComposer render targets (format/sampler mismatch). Bypass
+        // post-processing whenever a splat is visible to avoid WebGL errors.
+        const splatVisible = splatMesh ? splatMesh.visible : false;
+        const canPostProcess = this.postProcessing?.isEnabled() && !splatVisible;
+
         if (displayMode === 'split') {
             // Split view - render splat on left, model + pointcloud + stl on right
-            const splatVisible = splatMesh ? splatMesh.visible : false;
             const modelVisible = modelGroup ? modelGroup.visible : false;
             const pcVisible = pointcloudGroup ? pointcloudGroup.visible : false;
             const stlVisible = stlGroup ? stlGroup.visible : false;
 
-            // Left view - splat only
+            // Left view - splat only (never post-processed)
             if (splatMesh) splatMesh.visible = true;
             if (modelGroup) modelGroup.visible = false;
             if (pointcloudGroup) pointcloudGroup.visible = false;
             if (stlGroup) stlGroup.visible = false;
-            if (this.postProcessing?.isEnabled()) {
-                this.postProcessing.render();
-            } else {
-                this.renderer!.render(this.scene!, this.camera!);
-            }
+            this.renderer!.render(this.scene!, this.camera!);
 
             // Right view - model + pointcloud + stl
             if (splatMesh) splatMesh.visible = false;
@@ -1330,7 +1400,7 @@ export class SceneManager {
             if (stlGroup) stlGroup.visible = stlVisible;
         } else {
             // Normal view
-            if (this.postProcessing?.isEnabled()) {
+            if (canPostProcess) {
                 this.postProcessing.render();
             } else {
                 this.renderer!.render(this.scene!, this.camera!);

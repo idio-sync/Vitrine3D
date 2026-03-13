@@ -9,7 +9,7 @@
  *   ?ui=full|viewer|kiosk  - Preset UI modes (overrides individual settings)
  */
 
-import { Logger, notify } from './utilities.js';
+import { Logger, notify, escapeHtml } from './utilities.js';
 import type { AppState, Transform } from '@/types.js';
 import { normalizeScale } from '@/types.js';
 
@@ -373,10 +373,6 @@ const generateQR: (text: string) => string = (() => {
 // URL GENERATION
 // =============================================================================
 
-function escapeHtml(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
 function getActivePreset(dialog: Element): string | null {
     const active = dialog.querySelector('.share-preset.active') as HTMLElement | null;
     return active?.dataset.preset || null;
@@ -548,6 +544,7 @@ export function showShareDialog(state: ShareState | AppState): void {
                                 '<option value="editorial">Editorial</option>' +
                                 '<option value="gallery">Gallery</option>' +
                                 '<option value="exhibit">Exhibit</option>' +
+                                '<option value="industrial">Industrial</option>' +
                             '</select></div>' +
                         '<div class="share-field"><label>Display Mode</label>' +
                             '<select class="share-select" data-opt="displayMode">' +

@@ -1,6 +1,6 @@
 # Browser Compatibility Audit
 
-Last updated: 2026-03-04
+Last updated: 2026-03-11
 
 Cross-browser compatibility findings for Vitrine3D. Covers Chrome, Firefox, Safari, and the Tauri desktop shell.
 
@@ -58,7 +58,7 @@ Safari requires the call within a direct user gesture handler — all current ca
 
 Base editor styles only use `::-webkit-scrollbar` pseudo-elements (Chrome/Safari). No `scrollbar-width` / `scrollbar-color` properties for Firefox. Firefox shows default system scrollbars in the editor.
 
-Theme files use both approaches correctly.
+Theme files (including the industrial theme) use both approaches correctly.
 
 ### 7. Screenshot Reliability
 
@@ -134,6 +134,7 @@ Uses `crypto.subtle.digest()` without checking `CRYPTO_AVAILABLE`. Would throw o
 | Spark.js splats | Yes | Yes | Yes | Yes | Yes |
 | CAD loading (WASM) | Yes | Yes | Yes | Yes | **Broken** (path) |
 | `:has()` CSS | 105+ | 121+ | 15.4+ | 15.4+ | Yes |
+| Industrial theme | Yes | Yes | Yes | Yes | Yes |
 | `backdrop-filter` | Yes | Yes | 15.4+ | 15.4+ | Yes |
 | Fullscreen | Yes | Yes | 16.4+ | **No** (hidden) | Varies |
 | Clipboard copy | HTTPS | HTTPS | HTTPS | HTTPS | Yes |

@@ -5,6 +5,8 @@
 **Status:** Draft
 **Authors:** archive-3d contributors
 
+> **Extension Note:** As of 2026, this format uses the `.ddim` file extension (Direct Dimensions archive). The legacy extensions `.a3d` (uncompressed) and `.a3z` (compressed) are still accepted on import for backward compatibility. All new archives should use `.ddim`. References to `.a3d`/`.a3z` throughout this document describe the legacy naming; the format structure and manifest schema are unchanged.
+
 ---
 
 ## Abstract
@@ -54,7 +56,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 | Term | Definition |
 |------|-----------|
-| **Archive** | A single `.a3d` or `.a3z` file conforming to this specification |
+| **Archive** | A single `.ddim` file (or legacy `.a3d` / `.a3z`) conforming to this specification |
 | **Manifest** | The `manifest.json` file within the archive describing its contents and metadata |
 | **Asset** | A 3D data file (mesh, point cloud, Gaussian splat) or supporting file (thumbnail) within the archive |
 | **Data entry** | A record in the manifest's `data_entries` object describing one asset |
@@ -76,10 +78,11 @@ The format comes in two variants:
 
 | Extension | Compression | MIME Type | Use Case |
 |-----------|-------------|-----------|----------|
-| `.a3d` | STORE (uncompressed) | `application/zip` | Default. Fast extraction, predictable size. Best when assets are already compressed (GLB, SPZ). |
-| `.a3z` | DEFLATE (compressed) | `application/zip` | Reduced file size. Best when assets contain uncompressed data (PLY, OBJ). |
+| `.ddim` | STORE (uncompressed) | `application/zip` | Current standard. Fast extraction, predictable size. Best when assets are already compressed (GLB, SPZ). |
+| `.a3d` | STORE (uncompressed) | `application/zip` | Legacy. Still accepted on import. |
+| `.a3z` | DEFLATE (compressed) | `application/zip` | Legacy (compressed variant). Still accepted on import. |
 
-Both variants are valid ZIP files. The extension signals the expected compression strategy but does not change the physical format.
+All variants are valid ZIP files. The extension signals the expected compression strategy but does not change the physical format. New archives SHOULD use `.ddim`.
 
 ---
 
@@ -93,9 +96,9 @@ Readers MUST validate the ZIP magic bytes (`0x50 0x4B`) at offset 0 before proce
 
 ### 3.2 Compression
 
-For `.a3d` archives, packers SHOULD use STORE (method 0) for asset files and MAY use DEFLATE (method 8) for `manifest.json`.
+For `.ddim` and `.a3d` archives, packers SHOULD use STORE (method 0) for asset files and MAY use DEFLATE (method 8) for `manifest.json`.
 
-For `.a3z` archives, packers SHOULD use DEFLATE (method 8) with compression level 6 as the default. Packers SHOULD use STORE (method 0) for assets in already-compressed formats (GLB, SPZ, SOG, JPEG, PNG, WebP, E57).
+For `.a3z` archives (legacy compressed variant), packers SHOULD use DEFLATE (method 8) with compression level 6 as the default. Packers SHOULD use STORE (method 0) for assets in already-compressed formats (GLB, SPZ, SOG, JPEG, PNG, WebP, E57).
 
 Readers MUST support both STORE and DEFLATE compression methods regardless of file extension.
 
@@ -112,7 +115,7 @@ All text content within the archive (manifest, filenames) MUST be encoded as UTF
 An archive MUST contain the following at minimum:
 
 ```
-archive.a3d
+archive.ddim
 ├── manifest.json                    # REQUIRED
 └── <at least one 3D asset file>     # REQUIRED
 ```
@@ -122,7 +125,7 @@ archive.a3d
 Archives SHOULD follow this directory structure:
 
 ```
-archive.a3d
+archive.ddim
 ├── manifest.json
 ├── README.txt                       # RECOMMENDED. Plain-text guide to archive contents
 ├── assets/
@@ -418,6 +421,7 @@ Entry keys MUST follow the pattern `<type>_<index>` where:
 | `pointcloud_` | Point cloud (E57) |
 | `drawing_` | 2D/3D line drawing (DXF) |
 | `cad_` | Parametric CAD model (STEP, IGES) |
+| `flightpath_` | Drone flight path (CSV, KML/KMZ, SRT) |
 | `thumbnail_` | Preview image |
 | `screenshot_` | User-captured viewport screenshot |
 | `image_` | Embedded image attachment (referenced by annotations or descriptions via the `asset:` protocol) |
@@ -458,6 +462,23 @@ Readers MUST support entries with unrecognized type prefixes by treating them as
 | `original_name` | string | RECOMMENDED | Original filename before sanitization. |
 | `source_category` | string | OPTIONAL | Category tag (e.g., `"photography"`, `"calibration"`, `"report"`, `"processing"`). |
 | `size_bytes` | number | OPTIONAL | File size in bytes. |
+
+**Flight path fields** (applicable to `flightpath_` entries):
+
+| Field | Type | Status | Description |
+|-------|------|--------|-------------|
+| `_source_format` | string | RECOMMENDED | Source file format identifier. Values: `"dji-csv"`, `"kml"`, `"srt"`. |
+| `_flight_meta` | object | OPTIONAL | Summary statistics derived from the telemetry data. |
+
+The `_flight_meta` object MAY contain:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `point_count` | number | Number of telemetry samples in the flight log. |
+| `duration_s` | number | Total flight duration in seconds. |
+| `origin_gps` | array of 2 numbers | GPS coordinates `[latitude, longitude]` of the first telemetry point, used as the local origin for coordinate conversion. |
+| `max_alt_m` | number | Maximum altitude recorded in the flight log, in metres. |
+| `source_format` | string | Redundant copy of `_source_format` stored inside the metadata object for self-contained readability. |
 
 #### 5.9.3 _parameters
 
@@ -503,7 +524,7 @@ Per-axis scale example:
 
 #### 5.9.4 Minimum Asset Requirement
 
-A valid archive MUST contain at least one data entry with a type prefix of `scene_`, `mesh_`, `pointcloud_`, or `cad_`. Archives containing only `thumbnail_`, `screenshot_`, `image_`, or `source_` entries are not valid.
+A valid archive MUST contain at least one data entry with a type prefix of `scene_`, `mesh_`, `pointcloud_`, `cad_`, `drawing_`, or `flightpath_`. Archives containing only `thumbnail_`, `screenshot_`, `image_`, or `source_` entries are not valid.
 
 ### 5.10 annotations
 
@@ -763,7 +784,23 @@ CAD assets SHOULD use the `cad_` entry key prefix (e.g., `cad_0`). Readers SHOUL
 
 CAD assets are tessellated via the OpenCASCADE Technology WASM library (`occt-import-js`) in the reference implementation.
 
-### 6.6 Thumbnail Formats
+### 6.6 Flight Path Formats
+
+| Extension | Format | Description |
+|-----------|--------|-------------|
+| `.csv` | DJI CSV telemetry log | Comma-separated log produced by DJI flight controller firmware; columns include GPS latitude, longitude, altitude, timestamp, and additional sensor fields. |
+| `.kml` / `.kmz` | Keyhole Markup Language | OGC/Google standard for geographic data; flight tracks are encoded as `<LineString>` or `<gx:Track>` elements. `.kmz` is a ZIP-compressed KML archive. |
+| `.srt` | DJI SRT subtitle log | SubRip-format file where each frame's metadata (GPS, altitude, speed) is embedded in subtitle cue text alongside the timecode. |
+
+Flight path assets store GPS telemetry as a 3D polyline in local scene coordinates. The GPS origin (first telemetry point) is used as the local coordinate origin; subsequent points are converted to metre offsets using equirectangular projection. Altitude is mapped to the Y axis.
+
+Flight path assets SHOULD be assigned the `role` value `"primary"` when they represent the original drone flight log. They SHOULD use the `flightpath_` entry key prefix (e.g., `flightpath_0`). Readers SHOULD render the path as a 3D line with interactive markers at each telemetry sample, exposing hover tooltips with speed, altitude, and timestamp data.
+
+Flight path assets SHOULD store the `_source_format` field to indicate the original file format (`"dji-csv"`, `"kml"`, or `"srt"`). The `_flight_meta` object SHOULD be populated with summary statistics (point count, duration, origin GPS, maximum altitude) derived at import time.
+
+Flight path assets are parsed by `flight-parsers.ts` and rendered by `flight-path.ts` in the reference implementation.
+
+### 6.7 Thumbnail Formats
 
 | Extension | Format |
 |-----------|--------|
@@ -862,8 +899,9 @@ Proposed future registration: `application/vnd.archive-3d+zip`.
 
 | Extension | Usage |
 |-----------|-------|
-| `.a3d` | Archive-3D container (uncompressed assets) |
-| `.a3z` | Archive-3D container (compressed assets) |
+| `.ddim` | Direct Dimensions archive container (current standard) |
+| `.a3d` | Legacy archive container (uncompressed assets; still accepted on import) |
+| `.a3z` | Legacy archive container (compressed assets; still accepted on import) |
 
 ---
 

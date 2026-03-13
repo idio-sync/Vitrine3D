@@ -6,9 +6,9 @@
  * Communicates with the /api/archives REST API (available when ADMIN_ENABLED=true in Docker).
  */
 
-import { Logger, notify } from './utilities.js';
+import { Logger, notify, formatBytes, escapeHtml } from './utilities.js';
 import { activateTool } from './ui-controller.js';
-import { initCollectionManager, getActiveCollectionArchives, updateChipsForArchive } from './collection-manager.js';
+import { initCollectionManager, getActiveCollectionArchives, updateChipsForArchive, hideCollectionDetail } from './collection-manager.js';
 
 const log = Logger.getLogger('library-panel');
 
@@ -40,6 +40,21 @@ interface ArchiveListResponse {
     storageUsed: number;
 }
 
+interface MediaItem {
+    id: string;
+    archive_hash: string | null;
+    title: string | null;
+    mode: string | null;
+    duration_ms: number;
+    status: string;
+    error_msg: string | null;
+    mp4_path: string | null;
+    gif_path: string | null;
+    thumb_path: string | null;
+    share_url: string;
+    created_at: string | null;
+}
+
 // ── State ──
 
 let archives: Archive[] = [];
@@ -54,6 +69,8 @@ let activeCollectionHashes: string[] | null = null;
 let uploadQueue: File[] = [];
 let uploading = false;
 let csrfToken: string | null = null;
+const mediaCache = new Map<string, MediaItem[]>();
+let mediaPollTimers: number[] = [];
 
 const CHUNK_SIZE = 50 * 1024 * 1024; // 50 MB — safely under Cloudflare's 100 MB request limit
 const CHUNK_CONCURRENCY = 3;          // parallel in-flight chunk uploads
@@ -85,17 +102,15 @@ let detailAssets: HTMLElement | null = null;
 let detailAssetsSection: HTMLElement | null = null;
 let detailMetadata: HTMLElement | null = null;
 let detailMetadataSection: HTMLElement | null = null;
+let detailVersions: HTMLElement | null = null;
+let detailVersionsSection: HTMLElement | null = null;
+let recordingsSection: HTMLElement | null = null;
+let recordingsBody: HTMLElement | null = null;
 
 // ── Helpers ──
 
-function formatBytes(b: number): string {
-    if (b === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(b) / Math.log(1024));
-    return (b / Math.pow(1024, i)).toFixed(i > 1 ? 1 : 0) + ' ' + units[i];
-}
-
-function formatDate(iso: string): string {
+/** Relative-time date formatting for the library archive list. */
+function formatDateRelative(iso: string): string {
     const d = new Date(iso);
     const now = new Date();
     const diff = now.getTime() - d.getTime();
@@ -103,12 +118,6 @@ function formatDate(iso: string): string {
     if (diff < 172800000) return 'Yesterday';
     if (diff < 604800000) return Math.floor(diff / 86400000) + 'd ago';
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
-function escapeHtml(s: string): string {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
 }
 
 // ── API ──
@@ -134,7 +143,17 @@ async function fetchCsrfToken(): Promise<void> {
 
 async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> {
     const headers = { ...authHeaders(), ...(opts.headers as Record<string, string> || {}) };
-    return fetch(url, { ...opts, headers, credentials: 'include' });
+    const res = await fetch(url, { ...opts, headers, credentials: 'include' });
+    // Auto-retry once on CSRF failure for state-changing requests
+    if (res.status === 403 && opts.method && opts.method !== 'GET') {
+        const body = await res.clone().json().catch(() => ({})) as { error?: string };
+        if (body.error?.includes('CSRF')) {
+            await fetchCsrfToken();
+            const retryHeaders = { ...authHeaders(), ...(opts.headers as Record<string, string> || {}) };
+            return fetch(url, { ...opts, headers: retryHeaders, credentials: 'include' });
+        }
+    }
+    return res;
 }
 
 async function fetchArchives(): Promise<ArchiveListResponse> {
@@ -208,7 +227,13 @@ function uploadFileChunked(file: File): Promise<Archive> {
 
     return (async () => {
         let next = 0;
-        const worker = async () => { while (next < totalChunks) await uploadChunk(next++); };
+        const worker = async () => {
+            while (true) {
+                const idx = next++;  // capture index synchronously before await yields
+                if (idx >= totalChunks) break;
+                await uploadChunk(idx);
+            }
+        };
         await Promise.all(Array.from({ length: Math.min(CHUNK_CONCURRENCY, totalChunks) }, worker));
         return complete();
     })();
@@ -308,7 +333,7 @@ function renderCard(a: Archive): HTMLElement {
             '<div class="library-card-title" title="' + escapeHtml(a.title) + '">' + escapeHtml(a.title) + '</div>' +
             '<div class="library-card-meta">' +
                 '<span>' + formatBytes(a.size) + '</span>' +
-                '<span>' + formatDate(a.modified) + '</span>' +
+                '<span>' + formatDateRelative(a.modified) + '</span>' +
             '</div>' +
         '</div>';
 
@@ -387,6 +412,7 @@ function updateStorage(data: ArchiveListResponse): void {
 // ── Detail pane ──
 
 function selectArchive(hash: string): void {
+    hideCollectionDetail();
     selectedHash = hash;
     const archive = archives.find(a => a.hash === hash);
 
@@ -411,18 +437,34 @@ function selectArchive(hash: string): void {
     if (detailTitle) detailTitle.textContent = archive.title;
     if (detailFilename) detailFilename.textContent = archive.filename;
     if (detailSize) detailSize.textContent = formatBytes(archive.size);
-    if (detailDate) detailDate.textContent = formatDate(archive.modified);
+    if (detailDate) detailDate.textContent = formatDateRelative(archive.modified);
 
     renderAssets(archive);
     renderMetadata(archive);
 
     // Update collection chips in detail pane
     updateChipsForArchive(hash);
+
+    // Fetch and render recordings (show cached immediately, then refresh)
+    const cached = mediaCache.get(hash);
+    if (cached) renderRecordings(cached);
+    else renderRecordings([]);
+    fetchMedia(hash).then(items => {
+        mediaCache.set(hash, items);
+        if (selectedHash === hash) renderRecordings(items);
+    });
+
+    // Fetch and render version history
+    renderVersions([], hash);
+    fetchVersionHistory(hash).then(versions => {
+        if (selectedHash === hash) renderVersions(versions, hash);
+    });
 }
 
 function showDetailEmpty(): void {
     if (detailEmpty) detailEmpty.style.display = '';
     if (detailPanel) detailPanel.style.display = 'none';
+    renderRecordings([]);
 }
 
 // ── Asset & Metadata rendering ──
@@ -433,6 +475,7 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
     pointcloud: 'Point Cloud',
     cad: 'CAD Model',
     drawing: 'Drawing',
+    flightpath: 'Flight Path',
 };
 
 const ASSET_TYPE_ICONS: Record<string, string> = {
@@ -441,6 +484,7 @@ const ASSET_TYPE_ICONS: Record<string, string> = {
     pointcloud: '\u2059',  // dot pattern
     cad: '\u2B21',         // hexagon
     drawing: '\u25A1',     // square
+    flightpath: '\u2708',  // airplane
 };
 
 function renderAssets(archive: Archive): void {
@@ -528,6 +572,271 @@ function renderMetadata(archive: Archive): void {
     detailMetadata.innerHTML = html;
 }
 
+// ── Recordings ──
+
+async function fetchMedia(archiveHash: string): Promise<MediaItem[]> {
+    try {
+        const res = await apiFetch('/api/media?archive_hash=' + encodeURIComponent(archiveHash));
+        if (!res.ok) return [];
+        const data = await res.json() as { media: MediaItem[] };
+        return data.media || [];
+    } catch {
+        log.warn('Failed to fetch media for', archiveHash);
+        return [];
+    }
+}
+
+function formatDuration(ms: number): string {
+    const s = Math.round(ms / 1000);
+    if (s < 60) return s + 's';
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+function renderRecordings(items: MediaItem[]): void {
+    if (!recordingsBody || !recordingsSection) return;
+
+    for (const t of mediaPollTimers) clearInterval(t);
+    mediaPollTimers = [];
+
+    if (items.length === 0) {
+        recordingsSection.style.display = 'none';
+        return;
+    }
+    recordingsSection.style.display = '';
+    recordingsBody.innerHTML = '';
+
+    for (const item of items) {
+        recordingsBody.appendChild(renderMediaCard(item));
+    }
+}
+
+// ── Version History ──
+
+interface VersionEntry {
+    id: number;
+    size: number;
+    created_at: string;
+}
+
+async function fetchVersionHistory(archiveHash: string): Promise<VersionEntry[]> {
+    try {
+        const res = await apiFetch('/api/archives/' + encodeURIComponent(archiveHash) + '/versions');
+        if (!res.ok) return [];
+        const data = await res.json() as { versions: VersionEntry[] };
+        return data.versions || [];
+    } catch {
+        log.warn('Failed to fetch versions for', archiveHash);
+        return [];
+    }
+}
+
+function renderVersions(versions: VersionEntry[], archiveHash: string): void {
+    if (!detailVersions || !detailVersionsSection) return;
+
+    if (versions.length === 0) {
+        detailVersionsSection.style.display = 'none';
+        return;
+    }
+    detailVersionsSection.style.display = '';
+    let html = '';
+    for (const v of versions) {
+        const date = formatDateRelative(v.created_at);
+        const size = formatBytes(v.size);
+        const downloadUrl = '/api/archives/' + encodeURIComponent(archiveHash) + '/versions/' + v.id + '/download';
+        html += '<div class="version-item">'
+            + '<span class="version-date">' + escapeHtml(date) + '</span>'
+            + '<span class="version-size">' + escapeHtml(size) + '</span>'
+            + '<a class="version-download" href="' + escapeHtml(downloadUrl) + '" title="Download">&#8681;</a>'
+            + '</div>';
+    }
+    detailVersions.innerHTML = html;
+}
+
+function renderMediaCard(item: MediaItem): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'library-media-card';
+    card.dataset.mediaId = item.id;
+
+    const isReady = item.status === 'ready';
+    const isError = item.status === 'error';
+    const isProcessing = !isReady && !isError;
+
+    // Thumbnail area
+    const thumbArea = document.createElement('div');
+    thumbArea.className = 'library-media-thumb';
+
+    if (isReady && item.thumb_path) {
+        const img = document.createElement('img');
+        img.src = item.thumb_path;
+        img.alt = item.title || 'Recording';
+        img.loading = 'lazy';
+
+        if (item.gif_path) {
+            const thumbSrc = item.thumb_path;
+            img.addEventListener('mouseenter', () => { img.src = item.gif_path!; });
+            img.addEventListener('mouseleave', () => { img.src = thumbSrc; });
+        }
+
+        img.addEventListener('click', () => {
+            if (item.mp4_path) expandVideoPlayer(thumbArea, item);
+        });
+        thumbArea.appendChild(img);
+    } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'library-media-placeholder';
+        placeholder.textContent = isProcessing ? 'Processing\u2026' : 'Error';
+        thumbArea.appendChild(placeholder);
+    }
+
+    if (isProcessing) {
+        const badge = document.createElement('span');
+        badge.className = 'library-media-status processing';
+        badge.textContent = 'Processing';
+        thumbArea.appendChild(badge);
+
+        const timer = window.setInterval(async () => {
+            try {
+                const res = await apiFetch('/api/media/' + item.id);
+                if (!res.ok) return;
+                const updated = await res.json() as MediaItem;
+                if (updated.status === 'ready' || updated.status === 'error') {
+                    clearInterval(timer);
+                    mediaPollTimers = mediaPollTimers.filter(t => t !== timer);
+                    if (selectedHash) {
+                        const cached = mediaCache.get(selectedHash);
+                        if (cached) {
+                            const idx = cached.findIndex(m => m.id === item.id);
+                            if (idx !== -1) cached[idx] = updated;
+                            renderRecordings(cached);
+                        }
+                    }
+                }
+            } catch { /* ignore poll errors */ }
+        }, 3000);
+        mediaPollTimers.push(timer);
+    } else if (isError) {
+        const badge = document.createElement('span');
+        badge.className = 'library-media-status error';
+        badge.textContent = 'Error';
+        badge.title = item.error_msg || 'Transcode failed';
+        thumbArea.appendChild(badge);
+    }
+
+    card.appendChild(thumbArea);
+
+    // Info line
+    const info = document.createElement('div');
+    info.className = 'library-media-info';
+
+    const title = document.createElement('span');
+    title.className = 'library-media-title';
+    title.textContent = item.title || 'Untitled';
+    info.appendChild(title);
+
+    if (item.mode) {
+        const modeBadge = document.createElement('span');
+        modeBadge.className = 'library-media-badge';
+        modeBadge.textContent = item.mode.charAt(0).toUpperCase() + item.mode.slice(1);
+        info.appendChild(modeBadge);
+    }
+
+    if (item.duration_ms > 0) {
+        const dur = document.createElement('span');
+        dur.className = 'library-media-duration';
+        dur.textContent = formatDuration(item.duration_ms);
+        info.appendChild(dur);
+    }
+
+    card.appendChild(info);
+
+    // Action buttons
+    const actions = document.createElement('div');
+    actions.className = 'library-media-actions';
+
+    if (isReady) {
+        const shareBtn = document.createElement('button');
+        shareBtn.textContent = 'Share Link';
+        shareBtn.addEventListener('click', () => copyMediaUrl(location.origin + item.share_url, 'Share link copied'));
+        actions.appendChild(shareBtn);
+
+        if (item.gif_path) {
+            const gifBtn = document.createElement('button');
+            gifBtn.textContent = 'Copy GIF';
+            gifBtn.addEventListener('click', () => copyMediaUrl(location.origin + item.gif_path!, 'GIF URL copied'));
+            actions.appendChild(gifBtn);
+        }
+    }
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'danger';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', () => handleDeleteMedia(item));
+    actions.appendChild(deleteBtn);
+
+    card.appendChild(actions);
+    return card;
+}
+
+function expandVideoPlayer(container: HTMLElement, item: MediaItem): void {
+    const existing = container.querySelector('video');
+    if (existing) {
+        existing.pause();
+        container.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = item.thumb_path!;
+        img.alt = item.title || 'Recording';
+        if (item.gif_path) {
+            const thumbSrc = item.thumb_path!;
+            img.addEventListener('mouseenter', () => { img.src = item.gif_path!; });
+            img.addEventListener('mouseleave', () => { img.src = thumbSrc; });
+        }
+        img.addEventListener('click', () => expandVideoPlayer(container, item));
+        container.appendChild(img);
+        return;
+    }
+
+    container.innerHTML = '';
+    const video = document.createElement('video');
+    video.src = item.mp4_path!;
+    video.controls = true;
+    video.autoplay = true;
+    video.style.cssText = 'width:100%; height:100%; object-fit:contain; background:#000;';
+    video.addEventListener('ended', () => expandVideoPlayer(container, item));
+    container.appendChild(video);
+}
+
+async function copyMediaUrl(text: string, successMsg: string): Promise<void> {
+    try {
+        await navigator.clipboard.writeText(text);
+        notify.success(successMsg);
+    } catch {
+        notify.error('Copy failed');
+    }
+}
+
+async function handleDeleteMedia(item: MediaItem): Promise<void> {
+    if (!confirm('Delete recording "' + (item.title || 'Untitled') + '"? This cannot be undone.')) return;
+    try {
+        const res = await apiFetch('/api/media/' + item.id, { method: 'DELETE' });
+        if (res.status === 401) { showAuth(); return; }
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({})) as { error?: string };
+            throw new Error(data.error || 'Delete failed');
+        }
+        if (selectedHash) {
+            const cached = mediaCache.get(selectedHash);
+            if (cached) {
+                mediaCache.set(selectedHash, cached.filter(m => m.id !== item.id));
+                renderRecordings(mediaCache.get(selectedHash)!);
+            }
+        }
+        notify.success('Recording deleted');
+    } catch (err) {
+        if (err instanceof AuthError) { showAuth(); return; }
+        notify.error('Delete failed: ' + (err as Error).message);
+    }
+}
+
 // ── Actions ──
 
 function openInEditor(archive: Archive): void {
@@ -538,7 +847,20 @@ function openInEditor(archive: Archive): void {
 }
 
 function openInNewTab(archive: Archive): void {
-    window.open(archive.viewerUrl, '_blank');
+    if (archive.uuid) {
+        window.open('/view/' + archive.uuid, '_blank');
+    } else {
+        window.open(archive.viewerUrl, '_blank');
+    }
+}
+
+function handleDownloadArchive(archive: Archive): void {
+    const a = document.createElement('a');
+    a.href = archive.path;
+    a.download = archive.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 }
 
 async function handleRename(archive: Archive): Promise<void> {
@@ -562,6 +884,7 @@ async function handleDelete(archive: Archive): Promise<void> {
     try {
         await deleteArchive(archive.hash);
         archives = archives.filter(a => a.hash !== archive.hash);
+        mediaCache.delete(archive.hash);
         if (selectedHash === archive.hash) {
             selectedHash = null;
             showDetailEmpty();
@@ -577,6 +900,10 @@ async function handleDelete(archive: Archive): Promise<void> {
 async function handleRegenerate(archive: Archive): Promise<void> {
     try {
         const updated = await regenerateArchive(archive.hash);
+        // Cache-bust thumbnail so the browser fetches the freshly extracted image
+        if (updated.thumbnail) {
+            updated.thumbnail = updated.thumbnail.split('?')[0] + '?t=' + Date.now();
+        }
         const idx = archives.findIndex(a => a.hash === archive.hash);
         if (idx !== -1) archives[idx] = updated;
         render();
@@ -754,7 +1081,7 @@ function setupUpload(): void {
         if (!files) return;
         for (let i = 0; i < files.length; i++) {
             const f = files[i];
-            if (f.name.endsWith('.a3d') || f.name.endsWith('.a3z')) {
+            if (f.name.endsWith('.ddim') || f.name.endsWith('.a3d') || f.name.endsWith('.a3z')) {
                 uploadQueue.push(f);
             }
         }
@@ -813,9 +1140,9 @@ function setupDetailActions(): void {
         }
     });
 
-    document.getElementById('library-action-copy')?.addEventListener('click', () => {
+    document.getElementById('library-action-download')?.addEventListener('click', () => {
         const a = getSelected();
-        if (a) handleCopyUrl(a);
+        if (a) handleDownloadArchive(a);
     });
 
     document.getElementById('library-action-rename')?.addEventListener('click', () => {
@@ -893,6 +1220,10 @@ export function initLibraryPanel(): void {
     detailAssetsSection = document.getElementById('library-assets-section');
     detailMetadata = document.getElementById('library-detail-metadata');
     detailMetadataSection = document.getElementById('library-metadata-section');
+    recordingsSection = document.getElementById('library-recordings-section');
+    recordingsBody = document.getElementById('library-detail-recordings');
+    detailVersions = document.getElementById('library-detail-versions');
+    detailVersionsSection = document.getElementById('library-versions-section');
 
     // Show "Save to Library" button in export pane
     const saveBtn = document.getElementById('btn-save-to-library');
@@ -979,6 +1310,8 @@ export function getAuthCredentials(): string | null {
 export function getCsrfToken(): string | null {
     return csrfToken;
 }
+
+export { fetchCsrfToken };
 
 export async function refreshLibrary(): Promise<void> {
     try {

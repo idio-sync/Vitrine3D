@@ -32,6 +32,8 @@ interface LocalAssetStore {
     pointcloudBlob: Blob | null;
     cadBlob: Blob | null;
     cadFileName: string | null;
+    flightPathBlobs: Array<{ blob: Blob; fileName: string }>;
+    colmapBlobs: Array<{ camerasBlob: Blob; imagesBlob: Blob; points3DBuffer?: ArrayBuffer }>;
     sourceFiles: SourceFileEntry[];
 }
 
@@ -43,6 +45,8 @@ const store: LocalAssetStore = {
     pointcloudBlob: null,
     cadBlob: null,
     cadFileName: null,
+    flightPathBlobs: [],
+    colmapBlobs: [],
     sourceFiles: []   // Array of { file: File|null, name: string, size: number, category: string, fromArchive: boolean }
 };
 
@@ -66,6 +70,8 @@ export function resetBlobs(): void {
     store.pointcloudBlob = null;
     store.cadBlob = null;
     store.cadFileName = null;
+    store.flightPathBlobs = [];
+    store.colmapBlobs = [];
     store.sourceFiles = [];
     log.info('Asset store reset');
 }

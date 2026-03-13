@@ -11,12 +11,70 @@ import type { AppState } from '@/types.js';
 
 const log = Logger.getLogger('screenshot-manager');
 
+/** Hide any GridHelper objects in the scene, returning those that were visible for later restore. */
+function hideGridHelpers(scene: any): any[] {
+    const hidden: any[] = [];
+    for (const child of scene.children) {
+        if (child.type === 'GridHelper' && child.visible) {
+            child.visible = false;
+            hidden.push(child);
+        }
+    }
+    return hidden;
+}
+
+/** Restore visibility on previously-hidden grid helpers. */
+function restoreGridHelpers(hidden: any[]): void {
+    for (const child of hidden) {
+        child.visible = true;
+    }
+}
+
 interface ScreenshotDeps {
     renderer: any; // TODO: type when @types/three is installed (THREE.WebGLRenderer)
     scene: any;    // TODO: type when @types/three is installed (THREE.Scene)
     camera: any;   // TODO: type when @types/three is installed (THREE.PerspectiveCamera)
     state: AppState;
     postProcessing?: { isEnabled(): boolean; render(): void };
+}
+
+/**
+ * Capture a screenshot and download it immediately as a PNG file.
+ */
+export async function downloadScreenshot(deps: ScreenshotDeps): Promise<void> {
+    const { renderer, scene, camera, postProcessing } = deps;
+    if (!renderer) {
+        notify.error('Renderer not ready');
+        return;
+    }
+    const hiddenGrids = hideGridHelpers(scene);
+    try {
+        if (postProcessing?.isEnabled()) {
+            postProcessing.render();
+        } else {
+            renderer.render(scene, camera);
+        }
+        const canvas = renderer.domElement;
+        const blob = await captureScreenshot(canvas, { width: canvas.width, height: canvas.height });
+        if (!blob) {
+            notify.error('Screenshot capture failed');
+            return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `screenshot_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        notify.success('Screenshot downloaded');
+    } catch (e) {
+        log.error('Screenshot download error:', e);
+        notify.error('Failed to download screenshot');
+    } finally {
+        restoreGridHelpers(hiddenGrids);
+    }
 }
 
 /**
@@ -28,6 +86,7 @@ export async function captureScreenshotToList(deps: ScreenshotDeps): Promise<voi
         notify.error('Renderer not ready');
         return;
     }
+    const hiddenGrids = hideGridHelpers(scene);
     try {
         if (postProcessing?.isEnabled()) {
             postProcessing.render();
@@ -55,6 +114,8 @@ export async function captureScreenshotToList(deps: ScreenshotDeps): Promise<voi
     } catch (e) {
         log.error('Screenshot capture error:', e);
         notify.error('Failed to capture screenshot');
+    } finally {
+        restoreGridHelpers(hiddenGrids);
     }
 }
 
@@ -105,6 +166,7 @@ export function hideViewfinder(): void {
 export async function captureManualPreview(deps: ScreenshotDeps): Promise<void> {
     const { renderer, scene, camera, state, postProcessing } = deps;
     if (!renderer) return;
+    const hiddenGrids = hideGridHelpers(scene);
     try {
         if (postProcessing?.isEnabled()) {
             postProcessing.render();
@@ -122,6 +184,8 @@ export async function captureManualPreview(deps: ScreenshotDeps): Promise<void> 
     } catch (e) {
         log.error('Manual preview capture error:', e);
         notify.error('Failed to capture preview');
+    } finally {
+        restoreGridHelpers(hiddenGrids);
     }
 }
 

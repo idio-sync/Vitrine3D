@@ -9,6 +9,7 @@
 
 import { Logger } from './utilities.js';
 import type { Annotation } from '@/types.js';
+import type { AnnotationSystem } from './annotation-system.js';
 
 const log = Logger.getLogger('annotation-controller');
 
@@ -16,8 +17,8 @@ const log = Logger.getLogger('annotation-controller');
 // TYPES
 // =============================================================================
 
-interface AnnotationControllerDeps {
-    annotationSystem: any; // TODO: type when @types/three is installed
+export interface AnnotationControllerDeps {
+    annotationSystem: AnnotationSystem | null;
     showAnnotationPopup: (annotation: Annotation) => string;
     hideAnnotationPopup: () => void;
 }

@@ -1,7 +1,7 @@
 # Shortcomings & Solutions Roadmap
 
 **Date:** 2026-02-06
-**Scope:** Viewer application and .a3d/.a3z container format
+**Scope:** Viewer application and .ddim container format
 **Status:** Proof of concept — this document tracks known gaps and proposed solutions for moving toward a production-quality tool and a genuinely preservable archive format.
 
 ---
@@ -103,14 +103,21 @@
 
 ## 2. Technology — Alignment & Analysis
 
-### 2.1 ICP Alignment Is Naive
+### 2.1 ICP Alignment — Improved but Not Complete
 
-**Problem:** The ICP implementation uses basic nearest-neighbor matching with a KD-tree but lacks RANSAC outlier rejection, multi-scale coarse-to-fine alignment, convergence criteria beyond iteration count, or point-to-plane variants. For a tool that documents metrology-grade accuracy, this is a significant gap between what the metadata can describe and what the tool can verify.
+**Problem:** ~~The ICP implementation uses basic nearest-neighbor matching with a KD-tree but lacks RANSAC outlier rejection, multi-scale coarse-to-fine alignment, convergence criteria beyond iteration count, or point-to-plane variants.~~ The ICP implementation has been significantly improved but still lacks some advanced features.
 
-**Solutions:**
-- **Short-term:** Add convergence criteria (stop when the transformation change between iterations falls below a threshold). Add a maximum correspondence distance to reject gross outliers.
+**Status: Partially Implemented (2026-03-07)**
+- **Rigid transforms** in ICP iterations prevent scale accumulation (previously a source of drift)
+- **Coarse rotation search** provides better initial alignment before ICP refinement
+- **points3D.bin support** — Colmap sparse reconstruction points can be used as alignment targets alongside mesh/splat geometry
+- **SpatialHash** nearest-neighbor lookup added as a faster alternative for large point sets
+- **Splat point sampling** (`sampleSplatPoints`) enables ICP alignment directly against Gaussian splat data
+- Alignment quality metrics (RMSE, match count) displayed in the UI after Colmap↔flight path alignment
+
+**Remaining solutions:**
 - **Medium-term:** Implement point-to-plane ICP (requires normals), which converges faster and more accurately on planar surfaces common in architecture and sculpture. Add RANSAC-based initial alignment for cases where the starting positions are far apart.
-- **Long-term:** Integrate a WASM-compiled alignment library (e.g., Open3D's registration module compiled to WebAssembly) for robust, production-quality registration. Provide alignment quality metrics (RMSE, overlap percentage, correspondence histogram) in the UI and store them in the manifest.
+- **Long-term:** Integrate a WASM-compiled alignment library (e.g., Open3D's registration module compiled to WebAssembly) for robust, production-quality registration.
 
 ---
 
@@ -118,7 +125,7 @@
 
 ### 3.1 No Formal Specification Document
 
-**Problem:** The `.a3d` format is defined implicitly by the code in `archive-loader.ts` and `archive-creator.ts`. There is no standalone specification document. Anyone writing an independent reader must reverse-engineer the behavior from JavaScript source code. For a preservation format, the specification should be a document, not an implementation.
+**Problem:** The `.ddim` format is defined implicitly by the code in `archive-loader.ts` and `archive-creator.ts`. There is no standalone specification document. Anyone writing an independent reader must reverse-engineer the behavior from JavaScript source code. For a preservation format, the specification should be a document, not an implementation.
 
 **Solutions:**
 - **Short-term:** Write a standalone specification document (`SPECIFICATION.md` or a versioned PDF) that defines the archive structure, manifest schema, required and optional fields, data types, and processing rules independent of any implementation. Publish it in the `archive-3d` repository.
@@ -311,11 +318,13 @@
 - **Point-to-point distance measurement** — two-click flow, 3D line overlay, DOM distance markers, configurable units (m/cm/mm/in/ft). Works in main app and kiosk viewer. (`measurement-system.ts`)
 - **Cross-section tool** — arbitrary-orientation clipping plane with draggable 3D handle, normal flip, and depth snap. Works in main app and kiosk viewer. (`cross-section.ts`)
 
+**Additional implementation (2026-03-07):**
+- **Coordinate readout** — hover over the surface, display XYZ coordinates in real-time. Implemented in the Industrial kiosk theme (`src/themes/industrial/`).
+
 **Remaining solutions:**
 - **Medium-term:** Add:
   - **Multi-point polyline measurement** — click a series of points, display cumulative distance
   - **Surface area measurement** — select a region, compute area from the mesh triangles within it
-  - **Coordinate readout** — hover over the surface, display XYZ coordinates in real-time
 - **Long-term:** Add:
   - **Volume estimation** from closed mesh regions
   - **Deviation analysis** — color-map the distance between two representations (e.g., mesh vs. point cloud) to visualize reconstruction accuracy
@@ -404,7 +413,7 @@
   - Each entry contains: version, date, description
   - Preserved on archive re-import (round-trip support)
 
-- **Medium-term:** Implement a diff tool that can compare two `.a3d` archives and report changes: new/modified/removed files, metadata differences, annotation changes, transform differences.
+- **Medium-term:** Implement a diff tool that can compare two `.ddim` archives and report changes: new/modified/removed files, metadata differences, annotation changes, transform differences.
 - **Long-term:** Support incremental archives that reference a base archive and contain only the changed files. This reduces storage for large datasets with frequent updates. Implement a PREMIS-style event log that records every significant action (creation, annotation, re-alignment, export).
 
 ### 9.2 No Collaboration Model
@@ -469,7 +478,7 @@
 
 ### 11.1 The Archive Format Is Coupled to the Viewer
 
-**Problem:** `packer: "vitrine3d"` in the manifest, and the absence of an independent specification, means the format is defined by this specific tool. If the project is abandoned, the format specification effectively dies with it. Contrast with IIIF (independent spec, consortium governance, multiple implementations) or E57 (ASTM standard).
+**Problem:** `packer: "vitrine3d"` in the manifest, and the absence of an independent specification, means the `.ddim` format is defined by this specific tool. If the project is abandoned, the format specification effectively dies with it. Contrast with IIIF (independent spec, consortium governance, multiple implementations) or E57 (ASTM standard).
 
 **Solutions:**
 - **Short-term:** Give the format its own identity separate from the viewer. The `archive-3d` repository is a start — flesh it out with a standalone specification, examples, and a validator. Change `packer` to reference the tool, but add a `format` field that references the spec:
@@ -487,17 +496,17 @@
 
 ### 11.2 Tension Between Self-Contained and Open
 
-**Problem:** The `.a3d` archive requires this viewer to display. ~~The kiosk export is self-contained but depends on a frozen JavaScript stack.~~ The kiosk is now served as a standard Vite bundle at `/`, updated with each deployment. The Tauri desktop app bundles a specific version for offline use. Neither is truly self-contained in the archival sense — one needs software, the other needs a compatible browser or the desktop app.
+**Problem:** The `.ddim` archive requires this viewer to display. ~~The kiosk export is self-contained but depends on a frozen JavaScript stack.~~ The kiosk is now served as a standard Vite bundle at `/`, updated with each deployment. The Tauri desktop app bundles a specific version for offline use. Neither is truly self-contained in the archival sense — one needs software, the other needs a compatible browser or the desktop app.
 
 **Solutions:**
 - **Short-term:** Accept and document the two-tier model explicitly:
-  - **Tier 1 (Archive, .a3d):** Long-term preservation. Standard ZIP + JSON + standard file formats. Any ZIP library + JSON parser can extract and read the contents. The data survives without any specific viewer.
+  - **Tier 1 (Archive, .ddim):** Long-term preservation. Standard ZIP + JSON + standard file formats. Any ZIP library + JSON parser can extract and read the contents. The data survives without any specific viewer.
   - **Tier 2 (Kiosk, web-served or Tauri desktop):** Convenient access. The web-served kiosk at `/` stays current with each deployment. The Tauri desktop app bundles a specific version for offline use. The viewer is a convenience, not a preservation guarantee.
 - **Medium-term:** Ensure the archive's data files are fully self-describing without the viewer. Include a `README.txt` in every archive explaining the structure in plain text:
   ```
-  This is an archive-3d container (version 1.0).
+  This is a Direct Dimensions archive container (version 1.0).
   It is a standard ZIP file. To extract:
-    unzip archive.a3d
+    unzip archive.ddim
   Contents:
     manifest.json - Metadata (JSON format)
     assets/       - 3D data files (GLB, PLY, E57)
@@ -581,7 +590,7 @@
 | 8.2 | No metadata validation | Medium | Medium | **Medium** | **Done** |
 | 9.1 | No versioning | Medium | Medium | **Medium** | **Done** |
 | 1.3 | CDN dependency | Low | Low | **Low** | Resolved |
-| 2.1 | ICP alignment naive | Low | High | **Low** | |
+| 2.1 | ICP alignment naive | Low | High | **Low** | Partial |
 | 6.2 | Embedded JS will age | Low | High | **Low** | Deprecated |
 
 ---
@@ -590,7 +599,7 @@
 
 The three most impactful areas of work were:
 
-1. **~~Write a standalone format specification~~ (3.1, 3.2, 11.1) — Done.** The [SPECIFICATION.md](../archive/SPECIFICATION.md) covers archive structure, manifest schema, versioning rules, and standards crosswalks. The format is now independently documented. Remaining work: JSON Schema for machine validation, PRONOM/IANA registration, and further decoupling the format identity from the viewer (11.1).
+1. **~~Write a standalone format specification~~ (3.1, 3.2, 11.1) — Done.** The [SPECIFICATION.md](../archive/SPECIFICATION.md) covers archive structure, manifest schema, versioning rules, and standards crosswalks. The `.ddim` format is now independently documented. Remaining work: JSON Schema for machine validation, PRONOM/IANA registration, and further decoupling the format identity from the viewer (11.1).
 
 2. **~~Add data hierarchy and role classification~~ (12.1, 4.2, 1.1) — Partially done.** Data entries now support `role` (primary/derived) classification. PRONOM variant annotations (4.2) and splat format stability documentation (1.1) remain open.
 

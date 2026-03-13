@@ -20,6 +20,8 @@ const log = Logger.getLogger('theme-loader');
 export interface LayoutModule {
     /** Main UI setup — called after archive loads (or for direct-file loads). */
     setup(manifest: any, deps: any): void;
+    /** Remove all DOM elements created by setup(). Called before re-setup or on scene cleanup. */
+    cleanup?(): void;
     /** Customize the loading overlay before archive loading begins. */
     initLoadingScreen?(container: HTMLElement, deps: any): void;
     /** Customize the click-to-load gate. */
@@ -33,6 +35,12 @@ export interface LayoutModule {
     onAnnotationDeselect?(): void;
     /** Called when the active display/view mode changes. */
     onViewModeChange?(mode: string): void;
+    /** Called when auto-rotate is toggled on or off (including by drag gesture). */
+    onAutoRotateChange?(active: boolean): void;
+    /** Called after a direct non-archive file finishes loading. */
+    onAssetLoaded?(): void;
+    /** Called when a measurement is added or removed. */
+    onMeasurementChanged?(): void;
     /** Called for keyboard shortcuts. Return true if the layout handled the key. */
     onKeyboardShortcut?(key: string): boolean;
 
@@ -40,6 +48,8 @@ export interface LayoutModule {
     hasOwnInfoPanel?: boolean;
     /** If true, the layout creates its own SD/HD quality toggle. */
     hasOwnQualityToggle?: boolean;
+    /** If true, the layout handles its own empty state (no-asset overlay) and the generic kiosk-file-picker is not shown. */
+    handlesEmptyState?: boolean;
 
     /** Called when a walkthrough is about to start (player bar created, autoplay pending). */
     onWalkthroughStart?(walkthrough: import('../types.js').Walkthrough): void;
@@ -47,6 +57,8 @@ export interface LayoutModule {
     onWalkthroughStopChange?(stopIndex: number, stop: import('../types.js').WalkthroughStop): void;
     /** Called when the walkthrough ends or is stopped. */
     onWalkthroughEnd?(): void;
+    /** Called after flight paths are loaded from an archive (flightPathManager is null at setup time). */
+    onFlightPathLoaded?(flightPathManager: any): void;
 }
 
 interface ThemeMeta {

@@ -1,6 +1,11 @@
-npm # Tauri Desktop Application
+# Tauri Desktop Application
 
-The 3D Archive Viewer can be built as a native desktop application using [Tauri v2](https://v2.tauri.app/). The desktop app defaults to **kiosk mode with the editorial theme**, providing a polished viewer experience. The web app (`npm start`) remains the full editor.
+The 3D Archive Viewer can be built as a native desktop application using [Tauri v2](https://v2.tauri.app/). Two app variants are configured:
+
+- **Vitrine3D** (`tauri.conf.json`): Editorial theme with `home=true` — shows a file picker with "Browse Files" and "Browse Collections" buttons. Default variant.
+- **PASS Viewer** (`tauri.pass.conf.json`): Industrial theme, no `home` — shows the full industrial CAD inspection UI with a File > Open menu.
+
+The web app (`npm start`) remains the full editor.
 
 ## Prerequisites
 
@@ -14,7 +19,7 @@ The 3D Archive Viewer can be built as a native desktop application using [Tauri 
 
 | Command | Description |
 |---------|-------------|
-| `npm start` | Web dev server (unchanged, full editor mode) |
+| `npm run dev` | Vite dev server (unchanged, full editor mode) |
 | `cargo tauri dev` | Launch native window loading from dev server |
 | `cargo tauri build` | Production build with bundled dependencies |
 | `npm run vendor` | Download CDN deps to `dist/` for offline use |
@@ -25,32 +30,32 @@ The 3D Archive Viewer can be built as a native desktop application using [Tauri 
 
 ### Dev Mode (`cargo tauri dev`)
 
-1. Starts `npx serve src -p 8080` (the `beforeDevCommand`)
+1. Runs `npm run dev` — Vite dev server on port 8080 (the `beforeDevCommand`)
 2. Compiles the Rust backend
-3. Opens a native window pointing to `http://localhost:8080/?kiosk=true&theme=editorial`
-4. Frontend loads dependencies from CDN (same as `npm start`)
+3. Opens a native window pointing to `http://localhost:8080/?home=true&kiosk=true&theme=editorial` (Vitrine3D variant) or `http://localhost:8080/?kiosk=true&theme=industrial` (PASS Viewer variant)
+4. Frontend loads dependencies from `node_modules/` via Vite (same as `npm run dev`)
 5. File watcher auto-rebuilds on Rust/config changes
 
 ### Production Build (`cargo tauri build`)
 
-1. Runs `node scripts/vendor-deps.mjs` (the `beforeBuildCommand`)
-   - Copies `src/` to `dist/`
-   - Downloads all 12 CDN dependencies to `dist/vendor/`
-   - Rewrites the import map in `dist/index.html` to use local paths
-   - Patches esm.sh polyfill imports for offline compatibility
+1. Runs `npm run build` — Vite production build to `dist/` (the `beforeBuildCommand`)
+   - Bundles all dependencies from `node_modules/` via Vite/Rollup
+   - Compiles TypeScript, tree-shakes, and minifies
+   - Copies runtime assets (themes, WASM files, Draco decoders)
 2. Compiles the Rust backend in release mode
 3. Bundles `dist/` into the executable as the frontend
 4. Produces installers in `src-tauri/target/release/bundle/`
 
 ### Native File Dialogs
 
-When running inside Tauri, the app detects `window.__TAURI__` and replaces HTML file inputs with native OS dialogs. This is handled by `src/modules/tauri-bridge.js`, which is lazy-imported in `main.js` only when Tauri is detected. All 9 file inputs and 4 download points use native dialogs in the desktop app, with browser fallbacks for the web version.
+When running inside Tauri, the app detects `window.__TAURI__` and replaces HTML file inputs with native OS dialogs. This is handled by `src/modules/tauri-bridge.ts`, which is lazy-imported in `main.ts` only when Tauri is detected. All 9 file inputs and 4 download points use native dialogs in the desktop app, with browser fallbacks for the web version.
 
 ## Project Structure
 
 ```
 src-tauri/
-  tauri.conf.json          Tauri configuration (window, CSP, build commands)
+  tauri.conf.json          Vitrine3D variant (editorial theme, home=true)
+  tauri.pass.conf.json     PASS Viewer variant (industrial theme, no home)
   Cargo.toml               Rust dependencies
   src/
     main.rs                Entry point
@@ -64,7 +69,8 @@ scripts/
   vendor-deps.mjs          CDN dependency vendoring for offline builds
 
 src/modules/
-  tauri-bridge.js          Native dialog bridge (feature-detected)
+  tauri-bridge.ts          Native dialog bridge (feature-detected)
+  tauri-auth.ts            Cloudflare Access JWT storage for library API auth
 ```
 
 ## CI/CD
@@ -90,14 +96,36 @@ Tauri manages CSP via `tauri.conf.json`. Key requirements:
 
 In Tauri v2, plugin permissions are managed through **capabilities** (`src-tauri/capabilities/`), not through the `plugins` section in `tauri.conf.json`. The `plugins` section should remain `{}`.
 
+## Building a Specific Variant
+
+To build the PASS Viewer variant instead of the default Vitrine3D:
+
+```bash
+cargo tauri build --config src-tauri/tauri.pass.conf.json
+```
+
+The `--config` flag overrides the default `tauri.conf.json` with the PASS Viewer configuration (industrial theme, different window title, no home screen).
+
+## Features by Variant
+
+| Feature | Vitrine3D | PASS Viewer |
+|---------|-----------|-------------|
+| Theme | Editorial (gold + navy) | Industrial (MeshLab-style) |
+| Home screen | File picker with "Browse Files" + "Browse Collections" | No home — opens directly to viewer |
+| Collections browser | Yes — editorial-themed collection pages | No |
+| File > Open menu | No | Yes — industrial UI menu bar |
+| Coordinate readout | No | Yes — real-time XYZ on hover |
+| View cube | No | Yes — orientation indicator |
+| QA annotations | No | Yes — defect annotation workflow |
+
 ## Future Work
 
 ### File Association
 
-Register `.a3d` and `.a3z` file extensions with the desktop app so users can:
+Register the `.ddim` file extension with the desktop app so users can:
 - **Double-click** an archive file to open it directly in the viewer
 - **Drag & drop** an archive onto the executable
-- **Open from command line**: `3d-archive-viewer.exe scene.a3z`
+- **Open from command line**: `3d-archive-viewer.exe scene.ddim`
 
 This would use Tauri's `bundle.fileAssociations` config and a Rust-side handler to pass the file path to the frontend. A single executable handles any archive — no per-file rebuilds needed.
 
@@ -110,7 +138,7 @@ npm run branded
 ```
 
 This opens native file/text dialogs to collect:
-1. **Archive** — the `.a3d`/`.a3z` file to bundle
+1. **Archive** — the `.ddim` file to bundle
 2. **Product name** — used as the window title and installer name
 3. **Icon** (optional) — a `.png` to replace the default app icon
 
@@ -118,11 +146,15 @@ The script then automates the full pipeline: patches `tauri.conf.json`, vendors 
 
 CLI mode (skips GUI dialogs):
 ```bash
-npm run branded -- --archive path/to/scene.a3z --name "Acme Site Tour" --icon icon.png
+npm run branded -- --archive path/to/scene.ddim --name "Acme Site Tour" --icon icon.png
 ```
 
 Output appears in `src-tauri/target/release/bundle/` (`.msi`/`.exe` on Windows).
 
 ### Android Support
 
-Tauri v2 supports Android targets. Deferred to a future phase — requires additional setup (Android SDK, NDK) and testing of touch interactions, file picker APIs, and WebView compatibility with Spark.js WASM.
+Tauri v2 Android builds are functional. The project includes `@tauri-apps/cli` with Android target support and a custom app icon. Requires Android SDK and NDK for building. Touch interactions and WebView compatibility with Spark.js WASM have been validated.
+
+### Deep Linking
+
+Collection thumbnail images are proxied through the Rust backend to avoid CORS issues when the Tauri app communicates with the remote library API. The back button in the collection browser correctly restores the previous page title.

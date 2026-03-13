@@ -89,7 +89,8 @@ export const COLORS = {
         DARK_PURPLE: '#1a1a2e',
         DARK_GRAY: '#2d2d2d',
         LIGHT_GRAY: '#808080',
-        WHITE: '#f0f0f0'
+        WHITE: '#f0f0f0',
+        EDITORIAL_NAVY: '#11304e'
     }
 } as const;
 
@@ -128,6 +129,23 @@ export const MATERIAL = {
 } as const;
 
 // =============================================================================
+// SPARK RENDERER DEFAULTS
+// =============================================================================
+
+export const SPARK_DEFAULTS = {
+    /** Prevent edge popping without excessive overdraw (default: 1.4) */
+    CLIP_XY: 2.0,
+    /** Cull near-invisible splats (3/255 ≈ 0.012) */
+    MIN_ALPHA: 3 / 255,
+    /** Aggressive behind-camera culling */
+    BEHIND_FOVEATE: 0.1,
+    /** ~57° half-angle priority cone (matches ~60° camera FOV) */
+    CONE_FOV: 1.0,
+    /** Deprioritize splats outside view cone → center-out LOD fill */
+    CONE_FOVEATE: 0.3,
+} as const;
+
+// =============================================================================
 // ASSET STATE (used by lazy archive loading)
 // =============================================================================
 
@@ -152,7 +170,12 @@ export const DEVICE_THRESHOLDS = {
     LOW_MEMORY_GB: 4,         // navigator.deviceMemory threshold
     LOW_CORES: 4,             // navigator.hardwareConcurrency threshold
     MOBILE_WIDTH_PX: 768,     // screen.width threshold
-    LOW_MAX_TEXTURE: 8192     // gl.MAX_TEXTURE_SIZE threshold
+    LOW_MAX_TEXTURE: 8192,    // gl.MAX_TEXTURE_SIZE threshold
+    GPU_BENCHMARK_HD: 1000,   // FPS at 410k tris for 2 points (discrete GPU territory)
+    GPU_BENCHMARK_MID: 500,   // FPS at 410k tris for 1 point (mid-range)
+    GPU_BENCHMARK_MIN: 500,   // Hard gate: below this FPS → force SD regardless of static score
+    // TODO: Make GPU_BENCHMARK thresholds overridable via
+    // APP_CONFIG env vars (same pattern as LOD_BUDGET_SD/LOD_BUDGET_HD)
 } as const;
 
 // =============================================================================
@@ -208,9 +231,11 @@ export const WALKTHROUGH = {
 export const ENVIRONMENT = {
     PRESETS: [
         { name: 'None', url: '' },
-        { name: 'Outdoor', url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_43d_clear_puresky_1k.hdr' },
-        { name: 'Studio', url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr' },
-        { name: 'Sunset', url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr' }
+        { name: 'Studio', url: '/hdri/studio_small_09_1k.hdr' },
+        { name: 'Outdoor', url: '/hdri/kloofendal_43d_clear_puresky_1k.hdr' },
+        { name: 'Studio (Dramatic)', url: '/hdri/pav_studio_03_1k.hdr' },
+        { name: 'Dark Studio', url: '/hdri/monochrome_studio_02_1k.hdr' },
+        { name: 'Sunset', url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr' },
     ]
 } as const;
 
@@ -292,3 +317,17 @@ export const DECIMATION_PRESETS: Record<string, DecimationPreset> = {
 } as const;
 
 export const DEFAULT_DECIMATION_PRESET = 'medium';
+
+// =============================================================================
+// FLIGHT LOG (drone telemetry import)
+// =============================================================================
+
+export const FLIGHT_LOG = {
+    EXTENSIONS: ['.csv', '.kml', '.kmz', '.srt', '.txt'],
+    /** Default line color — light blue, distinct from annotation/measurement orange */
+    LINE_COLOR: 0x4FC3F7,
+    /** Max rendered segments before subsampling kicks in */
+    MAX_RENDER_POINTS: 2000,
+    /** Marker sphere radius (scene units) */
+    MARKER_RADIUS: 0.02,
+} as const;

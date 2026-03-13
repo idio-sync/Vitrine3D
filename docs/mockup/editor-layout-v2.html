@@ -1024,7 +1024,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 /* ============================================================
    Archive Persistence Indicators
    ============================================================
-   Sections whose values are saved in .a3d/.a3z exports get a
+   Sections whose values are saved in .ddim exports get a
    subtle left accent border.  Session-only sections have no
    border (the default).
    ============================================================ */
@@ -1512,7 +1512,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
                     <button class="prop-btn"><span style="color:var(--accent-text);">+</span> Gaussian Splat (.ply, .splat, .ksplat, .spz)</button>
                     <button class="prop-btn"><span style="color:#c4863a;">+</span> Point Cloud (.e57)</button>
                     <button class="prop-btn"><span style="color:#9a7bce;">+</span> STL Model (.stl)</button>
-                    <button class="prop-btn mt4">Load Archive (.a3d, .a3z)</button>
+                    <button class="prop-btn mt4">Load Archive (.ddim)</button>
                     <button class="prop-btn" style="color:var(--text-muted); font-size:10px;">Load from URL&hellip;</button>
                 </div>
             </div>
@@ -2132,12 +2132,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
                 </div>
                 <div class="prop-section-body">
                     <div class="radio-row">
-                        <input type="radio" name="fmt" id="fmt-a3d" checked>
-                        <label for="fmt-a3d">.a3d (Standard)</label>
-                    </div>
-                    <div class="radio-row">
-                        <input type="radio" name="fmt" id="fmt-a3z">
-                        <label for="fmt-a3z">.a3z (Compressed)</label>
+                        <input type="radio" name="fmt" id="fmt-ddim" checked>
+                        <label for="fmt-ddim">.ddim (Direct Dimensions Archive)</label>
                     </div>
                 </div>
             </div>
@@ -2171,9 +2167,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
                     <span class="prop-section-chevron">&#9654;</span>
                 </div>
                 <div class="prop-section-body">
-                    <button class="prop-btn accent" style="margin-bottom:6px;">Download Archive (.a3d)</button>
+                    <button class="prop-btn accent" style="margin-bottom:6px;">Download Archive (.ddim)</button>
                     <button class="prop-btn">Download Offline Viewer</button>
-                    <p class="prop-hint">Self-contained HTML file. Opens any .a3d/.a3z offline.</p>
+                    <p class="prop-hint">Self-contained HTML file. Opens any .ddim archive offline.</p>
                 </div>
             </div>
 
@@ -2257,7 +2253,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
         <div class="status-right">
             <div class="status-item">
                 <span style="color:var(--text-faint)">file:</span>
-                <span class="status-num">lincoln_memorial_scan.a3d</span>
+                <span class="status-num">lincoln_memorial_scan.ddim</span>
             </div>
             <div class="status-item">
                 <span class="status-num">42.2 MB</span>

@@ -4,7 +4,7 @@ Kiosk view mode is a read-only mode used for presentation of 3D data. It can be 
 
 ## Capabilities
 
-- Full 3D rendering (splats, meshes, point clouds) with display mode switching
+- Full 3D rendering (splats, meshes, point clouds, flight paths, SfM cameras) with display mode switching
 - Orbit and fly camera controls
 - Auto-rotate turntable (enabled by default, auto-disables on manual interaction)
 - Shadow casting with shadow catcher ground plane
@@ -21,6 +21,48 @@ Kiosk view mode is a read-only mode used for presentation of 3D data. It can be 
 - Guided walkthrough playback — auto-plays a sequence of named camera stops with fly/fade/cut transitions, dwell times, and optional annotation links; play/pause button; loop and auto-play configurable in the archive
 - Annotation popups constrained to the 3D viewport — popups reposition automatically to stay within the visible canvas area rather than overflowing outside it
 - Cross-section clipping plane — if included in the archive, the clipping plane state is available in the kiosk viewer
+- SfM camera visualization — displays Colmap camera positions as frustum wireframes or instanced markers, with a toggle button that appears when camera data is present in the archive
+- Data overlay toggles — pill-style toggle buttons for SfM Cameras and Flight Paths appear when the respective data is present in the archive
+- Collections browser — editorial-themed collection pages accessible from the library, with mosaic thumbnails and archive membership
+
+## SfM Cameras (Colmap)
+
+The viewer supports Colmap Structure-from-Motion camera data as a native asset type. When an archive contains `colmap_sfm` entries, camera positions are rendered in the scene and a toggle button appears.
+
+### What it shows
+
+Camera positions from Colmap's `cameras.bin` + `images.bin` binary files are visualized as:
+- **Frustums** (default) — wireframe pyramids showing camera position, orientation, and approximate field of view. Color-coded blue→red by sequence order.
+- **Markers** — instanced spheres at each camera position. Useful when frustums are too dense.
+
+### Editor features
+
+In the editor (`/editor/`), the Assets pane has an **SfM Cameras** section where you can load `cameras.bin` and `images.bin` files separately (both are required). Once loaded:
+- Switch between Frustums and Markers display modes
+- Adjust frustum scale with a slider
+- Transform (position/rotate/scale) the camera group independently or linked with other assets
+- **Align Cameras to Path** button — automatically aligns the SfM camera group to match a manually positioned flight path using timestamp-matched (or sequential) Colmap↔GPS point pairs and a Umeyama similarity transform (requires both SfM cameras and a flight path to be loaded)
+
+### Archive format
+
+Colmap data is stored in `.ddim` archives under the `colmap_sfm_N` key prefix:
+```
+assets/colmap_sfm_0/cameras.bin
+assets/colmap_sfm_0/images.bin
+```
+
+The manifest entry uses role `colmap_sfm` with position/rotation/scale parameters.
+
+### Flight path alignment
+
+When both Colmap cameras and a flight path are loaded, the **Align Cameras to Path** button computes an automatic alignment:
+1. Manually position the flight path to match known points on the splat
+2. Click "Align Cameras to Path" — extracts timestamps from DJI image filenames (e.g., `DJI_20240315_142532_0001.jpg`), or falls back to sequential matching if filenames don't follow DJI naming
+3. Matches each camera to the corresponding flight log GPS point
+4. Computes a 7-DOF similarity transform (translation + rotation + uniform scale) via the Umeyama algorithm
+5. Applies the transform to the camera group, aligning cameras to the flight path's world-space positions
+
+Requires at least 3 matched point pairs. Reports RMSE — values above 1.0 trigger a warning.
 
 ## Keyboard Shortcuts
 
@@ -60,7 +102,7 @@ Total initial transfer: **~100-120KB** instead of the full archive.
 ### Example embed
 
 ```html
-<iframe src="https://viewer.example.com?archive=/archives/uuid/scan.a3d&autoload=false"></iframe>
+<iframe src="https://viewer.example.com?archive=/archives/uuid/scan.ddim&autoload=false"></iframe>
 ```
 
 ### Fallback behavior
@@ -85,6 +127,7 @@ The kiosk viewer supports themes — self-contained packages that control colors
 | `editorial` | Editorial | Gold and navy palette with full-bleed scene, edge-anchored title block, bottom ribbon, and magazine-spread details overlay. Default theme for kiosk mode. |
 | `gallery` | Gallery | Cinematic full-bleed layout with centered bottom title bar, slide-up details panel, and click gate |
 | `exhibit` | Exhibit | Institutional kiosk layout with attract mode idle screen, side panel, and click gate |
+| `industrial` | Industrial | MeshLab-style CAD inspection UI with coordinate readout, view cube, properties panel, layers tree, splat budget slider, and QA defect annotation workflow |
 | `minimal` | Sidebar | Neutral white accent with standard sidebar layout |
 
 ### Creating a custom theme
@@ -147,6 +190,7 @@ See `src/themes/editorial/`, `src/themes/gallery/`, or `src/themes/exhibit/` for
 ?theme=editorial          Full editorial experience (layout + colors) — default for kiosk mode
 ?theme=gallery            Cinematic full-bleed with click gate
 ?theme=exhibit            Institutional kiosk with attract mode and click gate
+?theme=industrial         MeshLab-style CAD inspection UI
 ?theme=minimal            Sidebar layout with neutral colors
 ?theme=my-custom-theme    Any user-created theme folder
 ?layout=editorial         Override layout regardless of theme

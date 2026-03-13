@@ -32,7 +32,7 @@
         "default-src": "'self' asset: https://asset.localhost",
         "script-src": "'self' 'unsafe-eval' 'unsafe-inline'",
         "style-src": "'self' 'unsafe-inline'",
-        "img-src": "'self' blob: data: asset: https://asset.localhost",
+        "img-src": "'self' blob: data: asset: https://asset.localhost https:",
         "connect-src": "'self' blob: data: ipc: http://ipc.localhost asset: https://asset.localhost https:",
         "worker-src": "'self' blob:",
         "font-src": "'self'",
@@ -50,8 +50,27 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
-      "icons/icon.ico"
-    ]
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["ddim"],
+        "mimeType": "application/octet-stream",
+        "description": "Vitrine3D Scene Archive"
+      }
+    ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "./windows/hooks.nsh"
+      }
+    }
   },
-  "plugins": {}
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["vitrine3d"]
+      }
+    }
+  }
 }

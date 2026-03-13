@@ -4,6 +4,16 @@
    Split from styles.css for cleaner separation of concerns.
    ============================================================================= */
 
+/* --- Safe area insets for devices with camera cutouts / notches --- */
+
+body.kiosk-mode {
+    padding:
+        env(safe-area-inset-top)
+        env(safe-area-inset-right)
+        env(safe-area-inset-bottom)
+        env(safe-area-inset-left);
+}
+
 /* --- Tag chip override for kiosk --- */
 
 body.kiosk-mode .tag-chip {
@@ -109,15 +119,14 @@ body.kiosk-mode .tag-chip {
 }
 
 .kiosk-library-btn {
-    display: block;
-    width: 100%;
-    margin: 0 0 20px;
-    padding: 14px 28px;
+    display: inline-block;
+    margin: 8px auto 0;
+    padding: 10px 28px;
     border: 1px solid var(--accent);
     border-radius: 8px;
     background: transparent;
     color: var(--accent-text);
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     transition: background 0.2s, border-color 0.2s;
@@ -222,7 +231,11 @@ body.kiosk-mode.kiosk-gallery #kiosk-wall-label,
 body.kiosk-mode.kiosk-exhibit #metadata-sidebar,
 body.kiosk-mode.kiosk-exhibit .kiosk-view-switcher,
 body.kiosk-mode.kiosk-exhibit #kiosk-toolbar,
-body.kiosk-mode.kiosk-exhibit #kiosk-wall-label {
+body.kiosk-mode.kiosk-exhibit #kiosk-wall-label,
+body.kiosk-mode.kiosk-industrial #metadata-sidebar,
+body.kiosk-mode.kiosk-industrial .kiosk-view-switcher,
+body.kiosk-mode.kiosk-industrial #kiosk-toolbar,
+body.kiosk-mode.kiosk-industrial #kiosk-wall-label {
     display: none !important;
 }
 
@@ -279,7 +292,7 @@ body.kiosk-mode #section-screenshots {
 
 body.kiosk-mode #kiosk-toolbar {
     position: fixed;
-    bottom: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom));
     left: 50%;
     transform: translateX(-50%);
     z-index: 200;
@@ -1424,8 +1437,8 @@ body.kiosk-mode #metadata-sidebar ::-webkit-scrollbar-thumb:hover {
 
     /* Kiosk toolbar: tighten spacing on mobile */
     body.kiosk-mode #kiosk-toolbar {
-        top: 10px;
-        left: 10px;
+        top: calc(10px + env(safe-area-inset-top));
+        left: calc(10px + env(safe-area-inset-left));
     }
 
     body.kiosk-mode .kiosk-tool-btn {
@@ -1451,7 +1464,7 @@ body.kiosk-mode #metadata-sidebar ::-webkit-scrollbar-thumb:hover {
 
     /* Toolbar: bottom-center, touch-sized on mobile */
     body.kiosk-mode #kiosk-toolbar {
-        bottom: 14px;
+        bottom: calc(14px + env(safe-area-inset-bottom));
         padding: 4px;
     }
 
@@ -1847,6 +1860,11 @@ body.kiosk-mode #metadata-sidebar.sheet-dragging {
     margin: 4px 0 0 0;
 }
 
+.kiosk-gate-plus {
+    font-size: 0.6rem;
+    color: rgba(255, 255, 255, 0.35);
+}
+
 .kiosk-gate-pill {
     font-size: 0.65rem;
     text-transform: uppercase;
@@ -2058,3 +2076,42 @@ body.kiosk-mode .kiosk-wt-player {
         transition: none;
     }
 }
+
+/* ── Back to Library button (Tauri in-app library) ──
+   Anchored below the editorial title block, aligned with the gold spine.
+   Styled as a minimal typographic link, not a bordered pill. */
+.kiosk-back-library {
+    position: fixed;
+    top: var(--back-btn-top, 110px);
+    left: 24px;
+    z-index: 91;
+    background: none;
+    border: none;
+    color: var(--kiosk-accent, rgba(254, 192, 58, 0.7));
+    font-family: var(--kiosk-font-body, 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8), 0 0 10px rgba(0,0,0,0.4);
+}
+
+.kiosk-back-library .back-arrow {
+    display: inline-block;
+    transition: transform 0.2s ease;
+}
+
+.kiosk-back-library:hover {
+    color: var(--kiosk-accent, rgba(254, 192, 58, 1));
+}
+
+.kiosk-back-library:hover .back-arrow {
+    transform: translateX(-3px);
+}
+

@@ -7,13 +7,14 @@
  */
 
 import { Logger } from './utilities.js';
+import { cfAuthFetch } from './tauri-auth.js';
 import {
-    escapeHtml,
     ASSET_LABELS,
     injectStyles as injectBaseStyles,
     getLogoSrc,
     renderCard,
 } from './collection-page.js';
+import { escapeHtml } from './utilities.js';
 import type { CollectionArchive } from './collection-page.js';
 
 const log = Logger.getLogger('library-page');
@@ -48,6 +49,7 @@ let sortField: SortField = 'date';
 let sortDir: SortDir = 'desc';
 const activeTypeFilters: Set<string> = new Set();
 let _activeTab: TabId = 'archives';
+let _onArchiveSelect: ((archive: CollectionArchive) => void) | null = null;
 
 // DOM refs
 let gridEl: HTMLElement | null = null;
@@ -60,13 +62,13 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 // ── Fetch ──
 
 async function fetchArchives(): Promise<ArchivesResponse> {
-    const res = await fetch('/api/archives');
+    const res = await cfAuthFetch('/api/archives');
     if (!res.ok) throw new Error('Failed to fetch archives (' + res.status + ')');
     return res.json();
 }
 
 async function fetchCollections(): Promise<CollectionItem[]> {
-    const res = await fetch('/api/collections');
+    const res = await cfAuthFetch('/api/collections');
     if (!res.ok) throw new Error('Failed to fetch collections (' + res.status + ')');
     return res.json();
 }
@@ -474,7 +476,7 @@ function refreshArchiveGrid(): void {
     } else {
         gridEl.innerHTML = '';
         filtered.forEach((archive, i) => {
-            gridEl!.appendChild(renderCard(archive, i));
+            gridEl!.appendChild(renderCard(archive, i, _onArchiveSelect || undefined));
         });
     }
 
@@ -642,6 +644,13 @@ function buildPage(container: HTMLElement, archivesData: ArchivesResponse, colle
 }
 
 // ── Public API ──
+
+export type { CollectionArchive } from './collection-page.js';
+
+/** Set a callback invoked when the user clicks an archive card (used by Tauri kiosk). */
+export function setOnArchiveSelect(cb: (archive: CollectionArchive) => void): void {
+    _onArchiveSelect = cb;
+}
 
 /**
  * Initialize the library page. Returns true if APP_CONFIG.library is set and the page was rendered.

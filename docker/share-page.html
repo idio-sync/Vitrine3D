@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{TITLE}} — {{SITE_NAME}}</title>
+
+    <!-- OpenGraph (absolute URLs for crawlers) -->
+    <meta property="og:type" content="video.other">
+    <meta property="og:site_name" content="{{SITE_NAME}}">
+    <meta property="og:url" content="{{SITE_URL}}/share/{{MEDIA_ID}}">
+    <meta property="og:title" content="{{TITLE}}">
+    <meta property="og:description" content="{{DESCRIPTION}}">
+    <meta property="og:image" content="{{THUMB_URL}}">
+    <meta property="og:video" content="{{MP4_URL}}">
+    <meta property="og:video:type" content="video/mp4">
+    <meta property="og:video:width" content="1280">
+    <meta property="og:video:height" content="720">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="player">
+    <meta name="twitter:title" content="{{TITLE}}">
+    <meta name="twitter:description" content="{{DESCRIPTION}}">
+    <meta name="twitter:image" content="{{THUMB_URL}}">
+    <meta name="twitter:player" content="{{SITE_URL}}/share/{{MEDIA_ID}}">
+    <meta name="twitter:player:width" content="1280">
+    <meta name="twitter:player:height" content="720">
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: #0a1929;
+            color: #e8e0d4;
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Video fills viewport minus ribbon */
+        .video-stage {
+            flex: 1;
+            min-height: 0;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        video {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
+
+        /* Gold spine — editorial signature */
+        .spine {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 3px;
+            background: #fec03a;
+            opacity: 0.6;
+            z-index: 200;
+            pointer-events: none;
+        }
+
+        /* Title block — top-left, editorial style */
+        .title-block {
+            position: fixed;
+            top: 0;
+            left: 0;
+            padding: 28px 48px 20px 24px;
+            z-index: 90;
+            pointer-events: none;
+            opacity: 0;
+            animation: fadeUp 0.6s ease-out 0.3s forwards;
+        }
+
+        .title-block h1 {
+            font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            line-height: 1.15;
+            color: #f5f0e8;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            margin: 0 0 8px 0;
+            text-shadow:
+                0 1px 2px rgba(0,0,0,0.9),
+                0 0 12px rgba(0,0,0,0.6),
+                0 0 40px rgba(0,0,0,0.3);
+        }
+
+        .title-rule {
+            width: 44px;
+            height: 3px;
+            background: #fec03a;
+            box-shadow: 0 0 8px rgba(0,0,0,0.5);
+            transform-origin: left;
+            animation: ruleDraw 0.6s cubic-bezier(0.33, 1, 0.68, 1) 0.5s both;
+        }
+
+        /* Bottom ribbon — thin editorial nav bar */
+        .ribbon {
+            height: 32px;
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            background: rgba(10, 20, 35, 0.88);
+            border-top: 1px solid rgba(254, 192, 58, 0.12);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            z-index: 100;
+            flex-shrink: 0;
+            gap: 12px;
+            animation: fadeIn 0.4s ease-out 0.5s both;
+        }
+
+        .ribbon-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .ribbon-rule {
+            width: 1px;
+            height: 14px;
+            background: rgba(254, 192, 58, 0.15);
+            flex-shrink: 0;
+        }
+
+        .ribbon-spacer {
+            flex: 1;
+        }
+
+        .ribbon-logo {
+            height: 16px;
+            width: auto;
+            opacity: 0.9;
+            flex-shrink: 0;
+            filter: brightness(1.5) drop-shadow(0 1px 4px rgba(0, 0, 0, 0.5));
+        }
+
+        .btn-primary,
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            padding: 0;
+            border: none;
+            background: none;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-decoration: none;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            transition: color 0.2s;
+            white-space: nowrap;
+            cursor: pointer;
+            line-height: 32px;
+        }
+
+        .btn-primary {
+            color: #fec03a;
+        }
+
+        .btn-primary:hover {
+            color: #ffe082;
+        }
+
+        .btn-secondary {
+            color: rgba(232, 224, 212, 0.6);
+        }
+
+        .btn-secondary:hover {
+            color: #fec03a;
+        }
+
+        /* Animations */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes ruleDraw {
+            from { transform: scaleX(0); }
+            to { transform: scaleX(1); }
+        }
+
+        /* Mobile */
+        @media (max-width: 600px) {
+            .title-block {
+                padding: 16px 24px 12px 16px;
+            }
+            .title-block h1 {
+                font-size: 1rem;
+            }
+            .ribbon {
+                padding: 0 12px;
+                gap: 8px;
+            }
+            .btn-primary, .btn-secondary {
+                font-size: 0.6rem;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .title-block, .ribbon, .title-rule {
+                animation: none !important;
+                opacity: 1;
+                transform: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="spine"></div>
+
+    <div class="title-block">
+        <h1>{{TITLE}}</h1>
+        <div class="title-rule"></div>
+    </div>
+
+    <div class="video-stage">
+        <video
+            src="{{MP4_REL}}"
+            poster="{{THUMB_REL}}"
+            controls
+            autoplay
+            muted
+            loop
+            playsinline
+        ></video>
+    </div>
+
+    <div class="ribbon">
+        <div class="ribbon-actions">
+            {{VIEW_3D_LINK}}
+            {{GIF_LINK}}
+        </div>
+        <div class="ribbon-spacer"></div>
+        <div class="ribbon-rule"></div>
+        <img class="ribbon-logo" src="{{LOGO_URL}}" alt="" draggable="false">
+    </div>
+</body>
+</html>

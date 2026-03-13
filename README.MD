@@ -8,7 +8,7 @@ The application is built as two separate bundles: a **kiosk viewer** (`/`) for c
 
 ## Features
 
-- **Archive container support** (.a3d, .a3z) — bundle all assets, metadata, and multi-data alignment into a single file
+- **Archive container support** (.ddim) — bundle all assets, metadata, and multi-data alignment into a single file
 - Load and display **3D models** (.glb, .gltf, .obj)
 - Load and display **Gaussian splat** files (.ply, .splat, .ksplat, .spz, .sog)
 - Load and display **E57 point clouds** (.e57) via [three-e57-loader](https://www.npmjs.com/package/three-e57-loader)
@@ -16,6 +16,8 @@ The application is built as two separate bundles: a **kiosk viewer** (`/`) for c
 - **Scene settings** — tone mapping (6 modes + exposure), HDR environment maps (3 presets + file/URL loading), environment-as-background skybox, shadow casting with shadow catcher ground plane, background image loading
 - **Auto-rotate** — turntable toggle in toolbar for both main app and kiosk viewer
 - **Screenshot capture** — capture viewport screenshots with a viewfinder-based archive preview override, thumbnail gallery with delete, and automatic export to `/screenshots/` in archives
+- **Video & GIF recording** — record turntable spins, walkthrough tours, annotation tours, or free camera movements; trim inline; server-side FFmpeg transcode to MP4 and GIF
+- **Post-processing effects** — SSAO (ambient occlusion), bloom, vignette, chromatic aberration, and film grain via configurable pipeline
 - **Transform controls** for positioning, rotating, and scaling each object independently
 - **Alignment Tools** for registering splats and models in overlapping space
 - **Measurement tool** — point-to-point distance measurement with two-click flow, 3D line overlay, and configurable units (m/cm/mm/in/ft); works in main editor and kiosk viewer
@@ -26,12 +28,14 @@ The application is built as two separate bundles: a **kiosk viewer** (`/`) for c
 - **Walkthrough engine** — author guided camera tours with fly/fade/cut transitions, dwell times, annotation links, auto-play and loop; playback in editor and kiosk viewer
 - **Kiosk themes** — Editorial (golden ratio layout), Gallery (cinematic full-bleed), Exhibit (institutional with attract mode), and Minimal; self-contained theme packages with layout CSS/JS and click gates
 - **Lazy archive loading** — only the manifest is decompressed on open; individual assets load on demand
-- **SIP compliance validation** — required/recommended field checking, compliance scoring, and manifest audit trail at export time
 - **Library panel** — built-in archive browser in the viewer when admin is enabled: gallery view, detail pane, upload, rename, delete, and direct-to-editor loading
 - **Admin panel** (`/admin`) — standalone archive management page with the same upload/rename/delete capabilities
 - **Share dialog** — generate customized share links, embed codes, and QR codes with preset modes (kiosk, minimal, editor) and theme selection
-- **Clean archive URLs** — shareable `/view/{hash}` URLs that load archives in kiosk mode without query parameters
 - **Social link previews** — Open Graph, Twitter Card, and oEmbed support for rich previews when sharing viewer URLs on Slack, Discord, Twitter, WordPress, etc.
+- **Flight path import** — import DJI drone flight logs (CSV, KML/KMZ, SRT) as 3D path overlays with telemetry tooltips; multiple logs per archive; manual alignment via transform gizmo; displayed in both editor and kiosk viewer
+- **SfM camera visualization** — import Colmap `cameras.bin` + `images.bin` to display camera positions as frustum wireframes or instanced markers; align cameras to a manually positioned flight path via Umeyama similarity transform; full archive support and kiosk toggle
+- **Collections** — organize archives into named collections; editorial-themed collection browser in kiosk mode; collection management in the library panel
+- **Library browser** — full-page themed archive and collection browser at `/library`
 - **Camera constraints** — lock orbit, pan, zoom, and height limits per-archive; applied automatically in kiosk mode
 - **Docker deployment** with s6-overlay process supervision (nginx + Node API), SQLite metadata storage, Cloudflare Access authentication, and environment-variable configuration
 - **Digital preservation metadata** aligned with Dublin Core, PRONOM, and Smithsonian EDAN standards
@@ -58,7 +62,7 @@ npm run docker:run      # http://localhost:8080
 
 # Or with pre-loaded archive
 docker run -p 8080:80 \
-  -e DEFAULT_ARCHIVE_URL="https://example.com/scene.a3d" \
+  -e DEFAULT_ARCHIVE_URL="https://example.com/scene.ddim" \
   vitrine3d
 
 # Or with pre-loaded files
@@ -72,8 +76,7 @@ docker run -p 8080:80 \
 ## Supported Formats
 
 ### Archive Containers
-- `.a3d` — Archive 3D container with metadata (ZIP-based, uncompressed)
-- `.a3z` — Archive 3D container with metadata (ZIP-based, compressed) - experimental
+- `.ddim` — Direct Dimensions archive container with metadata (ZIP-based)
 
 ### 3D Models (via Three.js)
 - `.glb` — Binary glTF (Draco-compressed GLBs supported via DRACOLoader)
@@ -88,20 +91,29 @@ docker run -p 8080:80 \
 - `.spz` — Spark compressed format
 - `.sog` — SOG format
 
-### Drawings
+### Drawings (WIP)
 - `.dxf` — AutoCAD DXF (via [three-dxf-loader](https://www.npmjs.com/package/three-dxf-loader), displayed as an independent drawing layer)
 
 ### Point Clouds
 - `.e57` — ASTM E57 format (via [three-e57-loader](https://www.npmjs.com/package/three-e57-loader), which uses the [web-e57](https://www.npmjs.com/package/web-e57) WASM parser)
 
-### Parametric CAD
+### Parametric CAD (WIP)
 - `.step` / `.stp` — ISO 10303 STEP (via [occt-import-js](https://github.com/kovacsv/occt-import-js) OpenCASCADE WASM)
 - `.iges` / `.igs` — Initial Graphics Exchange Specification (via [occt-import-js](https://github.com/kovacsv/occt-import-js) OpenCASCADE WASM)
+
+### Flight Logs (WIP)
+- `.csv` — DJI flight log CSV (auto-detected column aliases for firmware variations)
+- `.kml` / `.kmz` — KML/KMZ flight tracks
+- `.srt` — DJI SRT subtitle telemetry
+
+### SfM Camera Data
+- `cameras.bin` + `images.bin` — Colmap sparse reconstruction binary format (camera intrinsics/extrinsics)
 
 ## Documentation
 
 | Guide | Description |
 |-------|-------------|
+| [Development Guide](docs/DEVELOPMENT.md) | Setup, building, testing, module patterns, adding features |
 | [Usage Guide](docs/USAGE.md) | Controls, camera, alignment, annotations, scene settings, keyboard shortcuts |
 | [Configuration](docs/CONFIGURATION.md) | URL parameters, share/embed, URL security |
 | [Archive Format](docs/archive/ARCHIVE-GUIDE.md) | Container structure, manifest schema, loading/exporting, preservation |
@@ -110,6 +122,7 @@ docker run -p 8080:80 \
 | [Deployment](docs/DEPLOYMENT.md) | Docker env vars, compose, nginx, admin/library, clean URLs, link previews |
 | [Architecture](docs/reference/ARCHITECTURE.md) | Codebase structure and module relationships |
 | [Specification](docs/archive/SPECIFICATION.md) | Formal archive-3d container format spec |
+| [Tauri Desktop App](docs/reference/TAURI_APPLICATION.md) | Native desktop builds via Tauri v2 |
 | [Roadmap](docs/ROADMAP.md) | Planned features and priorities |
 
 ## Technologies
@@ -123,6 +136,7 @@ docker run -p 8080:80 \
 - [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) — SQLite database for server-side metadata storage
 - [busboy](https://github.com/mscdex/busboy) — Streaming multipart form parser for uploads
 - [s6-overlay](https://github.com/just-containers/s6-overlay) — Process supervision in Docker (nginx + Node API)
+- [FFmpeg](https://ffmpeg.org/) — Server-side video transcoding (WebM to MP4/GIF) in Docker container
 - [nginx](https://nginx.org/) — Web server for Docker deployment
 - [Vite](https://vitejs.dev/) — Dev server, bundler, and build toolchain
 - [Vitest](https://vitest.dev/) — Test runner

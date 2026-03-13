@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3",
-    "busboy": "^1.6.0"
+    "busboy": "^1.6.0",
+    "sharp": "^0.33.0"
   }
 }

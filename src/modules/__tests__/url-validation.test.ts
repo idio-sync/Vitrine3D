@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -119,7 +120,6 @@ describe('config.js validateUrl parity with url-validation.ts', () => {
 
         // Build a standalone function with the same logic
         const fnBody = fnMatch[1];
-        // eslint-disable-next-line no-new-func
         const factory = new Function(
             'ALLOWED_EXTERNAL_DOMAINS', 'windowLocation',
             `
@@ -172,9 +172,7 @@ describe('config.js validateUrl parity with url-validation.ts', () => {
             const tsValid = tsResult.valid;
             const configValid = configResult !== '' && configResult !== undefined;
 
-            expect(configValid).toBe(tsValid,
-                `Drift detected! config.js says ${configValid}, url-validation.ts says ${tsValid} for "${url}"`
-            );
+            expect(configValid).toBe(tsValid);
             expect(tsValid).toBe(expectedValid);
         });
     });

@@ -8,11 +8,15 @@
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { MeshoptSimplifier } from 'meshoptimizer';
+import { MeshoptSimplifier, MeshoptDecoder, type Flags } from 'meshoptimizer';
 import { Logger } from './utilities.js';
 import { DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET } from './constants.js';
 import type { DecimationOptions, DecimationResult } from '@/types.js';
 import type { DecimationPreset } from './constants.js';
+import { WebIO } from '@gltf-transform/core';
+import { EXTMeshoptCompression, KHRDracoMeshCompression } from '@gltf-transform/extensions';
+import { draco } from '@gltf-transform/functions';
+import draco3d from 'draco3dgltf';
 
 const log = Logger.getLogger('mesh-decimator');
 
@@ -25,6 +29,37 @@ async function ensureWasm(): Promise<void> {
     await MeshoptSimplifier.ready;
     _wasmReady = true;
     log.info('meshoptimizer WASM ready');
+}
+
+// ===== Draco Compression (gltf-transform) =====
+
+let _dracoIO: WebIO | null = null;
+
+async function fetchWasm(url: string): Promise<ArrayBuffer> {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
+    return res.arrayBuffer();
+}
+
+async function ensureDracoIO(): Promise<WebIO> {
+    if (_dracoIO) return _dracoIO;
+    // Fetch WASM binaries explicitly and pass as wasmBinary to bypass
+    // Emscripten's Node.js-oriented file loading (which breaks in Vite).
+    const [encoderWasm, decoderWasm] = await Promise.all([
+        fetchWasm('/draco/draco_encoder.wasm'),
+        fetchWasm('/draco/draco_decoder_gltf.wasm'),
+    ]);
+    await MeshoptDecoder.ready;
+    const io = new WebIO()
+        .registerExtensions([KHRDracoMeshCompression, EXTMeshoptCompression])
+        .registerDependencies({
+            'draco3d.encoder': await draco3d.createEncoderModule({ wasmBinary: encoderWasm }),
+            'draco3d.decoder': await draco3d.createDecoderModule({ wasmBinary: decoderWasm }),
+            'meshopt.decoder': MeshoptDecoder,
+        });
+    _dracoIO = io;
+    log.info('gltf-transform Draco IO ready');
+    return io;
 }
 
 // ===== Resolve Options =====
@@ -45,6 +80,7 @@ export function resolveOptions(opts?: Partial<DecimationOptions>): DecimationOpt
         textureMaxRes: opts?.textureMaxRes ?? preset.textureMaxRes,
         textureFormat: opts?.textureFormat ?? preset.textureFormat,
         textureQuality: opts?.textureQuality ?? preset.textureQuality,
+        dracoCompress: opts?.dracoCompress ?? true,
     };
 }
 
@@ -81,13 +117,32 @@ export async function decimateGeometry(
 ): Promise<THREE.BufferGeometry> {
     await ensureWasm();
 
-    // Ensure indexed geometry — meshoptimizer requires an index buffer.
-    // mergeVertices() deduplicates positions and creates an index.
-    let geo = geometry;
-    if (!geo.index) {
-        log.warn('Non-indexed geometry — merging vertices to create index');
-        geo = mergeVertices(geo);
+    // Draco-decoded geometries may use quantized typed arrays (Int16Array,
+    // Uint16Array with normalized=true) that break mergeVertices and
+    // computeVertexNormals. Convert all attributes to Float32Array first.
+    const prepared = geometry.clone();
+    for (const name of Object.keys(prepared.attributes)) {
+        const attr = prepared.attributes[name];
+        if (attr && attr.array && !(attr.array instanceof Float32Array)) {
+            const count = attr.count;
+            const itemSize = attr.itemSize;
+            const f32 = new Float32Array(count * itemSize);
+            for (let i = 0; i < count; i++) {
+                for (let c = 0; c < itemSize; c++) {
+                    // Use getComponent to respect normalized flag (converts int → 0..1 range)
+                    f32[i * itemSize + c] = attr.getComponent(i, c);
+                }
+            }
+            prepared.setAttribute(name, new THREE.BufferAttribute(f32, itemSize));
+        }
     }
+
+    // Strip normals, then mergeVertices() creates shared edges by merging
+    // vertices with identical position+UV. After simplification, normals
+    // are recomputed from the new topology.
+    prepared.deleteAttribute('normal');
+    const geo = mergeVertices(prepared);
+    prepared.dispose();
 
     const posAttr = geo.attributes.position;
     const indexAttr = geo.index!;
@@ -96,86 +151,72 @@ export async function decimateGeometry(
 
     onProgress?.('Preparing buffers', 10);
 
-    // Extract position data
     const positions = new Float32Array(posAttr.array);
-    const stride = posAttr instanceof THREE.InterleavedBufferAttribute
-        ? posAttr.data.stride : 3;
+    const stride = 3;
     const indices = new Uint32Array(indexAttr.array);
-
-    // Build attribute array (normals + UVs) for quality-aware simplification
-    let attribArray = new Float32Array(0);
-    let attribStride = 0;
-    const attribWeights: number[] = [];
-
-    const hasNormals = !!geo.attributes.normal;
-    const hasUVs = !!geo.attributes.uv;
-
-    if (options.preserveUVSeams || hasNormals) {
-        attribStride = (hasNormals ? 3 : 0) + (hasUVs ? 2 : 0);
-        if (attribStride > 0) {
-            attribArray = new Float32Array(vertexCount * attribStride);
-
-            for (let i = 0; i < vertexCount; i++) {
-                let offset = 0;
-                if (hasNormals) {
-                    const n = geo.attributes.normal;
-                    attribArray[i * attribStride + offset++] = n.getX(i);
-                    attribArray[i * attribStride + offset++] = n.getY(i);
-                    attribArray[i * attribStride + offset++] = n.getZ(i);
-                }
-                if (hasUVs) {
-                    const uv = geo.attributes.uv;
-                    attribArray[i * attribStride + offset++] = uv.getX(i);
-                    attribArray[i * attribStride + offset++] = uv.getY(i);
-                }
-            }
-
-            // Weights: normals at 1.0, UVs at 1.0 when preserving seams
-            if (hasNormals) attribWeights.push(1.0, 1.0, 1.0);
-            if (hasUVs) {
-                const uvWeight = options.preserveUVSeams ? 1.0 : 0.0;
-                attribWeights.push(uvWeight, uvWeight);
-            }
-        }
-    }
 
     const targetIndexCount = computeTargetIndexCount(originalFaceCount, options);
 
+    log.info(`Decimation input: ${geometry.attributes.position.count} original verts → ${vertexCount} merged verts, ${originalFaceCount} faces`);
+    log.info(`Decimation target: ${targetIndexCount / 3} faces (ratio=${options.targetRatio}, errorThreshold=${options.errorThreshold}, lockBorder=${options.lockBorder})`);
+
     onProgress?.('Simplifying', 30);
 
-    // Build flags
-    const flags: string[] = [];
+    const flags: Flags[] = [];
     if (options.lockBorder) flags.push('LockBorder');
 
-    // Run simplification
-    let result: [Uint32Array, number];
-    if (attribStride > 0) {
-        result = MeshoptSimplifier.simplifyWithAttributes(
-            indices, positions, stride,
-            attribArray, attribStride, attribWeights,
-            null, // no vertex locks
-            targetIndexCount,
-            options.errorThreshold,
-            flags,
-        );
-    } else {
-        result = MeshoptSimplifier.simplify(
-            indices, positions, stride,
-            targetIndexCount,
-            options.errorThreshold,
-            flags,
-        );
-    }
+    const [simplifiedIndices, error] = MeshoptSimplifier.simplify(
+        indices, positions, stride,
+        targetIndexCount,
+        options.errorThreshold,
+        flags,
+    );
 
-    const [newIndices, error] = result;
-    const newFaceCount = newIndices.length / 3;
+    const newFaceCount = simplifiedIndices.length / 3;
     log.info(`Decimation: ${originalFaceCount} → ${newFaceCount} faces (error: ${error.toFixed(6)})`);
 
     onProgress?.('Rebuilding geometry', 80);
 
-    // Build new geometry with decimated indices, keeping all vertex attributes
-    const newGeo = geo.clone();
-    newGeo.setIndex(new THREE.BufferAttribute(newIndices, 1));
+    // Compact: build new geometry with only the referenced vertices
+    const usedSet = new Set<number>();
+    for (let i = 0; i < simplifiedIndices.length; i++) usedSet.add(simplifiedIndices[i]);
+    const usedVerts = Array.from(usedSet).sort((a, b) => a - b);
+    const compactMap = new Map<number, number>();
+    for (let i = 0; i < usedVerts.length; i++) compactMap.set(usedVerts[i], i);
+
+    const newGeo = new THREE.BufferGeometry();
+
+    // Remap indices
+    const compactIndices = new Uint32Array(simplifiedIndices.length);
+    for (let i = 0; i < simplifiedIndices.length; i++) {
+        compactIndices[i] = compactMap.get(simplifiedIndices[i])!;
+    }
+    newGeo.setIndex(new THREE.BufferAttribute(compactIndices, 1));
+
+    // Copy and compact each attribute from the merged geometry.
+    // Use Float32Array for all output to handle Draco-decoded geometries
+    // that may use quantized types (Int16Array, Uint16Array, etc.).
+    for (const name of Object.keys(geo.attributes)) {
+        const src = geo.attributes[name];
+        if (!src || !src.array) {
+            log.warn(`Skipping attribute "${name}" — missing array`);
+            continue;
+        }
+        const itemSize = src.itemSize;
+        const dst = new Float32Array(usedVerts.length * itemSize);
+        for (let i = 0; i < usedVerts.length; i++) {
+            const si = usedVerts[i];
+            for (let c = 0; c < itemSize; c++) {
+                dst[i * itemSize + c] = src.array[si * itemSize + c];
+            }
+        }
+        newGeo.setAttribute(name, new THREE.BufferAttribute(dst, itemSize));
+    }
+
+    log.info(`Compacted: ${vertexCount} → ${usedVerts.length} vertices`);
+
+    // Recompute normals from the simplified topology
+    newGeo.computeVertexNormals();
 
     onProgress?.('Complete', 100);
     return newGeo;
@@ -193,11 +234,11 @@ function downscaleTexture(
     _format: 'jpeg' | 'png' | 'keep',
     _quality: number,
 ): THREE.Texture {
-    const image = texture.image;
+    const image = texture.image as HTMLImageElement | HTMLCanvasElement | undefined;
     if (!image) return texture;
 
-    const w = image.width || image.naturalWidth;
-    const h = image.height || image.naturalHeight;
+    const w = (image as HTMLImageElement).width || (image as HTMLImageElement).naturalWidth;
+    const h = (image as HTMLImageElement).height || (image as HTMLImageElement).naturalHeight;
     if (!w || !h) return texture;
 
     // Already within budget
@@ -213,7 +254,7 @@ function downscaleTexture(
     canvas.width = tw;
     canvas.height = th;
     const ctx = canvas.getContext('2d')!;
-    ctx.drawImage(image, 0, 0, tw, th);
+    ctx.drawImage(image as CanvasImageSource, 0, 0, tw, th);
 
     log.info(`Texture downscaled: ${w}x${h} → ${tw}x${th}`);
 
@@ -282,8 +323,15 @@ export async function decimateScene(
 
     log.info(`Decimating ${meshes.length} mesh(es)`);
 
-    // Deep clone the group so we don't mutate the original
+    // Deep clone the group so we don't mutate the original.
+    // Reset transforms on the clone so the exported GLB contains local-space
+    // geometry only — the manifest stores transforms separately and applies
+    // them on load.  Without this, transforms get baked into the GLB *and*
+    // re-applied from the manifest, causing double-rotation/offset.
     const cloned = group.clone(true);
+    cloned.position.set(0, 0, 0);
+    cloned.rotation.set(0, 0, 0);
+    cloned.scale.set(1, 1, 1);
 
     // Collect cloned meshes in the same order
     const clonedMeshes: THREE.Mesh[] = [];
@@ -329,10 +377,75 @@ export async function decimateScene(
 /**
  * Export a THREE.Group as a GLB Blob.
  */
-export async function exportAsGLB(group: THREE.Group): Promise<Blob> {
+export async function exportAsGLB(group: THREE.Group, dracoCompress = true): Promise<Blob> {
     const exporter = new GLTFExporter();
     const buffer = await exporter.parseAsync(group, { binary: true }) as ArrayBuffer;
-    return new Blob([buffer], { type: 'model/gltf-binary' });
+
+    if (!dracoCompress) {
+        return new Blob([buffer], { type: 'model/gltf-binary' });
+    }
+
+    const io = await ensureDracoIO();
+    const doc = await io.readBinary(new Uint8Array(buffer));
+    await doc.transform(draco({ method: 'edgebreaker' }));
+    const compressed = await io.writeBinary(doc);
+
+    log.info(`Draco compression: ${(buffer.byteLength / 1024).toFixed(0)} KB → ${(compressed.byteLength / 1024).toFixed(0)} KB`);
+
+    return new Blob([compressed], { type: 'model/gltf-binary' });
+}
+
+// ===== HD Mesh Draco Compression =====
+
+/**
+ * Cheaply check if a GLB blob is already Draco-compressed by reading only
+ * the JSON chunk and checking extensionsUsed. No gltf-transform involved.
+ *
+ * GLB binary layout:
+ *   bytes  0-11: file header (magic, version, total-length)
+ *   bytes 12-15: JSON chunk length
+ *   bytes 16-19: JSON chunk type (0x4E4F534A = "JSON")
+ *   bytes 20+  : JSON chunk data
+ */
+function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(blob);
+    });
+}
+
+async function isAlreadyCompressed(blob: Blob): Promise<boolean> {
+    // Read only the 20-byte file+chunk header to get JSON chunk length, then
+    // slice only the JSON chunk data — avoids buffering large HD mesh blobs.
+    const headerBuf = await blobToArrayBuffer(blob.slice(0, 20));
+    const view = new DataView(headerBuf);
+    const jsonLength = view.getUint32(12, true);
+    const jsonBuf = await blobToArrayBuffer(blob.slice(20, 20 + jsonLength));
+    const json = JSON.parse(new TextDecoder().decode(new Uint8Array(jsonBuf)).replace(/\0+$/, ''));
+    const used: string[] = json.extensionsUsed ?? [];
+    return used.includes('KHR_draco_mesh_compression') || used.includes('EXT_meshopt_compression');
+}
+
+/**
+ * Draco-compress a GLB blob using gltf-transform.
+ * Pure blob-to-blob pipeline — no Three.js round-trip.
+ * Preserves all textures, PBR materials, animations, and morph targets exactly.
+ * Returns the original blob unchanged if already compressed (Draco or meshopt).
+ */
+export async function dracoCompressGLB(blob: Blob): Promise<Blob> {
+    if (await isAlreadyCompressed(blob)) {
+        log.info('HD mesh already compressed (Draco or meshopt), skipping');
+        return blob;
+    }
+    const io = await ensureDracoIO();
+    const buffer = new Uint8Array(await blobToArrayBuffer(blob));
+    const doc = await io.readBinary(buffer);
+    await doc.transform(draco({ method: 'edgebreaker' }));
+    const compressed = await io.writeBinary(doc);
+    log.info(`HD Draco: ${(buffer.byteLength / 1024).toFixed(0)} KB → ${(compressed.byteLength / 1024).toFixed(0)} KB`);
+    return new Blob([compressed], { type: 'model/gltf-binary' });
 }
 
 // ===== High-Level Pipeline =====
@@ -357,7 +470,7 @@ export async function generateProxy(
         });
 
     onProgress?.('Exporting GLB', 85);
-    const blob = await exportAsGLB(decimatedGroup);
+    const blob = await exportAsGLB(decimatedGroup, options.dracoCompress);
 
     onProgress?.('Done', 100);
     log.info(`Proxy GLB size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);

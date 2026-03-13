@@ -205,6 +205,7 @@ export interface ViewerSettings {
     lockDistance: number | null;
     lockAboveGround: boolean;
     maxCameraHeight: number | null;
+    maxCameraDistance: number | null;
     ambientIntensity: number | null;
     hemisphereIntensity: number | null;
     directional1Intensity: number | null;
@@ -218,6 +219,18 @@ export interface ViewerSettings {
     measurementScale: number | null;
     measurementUnit: string | null;
     postProcessing?: PostProcessingEffectConfig | null;
+    flightColorMode?: string;
+    flightShowEndpoints?: boolean;
+    flightShowDirection?: boolean;
+    // View defaults
+    sfmVisible?: boolean;
+    sfmDisplayMode?: string;
+    flightVisible?: boolean;
+    flightLineColor?: string;
+    flightLineOpacity?: number;
+    flightShowMarkers?: boolean;
+    flightMarkerDensity?: string;
+    renderingPreset?: string | null;
 }
 
 export interface VersionHistoryEntry {
@@ -727,16 +740,29 @@ export function setupMetadataSidebar(deps: MetadataDeps = {}): void {
         const maxHeightRow = document.getElementById('max-height-controls');
         if (maxHeightRow) maxHeightRow.style.display = lockMaxHeightChecked ? '' : 'none';
 
+        // Max distance value
+        const lockMaxDistanceChecked = (document.getElementById('meta-viewer-lock-max-distance') as HTMLInputElement)?.checked ?? false;
+        let maxDistanceValue: number | null = null;
+        if (lockMaxDistanceChecked) {
+            const input = document.getElementById('meta-viewer-max-distance-value') as HTMLInputElement;
+            maxDistanceValue = input?.value ? parseFloat(input.value) : null;
+        }
+
+        // Show/hide max distance controls
+        const maxDistanceRow = document.getElementById('max-distance-controls');
+        if (maxDistanceRow) maxDistanceRow.style.display = lockMaxDistanceChecked ? '' : 'none';
+
         heightClampListener = applyCameraConstraints(ctrl, cam, {
             lockOrbit,
             lockDistance: lockDistanceValue,
             lockAboveGround,
             maxCameraHeight: maxHeightValue,
+            maxCameraDistance: maxDistanceValue,
         });
     }
 
     // Wire checkbox change events
-    ['meta-viewer-lock-orbit', 'meta-viewer-lock-orbit-distance', 'meta-viewer-lock-above-ground', 'meta-viewer-lock-max-height'].forEach(id => {
+    ['meta-viewer-lock-orbit', 'meta-viewer-lock-orbit-distance', 'meta-viewer-lock-above-ground', 'meta-viewer-lock-max-height', 'meta-viewer-lock-max-distance'].forEach(id => {
         const el = document.getElementById(id) as HTMLInputElement | null;
         if (el) el.addEventListener('change', applyLiveConstraints);
     });
@@ -755,6 +781,25 @@ export function setupMetadataSidebar(deps: MetadataDeps = {}): void {
             const input = document.getElementById('meta-viewer-max-height-value') as HTMLInputElement;
             if (input) {
                 input.value = cam.position.y.toFixed(2);
+                applyLiveConstraints();
+            }
+        });
+    }
+
+    // Wire max distance value input — re-apply on change
+    const maxDistInput = document.getElementById('meta-viewer-max-distance-value') as HTMLInputElement | null;
+    if (maxDistInput) maxDistInput.addEventListener('input', applyLiveConstraints);
+
+    // "Set to current" button for max distance
+    const setMaxDistBtn = document.getElementById('btn-set-max-distance-current');
+    if (setMaxDistBtn) {
+        setMaxDistBtn.addEventListener('click', () => {
+            if (!deps.getControls) return;
+            const { controls: ctrl, camera: cam } = deps.getControls();
+            if (!cam || !ctrl) return;
+            const input = document.getElementById('meta-viewer-max-distance-value') as HTMLInputElement;
+            if (input) {
+                input.value = cam.position.distanceTo(ctrl.target).toFixed(2);
                 applyLiveConstraints();
             }
         });
@@ -1235,6 +1280,7 @@ export function applyCameraConstraints(
         lockDistance: number | null;
         lockAboveGround: boolean;
         maxCameraHeight: number | null;
+        maxCameraDistance: number | null;
     }
 ): (() => void) | null {
     // Lock orbit point (disable panning)
@@ -1246,7 +1292,7 @@ export function applyCameraConstraints(
         controls.maxDistance = settings.lockDistance;
     } else {
         controls.minDistance = 0.1;  // ORBIT_CONTROLS.MIN_DISTANCE
-        controls.maxDistance = 100;  // ORBIT_CONTROLS.MAX_DISTANCE
+        controls.maxDistance = settings.maxCameraDistance ?? 100;  // ORBIT_CONTROLS.MAX_DISTANCE
     }
 
     // Keep camera above ground
@@ -1446,6 +1492,9 @@ export function collectMetadata(): CollectedMetadata {
             maxCameraHeight: (document.getElementById('meta-viewer-lock-max-height') as HTMLInputElement)?.checked
                 ? parseFloat((document.getElementById('meta-viewer-max-height-value') as HTMLInputElement)?.value) || null
                 : null,
+            maxCameraDistance: (document.getElementById('meta-viewer-lock-max-distance') as HTMLInputElement)?.checked
+                ? parseFloat((document.getElementById('meta-viewer-max-distance-value') as HTMLInputElement)?.value) || null
+                : null,
             // Lighting (only when enabled)
             ambientIntensity: (document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement)?.checked
                 ? parseFloat((document.getElementById('meta-viewer-ambient-intensity') as HTMLInputElement)?.value) ?? null
@@ -1483,6 +1532,18 @@ export function collectMetadata(): CollectedMetadata {
             measurementUnit: null,
             // Post-processing (only when enabled)
             postProcessing: postProcessing.isEnabled() ? postProcessing.getConfig() : null,
+            // Drone flight settings
+            flightColorMode: (document.getElementById('flight-color-mode') as HTMLSelectElement)?.value || 'speed',
+            flightShowEndpoints: (document.getElementById('flight-show-endpoints') as HTMLInputElement)?.checked ?? true,
+            flightShowDirection: (document.getElementById('flight-show-direction') as HTMLInputElement)?.checked ?? true,
+            // View defaults
+            sfmVisible: (document.getElementById('sfm-show-on-load') as HTMLInputElement)?.checked ?? false,
+            sfmDisplayMode: (document.getElementById('sfm-display-mode') as HTMLSelectElement)?.value || 'frustums',
+            flightVisible: (document.getElementById('flight-show-on-load') as HTMLInputElement)?.checked ?? false,
+            flightLineColor: (document.getElementById('flight-line-color') as HTMLInputElement)?.value || '#00ffff',
+            flightLineOpacity: parseInt((document.getElementById('flight-line-opacity') as HTMLInputElement)?.value || '100', 10) / 100,
+            flightShowMarkers: (document.getElementById('flight-show-markers') as HTMLInputElement)?.checked ?? true,
+            flightMarkerDensity: (document.getElementById('flight-marker-density') as HTMLSelectElement)?.value || 'all',
         }
     };
 
@@ -2032,6 +2093,15 @@ export function prefillMetadataFromArchive(manifest: any): void {
             maxHeightValEl.value = String(manifest.viewer_settings.max_camera_height);
         }
 
+        const lockMaxDistanceEl = document.getElementById('meta-viewer-lock-max-distance') as HTMLInputElement | null;
+        const maxDistanceControls = document.getElementById('max-distance-controls');
+        const maxDistanceValEl = document.getElementById('meta-viewer-max-distance-value') as HTMLInputElement | null;
+        if (lockMaxDistanceEl) lockMaxDistanceEl.checked = manifest.viewer_settings.max_camera_distance != null;
+        if (maxDistanceControls) maxDistanceControls.style.display = manifest.viewer_settings.max_camera_distance != null ? '' : 'none';
+        if (maxDistanceValEl && manifest.viewer_settings.max_camera_distance != null) {
+            maxDistanceValEl.value = String(manifest.viewer_settings.max_camera_distance);
+        }
+
         // Lighting defaults
         const hasLighting = manifest.viewer_settings.ambient_intensity != null;
         const lightingEnabledEl = document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement | null;
@@ -2084,6 +2154,20 @@ export function prefillMetadataFromArchive(manifest: any): void {
             const envBgEl = document.getElementById('meta-viewer-env-as-background') as HTMLInputElement | null;
             if (envBgEl && manifest.viewer_settings.environment_as_background != null) envBgEl.checked = manifest.viewer_settings.environment_as_background;
         }
+
+        // Rendering preset
+        const presetSelect = document.getElementById('rendering-preset-select') as HTMLSelectElement | null;
+        if (presetSelect && manifest.viewer_settings.rendering_preset) {
+            presetSelect.value = manifest.viewer_settings.rendering_preset;
+        }
+
+        // Drone flight settings
+        const colorModeEl = document.getElementById('flight-color-mode') as HTMLSelectElement | null;
+        if (colorModeEl && manifest.viewer_settings.flight_color_mode) colorModeEl.value = manifest.viewer_settings.flight_color_mode;
+        const endpointsEl = document.getElementById('flight-show-endpoints') as HTMLInputElement | null;
+        if (endpointsEl && manifest.viewer_settings.flight_show_endpoints != null) endpointsEl.checked = manifest.viewer_settings.flight_show_endpoints;
+        const directionEl = document.getElementById('flight-show-direction') as HTMLInputElement | null;
+        if (directionEl && manifest.viewer_settings.flight_show_direction != null) directionEl.checked = manifest.viewer_settings.flight_show_direction;
     }
 
     // Custom fields from _meta
@@ -2516,11 +2600,11 @@ export function updatePronomRegistry(state: { meshFormat: string | null; pointcl
     // Collect detected formats (extension → asset type label)
     const detected: Array<{ ext: string; label: string }> = [];
 
-    if (state.splatFormat) {
-        detected.push({ ext: state.splatFormat, label: 'Splat' });
-    }
     if (state.meshFormat) {
         detected.push({ ext: state.meshFormat, label: 'Mesh' });
+    }
+    if (state.splatFormat) {
+        detected.push({ ext: state.splatFormat, label: 'Splat' });
     }
     if (state.pointcloudFormat) {
         detected.push({ ext: state.pointcloudFormat, label: 'Point Cloud' });

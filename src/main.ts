@@ -1,13 +1,17 @@
 // ES Module imports (these are hoisted - execute first before any other code)
 import * as THREE from 'three';
-import { SplatMesh, createSparkRenderer, isSparkV2 } from './modules/spark-compat.js';
+import { SplatMesh, createSparkRenderer } from './modules/spark-compat.js';
 import { ArchiveLoader } from './modules/archive-loader.js';
 // hasAnyProxy moved to archive-pipeline.ts (Phase 2.2)
 import { AnnotationSystem } from './modules/annotation-system.js';
 import { CrossSectionTool } from './modules/cross-section.js';
 import { MeasurementSystem } from './modules/measurement-system.js';
+import { FlightPathManager } from './modules/flight-path.js';
+import { ColmapManager } from './modules/colmap-loader.js';
+import { alignCamerasToFlightPath, computeSimilarityTransform, matchCamerasToFlightPoints } from './modules/colmap-alignment.js';
+import { runICP, sampleSplatPoints } from './modules/icp-alignment.js';
 import { ArchiveCreator, CRYPTO_AVAILABLE } from './modules/archive-creator.js';
-import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS, DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET } from './modules/constants.js';
+import { CAMERA, TIMING, ASSET_STATE, MESH_LOD, QUALITY_TIER, COLORS, DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET, SPARK_DEFAULTS } from './modules/constants.js';
 import { getLodBudget } from './modules/quality-tier.js';
 import { Logger, notify, disposeObject } from './modules/utilities.js';
 import { FlyControls } from './modules/fly-controls.js';
@@ -54,6 +58,7 @@ import {
     applyViewerModeSettings as applyViewerModeSettingsHandler,
     updateStatusBar,
     updateDisplayPill,
+    updateOverlayPill,
     updateTransformPaneSelection
 } from './modules/ui-controller.js';
 import {
@@ -88,13 +93,7 @@ import {
     loadSTLFile as loadSTLFileHandler,
 } from './modules/file-handlers.js';
 import {
-    handleLoadSplatFromUrlPrompt as handleLoadSplatFromUrlPromptCtrl,
-    handleLoadModelFromUrlPrompt as handleLoadModelFromUrlPromptCtrl,
-    handleLoadPointcloudFromUrlPrompt as handleLoadPointcloudFromUrlPromptCtrl,
     handleLoadArchiveFromUrlPrompt as handleLoadArchiveFromUrlPromptCtrl,
-    handleLoadSTLFromUrlPrompt as handleLoadSTLFromUrlPromptCtrl,
-    handleLoadCADFromUrlPrompt as handleLoadCADFromUrlPromptCtrl,
-    handleLoadDrawingFromUrlPrompt as handleLoadDrawingFromUrlPromptCtrl,
     handleSplatFile as handleSplatFileCtrl,
     handleModelFile as handleModelFileCtrl,
     handleSTLFile as handleSTLFileCtrl,
@@ -108,11 +107,26 @@ import {
     loadPointcloudFromUrl as loadPointcloudFromUrlCtrl
 } from './modules/file-input-handlers.js';
 import {
+    downloadScreenshot as downloadScreenshotHandler,
     captureScreenshotToList as captureScreenshotToListHandler,
     showViewfinder as showViewfinderHandler,
     hideViewfinder as hideViewfinderHandler,
     captureManualPreview as captureManualPreviewHandler
 } from './modules/screenshot-manager.js';
+import {
+    initRecordingManager,
+    startRecording as startRecordingHandler,
+    stopRecording as stopRecordingHandler,
+    discardRecording,
+    uploadRecording,
+    pollMediaStatus,
+    type RecordingMode,
+} from './modules/recording-manager.js';
+import { showTrimUI } from './modules/recording-trim.js';
+import {
+    startAnnotationTour,
+    stopAnnotationTour,
+} from './modules/annotation-tour.js';
 import {
     setSelectedObject as setSelectedObjectHandler,
     syncBothObjects as syncBothObjectsHandler,
@@ -154,10 +168,16 @@ import {
 import {
     setupUIEvents as setupUIEventsCtrl
 } from './modules/event-wiring.js';
-import type { AppState, SceneRefs, ExportDeps, ArchivePipelineDeps, EventWiringDeps, DisplayMode, SelectedObject, TransformMode, DecimationOptions } from './types.js';
+import { UndoManager } from './modules/undo-manager.js';
+import type { MatrixSnapshot } from './modules/undo-manager.js';
+import type { AppState, SceneRefs, ExportDeps, ArchivePipelineDeps, EventWiringDeps, DisplayMode, SelectedObject, TransformMode, DecimationOptions, EditorAlignmentDeps, FileHandlerDeps, AlignmentIODeps, FlightCameraMode } from './types.js';
+import type { AnnotationControllerDeps } from './modules/annotation-controller.js';
+import type { MetadataDeps } from './modules/metadata-manager.js';
+import type { LoadCADDeps } from './modules/cad-loader.js';
+import type { ControlsPanelDeps } from './modules/ui-controller.js';
+import type { FileInputDeps } from './modules/file-input-handlers.js';
+import type { LoadPointcloudDeps } from './modules/file-handlers.js';
 import { generateProxy, estimateFaceCount } from './modules/mesh-decimator.js';
-// kiosk-viewer.js is loaded dynamically in downloadGenericViewer() to avoid
-// blocking the main application if the module fails to load.
 
 declare global {
     interface Window {
@@ -244,7 +264,7 @@ function validateUserUrl(urlString: string, resourceType: string) {
 // Global state
 const state: AppState = {
     displayMode: config.initialViewMode || 'model', // 'splat', 'model', 'pointcloud', 'both', 'split'
-    selectedObject: 'none', // 'splat', 'model', 'both', 'none'
+    selectedObject: 'none', // 'splat', 'mesh', 'both', 'none'
     transformMode: 'translate', // 'translate', 'rotate', 'scale'
     rotationPivot: 'object', // 'object' | 'origin'
     scaleLockProportions: true, // lock proportions when scaling
@@ -255,6 +275,8 @@ const state: AppState = {
     cadLoaded: false,
     currentCadUrl: null,
     drawingLoaded: false,
+    flightPathLoaded: false,
+    colmapLoaded: false,
     currentDrawingUrl: null,
     modelOpacity: 1,
     modelWireframe: false,
@@ -296,10 +318,21 @@ const state: AppState = {
     proxyMeshGroup: null,
     proxyMeshSettings: null,
     proxyMeshFaceCount: null,
+    originalMeshBlob: null,
+    originalMeshGroup: null,
+    meshOptimized: false,
+    meshOptimizationSettings: null,
     // Detected asset format extensions (set during file load)
     meshFormat: null,
     pointcloudFormat: null,
-    splatFormat: null
+    splatFormat: null,
+    splatLodEnabled: true,
+    viewDefaults: {
+        sfmCameras: { visible: false, displayMode: 'frustums' },
+        flightPath: { visible: false, lineColor: '#00ffff', lineOpacity: 1.0, showMarkers: true, markerDensity: 'all' },
+    },
+    environmentBlob: null,
+    renderingPreset: null,
 };
 
 // Scene manager instance (handles scene, camera, renderer, controls, lighting)
@@ -330,6 +363,20 @@ let measurementSystem: any = null;
 let landmarkAlignment: any = null;
 let archiveCreator: any = null;
 let crossSection: CrossSectionTool | null = null;
+let flightPathManager: FlightPathManager | null = null;
+let colmapManager: ColmapManager | null = null;
+let _dragBeforeMatrices: MatrixSnapshot | null = null;
+let _numericEditBefore: MatrixSnapshot | null = null;
+let undoManager: UndoManager;
+
+// Trim undo stack (separate from transform undo — stores before/after trim indices)
+interface TrimUndoEntry {
+    pathId: string;
+    before: { trimStart?: number; trimEnd?: number };
+    after: { trimStart?: number; trimEnd?: number };
+}
+const trimUndoStack: TrimUndoEntry[] = [];
+const trimRedoStack: TrimUndoEntry[] = [];
 
 // Asset blob store (ES module singleton — shared with archive-pipeline, export-controller, etc.)
 const assets = getStore();
@@ -349,9 +396,12 @@ const sceneRefs: SceneRefs = {
     get stlGroup() { return stlGroup; },
     get cadGroup() { return cadGroup; },
     get drawingGroup() { return drawingGroup; },
+    get flightPathGroup() { return flightPathManager ? sceneManager?.flightPathGroup : null; },
+    get colmapGroup() { return sceneManager?.colmapGroup || null; },
     get flyControls() { return flyControls; },
     get annotationSystem() { return annotationSystem; },
     get archiveCreator() { return archiveCreator; },
+    get measurementSystem() { return measurementSystem; },
     get landmarkAlignment() { return landmarkAlignment; },
     get ambientLight() { return ambientLight; },
     get hemisphereLight() { return hemisphereLight; },
@@ -376,7 +426,7 @@ log.info(' DOM elements found:', {
 });
 
 // Helper function to create dependencies object for file-handlers.js
-function createFileHandlerDeps(): any {
+function createFileHandlerDeps(): FileHandlerDeps {
     return {
         scene,
         modelGroup,
@@ -419,6 +469,7 @@ function createFileHandlerDeps(): any {
                     clearArchiveMetadata();
                 }
                 updatePronomRegistry(state);
+                enableRemoveBtn('btn-remove-splat', true);
             },
             onModelLoaded: (object: any, file: any, faceCount: number) => {
                 state.meshFaceCount = faceCount;
@@ -463,6 +514,17 @@ function createFileHandlerDeps(): any {
                         if (texRow) texRow.style.display = '';
                     }
                 }
+                showQualityToggleIfNeeded();
+                // Show web optimization section
+                const webOptSection = document.getElementById('web-opt-section');
+                if (webOptSection) {
+                    webOptSection.classList.remove('hidden');
+                }
+                const webOptFaces = document.getElementById('web-opt-current-faces');
+                if (webOptFaces) {
+                    webOptFaces.textContent = `Current faces: ${state.meshFaceCount.toLocaleString()}`;
+                }
+                enableRemoveBtn('btn-remove-model', true);
                 // Advisory face count warnings
                 if (faceCount > MESH_LOD.DESKTOP_WARNING_FACES) {
                     notify.warning(`Mesh has ${faceCount.toLocaleString()} faces. A display proxy is recommended for broad device support.`);
@@ -494,6 +556,7 @@ function createFileHandlerDeps(): any {
                 // Center STL on grid
                 setTimeout(() => centerModelOnGrid(stlGroup), TIMING.AUTO_ALIGN_DELAY);
                 updatePronomRegistry(state);
+                enableRemoveBtn('btn-remove-stl', true);
             },
             onDrawingLoaded: (object: any, file: any) => {
                 updateVisibility();
@@ -502,13 +565,14 @@ function createFileHandlerDeps(): any {
                 if (filenameEl) filenameEl.textContent = file.name || 'DXF loaded';
                 // Center drawing on grid
                 setTimeout(() => centerModelOnGrid(drawingGroup), TIMING.AUTO_ALIGN_DELAY);
+                enableRemoveBtn('btn-remove-drawing', true);
             }
         }
     };
 }
 
 // Helper function to create dependencies object for alignment.js
-function createAlignmentDeps(): any {
+function createAlignmentDeps(): EditorAlignmentDeps {
     return {
         splatMesh,
         modelGroup,
@@ -525,7 +589,7 @@ function createAlignmentDeps(): any {
 }
 
 // Helper function to create dependencies object for annotation-controller.js
-function createAnnotationControllerDeps(): any {
+function createAnnotationControllerDeps(): AnnotationControllerDeps {
     return {
         annotationSystem,
         showAnnotationPopup: (annotation: any) => {
@@ -540,7 +604,7 @@ function createAnnotationControllerDeps(): any {
 }
 
 // Helper function to create dependencies object for metadata-manager.js
-function createMetadataDeps(): any {
+function createMetadataDeps(): MetadataDeps {
     return {
         state,
         annotationSystem,
@@ -625,12 +689,94 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
         sourceFiles: {
             updateSourceFilesUI
         },
-        measurementSystem
+        measurementSystem,
+        renderFlightPaths: async () => {
+            if (!flightPathManager) return;
+            const fpStore = getStore();
+            for (const fp of fpStore.flightPathBlobs) {
+                try {
+                    const ext = fp.fileName.split('.').pop()?.toLowerCase() || '';
+                    let data;
+                    if (ext === 'txt') {
+                        const buffer = await fp.blob.arrayBuffer();
+                        data = await flightPathManager.importBinary(buffer, fp.fileName, 'dji-txt');
+                    } else {
+                        const text = await fp.blob.text();
+                        data = flightPathManager.importFromText(text, fp.fileName);
+                    }
+                    // Restore trim from blob store
+                    if (data && (fp.trimStart !== undefined || fp.trimEnd !== undefined)) {
+                        flightPathManager.setTrim(data.id,
+                            fp.trimStart ?? 0,
+                            fp.trimEnd ?? (data.points.length - 1)
+                        );
+                    }
+                } catch (err) {
+                    console.warn('[main] Failed to parse flight path:', fp.fileName, err);
+                }
+            }
+            if (flightPathManager.hasData) {
+                // Restore transform from manifest (round-trip preservation)
+                if (state.archiveLoader) {
+                    const fpEntries = state.archiveLoader.getFlightPathEntries();
+                    if (fpEntries.length > 0) {
+                        const t = state.archiveLoader.getEntryTransform(fpEntries[0].entry);
+                        const group = sceneManager?.flightPathGroup;
+                        if (group && (t.position.some((v: number) => v !== 0) ||
+                            t.rotation.some((v: number) => v !== 0) ||
+                            (typeof t.scale === 'number' ? t.scale : 1) !== 1)) {
+                            group.position.fromArray(t.position);
+                            group.rotation.set(...(t.rotation as [number, number, number]));
+                            const s = typeof t.scale === 'number' ? t.scale : 1;
+                            group.scale.setScalar(s);
+                        }
+                    }
+                }
+                // Apply settings from prefilled UI (set by prefillMetadataFromArchive)
+                const colorModeEl = document.getElementById('flight-color-mode') as HTMLSelectElement | null;
+                const endpointsEl = document.getElementById('flight-show-endpoints') as HTMLInputElement | null;
+                const directionEl = document.getElementById('flight-show-direction') as HTMLInputElement | null;
+                flightPathManager.applySettings({
+                    colorMode: colorModeEl?.value || 'speed',
+                    showEndpoints: endpointsEl?.checked ?? true,
+                    showDirection: directionEl?.checked ?? true,
+                });
+                // Apply view defaults: visibility, line styling, marker density
+                flightPathManager.setVisible(state.viewDefaults.flightPath.visible);
+                if (flightPathManager.setLineOpacity) flightPathManager.setLineOpacity(state.viewDefaults.flightPath.lineOpacity);
+                if (flightPathManager.setMarkerDensity) {
+                    const density = state.viewDefaults.flightPath.showMarkers ? state.viewDefaults.flightPath.markerDensity : 'off';
+                    flightPathManager.setMarkerDensity(density);
+                }
+                state.flightPathLoaded = true;
+                updateObjectSelectButtons();
+                updateFlightPathUI();
+                updateColmapUI();
+                updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
+                // Sync overlay pill button to view default
+                const fpPillBtn = document.getElementById('btn-overlay-flightpath');
+                if (fpPillBtn) fpPillBtn.classList.toggle('active', state.viewDefaults.flightPath.visible);
+            }
+        },
+        colmap: {
+            loadFromBuffers: (camerasBuffer: ArrayBuffer, imagesBuffer: ArrayBuffer) => {
+                if (!colmapManager) return;
+                colmapManager.loadFromBuffers(camerasBuffer, imagesBuffer);
+                state.colmapLoaded = true;
+                updateObjectSelectButtons();
+                updateColmapUI();
+            },
+            loadPoints3D: (positions: Float64Array, count: number) => {
+                colmapManager?.loadPoints3D(positions, count);
+            },
+            get points3DBuffer() { return colmapManager?.points3DBuffer ?? null; },
+            set points3DBuffer(buf: ArrayBuffer | null) { if (colmapManager) colmapManager.points3DBuffer = buf; },
+        },
     };
 }
 
 // Helper function to create dependencies object for file-input-handlers.ts
-function createCADDeps(): any {
+function createCADDeps(): LoadCADDeps {
     return {
         cadGroup,
         state,
@@ -640,11 +786,12 @@ function createCADDeps(): any {
             updateTransformInputs();
             storeLastPositions();
             updateObjectSelectButtons();
+            enableRemoveBtn('btn-remove-cad', true);
         },
     };
 }
 
-function createFileInputDeps(): any {
+function createFileInputDeps(): FileInputDeps {
     return {
         validateUserUrl, state, sceneManager, tauriBridge, assets,
         createFileHandlerDeps, createPointcloudDeps, createArchivePipelineDeps,
@@ -664,10 +811,9 @@ function createEventWiringDeps(): EventWiringDeps {
             handleSplatFile, handleModelFile, handleArchiveFile,
             handlePointcloudFile, handleProxyMeshFile, handleProxySplatFile,
             handleSTLFile, handleCADFile, handleDrawingFile, handleSourceFilesInput,
-            handleLoadSplatFromUrlPrompt, handleLoadModelFromUrlPrompt,
-            handleLoadPointcloudFromUrlPrompt, handleLoadArchiveFromUrlPrompt,
-            handleLoadSTLFromUrlPrompt, handleLoadCADFromUrlPrompt, handleLoadDrawingFromUrlPrompt,
-            handleLoadFullResMesh, switchQualityTier
+            handleLoadArchiveFromUrlPrompt,
+            handleLoadFullResMesh, switchQualityTier,
+            removeSplat, removeModel, removePointcloud, removeSTL, removeCAD, removeDrawing, removeFlightPath
         },
         display: {
             setDisplayMode, updateModelOpacity, updateModelWireframe,
@@ -682,11 +828,11 @@ function createEventWiringDeps(): EventWiringDeps {
             updateSelectedAnnotationCamera, deleteSelectedAnnotation,
             dismissPopup: () => dismissPopupHandler(createAnnotationControllerDeps())
         },
-        export: { showExportPanel, downloadArchive, downloadGenericViewer, saveToLibrary },
-        screenshots: { captureScreenshotToList, showViewfinder, captureManualPreview, hideViewfinder },
+        export: { showExportPanel, downloadArchive, saveToLibrary },
+        screenshots: { downloadScreenshot, captureScreenshotToList, showViewfinder, captureManualPreview, hideViewfinder },
+        recording: { startRecording: handleStartRecording, stopRecording: handleStopRecording },
         metadata: { hideMetadataPanel, toggleMetadataDisplay, setupMetadataSidebar, populateMetadataDisplay },
-        share: { copyShareLink },
-        transform: { setSelectedObject, setTransformMode, resetTransform },
+        transform: { setSelectedObject, setTransformMode, resetTransform, updateTransformInputs },
         crossSection: crossSection!,
         walkthrough: {
             addStop: wtAddStop,
@@ -707,7 +853,283 @@ function createEventWiringDeps(): EventWiringDeps {
                     }).catch(() => {});
                 }
             }
-        }
+        },
+        undo: {
+            performUndo,
+            performRedo,
+            captureBeforeNumericEdit: () => {
+                _numericEditBefore = captureTransformMatrices();
+            },
+            pushAfterNumericEdit: () => {
+                if (_numericEditBefore) {
+                    const after = captureTransformMatrices();
+                    undoManager.push({
+                        objectId: state.selectedObject,
+                        beforeMatrices: _numericEditBefore,
+                        afterMatrices: after,
+                    });
+                    _numericEditBefore = null;
+                }
+            },
+        },
+        colmap: {
+            loadFromBuffers: (camerasBuffer: ArrayBuffer, imagesBuffer: ArrayBuffer) => {
+                if (!colmapManager) return;
+                colmapManager.loadFromBuffers(camerasBuffer, imagesBuffer);
+                // Store blobs for archive export
+                const assets = getStore();
+                assets.colmapBlobs.push({
+                    camerasBlob: new Blob([camerasBuffer]),
+                    imagesBlob: new Blob([imagesBuffer]),
+                });
+                // Restore saved transform from archive if available; otherwise copy
+                // the splat's current transform (initial import — cameras share splat space).
+                const colmapGrp = sceneManager?.colmapGroup;
+                if (colmapGrp) {
+                    const manifest = state.archiveManifest as any;
+                    const colmapEntry = manifest?.data_entries &&
+                        Object.values(manifest.data_entries).find((e: any) => e.role === 'colmap_sfm');
+                    const params = (colmapEntry as any)?._parameters;
+                    if (params?.position || params?.rotation || params?.scale != null) {
+                        if (params.position) colmapGrp.position.set(...(params.position as [number, number, number]));
+                        if (params.rotation) colmapGrp.rotation.set(...(params.rotation as [number, number, number]));
+                        if (params.scale != null) colmapGrp.scale.setScalar(typeof params.scale === 'number' ? params.scale : 1);
+                    } else if (splatMesh) {
+                        colmapGrp.position.copy(splatMesh.position);
+                        colmapGrp.rotation.copy(splatMesh.rotation);
+                        colmapGrp.scale.copy(splatMesh.scale);
+                    }
+                }
+                state.colmapLoaded = true;
+                // Apply view defaults: visibility and display mode
+                const colmapGrpVis = sceneManager?.colmapGroup;
+                if (colmapGrpVis) colmapGrpVis.visible = state.viewDefaults.sfmCameras.visible;
+                if (colmapManager) colmapManager.setDisplayMode(state.viewDefaults.sfmCameras.displayMode);
+                updateObjectSelectButtons();
+                updateColmapUI();
+                storeLastPositions();
+                updateTransformInputs();
+                updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
+                // Sync overlay pill button to view default
+                const sfmPillBtn = document.getElementById('btn-overlay-sfm');
+                if (sfmPillBtn) sfmPillBtn.classList.toggle('active', state.viewDefaults.sfmCameras.visible);
+            },
+            setDisplayMode: (mode: string) => colmapManager?.setDisplayMode(mode as any),
+            setFrustumScale: (scale: number) => colmapManager?.setFrustumScale(scale),
+            alignFlightPath: () => {
+                if (!colmapManager?.hasData || !flightPathManager?.hasData) return;
+                const fpGroup = sceneManager?.flightPathGroup;
+                if (!fpGroup) return;
+                fpGroup.updateMatrixWorld(true);
+                const result = alignCamerasToFlightPath(
+                    colmapManager.colmapCameras,
+                    flightPathManager.getAllPoints(),
+                    fpGroup.matrixWorld,
+                );
+                if (!result) {
+                    notify.error('Could not align: insufficient matches (need >= 3)');
+                    return;
+                }
+                const group = sceneManager?.colmapGroup;
+                if (group) {
+                    group.position.copy(result.position);
+                    group.rotation.copy(result.rotation);
+                    group.scale.setScalar(result.scale);
+                    updateTransformInputs();
+                    storeLastPositions();
+                }
+                const el = document.getElementById('align-result');
+                if (el) {
+                    el.style.display = '';
+                    el.textContent = `Aligned: ${result.matchCount} matches, RMSE ${result.rmse.toFixed(3)}`;
+                }
+                if (result.rmse > 1.0) {
+                    notify.warning(`Alignment RMSE is high (${result.rmse.toFixed(2)}). Verify match quality.`);
+                } else {
+                    notify.success(`Cameras aligned to flight path (${result.matchCount} matches, RMSE: ${result.rmse.toFixed(3)})`);
+                }
+            },
+            get hasData() { return colmapManager?.hasData ?? false; },
+            get hasPoints3D() { return colmapManager?.hasPoints3D ?? false; },
+            loadPoints3D: (positions: Float64Array, count: number) => {
+                colmapManager?.loadPoints3D(positions, count);
+            },
+            get points3DBuffer() { return colmapManager?.points3DBuffer ?? null; },
+            set points3DBuffer(buf: ArrayBuffer | null) {
+                if (colmapManager) colmapManager.points3DBuffer = buf;
+                // Also store in asset store for export
+                const assets = getStore();
+                if (assets.colmapBlobs.length > 0 && buf) {
+                    assets.colmapBlobs[assets.colmapBlobs.length - 1].points3DBuffer = buf;
+                }
+            },
+            alignFromCameraData: async () => {
+                console.log('[ICP-DEBUG] alignFromCameraData called, hasPoints3D:', colmapManager?.hasPoints3D, 'splatMesh:', !!splatMesh);
+                if (!colmapManager?.hasPoints3D || !splatMesh) {
+                    notify.error('Load splat + camera data first');
+                    return;
+                }
+
+                showLoading('Auto-aligning from camera data...');
+
+                try {
+                    const splatSample = sampleSplatPoints(splatMesh);
+                    if (!splatSample) {
+                        notify.error('Could not sample splat points');
+                        return;
+                    }
+
+                    const points3D = colmapManager.points3D!;
+                    const points3DCount = colmapManager.points3DCount;
+
+                    // Diagnostic: log point cloud stats
+                    {
+                        const logStats = (name: string, pts: Float64Array, count: number) => {
+                            let cx = 0, cy = 0, cz = 0;
+                            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+                            for (let i = 0; i < count; i++) {
+                                const x = pts[i * 3], y = pts[i * 3 + 1], z = pts[i * 3 + 2];
+                                cx += x; cy += y; cz += z;
+                                if (x < minX) minX = x; if (x > maxX) maxX = x;
+                                if (y < minY) minY = y; if (y > maxY) maxY = y;
+                                if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+                            }
+                            cx /= count; cy /= count; cz /= count;
+                            console.log(`[ICP-DEBUG] ${name}: count=${count}, centroid=(${cx.toFixed(3)}, ${cy.toFixed(3)}, ${cz.toFixed(3)}), ` +
+                                `extent=(${(maxX-minX).toFixed(3)}, ${(maxY-minY).toFixed(3)}, ${(maxZ-minZ).toFixed(3)}), ` +
+                                `range X=[${minX.toFixed(3)},${maxX.toFixed(3)}] Y=[${minY.toFixed(3)},${maxY.toFixed(3)}] Z=[${minZ.toFixed(3)},${maxZ.toFixed(3)}]`);
+                        };
+                        logStats('points3D (source)', points3D, points3DCount);
+                        logStats('splatSample (target)', splatSample.points, splatSample.count);
+                        console.log(`[ICP-DEBUG] splatMesh.matrixWorld:`, splatMesh.matrixWorld.elements.map(v => v.toFixed(4)).join(', '));
+                    }
+
+                    // Pre-transform points3D by colmapGroup's current transform (copied
+                    // from splatMesh on load).  This puts them approximately into world
+                    // space so the ICP only needs to find a small correction (e.g. the
+                    // rotation baked in by Supersplat), not the entire transform chain.
+                    const colmapGrp = sceneManager?.colmapGroup;
+                    let preTransformedPts = points3D;
+                    let initialMatrix: THREE.Matrix4 | null = null;
+
+                    if (colmapGrp) {
+                        colmapGrp.updateMatrixWorld(true);
+                        initialMatrix = colmapGrp.matrixWorld.clone();
+                        preTransformedPts = new Float64Array(points3DCount * 3);
+                        for (let i = 0; i < points3DCount; i++) {
+                            const v = new THREE.Vector3(
+                                points3D[i * 3], points3D[i * 3 + 1], points3D[i * 3 + 2]
+                            ).applyMatrix4(initialMatrix);
+                            preTransformedPts[i * 3] = v.x;
+                            preTransformedPts[i * 3 + 1] = v.y;
+                            preTransformedPts[i * 3 + 2] = v.z;
+                        }
+                        console.log('[ICP-DEBUG] Pre-transformed points3D by colmapGroup matrix');
+                    }
+
+                    const icpResult = runICP(preTransformedPts, points3DCount, splatSample.points, splatSample.count,
+                        initialMatrix ? { skipCoarseSearch: true } : undefined);
+                    if (!icpResult) {
+                        notify.error('Alignment failed — insufficient point overlap');
+                        return;
+                    }
+
+                    // Diagnostic: log ICP result
+                    {
+                        const euler = new THREE.Euler().setFromQuaternion(icpResult.rotation);
+                        console.log(`[ICP-DEBUG] Result: scale=${icpResult.scale.toFixed(6)}, RMSE=${icpResult.rmse.toFixed(6)}, matches=${icpResult.matchCount}, converged=${icpResult.converged}`);
+                        console.log(`[ICP-DEBUG] Rotation (deg): X=${THREE.MathUtils.radToDeg(euler.x).toFixed(2)}, Y=${THREE.MathUtils.radToDeg(euler.y).toFixed(2)}, Z=${THREE.MathUtils.radToDeg(euler.z).toFixed(2)}`);
+                        console.log(`[ICP-DEBUG] Translation: (${icpResult.translation.x.toFixed(4)}, ${icpResult.translation.y.toFixed(4)}, ${icpResult.translation.z.toFixed(4)})`);
+                    }
+
+                    // Compose: final = ICP_correction × initial_transform
+                    if (colmapGrp) {
+                        const correctionMatrix = new THREE.Matrix4().compose(
+                            icpResult.translation,
+                            icpResult.rotation,
+                            new THREE.Vector3(icpResult.scale, icpResult.scale, icpResult.scale)
+                        );
+                        const finalMatrix = correctionMatrix.multiply(initialMatrix ?? new THREE.Matrix4());
+
+                        const pos = new THREE.Vector3();
+                        const rot = new THREE.Quaternion();
+                        const scl = new THREE.Vector3();
+                        finalMatrix.decompose(pos, rot, scl);
+
+                        colmapGrp.position.copy(pos);
+                        colmapGrp.quaternion.copy(rot);
+                        colmapGrp.scale.copy(scl);
+                        colmapGrp.updateMatrix();
+                        colmapGrp.updateMatrixWorld(true);
+                    }
+
+                    if (flightPathManager?.hasData && colmapManager.colmapCameras.length >= 3) {
+                        const fpGroup = sceneManager?.flightPathGroup;
+                        if (fpGroup) {
+                            const matchedPairs = matchCamerasToFlightPoints(
+                                colmapManager.colmapCameras,
+                                flightPathManager.getAllPoints()
+                            );
+
+                            if (matchedPairs.length >= 3) {
+                                const gpsSlice = matchedPairs.map(p => p.gpsPos);
+                                const colmapSlice = matchedPairs.map(p => p.colmapPos);
+
+                                const tGeo = computeSimilarityTransform(gpsSlice, colmapSlice);
+                                if (tGeo) {
+                                    const composedQ = icpResult.rotation.clone().multiply(tGeo.rotation);
+                                    const composedScale = icpResult.scale * tGeo.scale;
+                                    const composedT = tGeo.translation.clone()
+                                        .applyQuaternion(icpResult.rotation)
+                                        .multiplyScalar(icpResult.scale)
+                                        .add(icpResult.translation);
+
+                                    fpGroup.quaternion.copy(composedQ);
+                                    fpGroup.scale.setScalar(composedScale);
+                                    fpGroup.position.copy(composedT);
+                                    fpGroup.updateMatrix();
+                                    fpGroup.updateMatrixWorld(true);
+
+                                    notify.success(`Aligned camera data + flight path — RMSE: ${icpResult.rmse.toFixed(3)}`);
+                                } else {
+                                    notify.success(`Aligned camera data — RMSE: ${icpResult.rmse.toFixed(3)}`);
+                                    notify.warning('Flight path alignment failed (insufficient GPS↔camera matches)');
+                                }
+                            } else {
+                                notify.success(`Aligned camera data — RMSE: ${icpResult.rmse.toFixed(3)}`);
+                                notify.warning('Flight path: insufficient camera↔GPS matches (need >= 3)');
+                            }
+                        }
+                    } else {
+                        notify.success(`Aligned camera data — RMSE: ${icpResult.rmse.toFixed(3)}, ${icpResult.matchCount} matches`);
+                    }
+
+                    const resultEl = document.getElementById('icp-align-result');
+                    if (resultEl) {
+                        resultEl.style.display = '';
+                        resultEl.textContent = `RMSE: ${icpResult.rmse.toFixed(3)} | ${icpResult.matchCount} matches | ${icpResult.converged ? 'converged' : 'max iter'}`;
+                    }
+
+                    updateTransformInputs();
+                    storeLastPositions();
+                } catch (err) {
+                    log.error('Alignment failed:', err);
+                    notify.error('Alignment failed — see console for details');
+                } finally {
+                    hideLoading();
+                }
+            },
+        },
+        overlay: {
+            toggleSfm: (visible: boolean) => {
+                const colmapGroup = sceneManager?.colmapGroup;
+                if (colmapGroup) colmapGroup.visible = visible;
+            },
+            toggleFlightPath: (visible: boolean) => {
+                if (flightPathManager) flightPathManager.setVisible(visible);
+            },
+        },
+        validateUrl: validateUserUrl,
     };
 }
 
@@ -730,6 +1152,7 @@ function setupDecimationPanel(): void {
     const texFormatSelect = document.getElementById('decimation-texture-format') as HTMLSelectElement | null;
     const texQualityInput = document.getElementById('decimation-texture-quality') as HTMLInputElement | null;
     const texQualityLabel = document.getElementById('decimation-texture-quality-label');
+    const dracoInput = document.getElementById('decimation-draco') as HTMLInputElement | null;
     const generateBtn = document.getElementById('btn-generate-proxy') as HTMLButtonElement | null;
     const statusDiv = document.getElementById('decimation-status');
     const statusText = document.getElementById('decimation-status-text');
@@ -750,6 +1173,7 @@ function setupDecimationPanel(): void {
             textureMaxRes: texResSelect ? parseInt(texResSelect.value, 10) : undefined,
             textureFormat: texFormatSelect?.value as DecimationOptions['textureFormat'],
             textureQuality: texQualityInput ? parseFloat(texQualityInput.value) : undefined,
+            dracoCompress: dracoInput?.checked ?? true,
         };
     }
 
@@ -812,10 +1236,19 @@ function setupDecimationPanel(): void {
         if (texQualityLabel) texQualityLabel.textContent = `${Math.round(parseFloat(texQualityInput.value) * 100)}%`;
     });
 
+    // Splat LOD checkbox
+    const splatLodCheckbox = document.getElementById('chk-splat-lod') as HTMLInputElement | null;
+    if (splatLodCheckbox) {
+        splatLodCheckbox.checked = state.splatLodEnabled;
+        splatLodCheckbox.addEventListener('change', () => {
+            state.splatLodEnabled = splatLodCheckbox.checked;
+        });
+    }
+
     // Generate SD Proxy
     addListener('btn-generate-proxy', 'click', async () => {
         if (!modelGroup || !state.modelLoaded) {
-            notify('No mesh loaded to decimate', 'warning');
+            notify.warning('No mesh loaded to decimate');
             return;
         }
 
@@ -836,6 +1269,10 @@ function setupDecimationPanel(): void {
             state.proxyMeshSettings = result.options;
             state.proxyMeshFaceCount = result.faceCount;
 
+            // Update proxy filename so export-controller uses a valid .glb extension
+            const proxyFilenameEl = document.getElementById('proxy-mesh-filename');
+            if (proxyFilenameEl) proxyFilenameEl.textContent = 'mesh_proxy.glb';
+
             // Clean up old proxy preview
             if (state.proxyMeshGroup) {
                 scene.remove(state.proxyMeshGroup);
@@ -849,6 +1286,12 @@ function setupDecimationPanel(): void {
                 const { loadGLTF } = await import('./modules/file-handlers.js');
                 const loaded = await loadGLTF(blobUrl);
                 state.proxyMeshGroup = loaded;
+                // Copy transform from full-res model (proxy GLB is in local space)
+                if (modelGroup) {
+                    loaded.position.copy(modelGroup.position);
+                    loaded.rotation.copy(modelGroup.rotation);
+                    loaded.scale.copy(modelGroup.scale);
+                }
                 state.proxyMeshGroup.visible = false;
                 scene.add(state.proxyMeshGroup);
             } finally {
@@ -859,10 +1302,11 @@ function setupDecimationPanel(): void {
             if (statusText) statusText.textContent = `Proxy ready (${result.faceCount.toLocaleString()} faces, ${(result.blob.size / 1024 / 1024).toFixed(1)} MB)`;
             statusDiv?.classList.remove('hidden');
             if (previewBtn) previewBtn.textContent = 'Preview SD';
-            notify(`SD proxy generated: ${result.faceCount.toLocaleString()} faces`, 'success');
+            showQualityToggleIfNeeded();
+            notify.success(`SD proxy generated: ${result.faceCount.toLocaleString()} faces`);
         } catch (err: any) {
             log.error('Decimation failed:', err);
-            notify(`Decimation failed: ${err.message}`, 'error');
+            notify.error(`Decimation failed: ${err.message}`);
         } finally {
             progressDiv?.classList.add('hidden');
             if (generateBtn) generateBtn.disabled = false;
@@ -896,8 +1340,241 @@ function setupDecimationPanel(): void {
         state.proxyMeshSettings = null;
         state.proxyMeshFaceCount = null;
         modelGroup.visible = true;
+        state.viewingProxy = false;
+        updateQualityButtonStates('hd');
         statusDiv?.classList.add('hidden');
-        notify('SD proxy removed', 'info');
+        showQualityToggleIfNeeded();
+        notify.info('SD proxy removed');
+    });
+
+    // ── HD Web Optimization ──
+    // Web-opt mode toggle — switch between face count and ratio inputs
+    const webOptModeSelect = document.getElementById('web-opt-mode') as HTMLSelectElement | null;
+    const webOptFacesRow = document.getElementById('web-opt-faces-row');
+    const webOptRatioRow = document.getElementById('web-opt-ratio-row');
+    const webOptRatioInput = document.getElementById('web-opt-target-ratio') as HTMLInputElement | null;
+    const webOptRatioEstimate = document.getElementById('web-opt-ratio-estimate');
+    if (webOptModeSelect) {
+        webOptModeSelect.addEventListener('change', () => {
+            const isRatio = webOptModeSelect.value === 'ratio';
+            if (webOptFacesRow) webOptFacesRow.style.display = isRatio ? 'none' : '';
+            if (webOptRatioRow) webOptRatioRow.style.display = isRatio ? '' : 'none';
+            // Update estimate when switching to ratio
+            if (isRatio && webOptRatioInput && webOptRatioEstimate && state.meshFaceCount > 0) {
+                const est = Math.round(state.meshFaceCount * parseFloat(webOptRatioInput.value));
+                webOptRatioEstimate.textContent = `~${est.toLocaleString()} faces`;
+            }
+        });
+    }
+    if (webOptRatioInput && webOptRatioEstimate) {
+        webOptRatioInput.addEventListener('input', () => {
+            if (state.meshFaceCount > 0) {
+                const est = Math.round(state.meshFaceCount * parseFloat(webOptRatioInput.value));
+                webOptRatioEstimate.textContent = `~${est.toLocaleString()} faces`;
+            }
+        });
+    }
+
+    addListener('btn-web-opt-generate', 'click', async () => {
+        const assets = getStore();
+        if (!modelGroup || !assets.meshBlob) {
+            notify.warning('No mesh loaded');
+            return;
+        }
+
+        const modeEl = document.getElementById('web-opt-mode') as HTMLSelectElement | null;
+        const targetFacesEl = document.getElementById('web-opt-target-faces') as HTMLInputElement;
+        const targetRatioEl = document.getElementById('web-opt-target-ratio') as HTMLInputElement;
+        const dracoEl = document.getElementById('web-opt-draco') as HTMLInputElement;
+        const dracoEnabled = dracoEl?.checked ?? true;
+        const mode = modeEl?.value || 'faces';
+
+        let targetFaces: number;
+        let targetRatio: number;
+
+        if (mode === 'ratio') {
+            targetRatio = parseFloat(targetRatioEl?.value || '0.5');
+            if (targetRatio <= 0 || targetRatio >= 1) {
+                notify.warning('Target ratio must be between 0 and 1');
+                return;
+            }
+            targetFaces = Math.round(state.meshFaceCount * targetRatio);
+        } else {
+            targetFaces = parseInt(targetFacesEl?.value || '1000000', 10);
+            if (targetFaces >= state.meshFaceCount) {
+                notify.warning('Target face count must be less than current faces');
+                return;
+            }
+            targetRatio = targetFaces / state.meshFaceCount;
+        }
+
+        // Save originals for revert (only if not already optimized).
+        // Clone must happen before decimation which disposes geometry/material refs.
+        // We re-load from the original blob on revert to guarantee fresh GPU data.
+        if (!state.meshOptimized) {
+            state.originalMeshBlob = assets.meshBlob;
+        }
+
+        // Show progress
+        const progressEl = document.getElementById('web-opt-progress');
+        const progressFill = document.getElementById('web-opt-progress-fill') as HTMLElement;
+        const progressText = document.getElementById('web-opt-progress-text');
+        if (progressEl) progressEl.classList.remove('hidden');
+
+        const btnGenerate = document.getElementById('btn-web-opt-generate') as HTMLButtonElement;
+        if (btnGenerate) btnGenerate.disabled = true;
+
+        try {
+            showLoading('Optimizing mesh...');
+
+            const { decimateScene, exportAsGLB, dracoCompressGLB } = await import('./modules/mesh-decimator.js');
+
+            // Decimation options
+            const result = await decimateScene(modelGroup, {
+                targetRatio: Math.min(targetRatio, 1),
+                targetFaceCount: targetFaces,
+                errorThreshold: 0.1,
+                lockBorder: true,
+                preserveUVSeams: true,
+                textureMaxRes: 4096,
+                textureFormat: 'keep',
+                textureQuality: 1.0,
+                dracoCompress: false,
+                preset: 'custom',
+            }, (stage: string, pct: number) => {
+                if (progressFill) progressFill.style.width = `${pct * 100}%`;
+                if (progressText) progressText.textContent = stage;
+            });
+
+            // Export as GLB blob (with or without Draco)
+            let blob = await exportAsGLB(result.group, false);
+            if (dracoEnabled) {
+                if (progressText) progressText.textContent = 'Applying Draco compression...';
+                blob = await dracoCompressGLB(blob);
+            }
+
+            // Replace the displayed mesh
+            while (modelGroup.children.length > 0) {
+                const child = modelGroup.children[0];
+                modelGroup.remove(child);
+                if ((child as any).geometry) (child as any).geometry.dispose();
+                if ((child as any).material) {
+                    const mat = (child as any).material;
+                    if (Array.isArray(mat)) mat.forEach((m: any) => m.dispose());
+                    else mat.dispose();
+                }
+            }
+            for (const child of result.group.children) {
+                modelGroup.add(child.clone(true));
+            }
+
+            // Update blob reference for export
+            assets.meshBlob = blob;
+
+            // Update state
+            state.meshOptimized = true;
+            state.meshOptimizationSettings = {
+                targetFaces,
+                dracoEnabled,
+                originalFaces: result.totalOriginalFaces || state.meshFaceCount,
+                resultFaces: result.totalNewFaces,
+            };
+            state.meshFaceCount = result.totalNewFaces;
+
+            // Update UI
+            const statusEl = document.getElementById('web-opt-status');
+            if (statusEl) {
+                statusEl.textContent = `Optimized: ${result.totalNewFaces.toLocaleString()} faces`;
+                statusEl.classList.remove('hidden');
+            }
+            const revertBtn = document.getElementById('btn-web-opt-revert');
+            if (revertBtn) revertBtn.classList.remove('hidden');
+
+            const webOptFaces = document.getElementById('web-opt-current-faces');
+            if (webOptFaces) {
+                webOptFaces.textContent = `Original: ${state.meshOptimizationSettings.originalFaces.toLocaleString()} faces`;
+            }
+
+            // Also update the SD proxy HD face count display
+            const hdFacesEl = document.getElementById('decimation-hd-faces');
+            if (hdFacesEl) hdFacesEl.textContent = result.totalNewFaces.toLocaleString();
+
+            notify.success(`Mesh optimized to ${result.totalNewFaces.toLocaleString()} faces`);
+        } catch (err) {
+            log.error('Web optimization failed:', err);
+            notify.error('Mesh optimization failed: ' + (err as Error).message);
+        } finally {
+            hideLoading();
+            if (progressEl) progressEl.classList.add('hidden');
+            if (btnGenerate) btnGenerate.disabled = false;
+        }
+    });
+
+    addListener('btn-web-opt-revert', 'click', async () => {
+        const assets = getStore();
+        if (!state.originalMeshBlob) {
+            notify.warning('No original mesh to revert to');
+            return;
+        }
+
+        try {
+            showLoading('Reverting to original mesh...');
+
+            // Re-load the original mesh from the saved blob (guarantees fresh GPU data)
+            const { loadGLTF } = await import('./modules/loaders/mesh-loader.js');
+            const blobUrl = URL.createObjectURL(state.originalMeshBlob);
+
+            // Clear current decimated mesh
+            while (modelGroup.children.length > 0) {
+                const child = modelGroup.children[0];
+                disposeObject(child);
+                modelGroup.remove(child);
+            }
+
+            // Determine format from blob type or state
+            const ext = (state.meshFormat || 'glb').toLowerCase();
+            let loadedObject: THREE.Object3D;
+            if (ext === 'obj') {
+                const { loadOBJFromUrl } = await import('./modules/loaders/mesh-loader.js');
+                loadedObject = await loadOBJFromUrl(blobUrl);
+            } else {
+                loadedObject = await loadGLTF(blobUrl);
+            }
+            URL.revokeObjectURL(blobUrl);
+
+            modelGroup.add(loadedObject);
+
+            // Restore blob
+            assets.meshBlob = state.originalMeshBlob;
+
+            // Restore face count
+            const originalFaces = state.meshOptimizationSettings?.originalFaces ?? 0;
+            state.meshFaceCount = originalFaces;
+
+            // Clear optimization state
+            state.meshOptimized = false;
+            state.meshOptimizationSettings = null;
+            state.originalMeshBlob = null;
+
+            // Update UI
+            const statusEl = document.getElementById('web-opt-status');
+            if (statusEl) statusEl.classList.add('hidden');
+            const revertBtn = document.getElementById('btn-web-opt-revert');
+            if (revertBtn) revertBtn.classList.add('hidden');
+            const webOptFaces = document.getElementById('web-opt-current-faces');
+            if (webOptFaces) webOptFaces.textContent = `Current faces: ${originalFaces.toLocaleString()}`;
+
+            // Update SD proxy face count display
+            const hdFacesEl = document.getElementById('decimation-hd-faces');
+            if (hdFacesEl) hdFacesEl.textContent = originalFaces.toLocaleString();
+
+            notify.success('Reverted to original mesh');
+        } catch (err) {
+            log.error('Revert failed:', err);
+            notify.error('Revert failed: ' + (err as Error).message);
+        } finally {
+            hideLoading();
+        }
     });
 }
 
@@ -949,12 +1626,13 @@ async function init() {
     if (sceneManager.rendererType === 'webgl') {
         sparkRenderer = createSparkRenderer({
             renderer: renderer,
-            clipXY: 2.0,           // Prevent edge popping without excessive overdraw (default: 1.4)
+            clipXY: SPARK_DEFAULTS.CLIP_XY,
             autoUpdate: true,
-            minAlpha: 3 / 255,     // Cull near-invisible splats
-            // LOD (Spark 2.0) — budget-based rendering caps splats per frame
+            minAlpha: SPARK_DEFAULTS.MIN_ALPHA,
             lodSplatCount: getLodBudget(QUALITY_TIER.HD),
-            behindFoveate: 0.1,         // Aggressive behind-camera culling
+            behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
+            coneFov: SPARK_DEFAULTS.CONE_FOV,
+            coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
         });
         scene.add(sparkRenderer);
         log.info(`SparkRenderer created with clipXY=2.0, minAlpha=3/255, lodSplatCount=${getLodBudget(QUALITY_TIER.HD)}`);
@@ -992,11 +1670,13 @@ async function init() {
         if (sceneManager.rendererType === 'webgl') {
             sparkRenderer = createSparkRenderer({
                 renderer: newRenderer,
-                clipXY: 2.0,
+                clipXY: SPARK_DEFAULTS.CLIP_XY,
                 autoUpdate: true,
-                minAlpha: 3 / 255,
+                minAlpha: SPARK_DEFAULTS.MIN_ALPHA,
                 lodSplatCount: getLodBudget(QUALITY_TIER.HD),
-                behindFoveate: 0.1,
+                behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
+                coneFov: SPARK_DEFAULTS.CONE_FOV,
+                coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
             });
             scene.add(sparkRenderer);
             log.info(`Renderer changed, SparkRenderer recreated for WebGL (lodSplatCount=${getLodBudget(QUALITY_TIER.HD)})`);
@@ -1029,6 +1709,23 @@ async function init() {
         applyUniformScale();
     };
 
+    // Initialize undo manager for transform operations
+    undoManager = new UndoManager(20);
+
+    sceneManager.onDraggingChanged = (dragging: boolean) => {
+        if (dragging) {
+            _dragBeforeMatrices = captureTransformMatrices();
+        } else if (_dragBeforeMatrices) {
+            const afterMatrices = captureTransformMatrices();
+            undoManager.push({
+                objectId: state.selectedObject,
+                beforeMatrices: _dragBeforeMatrices,
+                afterMatrices,
+            });
+            _dragBeforeMatrices = null;
+        }
+    };
+
     // Initialize annotation system
     annotationSystem = new AnnotationSystem(scene, camera, renderer, controls);
     annotationSystem.onAnnotationCreated = onAnnotationPlaced;
@@ -1045,10 +1742,221 @@ async function init() {
     });
     log.info(' Walkthrough controller initialized');
 
+    // Initialize recording manager
+    initRecordingManager({
+        renderer,
+        scene,
+        camera,
+        controls,
+        canvas: renderer.domElement,
+        postProcessing,
+    });
+    log.info(' Recording manager initialized');
+
     // Initialize measurement system
     measurementSystem = new MeasurementSystem(scene, camera, renderer, controls);
     _wireMeasurementControls();
     log.info(' Measurement system initialized:', !!measurementSystem);
+
+    // Initialize flight path manager
+    if (sceneManager.flightPathGroup) {
+        flightPathManager = new FlightPathManager(
+            sceneManager.flightPathGroup,
+            scene,
+            camera,
+            renderer
+        );
+        const flightTooltip = document.getElementById('flight-tooltip');
+        if (flightTooltip) flightPathManager.setupTooltip(flightTooltip);
+        flightPathManager.setupFreeLook();
+        log.info(' FlightPathManager initialized');
+        flightPathManager.onCameraModeChange((mode) => {
+            if (mode === 'orbit') {
+                controls.enabled = true;
+            } else {
+                controls.enabled = false;
+            }
+        });
+    }
+
+    // Initialize colmap manager
+    if (sceneManager.colmapGroup) {
+        colmapManager = new ColmapManager(sceneManager.colmapGroup);
+        log.info(' ColmapManager initialized');
+    }
+
+    // Wire flight path file input
+    if (sceneManager.flightPathGroup) {
+        // Shared handler for flight path file inputs (toolbar + Flight Path pane)
+        async function handleFlightPathFile(e: Event, inputEl: HTMLInputElement) {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file || !flightPathManager) return;
+            const filenameEl = document.getElementById('flightpath-filename');
+            if (filenameEl) filenameEl.textContent = file.name;
+            showLoading('Importing flight log...');
+            try {
+                const data = await flightPathManager.importFile(file);
+                const fpStore = getStore();
+                fpStore.flightPathBlobs.push({ blob: file, fileName: file.name });
+                state.flightPathLoaded = true;
+                updateObjectSelectButtons();
+                updateFlightPathUI();
+                updateColmapUI();
+                updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
+                hideLoading();
+                notify.success('Flight path loaded: ' + data.points.length + ' points');
+            } catch (err: unknown) {
+                hideLoading();
+                notify.error('Error loading flight log: ' + (err instanceof Error ? err.message : String(err)));
+            }
+            inputEl.value = '';
+        }
+
+        const flightInput = document.getElementById('flightpath-input') as HTMLInputElement | null;
+        if (flightInput) {
+            flightInput.addEventListener('change', (e) => handleFlightPathFile(e, flightInput));
+        }
+
+        const flightInputPane = document.getElementById('flightpath-input-pane') as HTMLInputElement | null;
+        if (flightInputPane) {
+            flightInputPane.addEventListener('change', (e) => handleFlightPathFile(e, flightInputPane));
+        }
+
+        // Wire color mode dropdown
+        addListener('flight-color-mode', 'change', (e: Event) => {
+            if (!flightPathManager) return;
+            const mode = (e.target as HTMLSelectElement).value;
+            flightPathManager.setColorMode(mode as any);
+        });
+
+        // Wire endpoint toggle
+        addListener('flight-show-endpoints', 'change', (e: Event) => {
+            if (!flightPathManager) return;
+            flightPathManager.setShowEndpoints((e.target as HTMLInputElement).checked);
+        });
+
+        // Wire direction toggle
+        addListener('flight-show-direction', 'change', (e: Event) => {
+            if (!flightPathManager) return;
+            flightPathManager.setShowDirection((e.target as HTMLInputElement).checked);
+        });
+
+        // Wire playback controls
+        addListener('fp-play-btn', 'click', () => {
+            if (!flightPathManager) return;
+            if (flightPathManager.isPlaying) {
+                flightPathManager.pausePlayback();
+                const btn = document.getElementById('fp-play-btn');
+                if (btn) btn.textContent = '\u25B6';
+            } else {
+                flightPathManager.startPlayback();
+                const btn = document.getElementById('fp-play-btn');
+                if (btn) btn.textContent = '\u23F8';
+            }
+        });
+
+        addListener('fp-stop-btn', 'click', () => {
+            if (!flightPathManager) return;
+            flightPathManager.stopPlayback();
+            const btn = document.getElementById('fp-play-btn');
+            if (btn) btn.textContent = '\u25B6';
+            const scrubber = document.getElementById('fp-scrubber') as HTMLInputElement | null;
+            if (scrubber) scrubber.value = '0';
+            const timeCur = document.getElementById('fp-time-current');
+            if (timeCur) timeCur.textContent = '00:00';
+            // Reset camera mode UI to orbit
+            ['fp-cam-orbit', 'fp-cam-chase', 'fp-cam-fpv'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('active', id === 'fp-cam-orbit');
+            });
+            const recenterBtn = document.getElementById('fp-recenter-btn');
+            if (recenterBtn) recenterBtn.style.display = 'none';
+            const pipRow = document.getElementById('fp-pip-row');
+            if (pipRow) pipRow.style.display = '';
+            const telemDiv = document.getElementById('fp-telemetry');
+            if (telemDiv) telemDiv.style.display = 'none';
+            const pipOverlay = document.getElementById('fp-pip-overlay');
+            if (pipOverlay) pipOverlay.style.display = 'none';
+            const pipToggle = document.getElementById('fp-pip-toggle') as HTMLInputElement | null;
+            if (pipToggle) { pipToggle.checked = false; }
+            flightPathManager?.setPipEnabled(false);
+        });
+
+        addListener('fp-speed', 'change', (e: Event) => {
+            if (!flightPathManager) return;
+            flightPathManager.setPlaybackSpeed(parseFloat((e.target as HTMLSelectElement).value));
+        });
+
+        addListener('fp-scrubber', 'input', (e: Event) => {
+            if (!flightPathManager) return;
+            const val = parseInt((e.target as HTMLInputElement).value, 10);
+            flightPathManager.seekTo(val / 1000);
+        });
+
+        // Camera mode buttons
+        const camBtns = ['fp-cam-orbit', 'fp-cam-chase', 'fp-cam-fpv'] as const;
+        const camModes: FlightCameraMode[] = ['orbit', 'chase', 'fpv'];
+        camBtns.forEach((btnId, idx) => {
+            addListener(btnId, 'click', () => {
+                if (!flightPathManager) return;
+                flightPathManager.setCameraMode(camModes[idx]);
+                // Update active state
+                camBtns.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.toggle('active', id === btnId);
+                });
+                // Show/hide recenter (FPV only) and PiP (orbit only)
+                const recenterBtn = document.getElementById('fp-recenter-btn');
+                if (recenterBtn) recenterBtn.style.display = camModes[idx] === 'fpv' ? '' : 'none';
+                const pipRow = document.getElementById('fp-pip-row');
+                if (pipRow) pipRow.style.display = camModes[idx] === 'orbit' ? '' : 'none';
+            });
+        });
+
+        // Re-center button
+        addListener('fp-recenter-btn', 'click', () => {
+            flightPathManager?.recenterFreeLook();
+        });
+
+        // PiP toggle
+        addListener('fp-pip-toggle', 'change', (e: Event) => {
+            if (!flightPathManager) return;
+            const enabled = (e.target as HTMLInputElement).checked;
+            flightPathManager.setPipEnabled(enabled);
+            const overlay = document.getElementById('fp-pip-overlay');
+            if (overlay) overlay.style.display = enabled ? '' : 'none';
+        });
+
+        // Playback callbacks
+        flightPathManager.onPlaybackUpdate((currentMs, totalMs) => {
+            const scrubber = document.getElementById('fp-scrubber') as HTMLInputElement | null;
+            if (scrubber) scrubber.value = String(Math.round((currentMs / totalMs) * 1000));
+            const timeCur = document.getElementById('fp-time-current');
+            if (timeCur) {
+                const s = Math.floor(currentMs / 1000);
+                timeCur.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+            }
+
+            // Telemetry readout
+            const telem = flightPathManager!.getCurrentTelemetry();
+            const telemDiv = document.getElementById('fp-telemetry');
+            if (telemDiv) telemDiv.style.display = telem ? '' : 'none';
+            if (telem) {
+                const altEl = document.getElementById('fp-telem-alt');
+                const spdEl = document.getElementById('fp-telem-speed');
+                const hdgEl = document.getElementById('fp-telem-heading');
+                if (altEl) altEl.textContent = `${telem.alt.toFixed(1)}m`;
+                if (spdEl) spdEl.textContent = `${telem.speed.toFixed(1)}m/s`;
+                if (hdgEl) hdgEl.textContent = `${telem.heading.toFixed(0)}°`;
+            }
+        });
+
+        flightPathManager.onPlaybackEnd(() => {
+            const btn = document.getElementById('fp-play-btn');
+            if (btn) btn.textContent = '\u25B6';
+            // Camera stays frozen at last position per spec — user must hit Stop to restore
+        });
+    }
 
     // Initialize landmark alignment system
     landmarkAlignment = new LandmarkAlignment({
@@ -1269,38 +2177,260 @@ function setBackgroundColor(hexColor: string) {
 
 // Transform controls (delegated to transform-controller.js)
 function setSelectedObject(selection: SelectedObject) {
-    setSelectedObjectHandler(selection, { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state });
-    updateTransformPaneSelection(selection as string, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup);
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    setSelectedObjectHandler(selection, { transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup, state });
+    updateTransformPaneSelection(selection as string, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup);
 }
 
 function syncBothObjects() {
-    syncBothObjectsHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    syncBothObjectsHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup });
 }
 
 function applyPivotRotation() {
-    applyPivotRotationHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    applyPivotRotationHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup, state });
 }
 
 function applyUniformScale() {
-    applyUniformScaleHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    applyUniformScaleHandler({ transformControls, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup, state });
+}
+
+function captureTransformMatrices(): MatrixSnapshot {
+    const result: MatrixSnapshot = {};
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    const objects: [any, string][] = [
+        [splatMesh, 'splat'],
+        [modelGroup, 'model'],
+        [pointcloudGroup, 'pointcloud'],
+        [stlGroup, 'stl'],
+        [cadGroup, 'cad'],
+        [drawingGroup, 'drawing'],
+        [flightpathGroup, 'flightpath'],
+        [colmapGroup, 'colmap'],
+    ];
+    for (const [obj, key] of objects) {
+        if (obj) {
+            obj.updateMatrix();
+            result[key] = obj.matrix.clone();
+        }
+    }
+    return result;
+}
+
+function applyTransformMatrices(snapshot: MatrixSnapshot): void {
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    const objects: [any, string][] = [
+        [splatMesh, 'splat'],
+        [modelGroup, 'model'],
+        [pointcloudGroup, 'pointcloud'],
+        [stlGroup, 'stl'],
+        [cadGroup, 'cad'],
+        [drawingGroup, 'drawing'],
+        [flightpathGroup, 'flightpath'],
+        [colmapGroup, 'colmap'],
+    ];
+    for (const [obj, key] of objects) {
+        const mat = snapshot[key];
+        if (!obj || !mat) continue;
+        (mat as THREE.Matrix4).decompose(obj.position, obj.quaternion, obj.scale);
+        obj.rotation.setFromQuaternion(obj.quaternion);
+    }
+    storeLastPositions();
+    updateTransformInputs();
+}
+
+function performUndo(): void {
+    // Try trim undo first (most recent action wins)
+    if (trimUndoStack.length > 0) {
+        const lastTransform = undoManager.canUndo() ? undoManager['undoStack'][undoManager['undoStack'].length - 1] : null;
+        const lastTrim = trimUndoStack[trimUndoStack.length - 1];
+        // Simple heuristic: trim undo stack is always more recent if it has entries
+        // (transforms push to their own stack, trims push to theirs)
+        if (lastTrim && flightPathManager) {
+            trimUndoStack.pop();
+            trimRedoStack.push(lastTrim);
+            flightPathManager.setTrim(lastTrim.pathId, lastTrim.before.trimStart ?? 0, lastTrim.before.trimEnd ?? (flightPathManager.getPaths().find(p => p.id === lastTrim.pathId)?.points.length ?? 1) - 1);
+            if (lastTrim.before.trimStart === undefined && lastTrim.before.trimEnd === undefined) {
+                flightPathManager.resetTrim(lastTrim.pathId);
+            }
+            syncTrimToStore(lastTrim.pathId);
+            updateFlightPathUI();
+            notify.info('Undo trim');
+            return;
+        }
+    }
+    const entry = undoManager.undo();
+    if (entry) {
+        applyTransformMatrices(entry.beforeMatrices);
+        notify.info('Undo transform');
+    }
+}
+
+function performRedo(): void {
+    if (trimRedoStack.length > 0) {
+        const lastTrim = trimRedoStack[trimRedoStack.length - 1];
+        if (lastTrim && flightPathManager) {
+            trimRedoStack.pop();
+            trimUndoStack.push(lastTrim);
+            flightPathManager.setTrim(lastTrim.pathId, lastTrim.after.trimStart ?? 0, lastTrim.after.trimEnd ?? (flightPathManager.getPaths().find(p => p.id === lastTrim.pathId)?.points.length ?? 1) - 1);
+            syncTrimToStore(lastTrim.pathId);
+            updateFlightPathUI();
+            notify.info('Redo trim');
+            return;
+        }
+    }
+    const entry = undoManager.redo();
+    if (entry) {
+        applyTransformMatrices(entry.afterMatrices);
+        notify.info('Redo transform');
+    }
 }
 
 function storeLastPositions() {
-    storeLastPositionsHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    storeLastPositionsHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup });
 }
 
 function setTransformMode(mode: TransformMode) {
-    setTransformModeHandler(mode, { transformControls, state, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    setTransformModeHandler(mode, { transformControls, state, splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup });
 }
 
 function centerAtOrigin() {
-    centerAtOriginHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, camera, controls, state });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    centerAtOriginHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup, camera, controls, state });
     updateTransformInputs();
 }
 
 function resetTransform() {
-    resetTransformHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, state });
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    resetTransformHandler({ splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup, state });
     updateTransformInputs();
+}
+
+// ── Asset removal ───────────────────────────────────────────
+function enableRemoveBtn(id: string, enabled: boolean) {
+    const btn = document.getElementById(id) as HTMLButtonElement | null;
+    if (btn) btn.disabled = !enabled;
+}
+
+function removeAssetGroup(group: THREE.Group, stateKey: keyof AppState, filenameId: string, defaultHint: string, blobKey?: keyof ReturnType<typeof getStore>) {
+    // Detach transform controls if attached to this group
+    if (transformControls?.object === group) {
+        setSelectedObject('none' as SelectedObject);
+    }
+    while (group.children.length > 0) {
+        const child = group.children[0];
+        disposeObject(child);
+        group.remove(child);
+    }
+    (state as any)[stateKey] = false;
+    const el = document.getElementById(filenameId);
+    if (el) el.textContent = defaultHint;
+    if (blobKey) (getStore() as any)[blobKey] = null;
+    updateVisibility();
+    updateTransformInputs();
+    storeLastPositions();
+    updateObjectSelectButtons();
+}
+
+function removeSplat() {
+    if (!state.splatLoaded) return;
+    // Detach transform controls if attached to the splat
+    if (transformControls?.object === splatMesh) {
+        setSelectedObject('none' as SelectedObject);
+    }
+    if (splatMesh) {
+        scene.remove(splatMesh);
+        if (splatMesh.dispose) splatMesh.dispose();
+        splatMesh = null;
+    }
+    state.splatLoaded = false;
+    assets.splatBlob = null;
+    const el = document.getElementById('splat-filename');
+    if (el) el.textContent = '.ply, .splat, .ksplat, .spz';
+    const vertRow = document.getElementById('splat-vertices-row');
+    if (vertRow) vertRow.style.display = 'none';
+    enableRemoveBtn('btn-remove-splat', false);
+    if (state.displayMode === 'splat' || state.displayMode === 'both') {
+        setDisplayMode(state.modelLoaded ? 'model' : 'splat');
+    }
+    updateVisibility();
+    updateTransformInputs();
+    storeLastPositions();
+    updateObjectSelectButtons();
+}
+
+function removeModel() {
+    if (!state.modelLoaded) return;
+    removeAssetGroup(modelGroup, 'modelLoaded', 'model-filename', '.glb, .obj (+.mtl)', 'meshBlob');
+    const facesRow = document.getElementById('model-faces-row');
+    if (facesRow) facesRow.style.display = 'none';
+    const texRow = document.getElementById('model-textures-row');
+    if (texRow) texRow.style.display = 'none';
+    enableRemoveBtn('btn-remove-model', false);
+    if (state.displayMode === 'model' || state.displayMode === 'both') {
+        setDisplayMode(state.splatLoaded ? 'splat' : 'model');
+    }
+}
+
+function removePointcloud() {
+    if (!state.pointcloudLoaded) return;
+    removeAssetGroup(pointcloudGroup, 'pointcloudLoaded', 'pointcloud-filename', '.e57', 'pointcloudBlob');
+    const ptsRow = document.getElementById('pointcloud-points-row');
+    if (ptsRow) ptsRow.style.display = 'none';
+    enableRemoveBtn('btn-remove-pointcloud', false);
+}
+
+function removeSTL() {
+    if (!state.stlLoaded) return;
+    removeAssetGroup(stlGroup, 'stlLoaded', 'stl-filename', '.stl');
+    enableRemoveBtn('btn-remove-stl', false);
+    if (state.displayMode === 'stl') {
+        setDisplayMode(state.modelLoaded ? 'model' : 'splat');
+    }
+}
+
+function removeCAD() {
+    if (!state.cadLoaded) return;
+    removeAssetGroup(cadGroup, 'cadLoaded', 'cad-filename', '.step, .iges', 'cadBlob');
+    const store = getStore();
+    store.cadFileName = null;
+    state.currentCadUrl = null;
+    enableRemoveBtn('btn-remove-cad', false);
+}
+
+function removeDrawing() {
+    if (!state.drawingLoaded) return;
+    removeAssetGroup(drawingGroup, 'drawingLoaded', 'drawing-filename', '.dxf');
+    state.currentDrawingUrl = null;
+    enableRemoveBtn('btn-remove-drawing', false);
+}
+
+function removeFlightPath() {
+    if (!state.flightPathLoaded) return;
+    flightPathManager?.dispose();
+    const store = getStore();
+    store.flightPathBlobs = [];
+    state.flightPathLoaded = false;
+    const filenameEl = document.getElementById('flightpath-filename');
+    if (filenameEl) filenameEl.textContent = '.csv, .kml, .kmz, .srt, .txt';
+    enableRemoveBtn('btn-remove-flightpath', false);
+    updateObjectSelectButtons();
+    updateFlightPathUI();
+    updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
 }
 
 function updateVisibility() {
@@ -1311,11 +2441,14 @@ function updateVisibility() {
         pointcloud: state.pointcloudLoaded,
         stl: state.stlLoaded
     });
+    updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
     updateObjectSelectButtons();
 }
 
 function updateTransformInputs() {
-    updateTransformInputsHandler(splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup);
+    const flightpathGroup = sceneManager?.flightPathGroup || null;
+    const colmapGroup = sceneManager?.colmapGroup || null;
+    updateTransformInputsHandler(splatMesh, modelGroup, pointcloudGroup, stlGroup, cadGroup, drawingGroup, flightpathGroup, colmapGroup);
 }
 
 /** Show/hide the object-select buttons in the Transform pane based on what is loaded. */
@@ -1325,29 +2458,265 @@ function updateObjectSelectButtons() {
         if (el) el.style.display = visible ? '' : 'none';
     };
     show('btn-select-splat', state.splatLoaded);
-    show('btn-select-model', state.modelLoaded);
+    show('btn-select-mesh', state.modelLoaded);
     show('btn-select-pointcloud', state.pointcloudLoaded);
     show('btn-select-stl', state.stlLoaded);
     show('btn-select-cad', state.cadLoaded);
     show('btn-select-drawing', state.drawingLoaded);
+    show('btn-select-flightpath', state.flightPathLoaded);
+    show('btn-select-colmap', state.colmapLoaded);
+    // Sync remove buttons with loaded state
+    enableRemoveBtn('btn-remove-splat', state.splatLoaded);
+    enableRemoveBtn('btn-remove-model', state.modelLoaded);
+    enableRemoveBtn('btn-remove-pointcloud', state.pointcloudLoaded);
+    enableRemoveBtn('btn-remove-stl', state.stlLoaded);
+    enableRemoveBtn('btn-remove-cad', state.cadLoaded);
+    enableRemoveBtn('btn-remove-drawing', state.drawingLoaded);
+    enableRemoveBtn('btn-remove-flightpath', state.flightPathLoaded);
     // "All" only when 2+ types are loaded
-    const loadedCount = [state.splatLoaded, state.modelLoaded, state.pointcloudLoaded, state.stlLoaded, state.cadLoaded, state.drawingLoaded].filter(Boolean).length;
+    const loadedCount = [state.splatLoaded, state.modelLoaded, state.pointcloudLoaded, state.stlLoaded, state.cadLoaded, state.drawingLoaded, state.flightPathLoaded, state.colmapLoaded].filter(Boolean).length;
     show('btn-select-both', loadedCount >= 2);
+
+    // Show/hide flight path tool button and drone flight settings section
+    const fpToolBtn = document.getElementById('btn-tool-flightpath');
+    if (fpToolBtn) fpToolBtn.style.display = state.flightPathLoaded ? '' : 'none';
+    const droneSection = document.getElementById('drone-flight-section');
+    if (droneSection) droneSection.style.display = state.flightPathLoaded ? '' : 'none';
 }
 
-// Handle loading splat from URL via prompt
-function handleLoadSplatFromUrlPrompt() {
-    handleLoadSplatFromUrlPromptCtrl(createFileInputDeps());
+/** Sync trim values from FlightPathManager to the blob store. */
+function syncTrimToStore(pathId: string): void {
+    if (!flightPathManager) return;
+    const pathData = flightPathManager.getPaths().find(p => p.id === pathId);
+    if (!pathData) return;
+    const fpStore = getStore();
+    const blobEntry = fpStore.flightPathBlobs.find((b: { fileName: string }) => b.fileName === pathData.fileName);
+    if (blobEntry) {
+        blobEntry.trimStart = pathData.trimStart;
+        blobEntry.trimEnd = pathData.trimEnd;
+    }
 }
 
-// Handle loading model from URL via prompt
-function handleLoadModelFromUrlPrompt() {
-    handleLoadModelFromUrlPromptCtrl(createFileInputDeps());
+/** Update the flight path pane UI: stats, path list. */
+function updateFlightPathUI(): void {
+    if (!flightPathManager) return;
+
+    const paths = flightPathManager.getPaths();
+    const stats = flightPathManager.getStats();
+
+    // Stats
+    const emptyEl = document.getElementById('flight-stats-empty');
+    const contentEl = document.getElementById('flight-stats-content');
+    if (emptyEl) emptyEl.style.display = stats ? 'none' : '';
+    if (contentEl) contentEl.style.display = stats ? '' : 'none';
+    if (stats) {
+        const set = (id: string, val: string) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        set('fp-stat-duration', stats.duration);
+        set('fp-stat-distance', stats.distance);
+        set('fp-stat-max-alt', stats.maxAlt);
+        set('fp-stat-max-speed', stats.maxSpeed);
+        set('fp-stat-avg-speed', stats.avgSpeed);
+        set('fp-stat-points', stats.points);
+    }
+
+    // Path count
+    const countEl = document.getElementById('fp-path-count');
+    if (countEl) countEl.textContent = paths.length > 0 ? `${paths.length}` : '';
+
+    // Path list
+    const listEl = document.getElementById('fp-path-list');
+    if (listEl) {
+        listEl.innerHTML = '';
+        for (const p of paths) {
+            // --- Path row (visibility checkbox + name + reset + delete) ---
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:center; gap:6px; padding:3px 0; font-size:11px;';
+
+            const vis = document.createElement('input');
+            vis.type = 'checkbox';
+            vis.checked = flightPathManager.isPathVisible(p.id);
+            vis.title = 'Toggle visibility';
+            vis.style.cssText = 'margin:0; flex-shrink:0;';
+            vis.addEventListener('change', () => {
+                flightPathManager!.setPathVisible(p.id, vis.checked);
+            });
+
+            const name = document.createElement('span');
+            name.textContent = p.fileName;
+            name.style.cssText = 'flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary);';
+            name.title = `${p.fileName} — ${p.points.length} pts, ${p.durationS}s`;
+
+            // Reset trim link (shown only when trim is active)
+            const isTrimmed = p.trimStart !== undefined || p.trimEnd !== undefined;
+            const resetLink = document.createElement('span');
+            resetLink.className = 'fp-trim-reset';
+            resetLink.textContent = 'reset';
+            resetLink.title = 'Reset trim to full path';
+            resetLink.style.display = isTrimmed ? '' : 'none';
+            resetLink.addEventListener('click', () => {
+                const before = { trimStart: p.trimStart, trimEnd: p.trimEnd };
+                flightPathManager!.resetTrim(p.id);
+                trimUndoStack.push({ pathId: p.id, before, after: { trimStart: undefined, trimEnd: undefined } });
+                trimRedoStack.length = 0;
+                if (trimUndoStack.length > 20) trimUndoStack.shift();
+                syncTrimToStore(p.id);
+                updateFlightPathUI();
+            });
+
+            const del = document.createElement('button');
+            del.textContent = '\u00D7';
+            del.className = 'prop-btn danger small';
+            del.style.cssText = 'padding:0 5px; min-width:0; line-height:1.4; font-size:13px;';
+            del.title = 'Remove path';
+            del.addEventListener('click', () => {
+                flightPathManager!.deletePath(p.id);
+                // Remove from blob store
+                const fpStore = getStore();
+                const idx = fpStore.flightPathBlobs.findIndex((b: any) => b.fileName === p.fileName);
+                if (idx >= 0) fpStore.flightPathBlobs.splice(idx, 1);
+                // Update state
+                state.flightPathLoaded = flightPathManager!.hasData;
+                updateObjectSelectButtons();
+                updateFlightPathUI();
+                updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
+            });
+
+            row.appendChild(vis);
+            row.appendChild(name);
+            row.appendChild(resetLink);
+            row.appendChild(del);
+            listEl.appendChild(row);
+
+            // --- Trim bar ---
+            const totalPts = p.points.length;
+            if (totalPts > 2) {
+                const trimStart = p.trimStart ?? 0;
+                const trimEnd = p.trimEnd ?? (totalPts - 1);
+
+                const bar = document.createElement('div');
+                bar.className = 'fp-trim-bar';
+
+                const range = document.createElement('div');
+                range.className = 'fp-trim-range';
+
+                const handleStart = document.createElement('div');
+                handleStart.className = 'fp-trim-handle fp-trim-handle-start';
+
+                const handleEnd = document.createElement('div');
+                handleEnd.className = 'fp-trim-handle fp-trim-handle-end';
+
+                const startPct = (trimStart / (totalPts - 1)) * 100;
+                const endPct = (trimEnd / (totalPts - 1)) * 100;
+                range.style.left = `${startPct}%`;
+                range.style.width = `${endPct - startPct}%`;
+                handleStart.style.left = `${startPct}%`;
+                handleEnd.style.left = `${endPct}%`;
+
+                bar.appendChild(range);
+                bar.appendChild(handleStart);
+                bar.appendChild(handleEnd);
+
+                // Drag logic — update handle/range positions directly during drag,
+                // only rebuild full UI on mouseup to avoid detaching the bar element.
+                const setupDrag = (handle: HTMLElement, isStart: boolean) => {
+                    let dragging = false;
+                    let beforeTrim: { trimStart?: number; trimEnd?: number } | null = null;
+
+                    const updatePositions = (startIdx: number, endIdx: number) => {
+                        const sPct = (startIdx / (totalPts - 1)) * 100;
+                        const ePct = (endIdx / (totalPts - 1)) * 100;
+                        handleStart.style.left = `${sPct}%`;
+                        handleEnd.style.left = `${ePct}%`;
+                        range.style.left = `${sPct}%`;
+                        range.style.width = `${ePct - sPct}%`;
+                    };
+
+                    const onMove = (e: MouseEvent) => {
+                        if (!dragging) return;
+                        const rect = bar.getBoundingClientRect();
+                        if (rect.width === 0) return; // safety: bar detached
+                        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                        const idx = Math.round(pct * (totalPts - 1));
+
+                        // Read live trim values from the path data
+                        const liveStart = p.trimStart ?? 0;
+                        const liveEnd = p.trimEnd ?? (totalPts - 1);
+
+                        if (isStart) {
+                            const newStart = Math.min(idx, liveEnd - 1);
+                            flightPathManager!.setTrim(p.id, newStart, liveEnd);
+                            updatePositions(newStart, liveEnd);
+                        } else {
+                            const newEnd = Math.max(idx, liveStart + 1);
+                            flightPathManager!.setTrim(p.id, liveStart, newEnd);
+                            updatePositions(liveStart, newEnd);
+                        }
+                    };
+
+                    const onUp = () => {
+                        dragging = false;
+                        handle.classList.remove('dragging');
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+
+                        // Push trim undo entry
+                        if (beforeTrim) {
+                            const afterTrim = { trimStart: p.trimStart, trimEnd: p.trimEnd };
+                            if (beforeTrim.trimStart !== afterTrim.trimStart || beforeTrim.trimEnd !== afterTrim.trimEnd) {
+                                trimUndoStack.push({ pathId: p.id, before: beforeTrim, after: afterTrim });
+                                trimRedoStack.length = 0;
+                                if (trimUndoStack.length > 20) trimUndoStack.shift();
+                            }
+                            beforeTrim = null;
+                        }
+
+                        syncTrimToStore(p.id);
+                        updateFlightPathUI(); // full rebuild only on mouseup
+                    };
+
+                    handle.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dragging = true;
+                        beforeTrim = { trimStart: p.trimStart, trimEnd: p.trimEnd };
+                        handle.classList.add('dragging');
+                        document.addEventListener('mousemove', onMove);
+                        document.addEventListener('mouseup', onUp);
+                    });
+                };
+
+                setupDrag(handleStart, true);
+                setupDrag(handleEnd, false);
+
+                listEl.appendChild(bar);
+            }
+        }
+    }
+
+    // Total time label
+    const timeTotal = document.getElementById('fp-time-total');
+    if (timeTotal && paths.length > 0) {
+        const totalS = paths.reduce((sum, p) => sum + p.durationS, 0);
+        const m = Math.floor(totalS / 60);
+        const s = totalS % 60;
+        timeTotal.textContent = `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    }
 }
 
-// Handle loading point cloud from URL via prompt
-function handleLoadPointcloudFromUrlPrompt() {
-    handleLoadPointcloudFromUrlPromptCtrl(createFileInputDeps());
+/** Update the colmap pane UI: camera count, button visibility. */
+function updateColmapUI(): void {
+    const info = document.getElementById('colmap-info');
+    const count = document.getElementById('colmap-camera-count');
+    const selectBtn = document.getElementById('btn-select-colmap');
+    const alignBtn = document.getElementById('btn-align-flightpath');
+    const noData = document.getElementById('colmap-no-data');
+    if (info) info.style.display = state.colmapLoaded ? '' : 'none';
+    if (noData) noData.style.display = state.colmapLoaded ? 'none' : '';
+    if (count && colmapManager) count.textContent = String(colmapManager.cameraCount);
+    if (selectBtn) selectBtn.style.display = state.colmapLoaded ? '' : 'none';
+    if (alignBtn) alignBtn.style.display = (state.colmapLoaded && state.flightPathLoaded) ? '' : 'none';
+    const sfmSection = document.getElementById('sfm-camera-section');
+    if (sfmSection) sfmSection.style.display = state.colmapLoaded ? '' : 'none';
 }
 
 // Handle loading archive from URL via prompt
@@ -1361,10 +2730,10 @@ async function handlePointcloudFile(event: Event) {
 }
 
 // Handle archive file input (delegated to archive-pipeline.ts)
-async function handleArchiveFile(event: Event) { return handleArchiveFileCtrl(event, createArchivePipelineDeps()); }
+async function handleArchiveFile(event: Event) { clearRecordingPreview(); return handleArchiveFileCtrl(event, createArchivePipelineDeps()); }
 
 // Load archive from URL (delegated to archive-pipeline.ts)
-async function loadArchiveFromUrl(url: string) { return loadArchiveFromUrlCtrl(url, createArchivePipelineDeps()); }
+async function loadArchiveFromUrl(url: string) { clearRecordingPreview(); return loadArchiveFromUrlCtrl(url, createArchivePipelineDeps()); }
 
 // Ensure archive asset loaded (delegated to archive-pipeline.ts)
 async function ensureAssetLoaded(assetType: string) { return ensureAssetLoadedCtrl(assetType, createArchivePipelineDeps()); }
@@ -1443,6 +2812,10 @@ async function showExportPanel() {
 // SCREENSHOT FUNCTIONS (delegated to screenshot-manager.js)
 // =============================================================================
 
+function downloadScreenshot() {
+    return downloadScreenshotHandler({ renderer, scene, camera, state, postProcessing });
+}
+
 function captureScreenshotToList() {
     return captureScreenshotToListHandler({ renderer, scene, camera, state, postProcessing });
 }
@@ -1459,6 +2832,176 @@ function captureManualPreview() {
     return captureManualPreviewHandler({ renderer, scene, camera, state, postProcessing });
 }
 
+// =============================================================================
+// RECORDING FUNCTIONS (delegated to recording-manager.ts)
+// =============================================================================
+
+function handleStartRecording(): void {
+    const activeMode = document.querySelector('.rec-mode-btn.active') as HTMLElement | null;
+    const mode = (activeMode?.dataset.recMode || 'free') as RecordingMode;
+
+    const startBtn = document.getElementById('btn-rec-start');
+    const stopBtn = document.getElementById('btn-rec-stop');
+    if (startBtn) startBtn.style.display = 'none';
+    if (stopBtn) stopBtn.style.display = 'flex';
+
+    const started = startRecordingHandler(mode, async (result) => {
+        if (startBtn) startBtn.style.display = 'flex';
+        if (stopBtn) stopBtn.style.display = 'none';
+
+        const container = document.getElementById('rec-trim-container');
+        if (!container) return;
+
+        const archiveTitle = state.metadata?.title || 'Untitled';
+        const defaultTitle = `${archiveTitle} - ${mode} - ${new Date().toLocaleDateString()}`;
+
+        const trimResult = await showTrimUI(container, result.blob, defaultTitle);
+        if (!trimResult) {
+            discardRecording();
+            return;
+        }
+
+        const statusEl = document.getElementById('rec-upload-status');
+        const statusText = document.getElementById('rec-upload-text');
+        if (statusEl) statusEl.classList.remove('hidden');
+        if (statusText) statusText.textContent = 'Uploading...';
+
+        const uploadResult = await uploadRecording({
+            title: trimResult.title,
+            archiveHash: state.currentArchiveUrl
+                ? new URL(state.currentArchiveUrl, window.location.origin).pathname
+                : state.archiveFileName ? '/archives/' + state.archiveFileName : undefined,
+            trimStart: trimResult.trimStart,
+            trimEnd: trimResult.trimEnd,
+        });
+
+        if (uploadResult) {
+            if (statusText) statusText.textContent = 'Processing...';
+            pollMediaStatus(uploadResult.id, (status, data) => {
+                if (statusText) {
+                    if (status === 'ready') {
+                        statusText.textContent = 'Ready!';
+                        setTimeout(() => { if (statusEl) statusEl.classList.add('hidden'); }, 3000);
+                        showRecordingPreview(data);
+                    } else if (status === 'error') {
+                        statusText.textContent = 'Transcode failed — try again';
+                    }
+                }
+            });
+        } else {
+            if (statusEl) statusEl.classList.add('hidden');
+        }
+    });
+
+    if (!started) {
+        if (startBtn) startBtn.style.display = 'flex';
+        if (stopBtn) stopBtn.style.display = 'none';
+        return;
+    }
+
+    // Mode-specific automation
+    if (mode === 'turntable') {
+        controls.autoRotate = true;
+        const speedSlider = document.getElementById('rec-turntable-speed') as HTMLInputElement | null;
+        controls.autoRotateSpeed = parseFloat(speedSlider?.value || '2') * 2;
+    } else if (mode === 'walkthrough') {
+        import('./modules/walkthrough-controller.js').then(wc => wc.playPreview());
+    } else if (mode === 'annotation-tour') {
+        const dwellSlider = document.getElementById('rec-tour-dwell') as HTMLInputElement | null;
+        const dwellTime = (parseInt(dwellSlider?.value || '3')) * 1000;
+        startAnnotationTour(
+            { camera, controls, annotationSystem },
+            {
+                dwellTime,
+                flyDuration: 1500,
+                onComplete: () => stopRecordingHandler(),
+            }
+        );
+    }
+}
+
+function handleStopRecording(): void {
+    stopRecordingHandler();
+    controls.autoRotate = false;
+    stopAnnotationTour();
+}
+
+function showRecordingPreview(media: any): void {
+    const container = document.getElementById('rec-result-preview');
+    if (!container || !media) return;
+    container.classList.remove('hidden');
+    container.innerHTML = '';
+
+    const card = document.createElement('div');
+    card.className = 'rec-preview-card';
+
+    // Thumbnail with click-to-play
+    if (media.thumb_path) {
+        const thumbWrap = document.createElement('div');
+        thumbWrap.className = 'rec-preview-thumb';
+        const img = document.createElement('img');
+        img.src = media.thumb_path;
+        img.alt = media.title || 'Recording';
+        if (media.gif_path) {
+            const thumbSrc = media.thumb_path;
+            img.addEventListener('mouseenter', () => { img.src = media.gif_path; });
+            img.addEventListener('mouseleave', () => { img.src = thumbSrc; });
+        }
+        if (media.mp4_path) {
+            img.style.cursor = 'pointer';
+            img.addEventListener('click', () => {
+                thumbWrap.innerHTML = '';
+                const video = document.createElement('video');
+                video.src = media.mp4_path;
+                video.controls = true;
+                video.autoplay = true;
+                video.style.cssText = 'width:100%; border-radius:4px; background:#000;';
+                thumbWrap.appendChild(video);
+            });
+        }
+        thumbWrap.appendChild(img);
+        card.appendChild(thumbWrap);
+    }
+
+    // Action buttons
+    const actions = document.createElement('div');
+    actions.className = 'rec-preview-actions';
+
+    if (media.share_url) {
+        const shareBtn = document.createElement('button');
+        shareBtn.className = 'prop-btn';
+        shareBtn.textContent = 'Copy Share Link';
+        shareBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(location.origin + media.share_url);
+                notify.success('Share link copied');
+            } catch { notify.error('Copy failed'); }
+        });
+        actions.appendChild(shareBtn);
+    }
+
+    if (media.gif_path) {
+        const gifBtn = document.createElement('button');
+        gifBtn.className = 'prop-btn';
+        gifBtn.textContent = 'Copy GIF URL';
+        gifBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(location.origin + media.gif_path);
+                notify.success('GIF URL copied');
+            } catch { notify.error('Copy failed'); }
+        });
+        actions.appendChild(gifBtn);
+    }
+
+    card.appendChild(actions);
+    container.appendChild(card);
+}
+
+function clearRecordingPreview(): void {
+    const container = document.getElementById('rec-result-preview');
+    if (container) { container.innerHTML = ''; container.classList.add('hidden'); }
+}
+
 // Download archive — delegated to export-controller.ts
 async function downloadArchive() {
     const { downloadArchive: ctrl } = await import('./modules/export-controller.js');
@@ -1468,12 +3011,6 @@ async function downloadArchive() {
 // Save archive to library — delegated to export-controller.ts
 async function saveToLibrary() {
     const { saveToLibrary: ctrl } = await import('./modules/export-controller.js');
-    return ctrl(createExportDeps());
-}
-
-// Download generic offline viewer — delegated to export-controller.ts
-async function downloadGenericViewer() {
-    const { downloadGenericViewer: ctrl } = await import('./modules/export-controller.js');
     return ctrl(createExportDeps());
 }
 
@@ -1548,19 +3085,22 @@ function wireNativeFileDialogs() {
     if (!tauriBridge || !tauriBridge.isTauri()) return;
     tauriBridge.wireNativeFileDialogs({
         onSplatFiles: async (files: any[]) => {
-            document.getElementById('splat-filename').textContent = files[0].name;
+            const el = document.getElementById('splat-filename');
+            if (el) el.textContent = files[0].name;
             showLoading('Loading Gaussian Splat...');
             try { await loadSplatFromFileHandler(files[0], createFileHandlerDeps()); hideLoading(); }
             catch (e) { log.error('Error loading splat:', e); hideLoading(); notify.error('Error loading Gaussian Splat: ' + e.message); }
         },
         onModelFiles: async (files: any[]) => {
-            document.getElementById('model-filename').textContent = files[0].name;
+            const el = document.getElementById('model-filename');
+            if (el) el.textContent = files[0].name;
             showLoading('Loading 3D Model...');
             try { await loadModelFromFileHandler(files as any, createFileHandlerDeps()); hideLoading(); }
             catch (e) { log.error('Error loading model:', e); hideLoading(); notify.error('Error loading model: ' + e.message); }
         },
         onArchiveFiles: async (files: any[]) => {
-            document.getElementById('archive-filename').textContent = files[0].name;
+            const el = document.getElementById('archive-filename');
+            if (el) el.textContent = files[0].name;
             showLoading('Loading archive...');
             try {
                 if (state.archiveLoader) state.archiveLoader.dispose();
@@ -1571,20 +3111,23 @@ function wireNativeFileDialogs() {
             } catch (e) { log.error('Error loading archive:', e); hideLoading(); notify.error('Error loading archive: ' + e.message); }
         },
         onPointcloudFiles: async (files: any[]) => {
-            document.getElementById('pointcloud-filename').textContent = files[0].name;
+            const el = document.getElementById('pointcloud-filename');
+            if (el) el.textContent = files[0].name;
             showLoading('Loading point cloud...');
             try { await loadPointcloudFromFileHandler(files[0], createPointcloudDeps()); hideLoading(); }
             catch (e) { log.error('Error loading point cloud:', e); hideLoading(); notify.error('Error loading point cloud: ' + e.message); }
         },
         onSTLFiles: async (files: any[]) => {
-            document.getElementById('stl-filename').textContent = files[0].name;
+            const el = document.getElementById('stl-filename');
+            if (el) el.textContent = files[0].name;
             showLoading('Loading STL Model...');
             try { await loadSTLFileHandler([files[0]] as any, createFileHandlerDeps()); hideLoading(); }
             catch (e) { log.error('Error loading STL:', e); hideLoading(); notify.error('Error loading STL: ' + e.message); }
         },
         onProxyMeshFiles: async (files: any[]) => {
             assets.proxyMeshBlob = files[0];
-            document.getElementById('proxy-mesh-filename').textContent = files[0].name;
+            const el = document.getElementById('proxy-mesh-filename');
+            if (el) el.textContent = files[0].name;
             notify.info(`Display proxy "${files[0].name}" ready — will be included in archive exports.`);
         },
         onSourceFiles: async (files: any[]) => {
@@ -1633,36 +3176,98 @@ async function handleSTLFile(event: Event) {
     return handleSTLFileCtrl(event, createFileInputDeps());
 }
 
-function handleLoadSTLFromUrlPrompt() {
-    handleLoadSTLFromUrlPromptCtrl(createFileInputDeps());
-}
-
 async function handleDrawingFile(event: Event) {
     return handleDrawingFileCtrl(event, createFileInputDeps());
-}
-
-function handleLoadDrawingFromUrlPrompt() {
-    handleLoadDrawingFromUrlPromptCtrl(createFileInputDeps());
 }
 
 async function handleCADFile(event: Event) {
     return handleCADFileCtrl(event, createFileInputDeps());
 }
 
-function handleLoadCADFromUrlPrompt() {
-    handleLoadCADFromUrlPromptCtrl(createFileInputDeps());
-}
-
 async function handleProxyMeshFile(event: Event) {
-    return handleProxyMeshFileCtrl(event, createFileInputDeps());
+    await handleProxyMeshFileCtrl(event, createFileInputDeps());
+    showQualityToggleIfNeeded();
 }
 
 async function handleProxySplatFile(event: Event) {
     return handleProxySplatFileCtrl(event, createFileInputDeps());
 }
 
-// Switch quality tier (delegated to archive-pipeline.ts)
-async function switchQualityTier(newTier: string) { return switchQualityTierCtrl(newTier, createArchivePipelineDeps()); }
+/** Show or hide the SD/HD toggle in the status bar based on proxy availability. */
+function showQualityToggleIfNeeded() {
+    const container = document.getElementById('quality-toggle-container');
+    if (!container) return;
+    const assets = getStore();
+    const hasProxy = !!(assets.proxyMeshBlob || state.proxyMeshGroup);
+    const hasMesh = state.modelLoaded;
+    if (hasMesh && hasProxy) {
+        container.classList.remove('hidden');
+    } else {
+        container.classList.add('hidden');
+    }
+}
+
+/** Update SD/HD button active states. */
+function updateQualityButtonStates(tier: string) {
+    document.querySelectorAll('.quality-toggle-btn').forEach((btn: Element) => {
+        btn.classList.toggle('active', (btn as HTMLElement).dataset.tier === tier);
+    });
+}
+
+/**
+ * Editor quality tier switch — handles both archive-loaded and local proxies.
+ * For archive proxies, delegates to archive-pipeline switchQualityTier.
+ * For local proxies (decimator or manual upload), toggles visibility directly.
+ */
+async function switchQualityTier(newTier: string) {
+    // Archive-loaded proxy: delegate to archive-pipeline
+    if (state.archiveLoader) {
+        const contentInfo = state.archiveLoader.getContentInfo();
+        if (contentInfo.hasMeshProxy || contentInfo.hasSceneProxy) {
+            await switchQualityTierCtrl(newTier, createArchivePipelineDeps());
+            return;
+        }
+    }
+
+    // Local proxy (decimator or manual upload)
+    const assets = getStore();
+    if (newTier === 'sd') {
+        // Load proxy blob into a THREE.Group if not already loaded
+        if (!state.proxyMeshGroup && assets.proxyMeshBlob) {
+            const blobUrl = URL.createObjectURL(assets.proxyMeshBlob);
+            try {
+                const { loadGLTF } = await import('./modules/file-handlers.js');
+                const loaded = await loadGLTF(blobUrl);
+                state.proxyMeshGroup = loaded;
+                // Copy transform from full-res model
+                if (modelGroup) {
+                    loaded.position.copy(modelGroup.position);
+                    loaded.rotation.copy(modelGroup.rotation);
+                    loaded.scale.copy(modelGroup.scale);
+                }
+                loaded.visible = false;
+                scene.add(loaded);
+            } finally {
+                URL.revokeObjectURL(blobUrl);
+            }
+        }
+        if (state.proxyMeshGroup && modelGroup) {
+            state.proxyMeshGroup.visible = true;
+            modelGroup.visible = false;
+            state.viewingProxy = true;
+        }
+    } else {
+        // Switch to HD — show full-res, hide proxy
+        if (state.proxyMeshGroup) state.proxyMeshGroup.visible = false;
+        if (modelGroup) modelGroup.visible = true;
+        state.viewingProxy = false;
+    }
+
+    updateQualityButtonStates(newTier);
+    // Sync the decimation panel preview button text if present
+    const previewBtn = document.getElementById('btn-preview-proxy');
+    if (previewBtn) previewBtn.textContent = newTier === 'sd' ? 'Preview HD' : 'Preview SD';
+}
 
 // ==================== Source Files ====================
 // Extracted to source-files-manager.ts
@@ -1685,7 +3290,7 @@ function updateModelMetalnessView() { updateModelMetalnessFn(modelGroup, state.m
 function updateModelSpecularF0View() { updateModelSpecularF0Fn(modelGroup, state.modelSpecularF0); }
 
 // Alignment I/O (delegated to alignment.js)
-function createAlignmentIODeps(): any {
+function createAlignmentIODeps(): AlignmentIODeps {
     return {
         splatMesh, modelGroup, pointcloudGroup, tauriBridge,
         updateTransformInputs, storeLastPositions
@@ -1700,51 +3305,6 @@ function loadAlignmentFromUrl(url: string) {
     return loadAlignmentFromUrlHandler(url, createAlignmentIODeps());
 }
 
-// Open share dialog with current state
-async function copyShareLink() {
-    // Gather current state for the share dialog
-    const shareState = {
-        archiveUrl: state.currentArchiveUrl,
-        splatUrl: state.currentSplatUrl,
-        modelUrl: state.currentModelUrl,
-        pointcloudUrl: state.currentPointcloudUrl,
-        displayMode: state.displayMode,
-        splatTransform: null,
-        modelTransform: null,
-        pointcloudTransform: null
-    };
-
-    // Add splat transform if available
-    if (splatMesh) {
-        shareState.splatTransform = {
-            position: [splatMesh.position.x, splatMesh.position.y, splatMesh.position.z],
-            rotation: [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z],
-            scale: splatMesh.scale.x
-        };
-    }
-
-    // Add model transform if available
-    if (modelGroup) {
-        shareState.modelTransform = {
-            position: [modelGroup.position.x, modelGroup.position.y, modelGroup.position.z],
-            rotation: [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z],
-            scale: modelGroup.scale.x
-        };
-    }
-
-    // Add pointcloud transform if available
-    if (pointcloudGroup) {
-        shareState.pointcloudTransform = {
-            position: [pointcloudGroup.position.x, pointcloudGroup.position.y, pointcloudGroup.position.z],
-            rotation: [pointcloudGroup.rotation.x, pointcloudGroup.rotation.y, pointcloudGroup.rotation.z],
-            scale: pointcloudGroup.scale.x
-        };
-    }
-
-    // Show the share dialog
-    const { showShareDialog } = await import('./modules/share-dialog.js');
-    showShareDialog(shareState);
-}
 
 function resetAlignment() {
     resetAlignmentHandler(createAlignmentDeps());
@@ -1793,7 +3353,7 @@ function resetOrbitCenter() {
 }
 
 // Controls panel visibility (delegated to ui-controller.js)
-function createControlsDeps(): any {
+function createControlsDeps(): ControlsPanelDeps {
     return { state, config, onWindowResize };
 }
 
@@ -1918,6 +3478,7 @@ function _wireMeasurementControls() {
 
 // Load default files from configuration
 async function loadDefaultFiles() {
+    undoManager.clear();
     // Archive URL takes priority over splat/model URLs
     if (config.defaultArchiveUrl) {
         log.info(' Loading archive from URL:', config.defaultArchiveUrl);
@@ -1978,7 +3539,7 @@ async function loadModelFromUrl(url: string) {
 // Point cloud loading - URL wrapper
 // ============================================================
 
-function createPointcloudDeps(): any {
+function createPointcloudDeps(): LoadPointcloudDeps {
     return {
         pointcloudGroup,
         state,
@@ -2005,6 +3566,7 @@ function createPointcloudDeps(): any {
                     if (pcRow) pcRow.style.display = '';
                 }
                 updatePronomRegistry(state);
+                enableRemoveBtn('btn-remove-pointcloud', true);
             }
         }
     };
@@ -2062,6 +3624,7 @@ let _statusBarFrameCount = 0;
 const _prevCamPos = new THREE.Vector3();
 const _prevCamQuat = new THREE.Quaternion();
 let _markersDirty = true; // Start dirty so first frame always updates
+const _clock = new THREE.Clock();
 
 function animate() {
     requestAnimationFrame(animate);
@@ -2087,6 +3650,14 @@ function animate() {
 
         // Update cross-section plane (syncs THREE.Plane with gizmo anchor each frame)
         if (crossSection) crossSection.updatePlane();
+
+        // Update flight path playback
+        // Always get delta (keeps clock ticking even when not playing)
+        // Clamp to 100ms to avoid huge first-frame jump (Clock starts on construction)
+        const dt = Math.min(_clock.getDelta(), 0.1);
+        if (flightPathManager && (flightPathManager.isPlaying || flightPathManager.isTransitioning)) {
+            flightPathManager.updatePlayback(dt);
+        }
 
         // Check if camera moved since last frame (skip marker DOM updates when idle)
         const camMoved = _markersDirty
@@ -2116,6 +3687,11 @@ function animate() {
             updateAnnotationPopupPosition();
         }
 
+        // Render PiP viewport (must be after all DOM position updates)
+        if (flightPathManager?.pipEnabled) {
+            flightPathManager.renderPiP(renderer, scene);
+        }
+
         sceneManager.updateFPS(fpsElement);
 
         // Update status bar (~2 Hz to avoid DOM thrashing)
@@ -2127,7 +3703,7 @@ function animate() {
                 fps: sceneManager.lastFPS ?? 0,
                 renderer: sceneManager.rendererType ?? 'WebGL',
                 tris: ri?.render?.triangles ?? 0,
-                splats: splatMesh?.packedSplats?.splatCount ?? 0,
+                splats: splatMesh?.packedSplats?.numSplats ?? 0,
                 cameraMode: (flyControls && flyControls.enabled) ? 'Fly' : 'Orbit',
                 filename: state.archiveFileName ?? ''
             });

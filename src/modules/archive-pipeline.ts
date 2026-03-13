@@ -12,7 +12,9 @@ import { ArchiveLoader } from './archive-loader.js';
 import { hasAnyProxy } from './quality-tier.js';
 import { ASSET_STATE } from './constants.js';
 import { loadWalkthroughFromArchive } from './walkthrough-controller.js';
+import { resetWalkthroughEditor } from './walkthrough-editor.js';
 import { Logger, notify, computeMeshFaceCount, computeTextureInfo, disposeObject } from './utilities.js';
+import { updateOverlayPill } from './ui-controller.js';
 import { getStore } from './asset-store.js';
 import {
     loadGLTF,
@@ -33,13 +35,16 @@ import { normalizeScale } from '@/types.js';
 
 const log = Logger.getLogger('archive-pipeline');
 
+/** Tracks in-flight asset load promises so concurrent callers await the same operation. */
+const assetLoadingPromises = new Map<string, Promise<boolean>>();
+
 // ==================== Private Helpers ====================
 
 /**
  * Load splat from a blob URL (used by archive loader).
  * Reassigns splatMesh via deps.setSplatMesh.
  */
-async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: ArchivePipelineDeps): Promise<void> {
+async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: ArchivePipelineDeps, rawBytes?: Uint8Array): Promise<void> {
     const { sceneRefs, state, setSplatMesh } = deps;
 
     // Spark.js requires WebGL — switch renderer if currently WebGPU
@@ -57,12 +62,12 @@ async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
     // Ensure WASM is ready (required for compressed formats like .sog, .spz)
     await SplatMesh.staticInitialized;
 
-    // .sog (pcsogszip) must be pre-decoded via legacy worker; new WASM path doesn't support it
+    // .sog (pcsogszip) must be pre-decoded via legacy worker; new WASM path doesn't support it.
+    // If rawBytes are provided (from extractFileRaw), use them directly to skip the fetch round-trip.
     const fileType = getSplatFileType(fileName);
     let newSplatMesh: any;
     if (fileType === 'pcsogszip') {
-        const response = await fetch(blobUrl);
-        const fileBytes = new Uint8Array(await response.arrayBuffer());
+        const fileBytes = rawBytes ?? new Uint8Array(await (await fetch(blobUrl)).arrayBuffer());
         const decoded = await unpackSplats({ input: fileBytes, fileType: 'pcsogszip' });
         const packedSplats = new PackedSplats(decoded);
         newSplatMesh = new SplatMesh({ packedSplats });
@@ -98,8 +103,10 @@ async function loadSplatFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
     deps.ui.updateVisibility();
 
     // Update UI
-    document.getElementById('splat-filename')!.textContent = fileName;
-    document.getElementById('splat-vertices')!.textContent = 'Loaded';
+    const splatFilenameEl = document.getElementById('splat-filename');
+    if (splatFilenameEl) splatFilenameEl.textContent = fileName;
+    const splatVerticesEl = document.getElementById('splat-vertices');
+    if (splatVerticesEl) splatVerticesEl.textContent = 'Loaded';
 }
 
 /**
@@ -141,8 +148,10 @@ async function loadModelFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
 
         // Count faces and update UI
         const faceCount = computeMeshFaceCount(loadedObject);
-        document.getElementById('model-filename')!.textContent = fileName;
-        document.getElementById('model-faces')!.textContent = faceCount.toLocaleString();
+        const modelFilenameEl = document.getElementById('model-filename');
+        if (modelFilenameEl) modelFilenameEl.textContent = fileName;
+        const modelFacesEl = document.getElementById('model-faces');
+        if (modelFacesEl) modelFacesEl.textContent = faceCount.toLocaleString();
 
         const textureInfo = computeTextureInfo(loadedObject);
         state.meshTextureInfo = textureInfo;
@@ -153,6 +162,19 @@ async function loadModelFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
             const texRow = texEl.closest('.prop-row') as HTMLElement;
             if (texRow) texRow.style.display = '';
         }
+
+        // Store face count on state for web-opt validation
+        state.meshFaceCount = faceCount;
+
+        // Show web optimization section (same as onModelLoaded in main.ts)
+        const webOptSection = document.getElementById('web-opt-section');
+        if (webOptSection) webOptSection.classList.remove('hidden');
+        const webOptFaces = document.getElementById('web-opt-current-faces');
+        if (webOptFaces) webOptFaces.textContent = `Current faces: ${faceCount.toLocaleString()}`;
+
+        // Update decimation panel HD face count
+        const hdFacesEl = document.getElementById('decimation-hd-faces');
+        if (hdFacesEl) hdFacesEl.textContent = faceCount.toLocaleString();
     }
 }
 
@@ -168,18 +190,22 @@ function updateArchiveMetadataUI(manifest: any, archiveLoader: any): void {
     const metadata = archiveLoader.getMetadata();
 
     // Update basic info
-    document.getElementById('archive-version')!.textContent = metadata.version || '-';
+    const archiveVersionEl = document.getElementById('archive-version');
+    if (archiveVersionEl) archiveVersionEl.textContent = metadata.version || '-';
 
     const packerText = metadata.packerVersion
         ? `${metadata.packer} v${metadata.packerVersion}`
         : metadata.packer;
-    document.getElementById('archive-packer')!.textContent = packerText;
+    const archivePackerEl = document.getElementById('archive-packer');
+    if (archivePackerEl) archivePackerEl.textContent = packerText;
 
-    document.getElementById('archive-created')!.textContent =
+    const archiveCreatedEl = document.getElementById('archive-created');
+    if (archiveCreatedEl) archiveCreatedEl.textContent =
         metadata.createdAt ? new Date(metadata.createdAt).toLocaleString() : '-';
 
     // Populate entries list
-    const entriesList = document.getElementById('archive-entries-list')!;
+    const entriesList = document.getElementById('archive-entries-list');
+    if (!entriesList) return;
     entriesList.replaceChildren(); // Clear existing content safely
     const header = document.createElement('p');
     header.className = 'entries-header';
@@ -225,7 +251,8 @@ export async function handleArchiveFile(event: Event, deps: ArchivePipelineDeps)
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
 
-    document.getElementById('archive-filename')!.textContent = file.name;
+    const archiveFilenameEl = document.getElementById('archive-filename');
+    if (archiveFilenameEl) archiveFilenameEl.textContent = file.name;
     deps.ui.showLoading('Loading archive...');
 
     try {
@@ -262,7 +289,7 @@ export async function loadArchiveFromUrl(url: string, deps: ArchivePipelineDeps)
         }
 
         const archiveLoader = new ArchiveLoader();
-        const fileName = url.split('/').pop() || 'archive.a3d';
+        const fileName = url.split('/').pop() || 'archive.ddim';
 
         // Try Range-based streaming first — only downloads the ZIP central
         // directory (~64KB). Each subsequent extractFile() call fetches just
@@ -279,7 +306,8 @@ export async function loadArchiveFromUrl(url: string, deps: ArchivePipelineDeps)
             });
         }
 
-        document.getElementById('archive-filename')!.textContent = fileName;
+        const archiveFilenameEl2 = document.getElementById('archive-filename');
+        if (archiveFilenameEl2) archiveFilenameEl2.textContent = fileName;
 
         deps.state.currentArchiveUrl = url;
         await processArchive(archiveLoader, fileName, deps);
@@ -305,21 +333,19 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
     if (state.assetStates[assetType] === ASSET_STATE.LOADED) return true;
     // Already errored — don't retry automatically
     if (state.assetStates[assetType] === ASSET_STATE.ERROR) return false;
-    // Already loading — wait for it
+    // Already loading — await the in-flight promise instead of polling
     if (state.assetStates[assetType] === ASSET_STATE.LOADING) {
-        return new Promise(resolve => {
-            const check = () => {
-                if (state.assetStates[assetType] === ASSET_STATE.LOADED) resolve(true);
-                else if (state.assetStates[assetType] === ASSET_STATE.ERROR) resolve(false);
-                else setTimeout(check, 50);
-            };
-            check();
-        });
+        const pending = assetLoadingPromises.get(assetType);
+        if (pending) return pending;
+        // Fallback: no stored promise (shouldn't happen), resolve based on state
+        return false;
     }
 
     state.assetStates[assetType] = ASSET_STATE.LOADING;
     deps.ui.showInlineLoading(assetType);
 
+    // Store the loading promise so concurrent callers can await it
+    const loadPromise = (async () => {
     try {
         if (assetType === 'splat') {
             const sceneEntry = archiveLoader.getSceneEntry();
@@ -335,7 +361,12 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
 
             const splatData = await archiveLoader.extractFile(entryToLoad.file_name);
             if (!splatData) { state.assetStates[assetType] = ASSET_STATE.ERROR; return false; }
-            await loadSplatFromBlobUrl(splatData.url, entryToLoad.file_name, deps);
+            // For .sog files, pass cached raw bytes directly to skip the fetch round-trip in loadSplatFromBlobUrl.
+            // extractFileRaw hits _fileCache (already populated by extractFile above) at zero decompression cost.
+            const sogRawBytes = getSplatFileType(entryToLoad.file_name) === 'pcsogszip'
+                ? (await archiveLoader.extractFileRaw(entryToLoad.file_name)) ?? undefined
+                : undefined;
+            await loadSplatFromBlobUrl(splatData.url, entryToLoad.file_name, deps, sogRawBytes);
             // Apply transform from primary scene entry
             const transform = archiveLoader.getEntryTransform(sceneEntry);
             const currentSplat = sceneRefs.splatMesh;
@@ -346,11 +377,9 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
                 currentSplat.scale.set(...s);
             }
             if (useProxy) {
-                // Store the proxy blob for re-export, extract full-res blob in background
+                // Store the proxy blob for re-export. Full-res blob is extracted on-demand
+                // at export time (export-controller.ts) to avoid wasting ~100MB+ RAM on SD/kiosk devices.
                 assets.proxySplatBlob = splatData.blob;
-                archiveLoader.extractFile(sceneEntry.file_name).then((fullData: any) => {
-                    if (fullData) assets.splatBlob = fullData.blob;
-                }).catch(() => {});
             } else {
                 assets.splatBlob = splatData.blob;
                 // Extract proxy blob in background so it survives re-export
@@ -439,8 +468,10 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
                 pointcloudGroup.rotation.set(...transform.rotation);
                 pointcloudGroup.scale.set(...ps);
             }
-            document.getElementById('pointcloud-filename')!.textContent = pointcloudEntry.file_name.split('/').pop()!;
-            document.getElementById('pointcloud-points')!.textContent = result.pointCount.toLocaleString();
+            const pcFilenameEl = document.getElementById('pointcloud-filename');
+            if (pcFilenameEl) pcFilenameEl.textContent = pointcloudEntry.file_name.split('/').pop() || '';
+            const pcPointsEl = document.getElementById('pointcloud-points');
+            if (pcPointsEl) pcPointsEl.textContent = result.pointCount.toLocaleString();
             assets.pointcloudBlob = pcData.blob;
             // Detect point cloud format from archive filename
             state.pointcloudFormat = pointcloudEntry.file_name.split('.').pop()?.toLowerCase() || 'e57';
@@ -468,7 +499,8 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
                 drawingGroup.rotation.set(...transform.rotation);
                 drawingGroup.scale.set(...ds);
             }
-            document.getElementById('drawing-filename')!.textContent = drawingEntry.file_name.split('/').pop()!;
+            const drawingFilenameEl = document.getElementById('drawing-filename');
+            if (drawingFilenameEl) drawingFilenameEl.textContent = drawingEntry.file_name.split('/').pop() || '';
             state.assetStates[assetType] = ASSET_STATE.LOADED;
             return true;
 
@@ -493,11 +525,40 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
                 cadGroup.rotation.set(...cadTransform.rotation);
                 cadGroup.scale.set(...cs);
             }
-            document.getElementById('cad-filename')!.textContent = cadEntry.file_name.split('/').pop()!;
+            const cadFilenameEl = document.getElementById('cad-filename');
+            if (cadFilenameEl) cadFilenameEl.textContent = cadEntry.file_name.split('/').pop() || '';
             const cadStore = getStore();
             cadStore.cadFileName = cadEntry.original_name || cadEntry.file_name.split('/').pop() || cadEntry.file_name;
             cadStore.cadBlob = cadData.blob;
             state.assetStates[assetType] = ASSET_STATE.LOADED;
+            return true;
+
+        } else if (assetType === 'flightpath') {
+            const flightEntries = archiveLoader.getFlightPathEntries();
+            if (flightEntries.length === 0) {
+                state.assetStates[assetType] = ASSET_STATE.UNLOADED;
+                return false;
+            }
+
+            const fpStore = getStore();
+            const fpResults = await Promise.all(flightEntries.map(async ({ entry }) => {
+                const fileData = await archiveLoader.extractFile(entry.file_name);
+                if (!fileData) return null;
+                return { blob: fileData.blob, fileName: entry.original_name || entry.file_name.split('/').pop() || entry.file_name };
+            }));
+            for (let i = 0; i < flightEntries.length; i++) {
+                const r = fpResults[i];
+                if (r) {
+                    const meta = (flightEntries[i].entry as any)._flight_meta as Record<string, unknown> | undefined;
+                    if (meta?.trim_start !== undefined) r.trimStart = meta.trim_start as number;
+                    if (meta?.trim_end !== undefined) r.trimEnd = meta.trim_end as number;
+                    fpStore.flightPathBlobs.push(r);
+                }
+            }
+
+            state.flightPathLoaded = true;
+            state.assetStates[assetType] = ASSET_STATE.LOADED;
+            updateOverlayPill({ sfm: state.colmapLoaded, flightpath: state.flightPathLoaded });
             return true;
         }
 
@@ -508,7 +569,12 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
         return false;
     } finally {
         deps.ui.hideInlineLoading(assetType);
+        assetLoadingPromises.delete(assetType);
     }
+    })();
+
+    assetLoadingPromises.set(assetType, loadPromise);
+    return loadPromise;
 }
 
 /**
@@ -530,7 +596,7 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
         state.archiveFileName = archiveName;
         state.archiveLoaded = true;
         // Reset asset states for new archive
-        state.assetStates = { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED, cad: ASSET_STATE.UNLOADED };
+        state.assetStates = { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED, cad: ASSET_STATE.UNLOADED, flightpath: ASSET_STATE.UNLOADED };
 
         // Prefill metadata panel from loaded archive
         deps.metadata.prefillMetadataFromArchive(manifest);
@@ -585,6 +651,7 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
                             textureMaxRes: entry.decimation.textureMaxRes || 1024,
                             textureFormat: entry.decimation.textureFormat || 'jpeg',
                             textureQuality: 0.85,
+                            dracoCompress: false,
                         };
                         state.proxyMeshFaceCount = entry.decimation.resultFaces || null;
 
@@ -644,7 +711,7 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
 
         if (!primaryLoaded) {
             // Try loading any available asset
-            const fallbackTypes = ['splat', 'mesh', 'pointcloud', 'drawing', 'cad'].filter(t => t !== primaryType);
+            const fallbackTypes = ['splat', 'mesh', 'pointcloud', 'drawing', 'cad', 'flightpath'].filter(t => t !== primaryType);
             let anyLoaded = false;
             for (const type of fallbackTypes) {
                 deps.ui.showLoading(`Loading ${type} from archive...`);
@@ -674,6 +741,34 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
             deps.annotations.loadAnnotationsFromArchive(annotations);
         }
 
+        // NOTE: Flight path rendering is deferred to Phase 3 — blobs aren't
+        // extracted until ensureAssetLoaded('flightpath') runs there.
+
+        // Load colmap SfM data
+        const colmapEntries = Object.entries(manifest.data_entries || {})
+            .filter(([, entry]: [string, any]) => entry.role === 'colmap_sfm');
+        for (const [key, entry] of colmapEntries) {
+            const basePath = (entry as any).file_name || `assets/${key}/`;
+            const camerasBuffer = await archiveLoader.extractFileBuffer(`${basePath}cameras.bin`);
+            const imagesBuffer = await archiveLoader.extractFileBuffer(`${basePath}images.bin`);
+            if (camerasBuffer && imagesBuffer && deps.colmap) {
+                deps.colmap.loadFromBuffers(camerasBuffer, imagesBuffer);
+
+                // Load points3D.bin if present
+                const points3DBuffer = await archiveLoader.extractFileBuffer(`${basePath}points3D.bin`);
+                if (points3DBuffer && deps.colmap.loadPoints3D) {
+                    const { parsePoints3D } = await import('./colmap-alignment.js');
+                    const result = parsePoints3D(points3DBuffer);
+                    if (result) {
+                        deps.colmap.loadPoints3D(result.positions, result.count);
+                        if (deps.colmap.points3DBuffer !== undefined) {
+                            deps.colmap.points3DBuffer = points3DBuffer;
+                        }
+                    }
+                }
+            }
+        }
+
         // Load walkthrough
         const walkthroughData = archiveLoader.getWalkthrough();
         if (walkthroughData) {
@@ -687,6 +782,30 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
             applyViewerSettings(manifest.viewer_settings, deps);
         }
 
+        // Load bundled HDR environment from archive
+        const envEntry = archiveLoader.getEnvironmentEntry();
+        if (envEntry) {
+            try {
+                const envData = await archiveLoader.extractFile(envEntry.entry.file_name);
+                if (envData) {
+                    const envBlob = new Blob([envData], { type: 'application/octet-stream' });
+                    deps.state.environmentBlob = envBlob; // store for re-export round-trip
+                    const blobUrl = URL.createObjectURL(envBlob);
+                    try {
+                        await deps.sceneManager.loadHDREnvironment(blobUrl);
+                        if (manifest.viewer_settings?.environment_as_background) {
+                            deps.sceneManager.setEnvironmentAsBackground(true);
+                        }
+                    } finally {
+                        URL.revokeObjectURL(blobUrl);
+                    }
+                    log.info('Loaded HDR environment from archive');
+                }
+            } catch (err: any) {
+                log.warn('Failed to load HDR environment from archive:', err.message);
+            }
+        }
+
         // Show quality toggle if archive has any proxies
         const contentInfoFinal = archiveLoader.getContentInfo();
         if (hasAnyProxy(contentInfoFinal)) {
@@ -698,22 +817,27 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
         const imageEntries = archiveLoader.getImageEntries();
         if (imageEntries.length > 0) {
             state.imageAssets.clear();
-            Promise.all(imageEntries.map(async (entry: any) => {
-                try {
-                    const data = await archiveLoader.extractFile(entry.file_name);
-                    if (data) {
-                        state.imageAssets.set(entry.file_name, { blob: data.blob, url: data.url, name: entry.file_name });
-                    }
-                } catch (e: any) {
-                    log.warn('Failed to extract image:', entry.file_name, e.message);
+            // Extract in batches of 4 to cap concurrent Range requests and memory pressure.
+            (async () => {
+                const BATCH_SIZE = 4;
+                for (let i = 0; i < imageEntries.length; i += BATCH_SIZE) {
+                    await Promise.all(imageEntries.slice(i, i + BATCH_SIZE).map(async (entry: any) => {
+                        try {
+                            const data = await archiveLoader.extractFile(entry.file_name);
+                            if (data) {
+                                state.imageAssets.set(entry.file_name, { blob: data.blob, url: data.url, name: entry.file_name });
+                            }
+                        } catch (e: any) {
+                            log.warn('Failed to extract image:', entry.file_name, e.message);
+                        }
+                    }));
                 }
-            })).then(() => {
                 log.info(`Extracted ${state.imageAssets.size} embedded images`);
-            });
+            })();
         }
 
         // === Phase 3: Background-load remaining assets (in parallel) ===
-        const remainingTypes = ['splat', 'mesh', 'pointcloud', 'drawing', 'cad'].filter(
+        const remainingTypes = ['splat', 'mesh', 'pointcloud', 'drawing', 'cad', 'flightpath'].filter(
             t => t !== primaryType && state.assetStates[t] === ASSET_STATE.UNLOADED
         );
         if (remainingTypes.length > 0) {
@@ -723,15 +847,24 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
                     (type === 'mesh' && contentInfo.hasMesh) ||
                     (type === 'pointcloud' && contentInfo.hasPointcloud) ||
                     (type === 'drawing' && contentInfo.hasDrawing) ||
-                    (type === 'cad' && contentInfo.hasCAD)
+                    (type === 'cad' && contentInfo.hasCAD) ||
+                    (type === 'flightpath' && contentInfo.hasFlightPath)
                 );
                 await Promise.all(typesToLoad.map(async (type) => {
                     log.info(`Background loading: ${type}`);
-                    await ensureAssetLoaded(type, deps);
+                    const loaded = await ensureAssetLoaded(type, deps);
+                    if (!loaded && state.assetStates[type] === ASSET_STATE.ERROR) {
+                        log.error(`Background load failed for: ${type}`);
+                        notify.error(`Failed to load ${type} from archive`);
+                    }
                     deps.ui.updateTransformInputs();
                     // Re-apply viewer settings to newly loaded meshes
                     if (type === 'mesh' && manifest.viewer_settings) {
                         applyViewerSettings(manifest.viewer_settings, deps);
+                    }
+                    // Render flight paths now that blobs are in the store
+                    if (type === 'flightpath' && loaded && deps.renderFlightPaths) {
+                        await deps.renderFlightPaths();
                     }
                 }));
                 // Release raw ZIP data after all assets are extracted,
@@ -786,19 +919,27 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
         if (el) el.checked = settings.single_sided;
     }
 
-    // Background color — per-mode overrides (with backward compat for old single background_color)
+    // Background color — legacy universal bg sets the general background;
+    // per-mode overrides only apply when explicitly set in the manifest.
     const legacyBg = settings.background_color || null;
-    const meshBg = settings.mesh_background_color || legacyBg;
-    const splatBg = settings.splat_background_color || legacyBg;
+    const meshBg = settings.mesh_background_color || null;
+    const splatBg = settings.splat_background_color || null;
     deps.state.meshBackgroundColor = meshBg;
     deps.state.splatBackgroundColor = splatBg;
 
-    // Apply correct background for current display mode
+    // Set the general/universal background (savedBackgroundColor) from legacy
+    // or keep the current default. Per-mode overrides do NOT touch savedBackgroundColor.
+    if (legacyBg) {
+        deps.sceneManager?.setBackgroundColor(legacyBg);
+    }
+
+    // Apply per-mode override for the current display mode (direct scene.background,
+    // so savedBackgroundColor remains the general/universal background).
     let activeBg: string | null = null;
     if (deps.state.displayMode === 'model') activeBg = meshBg;
     else if (deps.state.displayMode === 'splat' || deps.state.displayMode === 'both') activeBg = splatBg;
-    if (activeBg && sceneRefs.scene) {
-        sceneRefs.scene.background = new THREE.Color(activeBg);
+    if (activeBg && deps.sceneManager?.scene) {
+        deps.sceneManager.scene.background = new THREE.Color(activeBg);
     }
 
     // Sync sidebar mesh background UI
@@ -838,6 +979,7 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
             lockDistance: settings.lock_distance ?? null,
             lockAboveGround: settings.lock_above_ground ?? false,
             maxCameraHeight: settings.max_camera_height ?? null,
+            maxCameraDistance: settings.max_camera_distance ?? null,
         });
     }
 
@@ -872,8 +1014,6 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
         sceneRefs.renderer.toneMappingExposure = settings.tone_mapping_exposure;
     }
 
-    // NOTE: environment_preset IBL would require async HDR loading; skipped here.
-
     // Apply post-processing settings
     if (settings.post_processing) {
         const renderer = sceneRefs.renderer;
@@ -893,6 +1033,48 @@ export function applyViewerSettings(settings: any, deps: ArchivePipelineDeps): v
                 if (controlsDiv) controlsDiv.style.display = '';
             }
         }
+    }
+
+    // ─── View defaults (overlay visibility on load) ────────
+    const { state } = deps;
+    if (settings.sfm_visible !== undefined) {
+        state.viewDefaults.sfmCameras.visible = settings.sfm_visible;
+        const el = document.getElementById('sfm-show-on-load') as HTMLInputElement | null;
+        if (el) el.checked = settings.sfm_visible;
+    }
+    if (settings.sfm_display_mode !== undefined) {
+        state.viewDefaults.sfmCameras.displayMode = settings.sfm_display_mode;
+        const el = document.getElementById('sfm-display-mode') as HTMLSelectElement | null;
+        if (el) el.value = settings.sfm_display_mode;
+    }
+    if (settings.flight_visible !== undefined) {
+        state.viewDefaults.flightPath.visible = settings.flight_visible;
+        const el = document.getElementById('flight-show-on-load') as HTMLInputElement | null;
+        if (el) el.checked = settings.flight_visible;
+    }
+    if (settings.flight_line_color !== undefined) {
+        state.viewDefaults.flightPath.lineColor = settings.flight_line_color;
+        const el = document.getElementById('flight-line-color') as HTMLInputElement | null;
+        if (el) el.value = settings.flight_line_color;
+    }
+    if (settings.flight_line_opacity !== undefined) {
+        state.viewDefaults.flightPath.lineOpacity = settings.flight_line_opacity;
+        const slider = document.getElementById('flight-line-opacity') as HTMLInputElement | null;
+        const label = document.getElementById('flight-line-opacity-value');
+        if (slider) slider.value = String(Math.round(settings.flight_line_opacity * 100));
+        if (label) label.textContent = `${Math.round(settings.flight_line_opacity * 100)}%`;
+    }
+    if (settings.flight_show_markers !== undefined) {
+        state.viewDefaults.flightPath.showMarkers = settings.flight_show_markers;
+        const el = document.getElementById('flight-show-markers') as HTMLInputElement | null;
+        if (el) el.checked = settings.flight_show_markers;
+        const densitySelect = document.getElementById('flight-marker-density') as HTMLSelectElement | null;
+        if (densitySelect) densitySelect.disabled = !settings.flight_show_markers;
+    }
+    if (settings.flight_marker_density !== undefined) {
+        state.viewDefaults.flightPath.markerDensity = settings.flight_marker_density;
+        const el = document.getElementById('flight-marker-density') as HTMLSelectElement | null;
+        if (el) el.value = settings.flight_marker_density;
     }
 
     log.info('Applied viewer settings:', settings);
@@ -920,6 +1102,9 @@ export function clearArchiveMetadata(deps: ArchivePipelineDeps): void {
 
     const section = document.getElementById('archive-metadata-section');
     if (section) section.style.display = 'none';
+
+    // Reset walkthrough editor state
+    resetWalkthroughEditor();
 
     // Clear source files from previous archive
     assets.sourceFiles = [];
@@ -950,13 +1135,24 @@ export async function switchQualityTier(newTier: string, deps: ArchivePipelineDe
 
     try {
         if (contentInfo.hasSceneProxy) {
+            const oldSplatEntry = newTier === 'hd'
+                ? archiveLoader.getSceneProxyEntry()
+                : archiveLoader.getSceneEntry();
             if (newTier === 'hd') {
                 await loadArchiveFullResSplat(archiveLoader, fileHandlerDeps);
             } else {
                 await loadArchiveProxySplat(archiveLoader, fileHandlerDeps);
             }
+            // Free replaced splat source data (Range re-fetch on demand)
+            if (oldSplatEntry) {
+                archiveLoader.revokeBlobForFile(oldSplatEntry.file_name);
+                archiveLoader.evictFileCache(oldSplatEntry.file_name);
+            }
         }
         if (contentInfo.hasMeshProxy) {
+            const oldMeshEntry = newTier === 'hd'
+                ? archiveLoader.getMeshProxyEntry()
+                : archiveLoader.getMeshEntry();
             if (newTier === 'hd') {
                 const result = await loadArchiveFullResMesh(archiveLoader, fileHandlerDeps);
                 if (result.loaded) {
@@ -968,6 +1164,19 @@ export async function switchQualityTier(newTier: string, deps: ArchivePipelineDe
                 await loadArchiveProxyMesh(archiveLoader, fileHandlerDeps);
                 state.viewingProxy = true;
                 document.getElementById('proxy-mesh-indicator')?.classList.remove('hidden');
+            }
+            // Free replaced mesh source data (Range re-fetch on demand)
+            if (oldMeshEntry) {
+                archiveLoader.revokeBlobForFile(oldMeshEntry.file_name);
+                archiveLoader.evictFileCache(oldMeshEntry.file_name);
+            }
+            // Evict new mesh's cached bytes — Three.js holds parsed geometry;
+            // editor keeps the blob ref via assets.meshBlob for re-export
+            const newMeshEntry = newTier === 'hd'
+                ? archiveLoader.getMeshEntry()
+                : archiveLoader.getMeshProxyEntry();
+            if (newMeshEntry) {
+                archiveLoader.evictFileCache(newMeshEntry.file_name);
             }
         }
         deps.ui.updateVisibility();
@@ -1001,7 +1210,8 @@ export async function handleLoadFullResMesh(deps: ArchivePipelineDeps): Promise<
         if (result.loaded) {
             assets.meshBlob = result.blob;
             state.viewingProxy = false;
-            document.getElementById('model-faces')!.textContent = (result.faceCount || 0).toLocaleString();
+            const modelFacesEl2 = document.getElementById('model-faces');
+            if (modelFacesEl2) modelFacesEl2.textContent = (result.faceCount || 0).toLocaleString();
             // Hide proxy indicator and Load Full Res button
             document.getElementById('proxy-mesh-indicator')?.classList.add('hidden');
             const fullResBtn = document.getElementById('btn-load-full-res');

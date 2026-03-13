@@ -49,6 +49,7 @@ services:
       # rw required for admin upload/delete/rename. Change to :ro if ADMIN_ENABLED=false.
       - ./archives:/usr/share/nginx/html/archives:rw
       - thumbs:/usr/share/nginx/html/thumbs
+      - media:/usr/share/nginx/html/media
       - app_data:/data
       # Mount a default thumbnail for link previews (optional)
       # - ./thumbs/default.jpg:/usr/share/nginx/html/thumbs/default.jpg:ro
@@ -60,4 +61,5 @@ services:
 
 volumes:
   thumbs:
+  media:
   app_data:

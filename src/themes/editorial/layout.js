@@ -234,8 +234,10 @@ function createInfoOverlay(manifest, deps) {
     closeBtn.innerHTML = '&times;';
     closeBtn.addEventListener('click', () => {
         overlay.classList.remove('open');
+        overlay.classList.remove('mobile-open');
         const detailsBtn = document.querySelector('.editorial-details-link');
         if (detailsBtn) detailsBtn.classList.remove('active');
+        if (syncInfoOverlayState) syncInfoOverlayState(false);
     });
     panelInner.appendChild(closeBtn);
 
@@ -702,31 +704,75 @@ function createInfoOverlay(manifest, deps) {
     return overlay;
 }
 
+// ---- Cleanup — remove all DOM elements created by setup() ----
+
+/** Top-level CSS classes appended to viewerContainer by setup(). */
+const EDITORIAL_ROOT_CLASSES = [
+    'editorial-spine',
+    'editorial-title-block',
+    'editorial-bottom-ribbon',
+    'editorial-mobile-pill',
+    'editorial-info-overlay',
+    'editorial-anno-strip'
+];
+
+export function cleanup() {
+    // Remove from both viewerContainer and body (mobile portals fixed elements to body)
+    const viewerContainer = document.getElementById('viewer-container') || document.body;
+    EDITORIAL_ROOT_CLASSES.forEach(cls => {
+        viewerContainer.querySelectorAll('.' + cls).forEach(el => el.remove());
+        document.body.querySelectorAll('.' + cls).forEach(el => el.remove());
+    });
+    // Reset walkthrough module state
+    wtStopDots = null;
+    wtTitleEl = null;
+    if (wtMobileControls) { wtMobileControls.remove(); wtMobileControls = null; }
+    wtTotalStops = 0;
+    syncInfoOverlayState = null;
+}
+
 // ---- Main setup entry point ----
 
 export function setup(manifest, deps) {
     const {
         Logger, escapeHtml,
         updateModelTextures, updateModelWireframe, updateModelMatcap, updateModelNormals,
-        updateModelRoughness, updateModelMetalness, updateModelSpecularF0,
+        updateModelRoughness, updateModelMetalness,
         sceneManager, state, annotationSystem, modelGroup,
         setDisplayMode, createDisplayModeDeps, triggerLazyLoad,
         showAnnotationPopup, hideAnnotationPopup, hideAnnotationLine,
         getCurrentPopupId, setCurrentPopupId,
-        resetOrbitCenter
+        resetOrbitCenter,
+        flightPathManager
     } = deps;
 
     const log = Logger.getLogger('editorial-layout');
     log.info('Setting up editorial layout');
 
+    // Remove any previously-created editorial layout elements (re-entry safe)
+    cleanup();
+
+    // Hide orbit-reset when the archive locks the orbit pivot (pan disabled)
+    const vs = manifest && manifest.viewer_settings;
+    const cameraLocked = !!(vs && vs.lock_orbit);
+
     const viewerContainer = document.getElementById('viewer-container') || document.body;
 
-    // Set scene background from theme metadata, or fall back to CSS variable
-    const themeMeta = (window.APP_CONFIG || {})._themeMeta;
-    const sceneBg = (themeMeta && themeMeta.sceneBg) ||
-        getComputedStyle(document.body).getPropertyValue('--kiosk-scene-bg').trim() ||
-        '#1a1a2e';
-    sceneManager.setBackgroundColor(sceneBg);
+    // Set scene background from theme metadata, or fall back to CSS variable.
+    // Skip if the archive manifest declares its own background override — the
+    // kiosk loader applies that override after setup() returns, and we must not
+    // clobber savedBackgroundColor with the theme default.
+    const hasArchiveBgOverride = manifest && manifest.viewer_settings &&
+        (manifest.viewer_settings.splat_background_color ||
+         manifest.viewer_settings.mesh_background_color ||
+         manifest.viewer_settings.background_color);
+    if (!hasArchiveBgOverride) {
+        const themeMeta = (window.APP_CONFIG || {})._themeMeta;
+        const sceneBg = (themeMeta && themeMeta.sceneBg) ||
+            getComputedStyle(document.body).getPropertyValue('--kiosk-scene-bg').trim() ||
+            '#1a1a2e';
+        sceneManager.setBackgroundColor(sceneBg);
+    }
 
     // --- 1. Gold Spine ---
     const spine = document.createElement('div');
@@ -748,7 +794,13 @@ export function setup(manifest, deps) {
         <div class="editorial-title-rule"></div>
         ${metaParts.length > 0 ? `<span class="editorial-title-meta">${escapeHtml(metaParts.join(' \u00B7 '))}</span>` : ''}
     `;
-    viewerContainer.appendChild(titleBlock);
+    // On mobile, append fixed-position elements to document.body so position:fixed
+    // works correctly. Chrome Android doesn't break fixed elements out of overflow:hidden
+    // flex containers reliably.
+    const isMobileTier = window.matchMedia('(max-width: 699px)').matches;
+    const fixedRoot = isMobileTier ? document.body : viewerContainer;
+
+    fixedRoot.appendChild(titleBlock);
 
     // Auto-fade behavior for title block
     setupAutoFade(titleBlock, null);
@@ -794,8 +846,8 @@ export function setup(manifest, deps) {
         viewModes.appendChild(link);
     });
 
-    // Quality toggle (SD/HD) — inline with view modes if archive has proxies or splat (Spark 2.0 LOD budget)
-    if (deps.hasAnyProxy || deps.hasSplat) {
+    // Quality toggle (SD/HD) — inline with view modes if archive has proxies, splat (Spark 2.0 LOD budget), or mesh
+    if (deps.hasAnyProxy || deps.hasSplat || deps.hasMesh) {
         const qualitySep = document.createElement('span');
         qualitySep.className = 'editorial-view-mode-sep';
         qualitySep.textContent = '|';
@@ -907,7 +959,6 @@ export function setup(manifest, deps) {
             e.stopPropagation();
             const isActive = !deps.measurementSystem.isActive;
             deps.measurementSystem.setMeasureMode(isActive);
-            if (!isActive) deps.measurementSystem.clearAll();
             measureBtn.classList.toggle('active', isActive);
             measureDropdown.classList.toggle('open', isActive);
         });
@@ -1087,94 +1138,200 @@ export function setup(manifest, deps) {
     const toolsGroup = document.createElement('div');
     toolsGroup.className = 'editorial-ribbon-tools';
 
-    // Annotation sequence chain + marker toggle
+    // Annotation dropdown — matches matcap dropdown pattern
     const annotations = annotationSystem.getAnnotations();
     let markersVisible = true;
-    let markerToggle = null;
+    let activeAnnoIndex = -1; // -1 = none selected
+
+    let annoWrapper, annoBtn, annoDropdown, annoBadge;
+
+    const goToAnno = (index) => {
+        if (index < 0 || index >= annotations.length) return;
+        const anno = annotations[index];
+        activeAnnoIndex = index;
+
+        if (!markersVisible) setMarkersVisible(true);
+
+        annotationSystem.goToAnnotation(anno.id);
+        setCurrentPopupId(showAnnotationPopup(anno, state.imageAssets));
+        updateAnnoUI();
+    };
+
+    const deselectAnno = () => {
+        hideAnnotationPopup();
+        hideAnnotationLine();
+        setCurrentPopupId(null);
+        annotationSystem.selectedAnnotation = null;
+        document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
+        activeAnnoIndex = -1;
+        updateAnnoUI();
+    };
 
     const setMarkersVisible = (visible) => {
         markersVisible = visible;
         const container = document.getElementById('annotation-markers');
         if (container) container.style.display = markersVisible ? '' : 'none';
-        if (markerToggle) markerToggle.classList.toggle('off', !markersVisible);
+        if (annoBtn) annoBtn.classList.toggle('off', !markersVisible);
+        if (annoDropdown) {
+            const toggleItem = annoDropdown.querySelector('[data-anno-action="toggle"]');
+            if (toggleItem) toggleItem.textContent = markersVisible ? 'Hide Markers' : 'Show Markers';
+        }
+    };
+
+    const updateAnnoUI = () => {
+        if (!annoBtn) return;
+        annoBtn.classList.toggle('active', activeAnnoIndex >= 0);
+        annoBtn.title = activeAnnoIndex >= 0
+            ? 'Annotation ' + (activeAnnoIndex + 1) + ' / ' + annotations.length
+            : 'Annotations';
+        if (annoDropdown) {
+            annoDropdown.querySelectorAll('.editorial-matcap-item[data-anno-idx]').forEach(el => {
+                el.classList.toggle('active', parseInt(el.dataset.annoIdx) === activeAnnoIndex);
+            });
+        }
+    };
+
+    const createOrbitResetBtn = () => {
+        const btn = document.createElement('button');
+        btn.className = 'editorial-marker-toggle';
+        btn.title = 'Reset rotation center';
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', '14'); svg.setAttribute('height', '14');
+        svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2');
+        ['circle', 'line', 'line', 'line', 'line'].forEach((tag, idx) => {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            if (idx === 0) { el.setAttribute('cx','12'); el.setAttribute('cy','12'); el.setAttribute('r','10'); }
+            if (idx === 1) { el.setAttribute('x1','12'); el.setAttribute('y1','2'); el.setAttribute('x2','12'); el.setAttribute('y2','6'); }
+            if (idx === 2) { el.setAttribute('x1','12'); el.setAttribute('y1','18'); el.setAttribute('x2','12'); el.setAttribute('y2','22'); }
+            if (idx === 3) { el.setAttribute('x1','2'); el.setAttribute('y1','12'); el.setAttribute('x2','6'); el.setAttribute('y2','12'); }
+            if (idx === 4) { el.setAttribute('x1','18'); el.setAttribute('y1','12'); el.setAttribute('x2','22'); el.setAttribute('y2','12'); }
+            svg.appendChild(el);
+        });
+        btn.appendChild(svg);
+        btn.addEventListener('click', () => { if (resetOrbitCenter) resetOrbitCenter(); });
+        return btn;
     };
 
     if (annotations.length > 0) {
-        const sequence = document.createElement('div');
-        sequence.className = 'editorial-anno-sequence';
+        annoWrapper = document.createElement('div');
+        annoWrapper.className = 'editorial-anno-wrapper';
 
+        annoBtn = document.createElement('button');
+        annoBtn.className = 'editorial-marker-toggle';
+        annoBtn.title = 'Annotations';
+        annoBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+
+        annoBadge = document.createElement('span');
+        annoBadge.className = 'editorial-anno-badge';
+        annoBadge.textContent = String(annotations.length);
+
+        annoDropdown = document.createElement('div');
+        annoDropdown.className = 'editorial-matcap-dropdown';
+
+        // Annotation items
         annotations.forEach((anno, i) => {
-            if (i > 0) {
-                const dash = document.createElement('span');
-                dash.className = 'editorial-anno-seq-dash';
-                sequence.appendChild(dash);
-            }
-
-            const num = document.createElement('button');
-            num.className = 'editorial-anno-seq-num';
-            num.dataset.annoId = anno.id;
-            num.textContent = String(i + 1).padStart(2, '0');
-            num.addEventListener('click', () => {
-                if (getCurrentPopupId() === anno.id) {
-                    hideAnnotationPopup();
-                    hideAnnotationLine();
-                    setCurrentPopupId(null);
-                    annotationSystem.selectedAnnotation = null;
-                    document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
-                    sequence.querySelectorAll('.editorial-anno-seq-num.active').forEach(n => n.classList.remove('active'));
-                    return;
+            const item = document.createElement('button');
+            item.className = 'editorial-matcap-item';
+            item.dataset.annoIdx = String(i);
+            const numSpan = document.createElement('span');
+            numSpan.className = 'editorial-anno-item-num';
+            numSpan.textContent = String(i + 1).padStart(2, '0');
+            item.appendChild(numSpan);
+            item.appendChild(document.createTextNode(anno.title || 'Annotation ' + (i + 1)));
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (activeAnnoIndex === i) {
+                    deselectAnno();
+                } else {
+                    goToAnno(i);
                 }
-
-                if (!markersVisible) setMarkersVisible(true);
-
-                sequence.querySelectorAll('.editorial-anno-seq-num.active').forEach(n => n.classList.remove('active'));
-                num.classList.add('active');
-
-                annotationSystem.goToAnnotation(anno.id);
-                setCurrentPopupId(showAnnotationPopup(anno, state.imageAssets));
+                annoDropdown.classList.remove('open');
             });
-            sequence.appendChild(num);
+            annoDropdown.appendChild(item);
         });
 
-        toolsGroup.appendChild(sequence);
+        // Divider + prev/next row
+        const navDiv = document.createElement('div');
+        navDiv.className = 'editorial-material-divider';
+        annoDropdown.appendChild(navDiv);
 
-        // Marker visibility toggle
-        markerToggle = document.createElement('button');
-        markerToggle.className = 'editorial-marker-toggle';
-        markerToggle.title = 'Toggle annotation markers';
-        markerToggle.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
-        markerToggle.addEventListener('click', () => {
+        const navRow = document.createElement('div');
+        navRow.className = 'editorial-anno-nav-row';
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'editorial-anno-nav-btn';
+        prevBtn.textContent = '\u2039 Prev';
+        prevBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (annotations.length === 0) return;
+            const next = activeAnnoIndex <= 0 ? annotations.length - 1 : activeAnnoIndex - 1;
+            goToAnno(next);
+        });
+        const navSep = document.createElement('div');
+        navSep.className = 'editorial-anno-nav-sep';
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'editorial-anno-nav-btn';
+        nextBtn.textContent = 'Next \u203A';
+        nextBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (annotations.length === 0) return;
+            const next = activeAnnoIndex >= annotations.length - 1 ? 0 : activeAnnoIndex + 1;
+            goToAnno(next);
+        });
+        navRow.appendChild(prevBtn);
+        navRow.appendChild(navSep);
+        navRow.appendChild(nextBtn);
+        annoDropdown.appendChild(navRow);
+
+        // Divider + hide/show toggle
+        const toggleDiv = document.createElement('div');
+        toggleDiv.className = 'editorial-material-divider';
+        annoDropdown.appendChild(toggleDiv);
+
+        const toggleItem = document.createElement('button');
+        toggleItem.className = 'editorial-matcap-item editorial-matcap-off';
+        toggleItem.dataset.annoAction = 'toggle';
+        toggleItem.textContent = 'Hide Markers';
+        toggleItem.addEventListener('click', (e) => {
+            e.stopPropagation();
             setMarkersVisible(!markersVisible);
-            if (!markersVisible && getCurrentPopupId()) {
-                hideAnnotationPopup();
-                hideAnnotationLine();
-                setCurrentPopupId(null);
-                annotationSystem.selectedAnnotation = null;
-                document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
-                sequence.querySelectorAll('.editorial-anno-seq-num.active').forEach(n => n.classList.remove('active'));
-            }
+            if (!markersVisible) deselectAnno();
+            annoDropdown.classList.remove('open');
         });
-        // Reset orbit center
-        const orbitResetBtn = document.createElement('button');
-        orbitResetBtn.className = 'editorial-marker-toggle';
-        orbitResetBtn.title = 'Reset rotation center';
-        orbitResetBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>';
-        orbitResetBtn.addEventListener('click', () => { if (resetOrbitCenter) resetOrbitCenter(); });
-        toolsGroup.appendChild(orbitResetBtn);
+        annoDropdown.appendChild(toggleItem);
 
-        toolsGroup.appendChild(markerToggle);
+        // Open/close dropdown
+        annoBtn.addEventListener('click', (e) => { e.stopPropagation(); annoDropdown.classList.toggle('open'); });
+        document.addEventListener('click', () => { annoDropdown.classList.remove('open'); });
+
+        annoWrapper.appendChild(annoBtn);
+        annoWrapper.appendChild(annoBadge);
+        annoWrapper.appendChild(annoDropdown);
+        updateAnnoUI();
+
+        toolsGroup.appendChild(annoWrapper);
+
+        // Separator after annotations
+        const annoRule = document.createElement('div');
+        annoRule.className = 'editorial-ribbon-rule';
+        toolsGroup.appendChild(annoRule);
+
+        // Reset orbit center — only useful when camera is fully unlocked
+        if (!cameraLocked) toolsGroup.appendChild(createOrbitResetBtn());
+
         if (measureWrapper) toolsGroup.appendChild(measureWrapper);
         if (sliceWrapper) toolsGroup.appendChild(sliceWrapper);
     } else {
         // No annotations — still show orbit reset and measure
-        const orbitResetBtn = document.createElement('button');
-        orbitResetBtn.className = 'editorial-marker-toggle';
-        orbitResetBtn.title = 'Reset rotation center';
-        orbitResetBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>';
-        orbitResetBtn.addEventListener('click', () => { if (resetOrbitCenter) resetOrbitCenter(); });
-        toolsGroup.appendChild(orbitResetBtn);
+        if (!cameraLocked) toolsGroup.appendChild(createOrbitResetBtn());
         if (measureWrapper) toolsGroup.appendChild(measureWrapper);
         if (sliceWrapper) toolsGroup.appendChild(sliceWrapper);
+    }
+
+    // Flight log dropdown — inserted late via onFlightPathLoaded since
+    // flightPathManager is null at setup() time (loaded after layout init)
+    if (flightPathManager && flightPathManager.hasData) {
+        buildFlightDropdown(flightPathManager, toolsGroup);
     }
 
     // Rule separator between annotation and visualization groups
@@ -1189,10 +1346,12 @@ export function setup(manifest, deps) {
     textureToggle.title = 'Toggle textures';
     textureToggle.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>';
     let texturesVisible = true;
+    let barTexBtn = null; // late-bound: set after mobile pill is created
     textureToggle.addEventListener('click', () => {
         texturesVisible = !texturesVisible;
         updateModelTextures(modelGroup, texturesVisible);
         textureToggle.classList.toggle('off', !texturesVisible);
+        if (barTexBtn) barTexBtn.classList.toggle('off', !texturesVisible);
     });
     toolsGroup.appendChild(textureToggle);
 
@@ -1200,6 +1359,8 @@ export function setup(manifest, deps) {
     const matcapPresets = ['clay', 'chrome', 'pearl', 'jade', 'copper', 'bronze'];
     const matcapLabels = ['Clay', 'Chrome', 'Pearl', 'Jade', 'Copper', 'Bronze'];
     let activeView = null; // null or: 'wireframe','normals','roughness','metalness','specularF0','matcap:clay', etc.
+
+    let syncMobileView = null; // late-bound: set after mobile pill is created
 
     const materialWrapper = document.createElement('div');
     materialWrapper.className = 'editorial-matcap-wrapper';
@@ -1214,7 +1375,7 @@ export function setup(manifest, deps) {
 
     const viewLabels = {
         wireframe: 'Wireframe', normals: 'Normals',
-        roughness: 'Roughness', metalness: 'Metalness', specularF0: 'Specular F0'
+        roughness: 'Roughness', metalness: 'Metalness'
     };
 
     const setMaterialView = (view) => {
@@ -1225,7 +1386,6 @@ export function setup(manifest, deps) {
             else if (activeView === 'normals') updateModelNormals(modelGroup, false);
             else if (activeView === 'roughness') updateModelRoughness(modelGroup, false);
             else if (activeView === 'metalness') updateModelMetalness(modelGroup, false);
-            else if (activeView === 'specularF0') updateModelSpecularF0(modelGroup, false);
             else if (activeView.startsWith('matcap:')) updateModelMatcap(modelGroup, false);
         }
         activeView = view;
@@ -1235,7 +1395,6 @@ export function setup(manifest, deps) {
             else if (activeView === 'normals') updateModelNormals(modelGroup, true);
             else if (activeView === 'roughness') updateModelRoughness(modelGroup, true);
             else if (activeView === 'metalness') updateModelMetalness(modelGroup, true);
-            else if (activeView === 'specularF0') updateModelSpecularF0(modelGroup, true);
             else if (activeView.startsWith('matcap:')) updateModelMatcap(modelGroup, true, activeView.split(':')[1]);
         }
         // Update button — highlight when a view is active, but never dim to .off
@@ -1248,6 +1407,7 @@ export function setup(manifest, deps) {
             el.classList.toggle('active', el.dataset.view === activeView);
         });
         materialDropdown.classList.remove('open');
+        if (syncMobileView) syncMobileView(activeView);
     };
 
     const addMaterialItem = (label, viewKey) => {
@@ -1269,7 +1429,6 @@ export function setup(manifest, deps) {
     addMaterialItem('Normals', 'normals');
     addMaterialItem('Roughness', 'roughness');
     addMaterialItem('Metalness', 'metalness');
-    addMaterialItem('Specular F0', 'specularF0');
     addDivider();
     matcapPresets.forEach((style, i) => addMaterialItem(matcapLabels[i], 'matcap:' + style));
     addDivider();
@@ -1285,50 +1444,6 @@ export function setup(manifest, deps) {
     materialWrapper.appendChild(materialBtn);
     materialWrapper.appendChild(materialDropdown);
     toolsGroup.appendChild(materialWrapper);
-
-    // FOV — camera icon with popover (same pattern as material dropdown)
-    const fovWrapper = document.createElement('div');
-    fovWrapper.className = 'editorial-fov-wrapper';
-
-    const fovBtn = document.createElement('button');
-    fovBtn.className = 'editorial-marker-toggle';
-    fovBtn.title = 'Field of view';
-    fovBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
-
-    const fovDropdown = document.createElement('div');
-    fovDropdown.className = 'editorial-fov-dropdown';
-
-    const fovLabel = document.createElement('span');
-    fovLabel.className = 'editorial-fov-label';
-    fovLabel.textContent = '60°';
-
-    const fovSlider = document.createElement('input');
-    fovSlider.type = 'range';
-    fovSlider.min = '10';
-    fovSlider.max = '120';
-    fovSlider.step = '1';
-    fovSlider.value = '60';
-    fovSlider.className = 'editorial-fov-slider';
-
-    fovSlider.addEventListener('input', () => {
-        const fov = parseInt(fovSlider.value, 10);
-        fovLabel.textContent = fov + '°';
-        if (sceneManager && sceneManager.camera) {
-            sceneManager.camera.fov = fov;
-            sceneManager.camera.updateProjectionMatrix();
-        }
-    });
-
-    fovDropdown.appendChild(fovLabel);
-    fovDropdown.appendChild(fovSlider);
-
-    fovBtn.addEventListener('click', (e) => { e.stopPropagation(); fovDropdown.classList.toggle('open'); });
-    document.addEventListener('click', () => { fovDropdown.classList.remove('open'); });
-    fovDropdown.addEventListener('click', (e) => { e.stopPropagation(); });
-
-    fovWrapper.appendChild(fovBtn);
-    fovWrapper.appendChild(fovDropdown);
-    toolsGroup.appendChild(fovWrapper);
 
     // --- Overflow menu for compact viewports ---
     // At full width: panel uses display:contents so tools render inline in toolsGroup.
@@ -1347,7 +1462,6 @@ export function setup(manifest, deps) {
     overflowPanel.appendChild(vizRule);
     overflowPanel.appendChild(textureToggle);
     overflowPanel.appendChild(materialWrapper);
-    overflowPanel.appendChild(fovWrapper);
 
     overflowBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1404,100 +1518,349 @@ export function setup(manifest, deps) {
     }
     viewerContainer.appendChild(ribbon);
 
-    // --- 4b. Mobile Bottom Nav (replaces ribbon at <700px) ---
-    const mobileNav = document.createElement('div');
-    mobileNav.className = 'editorial-mobile-nav';
+    // --- 4b. Floating Capsule (replaces mobile nav at <700px) ---
+    const mobilePill = document.createElement('div');
+    mobilePill.className = 'editorial-mobile-pill';
 
-    // View mode cycle button
-    const navViewBtn = document.createElement('button');
-    navViewBtn.className = 'editorial-mobile-nav-btn';
-    navViewBtn.title = 'View mode';
-    navViewBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span class="editorial-mobile-nav-label">View</span>';
-    const navViewModes = types.length > 0 ? types.map(t => t.mode) : ['both'];
-    let navViewIndex = Math.max(0, navViewModes.indexOf(state.displayMode));
-    navViewBtn.addEventListener('click', () => {
-        navViewIndex = (navViewIndex + 1) % navViewModes.length;
-        const mode = navViewModes[navViewIndex];
-        state.displayMode = mode;
-        setDisplayMode(mode, createDisplayModeDeps());
-        triggerLazyLoad(mode);
-        // Sync ribbon view mode links if they exist
-        viewModes.querySelectorAll('.editorial-view-mode-link:not(.quality-toggle-btn)').forEach(l => {
-            l.classList.toggle('active', l.dataset.mode === mode);
+    const createCapsuleBtn = (iconSvg, label, extraClass) => {
+        const btn = document.createElement('button');
+        btn.className = 'editorial-capsule-btn' + (extraClass ? ' ' + extraClass : '');
+        btn.setAttribute('aria-label', label);
+        btn.innerHTML = iconSvg + '<span>' + label + '</span>';
+        return btn;
+    };
+
+    const createSep = () => {
+        const sep = document.createElement('div');
+        sep.className = 'editorial-capsule-sep';
+        return sep;
+    };
+
+    // --- Tool buttons (texture + material views) — only when mesh is present ---
+    const hasMeshContent = contentInfo && contentInfo.hasMesh;
+    if (hasMeshContent) {
+        // Texture toggle button
+        barTexBtn = createCapsuleBtn(
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>',
+            'Tex'
+        );
+        barTexBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            texturesVisible = !texturesVisible;
+            updateModelTextures(modelGroup, texturesVisible);
+            barTexBtn.classList.toggle('off', !texturesVisible);
+            textureToggle.classList.toggle('off', !texturesVisible);
         });
-    });
-    mobileNav.appendChild(navViewBtn);
+        mobilePill.appendChild(barTexBtn);
 
-    // Quality toggle button (SD/HD)
-    if (deps.hasAnyProxy || deps.hasSplat) {
-        const navQualityBtn = document.createElement('button');
-        navQualityBtn.className = 'editorial-mobile-nav-btn';
-        navQualityBtn.title = 'Quality';
-        let navQuality = deps.qualityResolved || 'sd';
-        const updateQualityIcon = () => {
-            navQualityBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span class="editorial-mobile-nav-label">${navQuality.toUpperCase()}</span>`;
-            navQualityBtn.classList.toggle('active', navQuality === 'hd');
+        // Matcap button
+        const capsuleMatBtn = createCapsuleBtn(
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>',
+            'Mat'
+        );
+        // Normals button
+        const capsuleNrmBtn = createCapsuleBtn(
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
+            'Nrm'
+        );
+        // Wireframe button
+        const capsuleWireBtn = createCapsuleBtn(
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l10 6v8l-10 6L2 16V8z"/></svg>',
+            'Wire'
+        );
+
+        capsuleMatBtn.addEventListener('click', (e) => { e.stopPropagation(); setMaterialView('matcap:clay'); });
+        capsuleNrmBtn.addEventListener('click', (e) => { e.stopPropagation(); setMaterialView('normals'); });
+        capsuleWireBtn.addEventListener('click', (e) => { e.stopPropagation(); setMaterialView('wireframe'); });
+
+        syncMobileView = (view) => {
+            capsuleMatBtn.classList.toggle('active', view === 'matcap:clay');
+            capsuleNrmBtn.classList.toggle('active', view === 'normals');
+            capsuleWireBtn.classList.toggle('active', view === 'wireframe');
         };
-        updateQualityIcon();
-        navQualityBtn.addEventListener('click', () => {
-            navQuality = navQuality === 'sd' ? 'hd' : 'sd';
-            if (deps.switchQualityTier) deps.switchQualityTier(navQuality);
-            updateQualityIcon();
-            // Sync ribbon quality buttons
-            ribbon.querySelectorAll('.quality-toggle-btn').forEach(b => {
-                b.classList.toggle('active', b.dataset.tier === navQuality);
-            });
-        });
-        mobileNav.appendChild(navQualityBtn);
+
+        mobilePill.appendChild(capsuleMatBtn);
+        mobilePill.appendChild(capsuleNrmBtn);
+        mobilePill.appendChild(capsuleWireBtn);
+        mobilePill.appendChild(createSep());
     }
 
-    // Annotation toggle button
-    const navAnnoBtn = document.createElement('button');
-    navAnnoBtn.className = 'editorial-mobile-nav-btn';
-    navAnnoBtn.title = 'Annotations';
-    navAnnoBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="editorial-mobile-nav-label">Notes</span>';
-    if (annotations.length === 0) navAnnoBtn.style.display = 'none';
-    navAnnoBtn.addEventListener('click', () => {
-        setMarkersVisible(!markersVisible);
-        navAnnoBtn.classList.toggle('active', markersVisible);
-        if (!markersVisible && getCurrentPopupId()) {
-            hideAnnotationPopup();
-            hideAnnotationLine();
-            setCurrentPopupId(null);
-            annotationSystem.selectedAnnotation = null;
-            document.querySelectorAll('.annotation-marker.selected').forEach(m => m.classList.remove('selected'));
-        }
+    // --- Info button (always shown) ---
+    const capsuleInfoBtn = createCapsuleBtn(
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+        'Info'
+    );
+    capsuleInfoBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const overlay = document.querySelector('.editorial-info-overlay');
+        if (!overlay) return;
+        const isOpen = overlay.classList.toggle('mobile-open');
+        capsuleInfoBtn.classList.toggle('active', isOpen);
     });
-    navAnnoBtn.classList.toggle('active', markersVisible && annotations.length > 0);
-    mobileNav.appendChild(navAnnoBtn);
 
-    // Details button — opens sidebar bottom sheet on mobile
-    const navDetailsBtn = document.createElement('button');
-    navDetailsBtn.className = 'editorial-mobile-nav-btn';
-    navDetailsBtn.title = 'Details';
-    navDetailsBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="editorial-mobile-nav-label">Info</span>';
-    navDetailsBtn.addEventListener('click', () => {
-        const sidebar = document.getElementById('metadata-sidebar');
-        if (!sidebar) return;
-        if (sidebar.classList.contains('sheet-half') || sidebar.classList.contains('sheet-full')) {
-            // Collapse to peek
-            sidebar.classList.remove('sheet-half', 'sheet-full');
-            sidebar.classList.add('sheet-peek');
-            navDetailsBtn.classList.remove('active');
+    syncInfoOverlayState = (isOpen) => {
+        capsuleInfoBtn.classList.toggle('active', isOpen);
+    };
+
+    mobilePill.appendChild(capsuleInfoBtn);
+
+    // --- Annotation button + strip (only when annotations exist) ---
+    let annoStrip = null;
+    let annoStripTimeout = null;
+    let capsuleAnnoIndex = 0;
+
+    if (annotations.length > 0) {
+        mobilePill.appendChild(createSep());
+
+        const capsuleAnnoBtn = createCapsuleBtn(
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+            'Anno'
+        );
+        capsuleAnnoBtn.style.position = 'relative';
+
+        // Badge
+        const annoBadge = document.createElement('span');
+        annoBadge.className = 'editorial-capsule-badge';
+        annoBadge.textContent = String(annotations.length);
+        capsuleAnnoBtn.appendChild(annoBadge);
+
+        // Annotation strip
+        annoStrip = document.createElement('div');
+        annoStrip.className = 'editorial-anno-strip';
+        annoStrip.style.display = 'none';
+
+        const stripPrev = document.createElement('button');
+        stripPrev.className = 'editorial-anno-strip-btn';
+        stripPrev.innerHTML = '&#9664;';
+
+        const stripCounter = document.createElement('span');
+        stripCounter.className = 'editorial-anno-strip-counter';
+
+        const stripLabel = document.createElement('span');
+        stripLabel.className = 'editorial-anno-strip-label';
+
+        const stripNext = document.createElement('button');
+        stripNext.className = 'editorial-anno-strip-btn';
+        stripNext.innerHTML = '&#9654;';
+
+        const updateStripUI = () => {
+            const anno = annotations[capsuleAnnoIndex];
+            stripCounter.textContent = (capsuleAnnoIndex + 1) + '/' + annotations.length;
+            stripLabel.textContent = anno ? (anno.title || anno.label || '') : '';
+        };
+
+        const navigateAnno = (index) => {
+            capsuleAnnoIndex = ((index % annotations.length) + annotations.length) % annotations.length;
+            updateStripUI();
+            const anno = annotations[capsuleAnnoIndex];
+            if (anno && anno.id) {
+                // Trigger annotation selection via the existing system
+                const marker = document.querySelector('.annotation-marker[data-annotation-id="' + anno.id + '"]');
+                if (marker) marker.click();
+            }
+            // Reset auto-hide timer
+            clearTimeout(annoStripTimeout);
+            annoStripTimeout = setTimeout(() => {
+                if (annoStrip) {
+                    annoStrip.classList.add('fade-out');
+                    setTimeout(() => { if (annoStrip) annoStrip.style.display = 'none'; annoStrip.classList.remove('fade-out'); }, 200);
+                }
+            }, 5000);
+        };
+
+        stripPrev.addEventListener('click', (e) => { e.stopPropagation(); navigateAnno(capsuleAnnoIndex - 1); });
+        stripNext.addEventListener('click', (e) => { e.stopPropagation(); navigateAnno(capsuleAnnoIndex + 1); });
+
+        annoStrip.appendChild(stripPrev);
+        annoStrip.appendChild(stripCounter);
+        annoStrip.appendChild(stripLabel);
+        annoStrip.appendChild(stripNext);
+
+        capsuleAnnoBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (annoStrip.style.display === 'none') {
+                annoStrip.style.display = 'flex';
+                annoStrip.classList.remove('fade-out');
+                updateStripUI();
+                navigateAnno(capsuleAnnoIndex);
+            } else {
+                clearTimeout(annoStripTimeout);
+                annoStrip.classList.add('fade-out');
+                setTimeout(() => { annoStrip.style.display = 'none'; annoStrip.classList.remove('fade-out'); }, 200);
+            }
+        });
+
+        mobilePill.appendChild(capsuleAnnoBtn);
+        viewerContainer.appendChild(annoStrip);
+    }
+
+    // --- More button (kebab ⋮) ---
+    const moreWrapper = document.createElement('div');
+    moreWrapper.style.cssText = 'position:relative;display:flex;';
+
+    const capsuleMoreBtn = createCapsuleBtn(
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="17" r="1"/></svg>',
+        ''
+    );
+    capsuleMoreBtn.title = 'More';
+
+    const morePopover = document.createElement('div');
+    morePopover.className = 'editorial-capsule-popover';
+
+    // Note: Share is listed in the spec's More menu but editorial layout.js has no
+    // share dialog in its deps interface. Share can be added later when a share
+    // module is wired into the editorial theme deps. For now, only Fullscreen + Quality.
+
+    // Fullscreen item
+    const fsItem = document.createElement('button');
+    fsItem.className = 'editorial-capsule-popover-item';
+    fsItem.textContent = document.fullscreenElement ? 'Exit Fullscreen' : 'Fullscreen';
+    fsItem.addEventListener('click', (e) => {
+        e.stopPropagation();
+        morePopover.classList.remove('open');
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+            fsItem.textContent = 'Fullscreen';
         } else {
-            // Open to half
-            sidebar.classList.remove('sheet-peek');
-            sidebar.classList.add('sheet-half');
-            navDetailsBtn.classList.add('active');
+            document.documentElement.requestFullscreen();
+            fsItem.textContent = 'Exit Fullscreen';
         }
     });
-    mobileNav.appendChild(navDetailsBtn);
+    morePopover.appendChild(fsItem);
 
-    viewerContainer.appendChild(mobileNav);
+    // Quality toggle item (uses deps.qualityResolved + deps.switchQualityTier — same pattern as ribbon)
+    if (deps.switchQualityTier) {
+        let currentTier = deps.qualityResolved || 'sd';
+        const qualItem = document.createElement('button');
+        qualItem.className = 'editorial-capsule-popover-item';
+        qualItem.textContent = 'Quality: ' + currentTier.toUpperCase();
+        qualItem.addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentTier = currentTier === 'sd' ? 'hd' : 'sd';
+            deps.switchQualityTier(currentTier);
+            qualItem.textContent = 'Quality: ' + currentTier.toUpperCase();
+        });
+        morePopover.appendChild(qualItem);
+    }
+
+    capsuleMoreBtn.addEventListener('click', (e) => { e.stopPropagation(); morePopover.classList.toggle('open'); });
+    document.addEventListener('click', () => morePopover.classList.remove('open'));
+
+    moreWrapper.appendChild(capsuleMoreBtn);
+    moreWrapper.appendChild(morePopover);
+    mobilePill.appendChild(moreWrapper);
+
+    fixedRoot.appendChild(mobilePill);
+
+    // Keep legacy reference — walkthrough uses querySelector('.editorial-mobile-pill') not this var,
+    // but other downstream code between here and section 5 may reference mobileNav.
+    const mobileNav = mobilePill; // eslint-disable-line no-unused-vars
 
     // --- 5. Info Panel (side panel) ---
     const overlay = createInfoOverlay(manifest, deps);
-    viewerContainer.appendChild(overlay);
+    // On desktop, overlay is a flex child of viewerContainer (slides in from right).
+    // On mobile, portal to body so position:fixed works correctly.
+    if (isMobileTier) {
+        fixedRoot.appendChild(overlay);
+    } else {
+        viewerContainer.appendChild(overlay);
+    }
+
+    // --- Mobile info overlay: curated content for mobile tier ---
+    // Build curated mobile content inside the existing overlay element.
+    // On mobile, the .mobile-open class shows this content; on desktop, .open shows the full panel.
+    const mobileInfoContent = document.createElement('div');
+    mobileInfoContent.className = 'editorial-mobile-info-content';
+    // Hidden by default via CSS (.editorial-mobile-info-content { display: none; })
+    // Shown when parent has .mobile-open class — do NOT use inline style.display here
+    // because inline styles defeat CSS !important rules.
+
+    const mobileCloseBtn = document.createElement('button');
+    mobileCloseBtn.className = 'editorial-mobile-info-close';
+    mobileCloseBtn.setAttribute('aria-label', 'Close info overlay');
+    mobileCloseBtn.innerHTML = '&times;';
+    mobileCloseBtn.addEventListener('click', () => {
+        overlay.classList.remove('mobile-open');
+        if (syncInfoOverlayState) syncInfoOverlayState(false);
+    });
+
+    // Title
+    const mobileTitleText = manifest?.title || manifest?.project?.title || 'Untitled';
+    const mobileTitle = document.createElement('div');
+    mobileTitle.className = 'editorial-mobile-info-title';
+    mobileTitle.textContent = mobileTitleText;
+
+    const mobileRule = document.createElement('div');
+    mobileRule.className = 'editorial-mobile-info-rule';
+
+    // Close button appended directly to overlay (not mobileInfoContent) so position:absolute
+    // works correctly within the fixed-position overlay.
+    mobileInfoContent.appendChild(mobileTitle);
+    mobileInfoContent.appendChild(mobileRule);
+
+    // Description
+    const desc = manifest?.description || manifest?.project?.description || '';
+    if (desc) {
+        const mobileDesc = document.createElement('div');
+        mobileDesc.className = 'editorial-mobile-info-desc';
+        mobileDesc.textContent = desc.replace(/<[^>]+>/g, '').substring(0, 300);
+        mobileInfoContent.appendChild(mobileDesc);
+
+        const divider = document.createElement('div');
+        divider.className = 'editorial-mobile-info-divider';
+        mobileInfoContent.appendChild(divider);
+    }
+
+    // Detail rows: Creator, Date, Location
+    const detailFields = [
+        ['Creator', manifest?.creator || manifest?.project?.creator || ''],
+        ['Date', manifest?.date || manifest?.project?.date || ''],
+        ['Location', manifest?.coverage || manifest?.project?.coverage || '']
+    ];
+    detailFields.forEach(([label, value]) => {
+        if (!value) return;
+        const row = document.createElement('div');
+        row.className = 'editorial-mobile-info-row';
+        row.innerHTML = '<span class="editorial-mobile-info-label">' + escapeHtml(label) + '</span><span class="editorial-mobile-info-value">' + escapeHtml(String(value)) + '</span>';
+        mobileInfoContent.appendChild(row);
+    });
+
+    // Stats grid
+    const statsGrid = document.createElement('div');
+    statsGrid.className = 'editorial-mobile-info-stats';
+    const fmt = (n) => n >= 1000000 ? (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M' : n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K' : String(n);
+
+    if (modelGroup && modelGroup.children.length > 0) {
+        let vertexCount = 0;
+        modelGroup.traverse(child => {
+            if (child.isMesh && child.geometry && child.geometry.attributes.position) {
+                vertexCount += child.geometry.attributes.position.count;
+            }
+        });
+        if (vertexCount > 0) {
+            const vertStat = document.createElement('div');
+            vertStat.className = 'editorial-mobile-info-stat';
+            vertStat.innerHTML = '<div class="editorial-mobile-info-stat-num">' + fmt(vertexCount) + '</div><div class="editorial-mobile-info-stat-label">Vertices</div>';
+            statsGrid.appendChild(vertStat);
+        }
+    }
+
+    // Gaussian count from manifest
+    const gaussianCount = manifest?.splat_count || manifest?.project?.splat_count || 0;
+    if (gaussianCount > 0) {
+        const gaussStat = document.createElement('div');
+        gaussStat.className = 'editorial-mobile-info-stat';
+        gaussStat.innerHTML = '<div class="editorial-mobile-info-stat-num">' + fmt(gaussianCount) + '</div><div class="editorial-mobile-info-stat-label">Gaussians</div>';
+        statsGrid.appendChild(gaussStat);
+    }
+
+    if (statsGrid.children.length > 0) {
+        mobileInfoContent.appendChild(statsGrid);
+    }
+
+    // Close button is a direct child of overlay (the scroll container) for absolute positioning
+    overlay.appendChild(mobileCloseBtn);
+    overlay.appendChild(mobileInfoContent);
 
     // Wire details link to panel
     detailsLink.addEventListener('click', () => {
@@ -1645,7 +2008,7 @@ function initFilePicker(container, deps) {
             <h1 class="editorial-picker-title">Vitrine3D</h1>
             <div class="editorial-loading-title-bar"></div>
             <p class="kiosk-picker-formats">
-                Scans, models, point clouds, and archives
+                Models, splats, point clouds, and 3D archives
             </p>
             <button id="kiosk-picker-btn" type="button">Browse Files</button>
             <p class="kiosk-picker-prompt">or drag and drop here</p>
@@ -1653,20 +2016,233 @@ function initFilePicker(container, deps) {
         <div class="editorial-loading-bottom">
             <div class="editorial-picker-progress-shell"></div>
         </div>
-        <input type="file" id="kiosk-picker-input" accept=".a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">
+        <input type="file" id="kiosk-picker-input" accept=".ddim,.a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">
     `;
+}
+
+// ---- Flight log dropdown builder (reusable from setup + onFlightPathLoaded) ----
+
+function buildFlightDropdown(fpm, container) {
+    // Guard: already inserted
+    if (container.querySelector('.editorial-flight-wrapper')) return;
+
+    const fpRule = document.createElement('div');
+    fpRule.className = 'editorial-ribbon-rule';
+    container.appendChild(fpRule);
+
+    const fpWrapper = document.createElement('div');
+    fpWrapper.className = 'editorial-flight-wrapper';
+
+    const fpBtn = document.createElement('button');
+    fpBtn.className = 'editorial-marker-toggle editorial-flight-btn active';
+    fpBtn.title = 'Flight Log';
+    fpBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 2.8L21 6l-3.2 3.2"/><path d="M21 6H7.5a4.5 4.5 0 0 0 0 9H12"/><circle cx="17" cy="17" r="3"/><path d="M14 17h-4"/></svg>';
+
+    const fpDropdown = document.createElement('div');
+    fpDropdown.className = 'editorial-flight-dropdown';
+
+    // --- Stats section ---
+    const statsGrid = document.createElement('div');
+    statsGrid.className = 'editorial-flight-stats';
+
+    const stats = fpm.getStats();
+    if (stats) {
+        [
+            ['Duration', stats.duration],
+            ['Distance', stats.distance],
+            ['Max Alt', stats.maxAlt],
+            ['Max Speed', stats.maxSpeed],
+            ['Avg Speed', stats.avgSpeed],
+            ['Points', stats.points],
+        ].forEach(([label, value]) => {
+            const lbl = document.createElement('span');
+            lbl.className = 'editorial-flight-stat-label';
+            lbl.textContent = label;
+            const val = document.createElement('span');
+            val.className = 'editorial-flight-stat-value';
+            val.textContent = value;
+            statsGrid.appendChild(lbl);
+            statsGrid.appendChild(val);
+        });
+    }
+    fpDropdown.appendChild(statsGrid);
+
+    // --- Divider ---
+    const div1 = document.createElement('div');
+    div1.className = 'editorial-flight-divider';
+    fpDropdown.appendChild(div1);
+
+    // --- Color mode selector ---
+    const colorSection = document.createElement('div');
+    colorSection.className = 'editorial-flight-section';
+
+    const colorLabel = document.createElement('span');
+    colorLabel.className = 'editorial-flight-section-label';
+    colorLabel.textContent = 'Color';
+    colorSection.appendChild(colorLabel);
+
+    const colorSeg = document.createElement('div');
+    colorSeg.className = 'editorial-flight-seg';
+
+    const currentSettings = fpm.getSettings();
+    const colorModes = [
+        { key: 'speed', label: 'Spd' },
+        { key: 'altitude', label: 'Alt' },
+        { key: 'climbrate', label: 'Climb' },
+    ];
+    const colorBtns = [];
+    colorModes.forEach(({ key, label }) => {
+        const btn = document.createElement('button');
+        btn.className = 'editorial-flight-seg-btn';
+        btn.textContent = label;
+        btn.dataset.colorMode = key;
+        if (currentSettings.colorMode === key) btn.classList.add('active');
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fpm.setColorMode(key);
+            colorBtns.forEach(b => b.classList.toggle('active', b.dataset.colorMode === key));
+        });
+        colorBtns.push(btn);
+        colorSeg.appendChild(btn);
+    });
+    colorSection.appendChild(colorSeg);
+    fpDropdown.appendChild(colorSection);
+
+    // --- Marker density selector ---
+    const markerSection = document.createElement('div');
+    markerSection.className = 'editorial-flight-section';
+
+    const markerLabel = document.createElement('span');
+    markerLabel.className = 'editorial-flight-section-label';
+    markerLabel.textContent = 'Markers';
+    markerSection.appendChild(markerLabel);
+
+    const markerSeg = document.createElement('div');
+    markerSeg.className = 'editorial-flight-seg';
+
+    let currentDensity = 'sparse';
+    const densityModes = [
+        { key: 'off', label: 'Off' },
+        { key: 'sparse', label: 'Few' },
+        { key: 'all', label: 'All' },
+    ];
+    const densityBtns = [];
+    densityModes.forEach(({ key, label }) => {
+        const btn = document.createElement('button');
+        btn.className = 'editorial-flight-seg-btn';
+        btn.textContent = label;
+        btn.dataset.density = key;
+        if (currentDensity === key) btn.classList.add('active');
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentDensity = key;
+            fpm.setMarkerDensity(key);
+            densityBtns.forEach(b => b.classList.toggle('active', b.dataset.density === key));
+        });
+        densityBtns.push(btn);
+        markerSeg.appendChild(btn);
+    });
+    markerSection.appendChild(markerSeg);
+    fpDropdown.appendChild(markerSection);
+
+    // --- Line opacity slider ---
+    const opacitySection = document.createElement('div');
+    opacitySection.className = 'editorial-flight-section';
+
+    const opacityLabel = document.createElement('span');
+    opacityLabel.className = 'editorial-flight-section-label';
+    opacityLabel.textContent = 'Opacity';
+    opacitySection.appendChild(opacityLabel);
+
+    const sliderRow = document.createElement('div');
+    sliderRow.className = 'editorial-flight-slider-row';
+    sliderRow.style.padding = '0';
+    sliderRow.style.flex = '1';
+
+    const opacitySlider = document.createElement('input');
+    opacitySlider.type = 'range';
+    opacitySlider.min = '0.1';
+    opacitySlider.max = '1';
+    opacitySlider.step = '0.05';
+    opacitySlider.value = '1';
+    opacitySlider.className = 'editorial-flight-slider';
+    opacitySlider.addEventListener('input', (e) => {
+        e.stopPropagation();
+        fpm.setLineOpacity(parseFloat(opacitySlider.value));
+    });
+    sliderRow.appendChild(opacitySlider);
+    opacitySection.appendChild(sliderRow);
+    fpDropdown.appendChild(opacitySection);
+
+    // --- Bottom action: Hide / Show ---
+    const actions = document.createElement('div');
+    actions.className = 'editorial-flight-actions';
+
+    let fpVisible = true;
+    const hideBtn = document.createElement('button');
+    hideBtn.className = 'editorial-flight-action';
+    hideBtn.textContent = 'Hide Path';
+    hideBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fpVisible = !fpVisible;
+        fpm.setVisible(fpVisible);
+        fpBtn.classList.toggle('active', fpVisible);
+        fpBtn.classList.toggle('off', !fpVisible);
+        hideBtn.textContent = fpVisible ? 'Hide Path' : 'Show Path';
+        fpDropdown.classList.remove('open');
+    });
+    actions.appendChild(hideBtn);
+    fpDropdown.appendChild(actions);
+
+    // Open/close dropdown
+    fpBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fpDropdown.classList.toggle('open');
+    });
+    document.addEventListener('click', () => { fpDropdown.classList.remove('open'); });
+    fpDropdown.addEventListener('click', (e) => { e.stopPropagation(); });
+
+    fpWrapper.appendChild(fpBtn);
+    fpWrapper.appendChild(fpDropdown);
+    container.appendChild(fpWrapper);
+}
+
+// ---- Late-bind hook: flight path loaded after layout setup ----
+
+function onFlightPathLoaded(fpm) {
+    if (!fpm || !fpm.hasData) return;
+    // Find the tools group in the already-rendered ribbon
+    const toolsGroup = document.querySelector('.editorial-ribbon-tools');
+    if (!toolsGroup) return;
+    buildFlightDropdown(fpm, toolsGroup);
 }
 
 // ---- Layout module hooks (called by kiosk-main.ts) ----
 
 function onAnnotationSelect(annotationId) {
-    document.querySelectorAll('.editorial-anno-seq-num.active').forEach(n => n.classList.remove('active'));
-    const el = document.querySelector(`.editorial-anno-seq-num[data-anno-id="${annotationId}"]`);
-    if (el) el.classList.add('active');
+    // Update annotation dropdown when a 3D marker is clicked
+    const wrapper = document.querySelector('.editorial-anno-wrapper');
+    if (!wrapper) return;
+    const items = wrapper.querySelectorAll('.editorial-matcap-item[data-anno-idx]');
+    const btn = wrapper.querySelector('.editorial-marker-toggle');
+    let foundIndex = -1;
+    const annos = document.querySelectorAll('.annotation-marker');
+    annos.forEach((marker, i) => {
+        if (marker.dataset.annotationId === annotationId) foundIndex = i;
+    });
+    if (foundIndex >= 0) {
+        if (btn) btn.classList.add('active');
+        items.forEach((el, i) => el.classList.toggle('active', i === foundIndex));
+    }
 }
 
 function onAnnotationDeselect() {
-    document.querySelectorAll('.editorial-anno-seq-num.active').forEach(n => n.classList.remove('active'));
+    const wrapper = document.querySelector('.editorial-anno-wrapper');
+    if (!wrapper) return;
+    const btn = wrapper.querySelector('.editorial-marker-toggle');
+    const items = wrapper.querySelectorAll('.editorial-matcap-item[data-anno-idx]');
+    if (btn) btn.classList.remove('active');
+    items.forEach(el => el.classList.remove('active'));
 }
 
 function onViewModeChange(mode) {
@@ -1680,16 +2256,39 @@ function onKeyboardShortcut(key) {
         const panel = document.querySelector('.editorial-info-overlay');
         const btn = document.querySelector('.editorial-details-link');
         if (panel) {
-            const isOpen = panel.classList.toggle('open');
-            if (btn) btn.classList.toggle('active', isOpen);
+            // Toggle both desktop and mobile open states
+            const isMobileOpen = panel.classList.contains('mobile-open');
+            const isDesktopOpen = panel.classList.contains('open');
+            if (isMobileOpen) {
+                panel.classList.remove('mobile-open');
+                if (syncInfoOverlayState) syncInfoOverlayState(false);
+            } else if (isDesktopOpen) {
+                panel.classList.remove('open');
+                if (btn) btn.classList.remove('active');
+            } else {
+                // Open — detect if mobile tier
+                const isMobile = window.matchMedia('(max-width: 699px)').matches;
+                if (isMobile) {
+                    panel.classList.add('mobile-open');
+                    if (syncInfoOverlayState) syncInfoOverlayState(true);
+                } else {
+                    panel.classList.add('open');
+                    if (btn) btn.classList.add('active');
+                }
+            }
         }
         return true;
     }
     if (key === 'escape') {
         const panel = document.querySelector('.editorial-info-overlay');
-        const btn = document.querySelector('.editorial-details-link');
+        if (panel && panel.classList.contains('mobile-open')) {
+            panel.classList.remove('mobile-open');
+            if (syncInfoOverlayState) syncInfoOverlayState(false);
+            return true;
+        }
         if (panel && panel.classList.contains('open')) {
             panel.classList.remove('open');
+            const btn = document.querySelector('.editorial-details-link');
             if (btn) btn.classList.remove('active');
             return true;
         }
@@ -1698,6 +2297,8 @@ function onKeyboardShortcut(key) {
 }
 
 // ---- Walkthrough hooks ----
+
+let syncInfoOverlayState = null; // late-bound: assigned inside setup() capsule creation, called from module-level createInfoOverlay()
 
 let wtStopDots = null;
 let wtTitleEl = null;
@@ -1710,9 +2311,9 @@ function onWalkthroughStart(walkthrough) {
     // Create walkthrough progress dots in the ribbon
     const ribbon = document.querySelector('.editorial-bottom-ribbon');
     if (ribbon) {
-        // Hide annotation sequence during walkthrough
-        const annoSeq = ribbon.querySelector('.editorial-anno-sequence');
-        if (annoSeq) annoSeq.style.display = 'none';
+        // Hide annotation capsule during walkthrough
+        const annoWrapper = ribbon.querySelector('.editorial-anno-wrapper');
+        if (annoWrapper) annoWrapper.style.display = 'none';
 
         // Create walkthrough stop dots
         wtStopDots = document.createElement('div');
@@ -1734,11 +2335,7 @@ function onWalkthroughStart(walkthrough) {
         // Insert before the first ribbon-rule after tools group, or append to tools group
         const toolsGroup = ribbon.querySelector('.editorial-ribbon-tools');
         if (toolsGroup) {
-            if (annoSeq) {
-                toolsGroup.insertBefore(wtStopDots, annoSeq);
-            } else {
-                toolsGroup.prepend(wtStopDots);
-            }
+            toolsGroup.prepend(wtStopDots);
         }
     }
 
@@ -1752,12 +2349,12 @@ function onWalkthroughStart(walkthrough) {
         titleBlock.style.pointerEvents = 'auto';
     }
 
-    // --- Mobile nav: swap buttons with walkthrough controls ---
-    const mobileNav = document.querySelector('.editorial-mobile-nav');
+    // --- Mobile pill: swap content with walkthrough controls ---
+    const mobileNav = document.querySelector('.editorial-mobile-pill');
     if (mobileNav) {
-        // Hide normal buttons
-        mobileNav.querySelectorAll('.editorial-mobile-nav-btn').forEach(btn => {
-            btn.style.display = 'none';
+        // Hide pill children
+        Array.from(mobileNav.children).forEach(child => {
+            child.style.display = 'none';
         });
 
         // Create walkthrough controls container
@@ -1833,9 +2430,9 @@ function onWalkthroughEnd() {
         wtTitleEl = null;
     }
 
-    // Re-show annotation sequence
-    const annoSeq = document.querySelector('.editorial-anno-sequence');
-    if (annoSeq) annoSeq.style.display = '';
+    // Re-show annotation dropdown
+    const annoWrapper = document.querySelector('.editorial-anno-wrapper');
+    if (annoWrapper) annoWrapper.style.display = '';
 
     // Let title block resume auto-fade
     const titleBlock = document.querySelector('.editorial-title-block');
@@ -1844,15 +2441,15 @@ function onWalkthroughEnd() {
         titleBlock.style.pointerEvents = '';
     }
 
-    // Restore mobile nav buttons
+    // Restore mobile pill children
     if (wtMobileControls) {
         wtMobileControls.remove();
         wtMobileControls = null;
     }
-    const mobileNav = document.querySelector('.editorial-mobile-nav');
-    if (mobileNav) {
-        mobileNav.querySelectorAll('.editorial-mobile-nav-btn').forEach(btn => {
-            btn.style.display = '';
+    const mobilePillEl = document.querySelector('.editorial-mobile-pill');
+    if (mobilePillEl) {
+        Array.from(mobilePillEl.children).forEach(child => {
+            child.style.display = '';
         });
     }
 
@@ -1862,9 +2459,10 @@ function onWalkthroughEnd() {
 // ---- Self-register for offline kiosk discovery ----
 if (!window.__KIOSK_LAYOUTS__) window.__KIOSK_LAYOUTS__ = {};
 window.__KIOSK_LAYOUTS__['editorial'] = {
-    setup, initLoadingScreen, initClickGate, initFilePicker,
+    setup, cleanup, initLoadingScreen, initClickGate, initFilePicker,
     onAnnotationSelect, onAnnotationDeselect, onViewModeChange, onKeyboardShortcut,
     onWalkthroughStart, onWalkthroughStopChange, onWalkthroughEnd,
+    onFlightPathLoaded,
     hasOwnInfoPanel: true,
     hasOwnQualityToggle: true
 };

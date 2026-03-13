@@ -295,8 +295,28 @@
         sparkVersion: "${SPARK_VERSION}" || '2.0',
 
         // Browser tab title (set by APP_TITLE env var)
-        appTitle: envAppTitle || 'Vitrine3D'
+        appTitle: envAppTitle || 'Vitrine3D',
+
+        // DJI API key for decrypting v13+ binary flight logs (runtime env var, overridable via admin settings)
+        djiApiKey: "${DJI_API_KEY}"
     };
 
     console.log('[config.js] Generated Config:', window.APP_CONFIG);
+
+    // Fetch server-managed settings (non-blocking — modules await settingsReady if needed)
+    window.APP_CONFIG.settingsReady = fetch('/api/settings')
+        .then(function(res) { return res.ok ? res.json() : Promise.reject(res.statusText); })
+        .then(function(settings) {
+            var s = settings;
+            if (s['lod.budgetSd'])           window.APP_CONFIG.lodBudgetSd = Number(s['lod.budgetSd'].value);
+            if (s['lod.budgetHd'])           window.APP_CONFIG.lodBudgetHd = Number(s['lod.budgetHd'].value);
+            if (s['renderer.maxPixelRatio']) window.APP_CONFIG.maxPixelRatio = Number(s['renderer.maxPixelRatio'].value);
+            if (s['recording.bitrate'])      window.APP_CONFIG.recordingBitrate = Number(s['recording.bitrate'].value);
+            if (s['recording.framerate'])    window.APP_CONFIG.recordingFramerate = Number(s['recording.framerate'].value);
+            if (s['recording.maxDuration'])  window.APP_CONFIG.recordingMaxDuration = Number(s['recording.maxDuration'].value);
+            if (s['flight.djiApiKey'])       window.APP_CONFIG.djiApiKey = s['flight.djiApiKey'].value;
+        })
+        .catch(function() {
+            // Silently fail — local dev / Tauri won't have this endpoint
+        });
 })();

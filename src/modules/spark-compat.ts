@@ -43,7 +43,7 @@ export function createSparkRenderer(options: SparkRendererOptions): any {
         return new SparkRenderer(options);
     }
     // OldSparkRenderer doesn't support LOD or clipXY — strip them
-    const { lodSplatCount, behindFoveate, clipXY, ...rest } = options;
+    const { lodSplatCount: _lod, behindFoveate: _bf, clipXY: _clip, ...rest } = options;
     return new OldSparkRenderer(rest);
 }
 

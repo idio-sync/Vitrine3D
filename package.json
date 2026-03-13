@@ -12,6 +12,8 @@
     "tauri": "tauri",
     "tauri:dev": "npx tauri dev",
     "tauri:build": "npx tauri build",
+    "tauri:dev:pass": "npx tauri dev --config ./src-tauri/tauri.pass.conf.json",
+    "tauri:build:pass": "npx tauri build --config ./src-tauri/tauri.pass.conf.json",
     "branded": "node scripts/build-branded.mjs",
     "docker:build": "vite build && docker build -f docker/Dockerfile -t vitrine3d .",
     "docker:run": "docker run -p 8080:80 vitrine3d",
@@ -22,7 +24,7 @@
     "format:check": "prettier --check \"src/**/*.{js,ts,css,html}\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "postinstall": "node -e \"const {mkdirSync,copyFileSync}=require('fs'),s='node_modules/three/examples/jsm/libs/draco/gltf',d='public/draco';mkdirSync(d,{recursive:true});['draco_decoder.js','draco_decoder.wasm','draco_wasm_wrapper.js'].forEach(f=>copyFileSync(s+'/'+f,d+'/'+f));console.log('Draco decoder files copied to public/draco/');\""
+    "postinstall": "node -e \"const {mkdirSync,copyFileSync}=require('fs'),d='public/draco';mkdirSync(d,{recursive:true});const s1='node_modules/three/examples/jsm/libs/draco/gltf';['draco_decoder.js','draco_decoder.wasm','draco_wasm_wrapper.js'].forEach(f=>copyFileSync(s1+'/'+f,d+'/'+f));const s2='node_modules/draco3dgltf';['draco_encoder.wasm','draco_decoder_gltf.wasm'].forEach(f=>copyFileSync(s2+'/'+f,d+'/'+f));console.log('Draco files copied to public/draco/');\""
   },
   "keywords": [
     "gaussian-splatting",
@@ -36,7 +38,8 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2.10.0",
-    "@types/three": "^0.182.0",
+    "@types/node": "^25.3.5",
+    "@types/three": "^0.183.1",
     "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "jsdom": "^26.1.0",
@@ -47,13 +50,22 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "@gltf-transform/core": "^4.3.0",
+    "@gltf-transform/extensions": "^4.3.0",
+    "@gltf-transform/functions": "^4.3.0",
     "@sparkjsdev/spark": "^0.1.10",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/plugin-deep-link": "^2.4.7",
+    "@tauri-apps/plugin-shell": "^2.3.5",
+    "dji-log-parser-js": "^0.5.7",
+    "draco3d": "^1.5.7",
+    "draco3dgltf": "^1.5.7",
     "dxf-parser": "^1.1.2",
     "fflate": "^0.8.2",
     "leaflet": "^1.9.4",
     "meshoptimizer": "^1.0.1",
     "occt-import-js": "^0.0.23",
-    "three": "^0.182.0",
+    "three": "^0.183.2",
     "three-e57-loader": "^1.2.0",
     "web-e57": "^1.2.0"
   }

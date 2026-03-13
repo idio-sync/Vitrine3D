@@ -233,8 +233,15 @@ location ~ "^/view/[a-f0-9]{16}$" {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
 }
+# Share pages for media recordings: /share/{16-hex-id}
+location ~ "^/share/[a-f0-9]{16}$" {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
 VIEWEOF
-    echo "  Clean URLs: /view/{uuid} and /view/{hash} enabled"
+    echo "  Clean URLs: /view/{uuid}, /view/{hash}, and /share/{id} enabled"
 
     SITE_NAME="${SITE_NAME}" \
     SITE_URL="${SITE_URL}" \

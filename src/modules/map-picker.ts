@@ -270,6 +270,8 @@ export function openMapPicker(options: MapPickerOptions): void {
         cancelBtn?.removeEventListener('click', closeModal);
         locateBtn?.removeEventListener('click', handleLocate);
         overlay.removeEventListener('click', handleOverlayClick);
+        // Destroy Leaflet map to free resources
+        destroyMapPicker();
     }
 
     function handleConfirm() {
@@ -291,4 +293,20 @@ export function openMapPicker(options: MapPickerOptions): void {
     overlay.addEventListener('click', handleOverlayClick);
 
     log.info('Map picker opened');
+}
+
+/**
+ * Destroy the Leaflet map instance and release resources.
+ * Called automatically when the modal closes; can also be called externally for cleanup.
+ */
+export function destroyMapPicker(): void {
+    if (searchTimeout) {
+        clearTimeout(searchTimeout);
+        searchTimeout = null;
+    }
+    if (map) {
+        map.remove();
+        map = null;
+    }
+    marker = null;
 }

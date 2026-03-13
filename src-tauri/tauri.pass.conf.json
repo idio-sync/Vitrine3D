@@ -1,0 +1,28 @@
+{
+  "productName": "Direct Dimensions PASS Viewer",
+  "identifier": "com.directdimensions.passviewer",
+  "app": {
+    "windows": [
+      {
+        "title": "Direct Dimensions PASS Viewer",
+        "url": "index.html?kiosk=true&theme=industrial",
+        "width": 1400,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ]
+  },
+  "build": {
+    "devUrl": "http://localhost:8080/?kiosk=true&theme=industrial"
+  },
+  "bundle": {
+    "windows": {
+      "nsis": {
+        "installerHooks": "./windows/hooks.pass.nsh"
+      }
+    }
+  }
+}

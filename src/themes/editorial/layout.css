@@ -225,52 +225,98 @@ body.kiosk-mode.kiosk-editorial .editorial-ribbon-rule {
     flex-shrink: 0;
 }
 
-/* Annotation sequence chain */
+/* Annotation dropdown — matches matcap dropdown pattern */
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-sequence {
+body.kiosk-mode.kiosk-editorial .editorial-anno-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* Count badge on the icon button */
+body.kiosk-mode.kiosk-editorial .editorial-anno-badge {
+    position: absolute;
+    top: 0;
+    right: 2px;
+    min-width: 13px;
+    height: 13px;
+    font-family: var(--kiosk-font-body);
+    font-size: 0.48rem;
+    font-weight: 700;
+    line-height: 13px;
+    text-align: center;
+    color: var(--kiosk-bg);
+    background: var(--kiosk-text-muted);
+    border-radius: 7px;
+    padding: 0 3px;
+    pointer-events: none;
+    transition: background 0.15s;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-marker-toggle.active ~ .editorial-anno-badge,
+body.kiosk-mode.kiosk-editorial .editorial-anno-wrapper:hover .editorial-anno-badge {
+    background: var(--kiosk-accent);
+}
+
+/* Number prefix inside annotation items */
+body.kiosk-mode.kiosk-editorial .editorial-anno-item-num {
+    font-weight: 700;
+    color: var(--kiosk-text-faint);
+    margin-right: 8px;
+    font-size: 0.58rem;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+    min-width: 14px;
+    transition: color 0.1s;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-matcap-item:hover .editorial-anno-item-num {
+    color: var(--kiosk-text-secondary);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-matcap-item.active .editorial-anno-item-num {
+    color: var(--kiosk-accent);
+}
+
+/* Prev/next navigation row inside dropdown */
+body.kiosk-mode.kiosk-editorial .editorial-anno-nav-row {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0;
-    position: absolute;
-    left: 0;
-    right: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-    pointer-events: none;
+    padding: 2px 10px;
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-sequence > * {
-    pointer-events: auto;
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-sequence::-webkit-scrollbar {
-    display: none;
-}
-
-body.kiosk-mode.kiosk-editorial .editorial-anno-seq-num {
-    font-family: var(--kiosk-font-body);
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--kiosk-text-muted);
-    cursor: pointer;
-    padding: 2px 4px;
-    transition: color 0.15s;
-    letter-spacing: 0.02em;
+body.kiosk-mode.kiosk-editorial .editorial-anno-nav-btn {
     background: none;
     border: none;
+    color: var(--kiosk-text-muted);
+    cursor: pointer;
+    font-size: 0.65rem;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 4px 10px;
+    transition: color 0.1s, background 0.1s;
+    flex: 1;
+    text-align: center;
     white-space: nowrap;
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-seq-num:hover {
-    color: var(--kiosk-text-secondary);
+body.kiosk-mode.kiosk-editorial .editorial-anno-nav-btn:hover {
+    color: var(--kiosk-text-primary);
+    background: rgba(255, 255, 255, 0.06);
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-anno-seq-num.active {
-    color: var(--kiosk-accent);
-    font-weight: 500;
+body.kiosk-mode.kiosk-editorial .editorial-anno-nav-sep {
+    width: 1px;
+    height: 10px;
+    background: var(--kiosk-border-subtle);
+    flex-shrink: 0;
 }
 
+/* Walkthrough sequence dash */
 body.kiosk-mode.kiosk-editorial .editorial-anno-seq-dash {
     width: 20px;
     height: 1px;
@@ -580,6 +626,11 @@ body.kiosk-mode.kiosk-editorial .editorial-info-overlay.open {
     border-left-color: var(--kiosk-border-subtle);
     box-shadow: -8px 0 32px rgba(0,0,0,0.35), -2px 0 8px rgba(0,0,0,0.2);
     pointer-events: auto;
+}
+
+/* Mobile info content — hidden at all widths, shown only via .mobile-open parent in Tier 3 */
+body.kiosk-mode.kiosk-editorial .editorial-mobile-info-content {
+    display: none;
 }
 
 /* Panel interior — flex row: image-strip | accent | content */
@@ -2084,6 +2135,25 @@ body.kiosk-mode.kiosk-editorial #kiosk-picker-btn:hover {
     background: rgba(var(--kiosk-accent-rgb), 0.22);
 }
 
+body.kiosk-mode.kiosk-editorial .kiosk-library-btn {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 12px 36px;
+    border: 1px solid var(--kiosk-accent);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--kiosk-accent);
+    margin: 10px auto 0;
+    transition: background 0.2s;
+}
+
+body.kiosk-mode.kiosk-editorial .kiosk-library-btn:hover {
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+}
+
 /* Prompt — sits where #loading-text would be */
 
 body.kiosk-mode.kiosk-editorial .kiosk-picker-prompt {
@@ -2406,69 +2476,396 @@ body.kiosk-mode.kiosk-editorial .editorial-slice-btn.active {
     opacity: 1;
 }
 
-/* =================================================================
-   Mobile Bottom Nav — hidden by default, shown at Tier 3 (<700px)
-   ================================================================= */
+/* --- Flight Log Dropdown Panel --- */
 
-body.kiosk-mode.kiosk-editorial .editorial-mobile-nav {
-    display: none;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 48px;
-    background: rgba(var(--kiosk-surface-rgb), 0.92);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border-top: 1.5px solid var(--kiosk-accent);
-    z-index: 100;
-    justify-content: space-evenly;
+body.kiosk-mode.kiosk-editorial .editorial-flight-wrapper {
+    position: relative;
+    display: flex;
     align-items: center;
-    padding: 0 8px;
+    flex-shrink: 0;
+    align-self: stretch;
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-mobile-nav-btn {
-    display: flex;
+body.kiosk-mode.kiosk-editorial .editorial-flight-dropdown {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: -12px;
+    background: rgba(var(--kiosk-surface-rgb), 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--kiosk-border-subtle);
+    border-radius: 4px;
+    padding: 0;
+    min-width: 240px;
+    width: 260px;
+    z-index: 200;
     flex-direction: column;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-dropdown.open {
+    display: flex;
+    animation: editorialDropdownIn 0.15s ease-out;
+}
+
+/* Stats grid — two-column key/value layout */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-stats {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1px 12px;
+    padding: 10px 14px 8px;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-stat-label {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.56rem;
+    font-weight: 500;
+    color: var(--kiosk-text-faint);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    line-height: 1.8;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-stat-value {
+    font-family: var(--kiosk-font-mono, var(--kiosk-font-body));
+    font-size: 0.62rem;
+    font-weight: 400;
+    color: var(--kiosk-text-primary);
+    letter-spacing: 0.02em;
+    text-align: right;
+    line-height: 1.8;
+}
+
+/* Section divider */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-divider {
+    height: 1px;
+    background: var(--kiosk-border-subtle);
+    margin: 0;
+}
+
+/* Color mode selector row */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-section {
+    padding: 6px 14px;
+    display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 2px;
+    gap: 8px;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-section-label {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.54rem;
+    font-weight: 500;
+    color: var(--kiosk-text-faint);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-seg {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-left: auto;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-seg-btn {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.56rem;
+    font-weight: 400;
+    color: var(--kiosk-text-muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
     background: none;
     border: none;
-    color: var(--kiosk-text-secondary);
+    padding: 3px 7px;
     cursor: pointer;
-    padding: 4px 12px;
-    min-width: 44px;
-    min-height: 44px;
-    border-radius: 6px;
-    transition: color 0.15s ease, background 0.15s ease;
-    -webkit-tap-highlight-color: transparent;
+    transition: color 0.1s, background 0.1s;
+    white-space: nowrap;
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-mobile-nav-btn:active {
+body.kiosk-mode.kiosk-editorial .editorial-flight-seg-btn:hover {
+    color: var(--kiosk-text-primary);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-seg-btn.active {
+    color: var(--kiosk-accent);
     background: rgba(var(--kiosk-accent-rgb), 0.12);
+    font-weight: 600;
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-mobile-nav-btn.active {
+/* Opacity slider row */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 14px 6px;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--kiosk-accent);
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-slider::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--kiosk-accent);
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Bottom actions row */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-actions {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 4px 14px 6px;
+    border-top: 1px solid var(--kiosk-border-subtle);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-action {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.56rem;
+    font-weight: 400;
+    color: var(--kiosk-text-faint);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    padding: 3px 0;
+    cursor: pointer;
+    transition: color 0.1s;
+    flex: 1;
+    text-align: center;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-action:hover {
+    color: var(--kiosk-text-secondary);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-action-sep {
+    width: 1px;
+    height: 10px;
+    background: var(--kiosk-border-subtle);
+    flex-shrink: 0;
+}
+
+/* Active state on the ribbon button */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-btn.active {
+    color: var(--kiosk-accent);
+    opacity: 1;
+}
+
+/* =================================================================
+   Floating Pill — hidden by default, shown at Tier 3 (<700px)
+   Replaces the old mobile bottom nav with a minimal capsule.
+   ================================================================= */
+
+body.kiosk-mode.kiosk-editorial .editorial-mobile-pill {
+    display: none;
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 40px;
+    align-items: center;
+    gap: 0;
+    background: rgba(var(--kiosk-surface-rgb), 0.82);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(var(--kiosk-accent-rgb), 0.25);
+    border-top: 2px solid rgba(var(--kiosk-accent-rgb), 0.6);
+    border-radius: 24px;
+    z-index: 100;
+    padding: 0 4px 0 14px;
+    max-width: calc(100vw - 32px);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.15);
+    animation: editorialPillIn 0.5s cubic-bezier(0.33, 1, 0.68, 1) 0.4s both;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-mobile-pill:not(:has(.editorial-pill-kebab)) {
+    padding: 0 14px;
+}
+
+@keyframes editorialPillIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Annotation count badge */
+body.kiosk-mode.kiosk-editorial .editorial-pill-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 10px;
+    background: rgba(var(--kiosk-accent-rgb), 0.2);
+    color: var(--kiosk-accent);
+    font-family: var(--kiosk-font-body);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+/* Title label — main tap target */
+body.kiosk-mode.kiosk-editorial .editorial-pill-label {
+    background: none;
+    border: none;
+    color: var(--kiosk-text-primary);
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 40px;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.15s;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-pill-label:active {
     color: var(--kiosk-accent);
 }
 
-body.kiosk-mode.kiosk-editorial .editorial-mobile-nav-label {
-    font-family: var(--kiosk-font-body);
-    font-size: 0.55rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    line-height: 1;
+/* Kebab menu button — right side of pill */
+body.kiosk-mode.kiosk-editorial .editorial-pill-kebab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: none;
+    border: none;
+    border-left: 1px solid rgba(var(--kiosk-accent-rgb), 0.15);
+    margin-left: 10px;
+    color: var(--kiosk-text-muted);
+    cursor: pointer;
+    border-radius: 0 20px 20px 0;
+    transition: color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    flex-shrink: 0;
 }
 
-/* Mobile walkthrough controls (inside mobile nav) */
+body.kiosk-mode.kiosk-editorial .editorial-pill-kebab:active {
+    color: var(--kiosk-accent);
+}
+
+/* Kebab popover menu */
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    background: rgba(var(--kiosk-surface-rgb), 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(var(--kiosk-accent-rgb), 0.2);
+    border-radius: 8px;
+    padding: 6px 0;
+    min-width: 160px;
+    z-index: 200;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu.open {
+    display: flex;
+    flex-direction: column;
+    animation: editorialPillMenuIn 0.15s ease-out;
+}
+
+@keyframes editorialPillMenuIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes editorialBarIn {
+    from { opacity: 0; transform: translateY(100%); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu-item {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.7rem;
+    font-weight: 400;
+    color: var(--kiosk-text-secondary);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    padding: 9px 16px;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+    transition: color 0.1s, background 0.1s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu-item:active {
+    background: rgba(var(--kiosk-accent-rgb), 0.1);
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu-item.active {
+    color: var(--kiosk-accent);
+    font-weight: 600;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu-off {
+    color: var(--kiosk-text-muted);
+    font-size: 0.65rem;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-pill-menu-divider {
+    height: 1px;
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+    margin: 4px 12px;
+}
+
+/* Mobile walkthrough controls (inside floating pill) */
 body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-controls {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 16px;
-    width: 100%;
+    gap: 12px;
     height: 100%;
+    padding: 0 4px;
 }
 
 body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-btn {
@@ -2547,6 +2944,17 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
         width: 40px;
         height: 40px;
     }
+
+    /* Capsule buttons — larger touch targets */
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-btn {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip-btn {
+        min-width: 44px;
+        min-height: 44px;
+    }
 }
 
 /* =================================================================
@@ -2600,9 +3008,12 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
         margin: 0 6px 0 8px;
     }
 
-    /* Hide annotation sequence chain — too wide for compact ribbon */
-    body.kiosk-mode.kiosk-editorial .editorial-anno-sequence {
-        display: none;
+    /* Compact the annotation badge for narrow viewports */
+    body.kiosk-mode.kiosk-editorial .editorial-anno-badge {
+        font-size: 0.44rem;
+        min-width: 11px;
+        height: 11px;
+        line-height: 11px;
     }
 
     /* Overflow menu — show button, tools become dropdown */
@@ -2764,7 +3175,7 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
 
     /* Compact title block — single-line, tight padding */
     body.kiosk-mode.kiosk-editorial .editorial-title-block {
-        padding: 12px 20px 10px 14px;
+        padding: calc(12px + env(safe-area-inset-top)) 20px 10px calc(14px + env(safe-area-inset-left));
         max-width: 70%;
     }
 
@@ -2780,112 +3191,370 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
         display: none;
     }
 
-    /* Hide ribbon and info panel — mobile nav replaces ribbon */
+    /* Hide ribbon and desktop info overlay — floating capsule replaces them */
     body.kiosk-mode.kiosk-editorial .editorial-bottom-ribbon,
     body.kiosk-mode.kiosk-editorial .editorial-info-overlay {
         display: none !important;
     }
 
-    /* Show mobile nav */
-    body.kiosk-mode.kiosk-editorial .editorial-mobile-nav {
-        display: flex !important;
-    }
-
-    /* Revert viewer to block layout for sidebar fallback */
-    body.kiosk-mode.kiosk-editorial #viewer-container {
-        display: block !important;
-    }
-
-    body.kiosk-mode.kiosk-editorial #viewer-canvas {
-        width: 100% !important;
-        flex: none;
-    }
-
-    /* Show sidebar for metadata access; hide generic view switcher (mobile nav has view cycling) */
+    /* Hide metadata sidebar — mobile info overlay replaces it */
     body.kiosk-mode.kiosk-editorial #metadata-sidebar {
-        display: block !important;
-    }
-
-    body.kiosk-mode.kiosk-editorial .kiosk-view-switcher {
         display: none !important;
     }
 
-    /* --- Editorial-styled bottom sheet --- */
-
-    /* Offset sheet above mobile nav (48px) */
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar {
-        bottom: 48px;
-        border-top-color: rgba(var(--kiosk-accent-rgb), 0.3);
-        background: rgba(var(--kiosk-surface-rgb), 0.96);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
+    /* Floating capsule — centered, compact, frosted glass */
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-pill {
+        display: flex !important;
+        bottom: calc(12px + env(safe-area-inset-bottom));
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        max-width: calc(100vw - 32px);
+        height: 38px;
+        border-radius: 20px;
+        border: 1px solid rgba(var(--kiosk-accent-rgb), 0.2);
+        background: rgba(22, 24, 29, 0.88);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        padding: 0 4px;
+        justify-content: center;
+        align-items: center;
+        gap: 0;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.15);
+        z-index: 220;
+        animation: editorialPillIn 0.5s cubic-bezier(0.33, 1, 0.68, 1) 0.4s both;
     }
 
-    /* Gold drag handle */
-    body.kiosk-mode.kiosk-editorial .drag-handle-bar {
-        background: rgba(var(--kiosk-accent-rgb), 0.4);
+    @keyframes editorialPillIn {
+        from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+        to   { opacity: 1; transform: translateX(-50%) translateY(0); }
     }
 
-    body.kiosk-mode.kiosk-editorial #sidebar-drag-handle:hover .drag-handle-bar,
-    body.kiosk-mode.kiosk-editorial #sidebar-drag-handle:active .drag-handle-bar {
-        background: rgba(var(--kiosk-accent-rgb), 0.7);
-    }
-
-    /* Editorial typography in sidebar */
-    body.kiosk-mode.kiosk-editorial #sidebar-view .display-title {
-        font-family: var(--kiosk-font-display);
-        font-size: 1.3rem;
-        letter-spacing: 0.01em;
-    }
-
-    body.kiosk-mode.kiosk-editorial #sidebar-view .display-description {
-        font-family: var(--kiosk-font-body);
-        font-size: 0.88rem;
-        line-height: 1.65;
-    }
-
-    /* Gold tab accents */
-    body.kiosk-mode.kiosk-editorial .sidebar-mode-tab.active {
-        color: var(--kiosk-accent);
-        border-bottom-color: var(--kiosk-accent);
-    }
-
-    /* Gold dividers in sidebar content */
-    body.kiosk-mode.kiosk-editorial #sidebar-view .display-divider {
-        background: rgba(var(--kiosk-accent-rgb), 0.2);
-    }
-
-    /* Gold scrollbar for sidebar */
-    body.kiosk-mode.kiosk-editorial #sidebar-view::-webkit-scrollbar {
-        width: 4px;
-    }
-
-    body.kiosk-mode.kiosk-editorial #sidebar-view::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
-    body.kiosk-mode.kiosk-editorial #sidebar-view::-webkit-scrollbar-thumb {
-        background: rgba(var(--kiosk-accent-rgb), 0.3);
-        border-radius: 2px;
-    }
-
-    body.kiosk-mode.kiosk-editorial #sidebar-view::-webkit-scrollbar-thumb:hover {
-        background: rgba(var(--kiosk-accent-rgb), 0.5);
-    }
-
-    /* Metadata field labels — editorial style */
-    body.kiosk-mode.kiosk-editorial .display-field-label {
-        font-family: var(--kiosk-font-body);
+    /* Capsule button — icon + tiny label */
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        width: 34px;
+        height: 34px;
+        border: none;
+        background: none;
+        color: rgba(200, 204, 212, 0.6);
+        border-radius: 50%;
+        font-size: 5.5px;
+        font-weight: 600;
         text-transform: uppercase;
-        font-size: 0.65rem;
-        letter-spacing: 0.06em;
-        color: var(--kiosk-text-muted);
+        letter-spacing: 0.03em;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        transition: color 0.15s;
     }
 
-    body.kiosk-mode.kiosk-editorial .display-field-value {
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-btn svg {
+        width: 13px;
+        height: 13px;
+        flex-shrink: 0;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-btn.active {
+        color: var(--kiosk-accent);
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-btn.off {
+        color: rgba(200, 204, 212, 0.3);
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-sep {
+        width: 1px;
+        height: 18px;
+        background: rgba(var(--kiosk-accent-rgb), 0.15);
+        flex-shrink: 0;
+        margin: 0 2px;
+    }
+
+    /* Annotation count badge on capsule button */
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-badge {
+        position: absolute;
+        top: 1px;
+        right: 1px;
+        min-width: 12px;
+        height: 12px;
+        padding: 0 3px;
+        border-radius: 6px;
+        background: var(--kiosk-accent);
+        color: var(--kiosk-surface);
+        font-size: 7px;
+        font-weight: 700;
+        line-height: 12px;
+        text-align: center;
+    }
+
+    /* Mobile info overlay — full viewport, 82% opacity */
+    body.kiosk-mode.kiosk-editorial .editorial-info-overlay {
+        display: none;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-info-overlay.mobile-open {
+        display: flex !important;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100% !important;
+        height: 100% !important;
+        margin-right: 0 !important;
+        border-left: none !important;
+        box-shadow: none !important;
+        transition: none !important;
+        pointer-events: auto !important;
+        z-index: 210;
+        flex-direction: column;
+        padding: calc(32px + env(safe-area-inset-top)) 20px calc(56px + env(safe-area-inset-bottom)) 20px;
+        background: rgba(14, 16, 22, 0.82);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        overflow-y: auto;
+        animation: editorialOverlayIn 0.2s ease-out;
+    }
+
+    @keyframes editorialOverlayIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-close {
+        position: absolute;
+        top: calc(18px + env(safe-area-inset-top));
+        right: 16px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 230;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-title {
+        font-family: var(--kiosk-font-body);
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--kiosk-text-primary);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 5px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-rule {
+        width: 26px;
+        height: 2px;
+        background: var(--kiosk-accent);
+        margin-bottom: 10px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-desc {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.75rem;
+        color: var(--kiosk-text-muted);
+        line-height: 1.65;
+        margin-bottom: 10px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-divider {
+        height: 1px;
+        background: rgba(var(--kiosk-accent-rgb), 0.15);
+        margin: 8px 0;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 3px 0;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-label {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.6rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: rgba(200, 204, 212, 0.35);
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-value {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.65rem;
+        color: var(--kiosk-text-primary);
+        text-align: right;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin-top: 10px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-stat {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        border-radius: 6px;
+        padding: 6px 8px;
+        text-align: center;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-stat-num {
         font-family: var(--kiosk-font-body);
         font-size: 0.85rem;
+        font-weight: 700;
         color: var(--kiosk-text-primary);
+        font-variant-numeric: tabular-nums;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-info-stat-label {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.5rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: rgba(200, 204, 212, 0.35);
+        margin-top: 1px;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-info-overlay.mobile-open .editorial-mobile-info-content {
+        display: block !important;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-info-overlay.mobile-open .editorial-panel-inner {
+        display: none !important;
+    }
+
+    /* Annotation navigation strip — above capsule */
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip {
+        position: fixed;
+        bottom: calc(56px + env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 32px;
+        padding: 0 10px;
+        background: rgba(22, 24, 29, 0.88);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(var(--kiosk-accent-rgb), 0.15);
+        border-radius: 16px;
+        z-index: 200;
+        animation: editorialStripIn 0.15s ease-out;
+        max-width: calc(100vw - 48px);
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip.fade-out {
+        opacity: 0;
+        transition: opacity 0.2s ease-out;
+    }
+
+    @keyframes editorialStripIn {
+        from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+        to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border: none;
+        background: none;
+        color: var(--kiosk-text-muted);
+        cursor: pointer;
+        border-radius: 50%;
+        font-size: 0.7rem;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip-btn:active {
+        color: var(--kiosk-accent);
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip-label {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.6rem;
+        color: var(--kiosk-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 120px;
+        letter-spacing: 0.02em;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip-counter {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.6rem;
+        font-weight: 600;
+        color: var(--kiosk-accent);
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* More menu — popover above capsule */
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover {
+        display: none;
+        position: absolute;
+        bottom: calc(100% + 8px);
+        right: 0;
+        background: rgba(var(--kiosk-surface-rgb), 0.92);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(var(--kiosk-accent-rgb), 0.2);
+        border-radius: 8px;
+        padding: 6px 0;
+        min-width: 140px;
+        z-index: 250;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover.open {
+        display: flex;
+        flex-direction: column;
+        animation: editorialPillMenuIn 0.15s ease-out;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover-item {
+        font-family: var(--kiosk-font-body);
+        font-size: 0.72rem;
+        font-weight: 400;
+        color: var(--kiosk-text-secondary);
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        background: none;
+        border: none;
+        padding: 10px 16px;
+        cursor: pointer;
+        text-align: left;
+        white-space: nowrap;
+        transition: color 0.1s, background 0.1s;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover-item:active {
+        background: rgba(var(--kiosk-accent-rgb), 0.1);
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover-item.active {
+        color: var(--kiosk-accent);
+        font-weight: 600;
     }
 
     /* --- Editorial mobile annotation detail --- */
@@ -3027,9 +3696,19 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
 /* --- Tier 4: Micro Embed (<480px) --- */
 
 @media (max-width: 479px) {
-    /* Hide title block — too much chrome for micro embeds */
+    /* Compact title block — minimal chrome for narrow screens */
     body.kiosk-mode.kiosk-editorial .editorial-title-block {
-        display: none !important;
+        padding: calc(8px + env(safe-area-inset-top)) 14px 6px calc(10px + env(safe-area-inset-left));
+        max-width: 60%;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-title-block h1 {
+        font-size: 0.82rem;
+    }
+
+    body.kiosk-mode.kiosk-editorial .editorial-title-block .editorial-title-rule {
+        width: 18px;
+        margin: 4px 0;
     }
 
     /* Smaller annotation markers */
@@ -3144,33 +3823,23 @@ body.kiosk-mode.kiosk-editorial .editorial-mobile-wt-close {
 /* --- Phone landscape: tighter chrome, hide title --- */
 
 @media (max-width: 699px) and (orientation: landscape) {
-    /* Shrink mobile nav for limited vertical space */
-    body.kiosk-mode.kiosk-editorial .editorial-mobile-nav {
-        height: 40px;
-    }
-
     /* Hide title block — too little vertical room */
     body.kiosk-mode.kiosk-editorial .editorial-title-block {
         display: none !important;
     }
 
-    /* Shorter bottom sheet */
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar {
-        height: 60dvh;
-        max-height: 60dvh;
-        bottom: 40px;
+    /* Capsule: icon-only in landscape to save vertical space */
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-btn span {
+        display: none;
     }
 
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar.sheet-peek {
-        transform: translateY(calc(60dvh - 60px));
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-pill {
+        height: 34px;
     }
 
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar.sheet-half {
-        transform: translateY(calc(60dvh * 0.5));
-    }
-
-    body.kiosk-mode.kiosk-editorial #metadata-sidebar.sheet-full {
-        transform: translateY(0);
+    /* Annotation strip closer to capsule (34px capsule + 12px bottom) */
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip {
+        bottom: calc(52px + env(safe-area-inset-bottom));
     }
 }
 
@@ -3243,7 +3912,11 @@ body.kiosk-mode.kiosk-editorial .editorial-loading-title-bar {
     body.kiosk-mode.kiosk-editorial #loading-progress-bar::after,
     body.kiosk-mode.kiosk-editorial #annotation-line-overlay line,
     body.kiosk-mode.kiosk-editorial .editorial-info-overlay.open .editorial-info-content > *,
-    body.kiosk-mode.kiosk-editorial .annotation-marker {
+    body.kiosk-mode.kiosk-editorial .annotation-marker,
+    body.kiosk-mode.kiosk-editorial .editorial-mobile-pill,
+    body.kiosk-mode.kiosk-editorial .editorial-anno-strip,
+    body.kiosk-mode.kiosk-editorial .editorial-info-overlay.mobile-open,
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover.open {
         animation: none !important;
     }
 

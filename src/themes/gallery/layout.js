@@ -569,6 +569,35 @@ var _letterboxTop = null;
 var _letterboxBottom = null;
 var _chapterTimer = null;
 
+// ---- Cleanup — remove all DOM elements created by setup() ----
+
+var GALLERY_ROOT_CLASSES = [
+    'gallery-title-card',
+    'gallery-tool-pill',
+    'gallery-letterbox-top',
+    'gallery-letterbox-bottom',
+    'gallery-chapter-card',
+    'gallery-info-overlay',
+    'gallery-timeline'
+];
+
+function cleanup() {
+    var viewerContainer = document.getElementById('viewer-container') || document.body;
+    GALLERY_ROOT_CLASSES.forEach(function(cls) {
+        viewerContainer.querySelectorAll('.' + cls).forEach(function(el) { el.remove(); });
+    });
+    _fadeElements = [];
+    if (_fadeTimer) { clearTimeout(_fadeTimer); _fadeTimer = null; }
+    _walkthroughActive = false;
+    _timelineDots = null;
+    _timelineDashes = null;
+    _timelineEl = null;
+    _chapterCard = null;
+    _letterboxTop = null;
+    _letterboxBottom = null;
+    if (_chapterTimer) { clearTimeout(_chapterTimer); _chapterTimer = null; }
+}
+
 // ---- Main setup ----
 
 function setup(manifest, deps) {
@@ -589,14 +618,25 @@ function setup(manifest, deps) {
     var log = Logger.getLogger('gallery-layout');
     log.info('Setting up gallery layout');
 
+    // Remove any previously-created gallery layout elements (re-entry safe)
+    cleanup();
+
     var viewerContainer = document.getElementById('viewer-container') || document.body;
 
-    // Set scene background from theme metadata
-    var themeMeta = (window.APP_CONFIG || {})._themeMeta;
-    var sceneBg = (themeMeta && themeMeta.sceneBg) ||
-        getComputedStyle(document.body).getPropertyValue('--kiosk-scene-bg').trim() ||
-        '#1a1a2e';
-    sceneManager.setBackgroundColor(sceneBg);
+    // Set scene background from theme metadata.
+    // Skip if the archive manifest declares its own background override — the
+    // kiosk loader applies that override after setup() returns.
+    var hasArchiveBgOverride = manifest && manifest.viewer_settings &&
+        (manifest.viewer_settings.splat_background_color ||
+         manifest.viewer_settings.mesh_background_color ||
+         manifest.viewer_settings.background_color);
+    if (!hasArchiveBgOverride) {
+        var themeMeta = (window.APP_CONFIG || {})._themeMeta;
+        var sceneBg = (themeMeta && themeMeta.sceneBg) ||
+            getComputedStyle(document.body).getPropertyValue('--kiosk-scene-bg').trim() ||
+            '#1a1a2e';
+        sceneManager.setBackgroundColor(sceneBg);
+    }
 
     // --- 1. Title Card ---
     var titleCard = document.createElement('div');
@@ -660,7 +700,7 @@ function setup(manifest, deps) {
     }
 
     // Quality toggle (SD / HD)
-    if (deps.hasAnyProxy || deps.hasSplat) {
+    if (deps.hasAnyProxy || deps.hasSplat || deps.hasMesh) {
         var sdBtn = document.createElement('button');
         sdBtn.className = 'gallery-pill-btn' + (deps.qualityResolved === 'sd' ? ' active' : '');
         sdBtn.dataset.tier = 'sd';
@@ -830,12 +870,12 @@ function initFilePicker(container) {
         '    <div class="kiosk-picker-box" id="kiosk-drop-zone" style="text-align:center;max-width:400px;padding:40px 32px;">' +
         '        <h1 style="font-family:var(--kiosk-font-display);font-size:1.4rem;font-weight:400;color:rgba(var(--kiosk-text-heading-rgb),0.95);margin:0 0 8px;">Vitrine3D</h1>' +
         '        <div style="width:48px;height:2px;background:var(--kiosk-accent);margin:0 auto 16px;"></div>' +
-        '        <p class="kiosk-picker-formats">Scans, models, point clouds, and archives</p>' +
+        '        <p class="kiosk-picker-formats">Models, splats, point clouds, and 3D archives</p>' +
         '        <button id="kiosk-picker-btn" type="button">Browse Files</button>' +
         '        <p class="kiosk-picker-prompt">or drag and drop here</p>' +
         '    </div>' +
         '</div>' +
-        '<input type="file" id="kiosk-picker-input" accept=".a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">';
+        '<input type="file" id="kiosk-picker-input" accept=".ddim,.a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">';
 }
 
 // ---- Layout module hooks ----
@@ -1005,6 +1045,7 @@ function onWalkthroughEnd() {
 if (!window.__KIOSK_LAYOUTS__) window.__KIOSK_LAYOUTS__ = {};
 window.__KIOSK_LAYOUTS__['gallery'] = {
     setup: setup,
+    cleanup: cleanup,
     initLoadingScreen: initLoadingScreen,
     initClickGate: initClickGate,
     initFilePicker: initFilePicker,

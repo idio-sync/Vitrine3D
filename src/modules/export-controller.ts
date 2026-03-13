@@ -6,19 +6,21 @@
  */
 
 import { captureScreenshot } from './archive-creator.js';
-import { Logger, notify } from './utilities.js';
+import { Logger, notify, escapeHtml } from './utilities.js';
+import { dracoCompressGLB } from './mesh-decimator.js';
 import { formatFileSize, getActiveProfile, VALIDATION_RULES } from './metadata-manager.js';
 import { validateSIP, toManifestCompliance } from './sip-validator.js';
 import type { SIPValidationResult } from './sip-validator.js';
 import { getStore } from './asset-store.js';
 import { captureWalkthroughForArchive } from './walkthrough-controller.js';
-import { getAuthCredentials, getCsrfToken, refreshLibrary } from './library-panel.js';
+import { getAuthCredentials, getCsrfToken, fetchCsrfToken, refreshLibrary } from './library-panel.js';
 import type { ExportDeps } from '@/types.js';
+import { transcodeSpz } from '@sparkjsdev/spark';
 
 const log = Logger.getLogger('export-controller');
 
 const CHUNK_SIZE = 50 * 1024 * 1024; // 50 MB — safely under Cloudflare's 100 MB request limit
-const CHUNK_CONCURRENCY = 3;          // parallel in-flight chunk uploads
+const CHUNK_CONCURRENCY = 1;          // sequential — concurrent uploads cause HTTP/2 protocol errors behind Cloudflare
 
 /**
  * Show the export panel and sync asset checkboxes.
@@ -48,6 +50,14 @@ function updateArchiveAssetCheckboxes(deps: ExportDeps): void {
             el.disabled = !loaded;
         }
     });
+
+    // Show Draco sub-row only when a GLB mesh is loaded
+    const dracoHdRow = document.getElementById('export-draco-hd-row');
+    if (dracoHdRow) {
+        const fileName = (state._meshFileName || document.getElementById('model-filename')?.textContent || '').toLowerCase();
+        const isGlb = fileName.endsWith('.glb');
+        dracoHdRow.style.display = (state.modelLoaded && isGlb) ? '' : 'none';
+    }
 }
 
 /**
@@ -92,7 +102,7 @@ function showComplianceDialog(result: SIPValidationResult): Promise<boolean> {
         if (errorSection) errorSection.classList.toggle('hidden', result.errors.length === 0);
         if (errorList) {
             errorList.innerHTML = result.errors
-                .map(f => `<li><span class="finding-label">${f.label}</span><span class="finding-msg">${f.message}</span></li>`)
+                .map(f => `<li><span class="finding-label">${escapeHtml(f.label)}</span><span class="finding-msg">${escapeHtml(f.message)}</span></li>`)
                 .join('');
         }
 
@@ -100,7 +110,7 @@ function showComplianceDialog(result: SIPValidationResult): Promise<boolean> {
         if (warningSection) warningSection.classList.toggle('hidden', result.warnings.length === 0);
         if (warningList) {
             warningList.innerHTML = result.warnings
-                .map(f => `<li><span class="finding-label">${f.label}</span><span class="finding-msg">${f.message}</span></li>`)
+                .map(f => `<li><span class="finding-label">${escapeHtml(f.label)}</span><span class="finding-msg">${escapeHtml(f.message)}</span></li>`)
                 .join('');
         }
 
@@ -148,7 +158,7 @@ interface PreparedArchive {
  */
 async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null> {
     const { sceneRefs, state, ui, metadata: metadataFns } = deps;
-    const { archiveCreator, renderer, scene, camera, controls, splatMesh, modelGroup, pointcloudGroup, cadGroup, annotationSystem } = sceneRefs;
+    const { archiveCreator, renderer, scene, camera, controls, splatMesh, modelGroup, pointcloudGroup, cadGroup, flightPathGroup, annotationSystem } = sceneRefs;
     const assets = getStore();
 
     log.info(' prepareArchive called');
@@ -172,15 +182,20 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     log.info(' Metadata collected:', metadata);
 
     // Inject current measurement calibration into viewer settings
-    const ms = (deps as any).measurementSystem || deps.sceneRefs?.measurementSystem;
+    const ms = deps.sceneRefs?.measurementSystem;
     if (ms && ms.isCalibrated && ms.isCalibrated()) {
         metadata.viewerSettings.measurementScale = ms.getScale();
         metadata.viewerSettings.measurementUnit = ms.getUnit();
     }
 
+    // Inject current rendering preset into viewer settings
+    if (deps.state.renderingPreset) {
+        metadata.viewerSettings.renderingPreset = deps.state.renderingPreset;
+    }
+
     // Get export options
     const formatRadio = document.querySelector('input[name="export-format"]:checked') as HTMLInputElement | null;
-    const format = formatRadio?.value || 'a3d';
+    const format = formatRadio?.value || 'ddim';
     // Preview image and integrity hashes are always included
     const includePreview = true;
     const includeHashes = true;
@@ -260,14 +275,59 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
 
     // Add splat if loaded and selected
     log.info(' Checking splat:', { splatBlob: !!assets.splatBlob, splatLoaded: state.splatLoaded });
+    // If the full-res blob is missing (SD proxy, or blob was reset), extract it on demand now
+    if (includeSplat && state.splatLoaded && !assets.splatBlob && state.archiveLoader) {
+        const sceneEntry = state.archiveLoader.getSceneEntry();
+        if (sceneEntry) {
+            const fullData = await state.archiveLoader.extractFile(sceneEntry.file_name);
+            if (fullData) assets.splatBlob = fullData.blob;
+        }
+    }
     if (includeSplat && assets.splatBlob && state.splatLoaded) {
         const fileName = document.getElementById('splat-filename')?.textContent || 'scene.ply';
         const position = splatMesh ? [splatMesh.position.x, splatMesh.position.y, splatMesh.position.z] : [0, 0, 0];
         const rotation = splatMesh ? [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z] : [0, 0, 0];
         const scale: [number, number, number] = splatMesh ? [splatMesh.scale.x, splatMesh.scale.y, splatMesh.scale.z] : [1, 1, 1];
 
-        log.info(' Adding scene:', { fileName, position, rotation, scale });
-        archiveCreator.addScene(assets.splatBlob, fileName, {
+        // Export-time LOD: transcode to LOD-ordered SPZ if enabled and format supports it
+        const splatExt = fileName.split('.').pop()?.toLowerCase() || '';
+        const lodCompatible = ['spz', 'ply', 'splat', 'ksplat'].includes(splatExt);
+        let splatBlobToArchive = assets.splatBlob;
+        let archiveFileName = fileName;
+
+        if (state.splatLodEnabled && lodCompatible && splatExt !== 'spz') {
+            try {
+                log.info('Generating splat LOD for archive export...');
+                deps.ui.showLoading('Generating splat LOD...', true);
+
+                const fileBytes = new Uint8Array(await assets.splatBlob.arrayBuffer());
+                const { fileBytes: spzBytes } = await transcodeSpz({
+                    inputs: [{ fileBytes, fileType: splatExt }],
+                });
+
+                if (!spzBytes || spzBytes.length === 0) {
+                    throw new Error('transcodeSpz returned empty output');
+                }
+
+                splatBlobToArchive = new Blob([spzBytes], { type: 'application/octet-stream' });
+                // Change extension to .spz for the archive
+                archiveFileName = fileName.replace(/\.[^.]+$/, '.spz');
+                log.info(`Splat LOD generated: ${fileBytes.length} -> ${spzBytes.length} bytes (${archiveFileName})`);
+            } catch (lodError: unknown) {
+                const message = lodError instanceof Error ? lodError.message : String(lodError);
+                log.warn('Splat LOD generation failed, using original file:', message);
+                notify.warning('Splat LOD generation failed — exporting original file.');
+            } finally {
+                deps.ui.hideLoading();
+            }
+        } else if (state.splatLodEnabled && splatExt === 'spz') {
+            log.info('Splat LOD skipped: input is already .spz');
+        } else if (state.splatLodEnabled && !lodCompatible) {
+            log.info(`Splat LOD skipped: .${splatExt} not supported (use .spz or .ply)`);
+        }
+
+        log.info(' Adding scene:', { fileName: archiveFileName, position, rotation, scale });
+        archiveCreator.addScene(splatBlobToArchive, archiveFileName, {
             position, rotation, scale,
             created_by: metadata.splatMetadata.createdBy || 'unknown',
             created_by_version: metadata.splatMetadata.version || '',
@@ -276,10 +336,13 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         });
     }
 
+    // Track the final mesh blob (post-compression if applied) for accurate quality stats
+    let finalMeshBlob: Blob | null = null;
+
     // Add mesh if loaded and selected
     log.info(' Checking mesh:', { meshBlob: !!assets.meshBlob, modelLoaded: state.modelLoaded });
-    // If viewing a proxy and full-res blob hasn't been extracted yet, extract now
-    if (includeModel && state.modelLoaded && !assets.meshBlob && state.viewingProxy && state.archiveLoader) {
+    // If the full-res blob is missing (SD proxy, or blob was reset), extract it on demand now
+    if (includeModel && state.modelLoaded && !assets.meshBlob && state.archiveLoader) {
         const meshEntry = state.archiveLoader.getMeshEntry();
         if (meshEntry) {
             const fullData = await state.archiveLoader.extractFile(meshEntry.file_name);
@@ -292,13 +355,28 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         const rotation = modelGroup ? [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z] : [0, 0, 0];
         const scale: [number, number, number] = modelGroup ? [modelGroup.scale.x, modelGroup.scale.y, modelGroup.scale.z] : [1, 1, 1];
 
+        let meshBlob = assets.meshBlob;
+        const dracoHdEl = document.getElementById('export-draco-hd') as HTMLInputElement | null;
+        const shouldDracoHD = dracoHdEl?.checked ?? false;
+        if (shouldDracoHD && fileName.toLowerCase().endsWith('.glb')) {
+            meshBlob = await dracoCompressGLB(meshBlob);
+        }
+        finalMeshBlob = meshBlob;
+
         log.info(' Adding mesh:', { fileName, position, rotation, scale });
-        archiveCreator.addMesh(assets.meshBlob, fileName, {
+        archiveCreator.addMesh(meshBlob, fileName, {
             position, rotation, scale,
             created_by: metadata.meshMetadata.createdBy || 'unknown',
             created_by_version: metadata.meshMetadata.version || '',
             source_notes: metadata.meshMetadata.sourceNotes || '',
-            role: metadata.meshMetadata.role || ''
+            role: metadata.meshMetadata.role || '',
+            parameters: state.meshOptimized && state.meshOptimizationSettings ? {
+                web_optimization: {
+                    originalFaces: state.meshOptimizationSettings.originalFaces,
+                    resultFaces: state.meshOptimizationSettings.resultFaces,
+                    dracoCompressed: state.meshOptimizationSettings.dracoEnabled,
+                }
+            } : undefined,
         });
     }
 
@@ -387,6 +465,41 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         archiveCreator.addCAD(assets.cadBlob, cadFileName, { position, rotation, scale });
     }
 
+    // Add flight paths if loaded
+    if (state.flightPathLoaded && assets.flightPathBlobs.length > 0) {
+        log.info(` Adding ${assets.flightPathBlobs.length} flight path(s)`);
+        for (let i = 0; i < assets.flightPathBlobs.length; i++) {
+            const fp = assets.flightPathBlobs[i];
+            const position = flightPathGroup ? [flightPathGroup.position.x, flightPathGroup.position.y, flightPathGroup.position.z] : [0, 0, 0];
+            const rotation = flightPathGroup ? [flightPathGroup.rotation.x, flightPathGroup.rotation.y, flightPathGroup.rotation.z] : [0, 0, 0];
+            const scale = flightPathGroup ? flightPathGroup.scale.x : 1;
+            const flightMeta: Record<string, unknown> = {};
+            if (fp.trimStart !== undefined) flightMeta.trim_start = fp.trimStart;
+            if (fp.trimEnd !== undefined) flightMeta.trim_end = fp.trimEnd;
+            archiveCreator.addFlightPath(fp.blob, fp.fileName, { position, rotation, scale, flightMeta });
+        }
+    }
+
+    // Add colmap data if loaded and checkbox is checked
+    const includeColmap = (document.getElementById('chk-export-camera-data') as HTMLInputElement)?.checked ?? false;
+    const colmapGroup = sceneRefs.colmapGroup;
+    if (state.colmapLoaded && assets.colmapBlobs.length > 0 && includeColmap) {
+        log.info(` Adding ${assets.colmapBlobs.length} colmap SfM dataset(s)`);
+        for (const { camerasBlob, imagesBlob, points3DBuffer } of assets.colmapBlobs) {
+            const position = colmapGroup ? [colmapGroup.position.x, colmapGroup.position.y, colmapGroup.position.z] : [0, 0, 0];
+            const rotation = colmapGroup ? [colmapGroup.rotation.x, colmapGroup.rotation.y, colmapGroup.rotation.z] : [0, 0, 0];
+            const scale = colmapGroup ? colmapGroup.scale.x : 1;
+            const points3DBlob = points3DBuffer ? new Blob([points3DBuffer]) : undefined;
+            archiveCreator.addColmap(camerasBlob, imagesBlob, { position, rotation, scale, points3DBlob });
+        }
+    }
+
+    // Bundle HDR environment if one is loaded
+    if (state.environmentBlob) {
+        archiveCreator.addEnvironment(state.environmentBlob, 'environment_0.hdr');
+        log.info(' Adding HDR environment');
+    }
+
     // Save global alignment — definitive scene state for re-import
     archiveCreator.setAlignment({
         splat: splatMesh ? {
@@ -468,11 +581,11 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     // Set quality stats
     log.info(' Setting quality stats');
     archiveCreator.setQualityStats({
-        splat_count: (includeSplat && state.splatLoaded) ? parseInt(document.getElementById('splat-vertices')?.textContent || '0') || 0 : 0,
-        mesh_polygons: (includeModel && state.modelLoaded) ? parseInt(document.getElementById('model-faces')?.textContent || '0') || 0 : 0,
+        splat_count: (includeSplat && state.splatLoaded) ? parseInt((document.getElementById('splat-vertices')?.textContent || '0').replace(/,/g, '')) || 0 : 0,
+        mesh_polygons: (includeModel && state.modelLoaded) ? parseInt((document.getElementById('model-faces')?.textContent || '0').replace(/,/g, '')) || 0 : 0,
         mesh_vertices: (includeModel && state.modelLoaded) ? (state.meshVertexCount || 0) : 0,
         splat_file_size: (includeSplat && assets.splatBlob) ? assets.splatBlob.size : 0,
-        mesh_file_size: (includeModel && assets.meshBlob) ? assets.meshBlob.size : 0,
+        mesh_file_size: (includeModel && finalMeshBlob) ? finalMeshBlob.size : 0,
         pointcloud_points: (includePointcloud && state.pointcloudLoaded) ? parseInt(document.getElementById('pointcloud-points')?.textContent?.replace(/,/g, '') || '0') || 0 : 0,
         pointcloud_file_size: (includePointcloud && assets.pointcloudBlob) ? assets.pointcloudBlob.size : 0,
         texture_count: (includeModel && state.modelLoaded && state.meshTextureInfo) ? state.meshTextureInfo.count : 0,
@@ -482,6 +595,14 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
 
     // Add preview/thumbnail
     if (includePreview && renderer) {
+        // Hide grid helpers so they don't appear in preview images
+        const hiddenGrids: any[] = [];
+        for (const child of scene.children) {
+            if (child.type === 'GridHelper' && child.visible) {
+                child.visible = false;
+                hiddenGrids.push(child);
+            }
+        }
         try {
             let previewBlob;
             if (state.manualPreviewBlob) {
@@ -498,6 +619,10 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
             }
         } catch (e) {
             log.warn(' Failed to capture preview:', e);
+        } finally {
+            for (const child of hiddenGrids) {
+                child.visible = true;
+            }
         }
     }
 
@@ -522,18 +647,32 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         return null;
     }
 
+    // Strip any existing archive extension from the ID to prevent double extensions
+    // (e.g., "project.ddim" → "project" so the final name is "project.ddim" not "project.ddim.ddim")
+    const rawFilename = metadata.project.id || 'archive';
+    const archiveExts = /\.(ddim|a3d|a3z|zip)$/i;
+    const filename = rawFilename.replace(archiveExts, '');
+
     return {
-        filename: metadata.project.id || 'archive',
+        filename,
         format,
         includeHashes
     };
 }
 
 /**
- * Create and download an archive (.a3d/.a3z) with all selected assets.
+ * Create and download an archive (.ddim/.zip) with all selected assets.
  */
 export async function downloadArchive(deps: ExportDeps): Promise<void> {
-    const prepared = await prepareArchive(deps);
+    let prepared: PreparedArchive | null;
+    try {
+        prepared = await prepareArchive(deps);
+    } catch (e: any) {
+        log.error('Archive preparation failed:', e);
+        notify.error('Archive preparation failed: ' + e.message);
+        deps.ui.hideLoading();
+        return;
+    }
     if (!prepared) return;
 
     const { archiveCreator } = deps.sceneRefs;
@@ -566,14 +705,23 @@ export async function downloadArchive(deps: ExportDeps): Promise<void> {
  * Create an archive and save it directly to the server library via /api/archives.
  */
 export async function saveToLibrary(deps: ExportDeps): Promise<void> {
-    const prepared = await prepareArchive(deps);
+    let prepared: PreparedArchive | null;
+    try {
+        prepared = await prepareArchive(deps);
+    } catch (e: any) {
+        log.error('Archive preparation failed:', e);
+        notify.error('Archive preparation failed: ' + e.message);
+        deps.ui.hideLoading();
+        return;
+    }
     if (!prepared) return;
 
     const { archiveCreator } = deps.sceneRefs;
     if (!archiveCreator) return;
 
     const creds = getAuthCredentials();
-    const csrf = getCsrfToken();
+    // Ensure we have a fresh CSRF token before starting the upload
+    if (!getCsrfToken()) await fetchCsrfToken();
 
     log.info(' Starting save to library');
     deps.ui.showLoading('Creating archive...', true);
@@ -591,6 +739,7 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
         deps.ui.updateProgress(82, 'Uploading to library...');
 
         // Upload via XHR for progress tracking
+        const csrf = getCsrfToken();
         const csrfHeaders: Record<string, string> = {};
         if (creds) csrfHeaders['Authorization'] = 'Basic ' + creds;
         if (csrf) csrfHeaders['X-CSRF-Token'] = csrf;
@@ -732,53 +881,27 @@ export async function saveToLibrary(deps: ExportDeps): Promise<void> {
         notify.error('Error saving to library: ' + e.message);
     }
 }
-
 /**
- * Download a generic offline viewer (standalone HTML that opens any .a3d/.a3z).
- * @deprecated Downloadable offline viewer has been removed from the product.
+ * Toggle "Save to Library" button visibility based on selected export format.
+ * .ddim shows it (if library is configured), .zip hides it (local download only).
  */
-export async function downloadGenericViewer(deps: ExportDeps): Promise<void> {
-    const { ui, tauriBridge } = deps;
+export function setupExportFormatToggle(): void {
+    const radios = document.querySelectorAll('input[name="export-format"]');
+    const saveBtn = document.getElementById('btn-save-to-library');
+    if (!saveBtn) return;
 
-    log.info(' downloadGenericViewer called');
-    ui.showLoading('Building offline viewer...', true);
-
-    try {
-        ui.updateProgress(1, 'Loading viewer module...');
-        const { fetchDependencies: fetchViewerDeps, generateGenericViewer } =
-            await import('./kiosk-viewer.js');
-
-        ui.updateProgress(5, 'Fetching viewer libraries...');
-        const viewerDeps = await fetchViewerDeps((msg: string) => {
-            ui.updateProgress(15, msg);
+    radios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            const selected = (document.querySelector('input[name="export-format"]:checked') as HTMLInputElement)?.value;
+            if (selected === 'zip') {
+                saveBtn.dataset.hiddenByFormat = saveBtn.style.display !== 'none' ? 'true' : '';
+                saveBtn.style.display = 'none';
+            } else if (saveBtn.dataset.hiddenByFormat === 'true') {
+                saveBtn.style.display = '';
+                delete saveBtn.dataset.hiddenByFormat;
+            }
         });
-
-        ui.updateProgress(90, 'Assembling viewer...');
-        const html = generateGenericViewer(viewerDeps);
-
-        ui.updateProgress(95, 'Starting download...');
-        const blob = new Blob([html], { type: 'text/html' });
-        if (tauriBridge) {
-            await tauriBridge.download(blob, 'archive-viewer.html', { name: 'HTML Files', extensions: ['html'] });
-        } else {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'archive-viewer.html';
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        log.info(`[Viewer] Generic viewer exported (${(blob.size / 1024).toFixed(0)} KB)`);
-        ui.updateProgress(100, 'Complete');
-        ui.hideLoading();
-        notify.success('Offline viewer downloaded: archive-viewer.html');
-
-    } catch (e: any) {
-        ui.hideLoading();
-        log.error(' Error creating generic viewer:', e);
-        notify.error('Error creating viewer: ' + e.message);
-    }
+    });
 }
 
 /**
@@ -800,10 +923,15 @@ export async function exportMetadataManifest(deps: ExportDeps): Promise<void> {
     const metadata = metadataFns.collectMetadata();
 
     // Inject current measurement calibration into viewer settings
-    const ms = (deps as any).measurementSystem || deps.sceneRefs?.measurementSystem;
+    const ms = deps.sceneRefs?.measurementSystem;
     if (ms && ms.isCalibrated && ms.isCalibrated()) {
         metadata.viewerSettings.measurementScale = ms.getScale();
         metadata.viewerSettings.measurementUnit = ms.getUnit();
+    }
+
+    // Inject current rendering preset into viewer settings
+    if (deps.state.renderingPreset) {
+        metadata.viewerSettings.renderingPreset = deps.state.renderingPreset;
     }
 
     tempCreator.applyMetadata(metadata);

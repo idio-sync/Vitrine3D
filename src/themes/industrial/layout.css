@@ -1,0 +1,1670 @@
+/* =============================================================================
+   Industrial Layout — MeshLab-style CAD workbench.
+   Light Qt gray chrome, raised toolbar buttons, trackball overlay.
+   All rules scoped under body.kiosk-mode.kiosk-industrial.
+   ============================================================================= */
+
+/* =============================================================================
+   MENU BAR — classic File | View | Render | Help strip
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-menubar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    z-index: 101;
+    display: flex;
+    align-items: center;
+    padding: 0 2px;
+    background: rgb(var(--kiosk-surface-rgb));
+    border-bottom: 1px solid var(--kiosk-border-dark);
+    font-family: var(--kiosk-font-body);
+    font-size: 0.78rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.95);
+    user-select: none;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-menu-item {
+    padding: 2px 10px;
+    cursor: pointer;
+    border-radius: 0;
+    white-space: nowrap;
+    line-height: 20px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-menu-item:hover {
+    background: var(--kiosk-accent);
+    color: #fff;
+}
+
+/* =============================================================================
+   TOP TOOLBAR — 34px, raised icon buttons in groups (below menu bar)
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-toolbar {
+    position: fixed;
+    top: 24px;
+    left: 0;
+    right: 0;
+    height: 34px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    padding: 2px 4px;
+    background: rgb(var(--kiosk-surface-rgb));
+    border-bottom: 1px solid var(--kiosk-border-dark);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-toolbar-sep {
+    width: 2px;
+    height: 22px;
+    margin: 0 6px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--kiosk-border-dark);
+    border-right: 1px solid var(--kiosk-border-light);
+}
+
+/* --- Raised Qt-style tool buttons --- */
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid transparent;
+    border-radius: 0;
+    cursor: pointer;
+    color: rgba(var(--kiosk-text-body-rgb), 0.85);
+    transition: none;
+    position: relative;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn:hover {
+    border-top-color: var(--kiosk-border-light);
+    border-left-color: var(--kiosk-border-light);
+    border-bottom-color: var(--kiosk-border-dark);
+    border-right-color: var(--kiosk-border-dark);
+    color: rgba(var(--kiosk-text-bright-rgb), 1);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn:active {
+    border-top-color: var(--kiosk-border-dark);
+    border-left-color: var(--kiosk-border-dark);
+    border-bottom-color: var(--kiosk-border-light);
+    border-right-color: var(--kiosk-border-light);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn.active {
+    border-top-color: var(--kiosk-border-dark);
+    border-left-color: var(--kiosk-border-dark);
+    border-bottom-color: var(--kiosk-border-light);
+    border-right-color: var(--kiosk-border-light);
+    background: rgb(var(--kiosk-bg-deep-rgb));
+    color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn.disabled {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Tooltip */
+body.kiosk-mode.kiosk-industrial .ind-tool-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 4px;
+    padding: 2px 6px;
+    background: #ffffe1;
+    border: 1px solid #000;
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: #000;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+    z-index: 110;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tool-btn:hover::after {
+    opacity: 1;
+}
+
+/* =============================================================================
+   BOTTOM STATUS BAR — 22px, system font metadata readout
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    background: rgb(var(--kiosk-surface-rgb));
+    border-top: 1px solid var(--kiosk-border-dark);
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.85);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-status-field {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-status-label {
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.9);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-status-sep {
+    margin: 0 8px;
+    color: var(--kiosk-border-dark);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-status-right {
+    margin-left: auto;
+    font-weight: 500;
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+}
+
+/* =============================================================================
+   VIEWPORT OFFSET — clear menu bar + toolbar + status bar
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial #viewer-container {
+    top: 58px !important;   /* 24px menu + 34px toolbar */
+    bottom: 24px !important;
+    /* MeshLab inset viewport border */
+    border: 2px inset #a0a0a0;
+}
+
+/* =============================================================================
+   TRACKBALL OVERLAY — MeshLab's signature circle in viewport center
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-trackball-overlay {
+    position: fixed;
+    z-index: 90;
+    pointer-events: none;
+    /* Centered in viewport area */
+    top: 58px;
+    left: 0;
+    right: 0;
+    bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-trackball-circle {
+    width: min(55%, 55vh);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 1.5px solid rgba(180, 180, 180, 0.35);
+    /* Subtle cross-hair lines */
+    background:
+        linear-gradient(to right, transparent calc(50% - 0.5px), rgba(180, 180, 180, 0.15) calc(50% - 0.5px), rgba(180, 180, 180, 0.15) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+        linear-gradient(to bottom, transparent calc(50% - 0.5px), rgba(180, 180, 180, 0.15) calc(50% - 0.5px), rgba(180, 180, 180, 0.15) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+}
+
+body.kiosk-mode.kiosk-industrial .ind-trackball-overlay.hidden {
+    display: none;
+}
+
+/* =============================================================================
+   LIGHT CONTROL WIDGET — hemisphere in top-right corner
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-light-widget {
+    position: fixed;
+    top: 70px;
+    right: 12px;
+    width: 72px;
+    height: 72px;
+    z-index: 95;
+    background: rgb(var(--kiosk-elevated-rgb));
+    border: 1px solid var(--kiosk-border-dark);
+    border-radius: 50%;
+    cursor: grab;
+    display: none;
+    overflow: hidden;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-light-widget.visible {
+    display: block;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-light-widget canvas {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-light-indicator {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    box-shadow: 0 0 3px rgba(255, 200, 0, 0.7);
+}
+
+/* =============================================================================
+   LOADING OVERLAY — MeshLab-style minimal, centered text + thin progress
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial #loading-overlay {
+    background: rgb(var(--kiosk-bg-deep-rgb));
+}
+
+body.kiosk-mode.kiosk-industrial .ind-loading-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+body.kiosk-mode.kiosk-industrial #loading-overlay #loading-text {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.82rem;
+    font-weight: 400;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.75);
+    letter-spacing: 0.01em;
+    margin-top: 12px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-loading-bottom {
+    position: absolute;
+    bottom: 24px;
+    left: 0;
+    right: 0;
+    text-align: center;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-loading-bottom #loading-progress-container {
+    width: 220px;
+    height: 2px;
+    background: var(--kiosk-border-dark);
+    border-radius: 0;
+    margin: 0 auto;
+    overflow: hidden;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-loading-bottom #loading-progress-bar {
+    height: 100%;
+    background: var(--kiosk-accent);
+    transition: width 0.15s ease-out;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-loading-bottom #loading-progress-text {
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.67rem;
+    font-weight: 400;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.6);
+    letter-spacing: 0.02em;
+    margin-top: 6px;
+}
+
+/* =============================================================================
+   ANNOTATION MARKER OVERRIDES
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .annotation-marker {
+    width: 24px;
+    height: 24px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: var(--kiosk-accent);
+    border: 1px solid #1a4a8a;
+    border-radius: 50%;
+    box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.4);
+    color: #fff;
+}
+
+body.kiosk-mode.kiosk-industrial .annotation-marker:hover {
+    background: #4a8ae0;
+    border-color: #2a5a9a;
+}
+
+body.kiosk-mode.kiosk-industrial .annotation-marker.selected {
+    background: #5a9af0;
+    border-color: #fff;
+    box-shadow: 0 0 0 2px var(--kiosk-accent);
+}
+
+/* Hide default kiosk sidebar elements */
+body.kiosk-mode.kiosk-industrial .kiosk-info-sidebar,
+body.kiosk-mode.kiosk-industrial .kiosk-wall-label,
+body.kiosk-mode.kiosk-industrial #kiosk-info-overlay {
+    display: none !important;
+}
+
+/* ============================================================
+   MENU DROPDOWNS
+   ============================================================ */
+
+body.kiosk-mode.kiosk-industrial .ind-menu-item {
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 200px;
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid var(--kiosk-border-dark);
+    border-top: none;
+    box-shadow: 1px 3px 6px rgba(0, 0, 0, 0.35);
+    z-index: 110;
+    padding: 3px 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-menu-item.open .ind-dropdown {
+    display: block;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item {
+    display: flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 20px 0 26px;
+    font-size: 0.75rem;
+    color: var(--kiosk-text-primary, #1a1a1a);
+    cursor: pointer;
+    white-space: nowrap;
+    position: relative;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item:hover {
+    background: var(--kiosk-accent);
+    color: #fff;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    font-size: 0.75rem;
+    line-height: 24px;
+    color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item.checked::before {
+    content: '✓';
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item.radio-active::before {
+    content: '•';
+    font-size: 1.1rem;
+    line-height: 22px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-hint {
+    margin-left: auto;
+    padding-left: 16px;
+    font-size: 0.72rem;
+    color: var(--kiosk-text-muted, #888);
+    opacity: 0.7;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-item:hover .ind-dd-hint {
+    color: rgba(255, 255, 255, 0.75);
+    opacity: 1;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-dd-sep {
+    height: 1px;
+    background: var(--kiosk-border-dark);
+    margin: 3px 0;
+}
+
+/* ============================================================
+   KEYBOARD SHORTCUTS OVERLAY
+   ============================================================ */
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-panel {
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid var(--kiosk-border-dark);
+    min-width: 320px;
+    max-width: 420px;
+    box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--kiosk-border-dark);
+    background: var(--kiosk-border-light, #e0e0e0);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-table {
+    padding: 6px 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-row {
+    display: flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 12px;
+    font-size: 0.75rem;
+    gap: 8px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-key {
+    min-width: 80px;
+    font-family: monospace;
+    font-size: 0.73rem;
+    color: var(--kiosk-accent);
+    font-weight: 600;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-desc {
+    color: var(--kiosk-text-primary, #1a1a1a);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-close {
+    display: block;
+    width: 100%;
+    padding: 5px;
+    font-size: 0.75rem;
+    text-align: center;
+    border: none;
+    border-top: 1px solid var(--kiosk-border-dark);
+    background: var(--kiosk-border-light, #e0e0e0);
+    cursor: pointer;
+    color: inherit;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-shortcuts-close:hover {
+    background: var(--kiosk-accent);
+    color: #fff;
+}
+
+/* =============================================================================
+   TOOLBAR SPACER — pushes right-side buttons to the right edge
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-toolbar-spacer {
+    flex: 1;
+}
+
+/* =============================================================================
+   DISPLAY MODE BUTTONS — [Mesh] [Splat] [Cloud] segmented in toolbar
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-mode-btn {
+    width: auto;
+    padding: 0 7px;
+    gap: 4px;
+    display: flex;
+    align-items: center;
+    font-family: var(--kiosk-font-body);
+    font-size: 0.70rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: rgba(var(--kiosk-text-body-rgb), 0.85);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-mode-btn svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-mode-btn span {
+    line-height: 1;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-mode-btn.active {
+    border-top-color: var(--kiosk-border-dark);
+    border-left-color: var(--kiosk-border-dark);
+    border-bottom-color: var(--kiosk-border-light);
+    border-right-color: var(--kiosk-border-light);
+    background: rgb(var(--kiosk-bg-deep-rgb));
+    color: var(--kiosk-accent);
+}
+
+/* =============================================================================
+   QUALITY BUTTONS — [SD] [HD] pair in toolbar
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-quality-btn {
+    width: auto;
+    padding: 0 8px;
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.67rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-quality-btn.active {
+    border-top-color: var(--kiosk-border-dark);
+    border-left-color: var(--kiosk-border-dark);
+    border-bottom-color: var(--kiosk-border-light);
+    border-right-color: var(--kiosk-border-light);
+    background: rgb(var(--kiosk-bg-deep-rgb));
+    color: var(--kiosk-accent);
+}
+
+/* =============================================================================
+   RIGHT INFO PANEL — MeshLab-style docked properties panel
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-panel {
+    position: fixed;
+    top: 58px;      /* below menubar + toolbar */
+    right: 0;
+    bottom: 24px;   /* above status bar */
+    width: 260px;
+    z-index: 92;
+    background: rgb(var(--kiosk-surface-rgb));
+    border-left: 1px solid var(--kiosk-border-dark);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    font-family: var(--kiosk-font-body);
+    font-size: 0.75rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.95);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel.hidden {
+    display: none;
+}
+
+/* Viewport, overlay, and floating widgets shrink when panel is open */
+body.kiosk-mode.kiosk-industrial.ind-panel-open #viewer-container {
+    right: 260px !important;
+}
+
+body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-trackball-overlay {
+    right: 260px;
+}
+
+body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-light-widget {
+    right: 272px; /* 12px gap + 260px panel */
+}
+
+/* ---- Panel section header ---- */
+
+body.kiosk-mode.kiosk-industrial .ind-panel-section {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--kiosk-border-dark);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-section-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 8px;
+    background: rgb(var(--kiosk-elevated-rgb));
+    border-bottom: 1px solid var(--kiosk-border-dark);
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: rgba(var(--kiosk-text-heading-rgb), 0.9);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-section-header:hover {
+    background: rgb(var(--kiosk-bg-deep-rgb));
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-arrow {
+    font-size: 0.62rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.7);
+    width: 10px;
+    text-align: center;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-section-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-section-body {
+    padding: 4px 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-section-body.collapsed {
+    display: none;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-panel-empty {
+    padding: 6px 10px;
+    font-size: 0.72rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.6);
+    font-style: italic;
+}
+
+/* ---- Layer items ---- */
+
+body.kiosk-mode.kiosk-industrial .ind-layer-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px 4px 10px;
+    cursor: default;
+    border-left: 2px solid transparent;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-layer-item:hover {
+    background: rgba(var(--kiosk-accent-rgb), 0.08);
+    border-left-color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-layer-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    font-size: 0.60rem;
+    font-weight: 700;
+    border-radius: 2px;
+    flex-shrink: 0;
+    color: #fff;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-badge-mesh    { background: #3874CB; }
+body.kiosk-mode.kiosk-industrial .ind-badge-splat   { background: #2a8a5a; }
+body.kiosk-mode.kiosk-industrial .ind-badge-cloud   { background: #7a5aaa; }
+body.kiosk-mode.kiosk-industrial .ind-badge-flight  { background: #c06020; }
+
+body.kiosk-mode.kiosk-industrial .ind-layer-name {
+    font-size: 0.73rem;
+    font-weight: 500;
+    color: rgba(var(--kiosk-text-bright-rgb), 0.95);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-layer-stats {
+    width: 100%;
+    padding-left: 21px;
+    font-size: 0.67rem;
+    font-family: var(--kiosk-font-mono);
+    color: rgba(var(--kiosk-text-dim-rgb), 0.75);
+    margin-top: -2px;
+}
+
+/* ---- Property rows ---- */
+
+body.kiosk-mode.kiosk-industrial .ind-prop-row {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 2px 10px;
+    min-height: 18px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-prop-label {
+    font-size: 0.70rem;
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
+    min-width: 52px;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-prop-value {
+    font-size: 0.73rem;
+    color: rgba(var(--kiosk-text-bright-rgb), 0.9);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-prop-sep {
+    height: 1px;
+    background: var(--kiosk-border-subtle);
+    margin: 4px 8px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-prop-desc {
+    padding: 3px 10px 5px 10px;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: rgba(var(--kiosk-text-body-rgb), 0.85);
+    white-space: pre-line;
+    overflow-wrap: break-word;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 3px 10px 6px 10px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-tag {
+    padding: 1px 6px;
+    background: rgba(var(--kiosk-accent-rgb), 0.12);
+    border: 1px solid rgba(var(--kiosk-accent-rgb), 0.3);
+    border-radius: 2px;
+    font-size: 0.67rem;
+    color: var(--kiosk-accent);
+    font-weight: 500;
+}
+
+/* ---- Annotation list ---- */
+
+body.kiosk-mode.kiosk-industrial .ind-anno-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 10px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-anno-item:hover {
+    background: rgba(var(--kiosk-accent-rgb), 0.08);
+    border-left-color: rgba(var(--kiosk-accent-rgb), 0.4);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-anno-item.selected {
+    background: rgba(var(--kiosk-accent-rgb), 0.15);
+    border-left-color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-anno-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    background: var(--kiosk-accent);
+    border-radius: 50%;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-anno-item.selected .ind-anno-num {
+    background: #1a50a0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-anno-title {
+    font-size: 0.73rem;
+    color: rgba(var(--kiosk-text-bright-rgb), 0.9);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- Annotation form (QA Phase 3) ---- */
+
+body.kiosk-mode.kiosk-industrial .ind-anno-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-count {
+    font-size: 10px;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-csv-btn {
+    font-size: 10px;
+    padding: 2px 6px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-sev-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: auto;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-pass {
+    background: rgba(76, 175, 80, 0.2);
+    color: #4caf50;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-fail {
+    background: rgba(244, 67, 54, 0.2);
+    color: #f44336;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-review {
+    background: rgba(255, 152, 0, 0.2);
+    color: #ff9800;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-del-btn {
+    background: none;
+    border: none;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.4);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    margin-left: 4px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-del-btn:hover {
+    color: #f44336;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-back-btn {
+    font-size: 11px;
+    margin-bottom: 8px;
+    width: 100%;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-form {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-form-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.65);
+    margin-top: 4px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-form-input,
+body.kiosk-mode.kiosk-industrial .ind-anno-form-textarea,
+body.kiosk-mode.kiosk-industrial .ind-anno-form-select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 6px;
+    background: rgb(var(--kiosk-bg-deep-rgb));
+    border: 1px solid var(--kiosk-border);
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+    border-radius: 3px;
+    font-family: var(--kiosk-font-body);
+    font-size: 12px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-form-textarea {
+    resize: vertical;
+    min-height: 36px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-row {
+    display: flex;
+    gap: 4px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-btn {
+    flex: 1;
+    padding: 4px 0;
+    background: rgb(var(--kiosk-bg-deep-rgb));
+    border: 1px solid var(--kiosk-border);
+    color: rgba(var(--kiosk-text-body-rgb), 0.7);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--kiosk-font-body);
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-btn.active[data-status="pass"] {
+    background: rgba(76, 175, 80, 0.25);
+    color: #4caf50;
+    border-color: #4caf50;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-btn.active[data-status="fail"] {
+    background: rgba(244, 67, 54, 0.25);
+    color: #f44336;
+    border-color: #f44336;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-status-btn.active[data-status="review"] {
+    background: rgba(255, 152, 0, 0.25);
+    color: #ff9800;
+    border-color: #ff9800;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-form-btns {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-save-btn {
+    flex: 1;
+    background: var(--kiosk-accent);
+    color: #fff;
+    border-color: var(--kiosk-accent);
+}
+body.kiosk-mode.kiosk-industrial .ind-anno-cancel-btn {
+    flex: 1;
+}
+
+/* ---- FPS field in status bar ---- */
+
+body.kiosk-mode.kiosk-industrial .ind-status-coords {
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.65rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.7);
+    min-width: 180px;
+    text-align: right;
+    margin-left: auto;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-status-fps-field {
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.67rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.7);
+    min-width: 44px;
+    text-align: right;
+}
+
+/* View cube */
+body.kiosk-mode.kiosk-industrial .ind-view-cube {
+    position: fixed;
+    bottom: 32px;
+    right: 8px;
+    width: 120px;
+    height: 120px;
+    z-index: 50;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+/* =============================================================================
+   ANNOTATION POPUP OVERRIDE — light Qt palette (overrides dark kiosk defaults)
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial #annotation-info-popup {
+    background: rgb(var(--kiosk-surface-rgb)) !important;
+    border: 1px solid var(--kiosk-border-dark) !important;
+    border-radius: 0 !important;
+    color: rgba(var(--kiosk-text-body-rgb), 0.95) !important;
+    box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.kiosk-mode.kiosk-industrial #annotation-info-popup .annotation-popup-title,
+body.kiosk-mode.kiosk-industrial #annotation-info-popup .popup-title {
+    color: rgba(var(--kiosk-text-bright-rgb), 1) !important;
+    border-bottom: 1px solid var(--kiosk-border-dark) !important;
+    background: rgb(var(--kiosk-elevated-rgb)) !important;
+}
+
+body.kiosk-mode.kiosk-industrial #annotation-info-popup .annotation-popup-body,
+body.kiosk-mode.kiosk-industrial #annotation-info-popup .popup-body {
+    color: rgba(var(--kiosk-text-body-rgb), 0.9) !important;
+}
+
+body.kiosk-mode.kiosk-industrial #annotation-info-popup .popup-close {
+    color: rgba(var(--kiosk-text-dim-rgb), 0.8) !important;
+}
+
+body.kiosk-mode.kiosk-industrial #annotation-info-popup .popup-close:hover {
+    color: var(--kiosk-accent) !important;
+    background: rgba(var(--kiosk-accent-rgb), 0.08) !important;
+}
+
+/* =============================================================================
+   MEASUREMENT LIST — in info panel Measurements section
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-measure-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 10px;
+    font-size: 0.73rem;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-measure-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    background: rgba(var(--kiosk-accent-rgb), 0.15);
+    border: 1px solid rgba(var(--kiosk-accent-rgb), 0.4);
+    border-radius: 2px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--kiosk-accent);
+    flex-shrink: 0;
+    font-family: var(--kiosk-font-mono);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-measure-value {
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.73rem;
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-bright-rgb), 0.9);
+}
+
+/* =============================================================================
+   CROSS-SECTION PANEL — axis buttons, position slider, flip in side panel
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-axis-row {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-label {
+    font-size: 0.70rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.75);
+    min-width: 44px;
+    flex-shrink: 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-axis-btn {
+    width: 26px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid transparent;
+    border-radius: 0;
+    cursor: pointer;
+    font-family: var(--kiosk-font-body);
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
+    transition: none;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-axis-btn:hover {
+    border-top-color: var(--kiosk-border-light);
+    border-left-color: var(--kiosk-border-light);
+    border-bottom-color: var(--kiosk-border-dark);
+    border-right-color: var(--kiosk-border-dark);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-axis-btn.active {
+    border-top-color: var(--kiosk-border-dark);
+    border-left-color: var(--kiosk-border-dark);
+    border-bottom-color: var(--kiosk-border-light);
+    border-right-color: var(--kiosk-border-light);
+    background: rgb(var(--kiosk-bg-deep-rgb));
+    color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-flip-btn {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid transparent;
+    border-radius: 0;
+    cursor: pointer;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.85);
+    transition: none;
+    margin-left: auto;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-flip-btn:hover {
+    border-top-color: var(--kiosk-border-light);
+    border-left-color: var(--kiosk-border-light);
+    border-bottom-color: var(--kiosk-border-dark);
+    border-right-color: var(--kiosk-border-dark);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-flip-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 0 4px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-slider {
+    flex: 1;
+    height: 4px;
+    accent-color: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-xsec-hint {
+    font-size: 0.62rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.45);
+    padding: 2px 0 0;
+    font-style: italic;
+}
+
+/* Cross-section mode toggle */
+body.kiosk-mode.kiosk-industrial .ind-xsec-mode-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 6px 0 0;
+}
+body.kiosk-mode.kiosk-industrial .ind-xsec-mode-btn {
+    flex: 1;
+    padding: 4px 0;
+    background: rgb(var(--kiosk-bg-deep-rgb));
+    border: 1px solid var(--kiosk-border);
+    color: rgba(var(--kiosk-text-body-rgb), 0.7);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--kiosk-font-body);
+}
+body.kiosk-mode.kiosk-industrial .ind-xsec-mode-btn:hover {
+    background: rgba(var(--kiosk-bg-deep-rgb), 0.8);
+}
+body.kiosk-mode.kiosk-industrial .ind-xsec-mode-btn.active {
+    background: var(--kiosk-accent);
+    color: #fff;
+    border-color: var(--kiosk-accent);
+}
+body.kiosk-mode.kiosk-industrial .ind-xsec-reset-row {
+    margin: 6px 0 0;
+}
+body.kiosk-mode.kiosk-industrial .ind-xsec-reset-row .ind-tool-btn {
+    width: 100%;
+    font-size: 11px;
+}
+
+/* Properties sub-section title */
+body.kiosk-mode.kiosk-industrial .ind-prop-section-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.65);
+    margin: 2px 0 4px;
+}
+
+/* Layer tree — selection, children, eye toggle */
+body.kiosk-mode.kiosk-industrial .ind-layer-item.selected {
+    background: rgba(56, 116, 203, 0.18);
+    border-left: 2px solid var(--kiosk-accent);
+}
+body.kiosk-mode.kiosk-industrial .ind-layer-children {
+    padding-left: 20px;
+}
+body.kiosk-mode.kiosk-industrial .ind-layer-child {
+    opacity: 0.85;
+    font-size: 11px;
+}
+body.kiosk-mode.kiosk-industrial .ind-layer-arrow {
+    display: inline-block;
+    width: 12px;
+    font-size: 9px;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.6);
+    transition: transform 0.15s;
+    user-select: none;
+    cursor: pointer;
+    margin-right: 4px;
+}
+body.kiosk-mode.kiosk-industrial .ind-layer-eye {
+    opacity: 0.5;
+    transition: opacity 0.15s;
+}
+body.kiosk-mode.kiosk-industrial .ind-layer-eye.active {
+    opacity: 1;
+}
+
+/* =============================================================================
+   SPLAT BUDGET SLIDER — in layers panel for splat assets
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-layer-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+    padding: 2px 0 3px 21px;
+    margin-top: -1px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-budget-label {
+    font-size: 0.67rem;
+    font-weight: 600;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.75);
+    min-width: 38px;
+    white-space: nowrap;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-budget-slider {
+    flex: 1;
+    height: 3px;
+    accent-color: var(--kiosk-accent);
+    cursor: pointer;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-budget-val {
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.67rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.8);
+    min-width: 30px;
+    text-align: right;
+}
+
+/* =============================================================================
+   DROP ZONE OVERLAY — shown when no asset is loaded (P2 empty state)
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-drop-zone {
+    position: fixed;
+    top: 58px;
+    left: 0;
+    right: 0;
+    bottom: 24px;
+    z-index: 88;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition: background 0.15s;
+}
+
+body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-drop-zone {
+    right: 260px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-drop-zone.drag-active {
+    background: rgba(var(--kiosk-accent-rgb), 0.08);
+    pointer-events: auto;
+    outline: 2px dashed rgba(var(--kiosk-accent-rgb), 0.5);
+    outline-offset: -8px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-drop-zone-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.5);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-drop-zone-inner svg {
+    width: 36px;
+    height: 36px;
+    opacity: 0.5;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-drop-zone-text {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.62);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-drop-zone-hint {
+    font-family: var(--kiosk-font-mono);
+    font-size: 0.67rem;
+    color: rgba(var(--kiosk-text-dim-rgb), 0.48);
+    letter-spacing: 0.04em;
+}
+
+/* Whole viewport becomes a drop target when drag enters */
+body.kiosk-mode.kiosk-industrial #viewer-container.drag-over ~ .ind-drop-zone,
+body.kiosk-mode.kiosk-industrial .ind-drop-zone.drag-active {
+    pointer-events: auto;
+}
+
+/* ============================================================
+   ABOUT OVERLAY
+   ============================================================ */
+
+body.kiosk-mode.kiosk-industrial .ind-about-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-about-panel {
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid var(--kiosk-border-dark);
+    min-width: 280px;
+    box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-about-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--kiosk-border-dark);
+    background: var(--kiosk-border-light, #e0e0e0);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-about-body {
+    padding: 10px 12px;
+    font-size: 0.75rem;
+    line-height: 1.7;
+    color: var(--kiosk-text-primary, #1a1a1a);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-about-close {
+    display: block;
+    width: 100%;
+    padding: 5px;
+    font-size: 0.75rem;
+    text-align: center;
+    border: none;
+    border-top: 1px solid var(--kiosk-border-dark);
+    background: var(--kiosk-border-light, #e0e0e0);
+    cursor: pointer;
+    color: inherit;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-about-close:hover {
+    background: var(--kiosk-accent);
+    color: #fff;
+}
+
+/* =============================================================================
+   WALKTHROUGH UI — progress bar in status bar during guided tours
+   ============================================================================= */
+
+body.kiosk-mode.kiosk-industrial .ind-wt-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 12px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-btn {
+    width: 20px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgb(var(--kiosk-surface-rgb));
+    border: 1px solid transparent;
+    border-radius: 0;
+    cursor: pointer;
+    color: rgba(var(--kiosk-text-body-rgb), 0.85);
+    font-size: 0.65rem;
+    padding: 0;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-btn:hover {
+    border-top-color: var(--kiosk-border-light);
+    border-left-color: var(--kiosk-border-light);
+    border-bottom-color: var(--kiosk-border-dark);
+    border-right-color: var(--kiosk-border-dark);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-btn svg {
+    width: 12px;
+    height: 12px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-dots {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin: 0 4px;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(var(--kiosk-text-dim-rgb), 0.3);
+    cursor: pointer;
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-dot:hover {
+    background: rgba(var(--kiosk-text-dim-rgb), 0.6);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-dot.visited {
+    background: rgba(var(--kiosk-accent-rgb), 0.4);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-dot.active {
+    background: var(--kiosk-accent);
+}
+
+body.kiosk-mode.kiosk-industrial .ind-wt-title {
+    font-size: 0.70rem;
+    color: rgba(var(--kiosk-text-body-rgb), 0.9);
+    margin-left: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+}
+
+/* =============================================================================
+   RESPONSIVE — Touch devices (pointer: coarse)
+   ============================================================================= */
+
+@media (pointer: coarse) {
+    /* Larger touch targets for toolbar buttons */
+    body.kiosk-mode.kiosk-industrial .ind-tool-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-toolbar {
+        height: 42px;
+    }
+
+    /* Adjust viewport offset for taller toolbar */
+    body.kiosk-mode.kiosk-industrial #viewer-container {
+        top: 66px !important;  /* 24px menu + 42px toolbar */
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-trackball-overlay {
+        top: 66px;
+    }
+
+    /* Menu items — taller for touch */
+    body.kiosk-mode.kiosk-industrial .ind-menu-item {
+        padding: 4px 12px;
+        line-height: 24px;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-dd-item {
+        height: 32px;
+        padding: 0 20px 0 26px;
+    }
+
+    /* Annotation items — taller tap targets */
+    body.kiosk-mode.kiosk-industrial .ind-anno-item {
+        padding: 7px 10px;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-layer-item {
+        padding: 6px 8px 6px 10px;
+    }
+
+    /* Cross-section buttons */
+    body.kiosk-mode.kiosk-industrial .ind-xsec-axis-btn {
+        width: 34px;
+        height: 30px;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-xsec-flip-btn {
+        width: 30px;
+        height: 30px;
+    }
+
+    /* Disable CSS tooltips on touch (they're sticky) */
+    body.kiosk-mode.kiosk-industrial .ind-tool-btn::after {
+        display: none;
+    }
+}
+
+/* =============================================================================
+   RESPONSIVE — Compact (700–1023px): narrower panel
+   ============================================================================= */
+
+@media (max-width: 1023px) {
+    body.kiosk-mode.kiosk-industrial .ind-panel {
+        width: 220px;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open #viewer-container {
+        right: 220px !important;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-trackball-overlay {
+        right: 220px;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-light-widget {
+        right: 232px;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-drop-zone {
+        right: 220px;
+    }
+
+    /* Compact mode labels */
+    body.kiosk-mode.kiosk-industrial .ind-mode-btn span {
+        display: none;
+    }
+}
+
+/* =============================================================================
+   RESPONSIVE — Narrow (<700px): panel hidden by default, compact toolbar
+   ============================================================================= */
+
+@media (max-width: 699px) {
+    /* Hide info panel by default on narrow screens */
+    body.kiosk-mode.kiosk-industrial .ind-panel {
+        width: 260px;
+        transform: translateX(100%);
+        transition: transform 0.2s ease-out;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-panel {
+        transform: translateX(0);
+    }
+
+    /* Viewport goes full width even when panel is "open" (it overlays) */
+    body.kiosk-mode.kiosk-industrial.ind-panel-open #viewer-container {
+        right: 0 !important;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-trackball-overlay {
+        right: 0;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-light-widget {
+        right: 12px;
+    }
+
+    body.kiosk-mode.kiosk-industrial.ind-panel-open .ind-drop-zone {
+        right: 0;
+    }
+
+    /* Hide mode button labels */
+    body.kiosk-mode.kiosk-industrial .ind-mode-btn span {
+        display: none;
+    }
+
+    /* Compact status bar */
+    body.kiosk-mode.kiosk-industrial .ind-status-bar {
+        font-size: 0.65rem;
+        padding: 0 4px;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-status-sep {
+        margin: 0 4px;
+    }
+
+    /* Walkthrough title — shorter */
+    body.kiosk-mode.kiosk-industrial .ind-wt-title {
+        max-width: 100px;
+    }
+}
+
+/* =============================================================================
+   RESPONSIVE — Micro (<480px): minimal chrome
+   ============================================================================= */
+
+@media (max-width: 479px) {
+    /* Hide quality buttons */
+    body.kiosk-mode.kiosk-industrial .ind-quality-btn {
+        display: none;
+    }
+
+    /* Single-row status bar — hide some fields */
+    body.kiosk-mode.kiosk-industrial .ind-status-fps-field {
+        display: none;
+    }
+}
+
+/* =============================================================================
+   REDUCED MOTION — disable transitions for accessibility
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+    body.kiosk-mode.kiosk-industrial .ind-panel {
+        transition: none;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-drop-zone {
+        transition: none;
+    }
+
+    body.kiosk-mode.kiosk-industrial .ind-tool-btn::after {
+        transition: none;
+    }
+}

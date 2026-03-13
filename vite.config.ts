@@ -97,7 +97,9 @@ export default defineConfig({
     publicDir: resolve(__dirname, 'public'),
 
     define: {
-        'import.meta.env.VITE_APP_LIBRARY_URL': JSON.stringify(process.env.SITE_URL || ''),
+        'import.meta.env.VITE_APP_LIBRARY_URL': JSON.stringify(
+            process.env.SITE_URL || 'https://jakemarino.fyi'
+        ),
     },
 
     build: {
@@ -132,7 +134,7 @@ export default defineConfig({
     optimizeDeps: {
         // Spark.js uses eval() for WASM — excluding prevents esbuild from breaking it.
         // occt-import-js uses dynamic import + locateFile for WASM — exclude to prevent esbuild inlining.
-        exclude: ['@sparkjsdev/spark', 'occt-import-js', 'meshoptimizer'],
+        exclude: ['@sparkjsdev/spark', 'occt-import-js', 'meshoptimizer', 'dji-log-parser-js'],
     },
 
     plugins: [

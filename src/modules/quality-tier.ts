@@ -7,8 +7,16 @@
 
 import { QUALITY_TIER, DEVICE_THRESHOLDS } from './constants.js';
 import { Logger } from './utilities.js';
+import {
+    Scene, PerspectiveCamera, IcosahedronGeometry,
+    MeshStandardMaterial, Mesh, DirectionalLight, AmbientLight, Color,
+    WebGLRenderer, WebGLRenderTarget
+} from 'three';
 
 const log = Logger.getLogger('quality-tier');
+
+/** Cached GPU benchmark FPS — null means benchmark hasn't run yet. */
+let _benchmarkFps: number | null = null;
 
 // Extend Navigator interface for Chrome-only deviceMemory API
 declare global {
@@ -35,10 +43,124 @@ function isAndroidDevice(): boolean {
 }
 
 /**
+ * Run a GPU benchmark by rendering ~500k triangles at actual viewport
+ * resolution over ~500ms. Measures average FPS (discarding 2 warm-up frames).
+ * Result is cached — subsequent calls return immediately.
+ *
+ * Always runs regardless of forced quality tier, so the result
+ * is available for diagnostics/logging.
+ *
+ * @param renderer - The active WebGLRenderer
+ * @returns Average FPS from the benchmark
+ */
+export async function runGpuBenchmark(renderer: WebGLRenderer): Promise<number> {
+    if (_benchmarkFps !== null) {
+        log.info(`GPU benchmark already cached: ${_benchmarkFps.toFixed(1)} FPS`);
+        return _benchmarkFps;
+    }
+
+    log.info('Starting GPU benchmark (~500ms)...');
+
+    // Render to an offscreen target so nothing is visible on the canvas.
+    // Use actual viewport dimensions to test real fill-rate cost.
+    const width = renderer.domElement.clientWidth || 1920;
+    const height = renderer.domElement.clientHeight || 1080;
+    const renderTarget = new WebGLRenderTarget(width, height);
+
+    // Create temporary scene with ~410k triangles (5 icospheres @ detail 6)
+    const benchScene = new Scene();
+    benchScene.background = new Color(0x000000);
+    const benchCamera = new PerspectiveCamera(60, width / height, 0.1, 100);
+    benchCamera.position.set(0, 0, 8);
+
+    // Lighting (matches real scene complexity)
+    benchScene.add(new AmbientLight(0xffffff, 0.5));
+    const dirLight = new DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(5, 5, 5);
+    benchScene.add(dirLight);
+
+    // 5 icospheres spread across viewport — detail 6 = ~81,920 faces each = ~409,600 total
+    const geometry = new IcosahedronGeometry(1, 6);
+    const material = new MeshStandardMaterial({ metalness: 0.5, roughness: 0.5 });
+    const positions = [
+        [0, 0, 0], [-3, 2, -1], [3, 2, -1], [-3, -2, -1], [3, -2, -1]
+    ];
+    const meshes: Mesh[] = [];
+    for (const [x, y, z] of positions) {
+        const mesh = new Mesh(geometry, material);
+        mesh.position.set(x, y, z);
+        benchScene.add(mesh);
+        meshes.push(mesh);
+    }
+
+    // Render to offscreen target in a tight loop (no vsync cap).
+    // 2 warm-up frames for shader compilation, then measure until ~500ms elapsed.
+    renderer.setRenderTarget(renderTarget);
+
+    // Warm-up: compile shaders, fill GPU pipeline
+    renderer.render(benchScene, benchCamera);
+    renderer.render(benchScene, benchCamera);
+    // Force GPU to finish warm-up before measuring
+    const gl = renderer.getContext();
+    gl.finish();
+
+    const startTime = performance.now();
+    let frameCount = 0;
+    const TARGET_DURATION_MS = 500;
+
+    // readPixels buffer — forces GPU to fully complete each frame.
+    // gl.finish() alone is insufficient on some drivers (Intel HD 530 reported
+    // 8000+ FPS because the driver deferred offscreen work). readPixels is the
+    // hardest sync point: the CPU blocks until pixel data is available.
+    const pixelBuf = new Uint8Array(4);
+
+    while (performance.now() - startTime < TARGET_DURATION_MS) {
+        renderer.render(benchScene, benchCamera);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixelBuf);
+        frameCount++;
+    }
+    const endTime = performance.now();
+
+    const elapsedSec = (endTime - startTime) / 1000;
+    const fps = frameCount / elapsedSec;
+
+    // Cleanup: restore default render target, dispose resources
+    renderer.setRenderTarget(null);
+    renderTarget.dispose();
+    geometry.dispose();
+    material.dispose();
+    meshes.length = 0;
+
+    _benchmarkFps = fps;
+    log.info(`GPU benchmark complete: ${fps.toFixed(1)} FPS (${frameCount} frames in ${(elapsedSec * 1000).toFixed(0)}ms)`);
+    return fps;
+}
+
+/**
+ * Get the benchmark score (0, 1, or 2) from the cached FPS result.
+ * Returns 0 if benchmark hasn't run yet.
+ */
+export function getBenchmarkScore(): number {
+    if (_benchmarkFps === null) return 0;
+    if (_benchmarkFps >= DEVICE_THRESHOLDS.GPU_BENCHMARK_HD) return 2;
+    if (_benchmarkFps >= DEVICE_THRESHOLDS.GPU_BENCHMARK_MID) return 1;
+    return 0;
+}
+
+/**
+ * Get the cached benchmark FPS value (or null if not yet run).
+ * Useful for diagnostics/logging.
+ */
+export function getBenchmarkFps(): number | null {
+    return _benchmarkFps;
+}
+
+/**
  * Detect device capability tier based on hardware signals.
  * Returns QUALITY_TIER.SD for low-end devices, QUALITY_TIER.HD for capable ones.
  *
- * Scoring: 5 heuristics, each worth 1 point. Score >= 3 = HD.
+ * Scoring: 5 static heuristics (1 pt each) + GPU benchmark (0-2 pts) = 7 max. Score >= 4 = HD.
+ * Hard gate: if benchmark FPS < GPU_BENCHMARK_MIN, force SD regardless of score.
  * iOS/iPadOS devices are forced to SD — Safari has strict process memory limits
  * (~1.5 GB) and will kill the tab when GPU memory is exhausted.
  *
@@ -101,8 +223,19 @@ export function detectDeviceTier(gl?: WebGLRenderingContext | WebGL2RenderingCon
         score++;
     }
 
-    const tier = score >= 3 ? QUALITY_TIER.HD : QUALITY_TIER.SD;
-    log.info(`Device tier detected: ${tier} (score ${score}/5)`);
+    // 6. GPU benchmark (0, 1, or 2 points)
+    score += getBenchmarkScore();
+
+    // Hard gate: if benchmark ran and GPU is below minimum FPS, force SD
+    // regardless of static score. Catches integrated GPUs on desktops that
+    // pass all static checks but can't handle HD assets.
+    if (_benchmarkFps !== null && _benchmarkFps < DEVICE_THRESHOLDS.GPU_BENCHMARK_MIN) {
+        log.info(`Device tier detected: ${QUALITY_TIER.SD} (benchmark ${_benchmarkFps.toFixed(1)} FPS < ${DEVICE_THRESHOLDS.GPU_BENCHMARK_MIN} min — forced SD)`);
+        return QUALITY_TIER.SD;
+    }
+
+    const tier = score >= 4 ? QUALITY_TIER.HD : QUALITY_TIER.SD;
+    log.info(`Device tier detected: ${tier} (score ${score}/7, benchmark ${getBenchmarkFps()?.toFixed(1) ?? 'N/A'} FPS)`);
     return tier;
 }
 
@@ -157,4 +290,9 @@ function resolveLodBudgets(): Record<string, number> {
 export function getLodBudget(tier: string): number {
     const budgets = resolveLodBudgets();
     return budgets[tier] ?? budgets[QUALITY_TIER.HD];
+}
+
+/** @internal — test-only: override cached benchmark FPS for unit tests. */
+export function _setBenchmarkFpsForTest(fps: number | null): void {
+    _benchmarkFps = fps;
 }

@@ -6,7 +6,7 @@
 
 | Parameter | Description |
 |-----------|-------------|
-| `archive` | URL to archive container (.a3d, .a3z). **Takes priority over individual file params.** |
+| `archive` | URL to archive container (.ddim, or legacy .a3d/.a3z). **Takes priority over individual file params.** |
 | `splat` | URL to Gaussian splat file |
 | `model` | URL to 3D model file |
 | `pointcloud` | URL to E57 point cloud file |
@@ -20,7 +20,9 @@
 | `mode` | `splat`, `model`, `pointcloud`, `both`, `split` | Initial display mode |
 | `toolbar` | `show`, `hide` | Toolbar visibility |
 | `sidebar` | `closed`, `view`, `edit` | Metadata sidebar state |
-| `theme` | theme folder name | Kiosk theme (e.g., `editorial`, `gallery`, `exhibit`, `minimal`) |
+| `theme` | theme folder name | Kiosk theme (e.g., `editorial`, `gallery`, `exhibit`, `industrial`, `minimal`) |
+| `home` | `true`, `false` | Show file picker home screen with "Browse Files" and "Browse Collections" (Tauri/library mode) |
+| `kiosk` | `true`, `false` | Enable kiosk (read-only) mode |
 | `layout` | `sidebar`, `editorial`, `gallery`, `exhibit` | Layout override (overrides theme default) |
 | `autoload` | `true`, `false` | Auto-load archive on page load (default `true`; `false` shows a click-to-load gate) |
 
@@ -38,25 +40,25 @@ Embed transform data directly in the URL instead of using an alignment file:
 
 ```
 # Load an archive container
-https://viewer.example.com?archive=/assets/scene.a3d
+https://viewer.example.com?archive=/assets/scene.ddim
 
 # Archive with minimal controls in split view
-https://viewer.example.com?archive=/assets/scene.a3d&controls=minimal&mode=split
+https://viewer.example.com?archive=/assets/scene.ddim&controls=minimal&mode=split
 
 # Pre-loaded files with inline alignment
 https://viewer.example.com?splat=/scene.ply&model=/model.glb&sp=0,1,0&sr=0,3.14,0&ss=1.5
 
 # Kiosk mode: no controls, no toolbar, metadata view-only
-https://viewer.example.com?archive=/scene.a3d&controls=none&toolbar=hide&sidebar=view
+https://viewer.example.com?archive=/scene.ddim&controls=none&toolbar=hide&sidebar=view
 
 # Point cloud with model comparison
 https://viewer.example.com?model=/model.glb&pointcloud=/scan.e57&mode=both
 
 # Kiosk with editorial theme
-https://viewer.example.com?archive=/scene.a3d&controls=none&theme=editorial
+https://viewer.example.com?archive=/scene.ddim&controls=none&theme=editorial
 
 # Deferred loading (click-to-load gate)
-https://viewer.example.com?archive=/scene.a3d&autoload=false
+https://viewer.example.com?archive=/scene.ddim&autoload=false
 ```
 
 ## Share & Embed
@@ -73,7 +75,7 @@ Click **Copy Share Link** to generate a URL encoding the current display mode, a
 
 ```html
 <iframe
-  src="https://viewer.example.com?archive=/scene.a3d&controls=minimal&toolbar=hide"
+  src="https://viewer.example.com?archive=/scene.ddim&controls=minimal&toolbar=hide"
   width="100%" height="600" frameborder="0" allow="fullscreen">
 </iframe>
 ```

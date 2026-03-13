@@ -1,10 +1,11 @@
 .omc/
-.claude/settings.local.json
+.claude/
 .mcp.json
 CLAUDE.md
 nul
 src/models/
 archives/
+.superpowers/
 
 # Tauri
 dist/
@@ -21,3 +22,6 @@ src-tauri/tauri.conf.json.bak
 .env
 docker-compose.override.yml
 docs/plans/
+
+# Agent instructions (per-directory, not committed)
+AGENTS.md

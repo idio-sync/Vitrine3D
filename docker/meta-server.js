@@ -24,12 +24,14 @@
  */
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const url = require('url');
-const { execFileSync } = require('child_process');
+const { execFileSync, execFile } = require('child_process');
 const busboy = require('busboy');
+const sharp = require('sharp');
 const Database = require('/opt/node_modules/better-sqlite3');
 
 // --- Configuration from environment ---
@@ -51,7 +53,203 @@ const HTML_ROOT = '/usr/share/nginx/html';
 const META_DIR = path.join(HTML_ROOT, 'meta');
 const THUMBS_DIR = path.join(HTML_ROOT, 'thumbs');
 const ARCHIVES_DIR = path.join(HTML_ROOT, 'archives');
+const MEDIA_ROOT = path.join(HTML_ROOT, 'media');
 const DB_PATH = process.env.DB_PATH || '/data/vitrine.db';
+
+// --- Settings defaults registry ---
+// Resolution: SQLite row → env var → hardcoded default
+const SETTINGS_DEFAULTS = {
+    'video.crf':              { default: '18',      type: 'number', label: 'Video CRF',              group: 'Video Transcode',  description: 'H.264 quality (0=lossless, 51=worst)', min: 0, max: 51 },
+    'video.preset':           { default: 'fast',    type: 'select', label: 'Encoding Preset',         group: 'Video Transcode',  description: 'FFmpeg speed/quality tradeoff', options: ['ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'] },
+    'recording.bitrate':      { default: '5000000', type: 'number', label: 'Recording Bitrate (bps)', group: 'Video Recording',  description: 'WebM capture bitrate' },
+    'recording.framerate':    { default: '30',      type: 'number', label: 'Recording FPS',           group: 'Video Recording',  description: 'Capture frame rate', min: 15, max: 60 },
+    'recording.maxDuration':  { default: '60',      type: 'number', label: 'Max Recording Duration (s)', group: 'Video Recording', description: 'Maximum recording length', min: 10, max: 300 },
+    'gif.fps':                { default: '15',      type: 'number', label: 'GIF FPS',                 group: 'GIF Generation',   description: 'GIF animation frame rate', min: 5, max: 30 },
+    'gif.width':              { default: '480',     type: 'number', label: 'GIF Width (px)',           group: 'GIF Generation',   description: 'GIF output width (height auto)', min: 240, max: 1280 },
+    'thumbnail.size':         { default: '512',     type: 'number', label: 'Thumbnail Size (px)',      group: 'Media Output',     description: 'Video thumbnail dimensions', min: 128, max: 1024 },
+    'upload.maxSizeMb':       { default: '1024',    type: 'number', label: 'Max Upload Size (MB)',     group: 'Upload',           description: 'Maximum archive upload size', min: 1 },
+    'lod.budgetSd':           { default: '1000000', type: 'number', label: 'LOD Budget — SD',         group: 'Renderer',         description: 'Max splats per frame (SD tier)' },
+    'lod.budgetHd':           { default: '5000000', type: 'number', label: 'LOD Budget — HD',         group: 'Renderer',         description: 'Max splats per frame (HD tier)' },
+    'renderer.maxPixelRatio': { default: '2',       type: 'number', label: 'Max Pixel Ratio',         group: 'Renderer',         description: 'Cap for high-DPI displays', min: 1, max: 4 },
+    'flight.djiApiKey':       { default: '',        type: 'string', label: 'DJI API Key',             group: 'Flight Logs',      description: 'API key for decrypting v13+ DJI binary flight logs (.txt). Register at developer.dji.com' },
+    'backup.maxVersions':     { default: '5',       type: 'number', label: 'Max Backup Versions',      group: 'Storage',          description: 'Maximum backup versions kept per archive (0 to disable backups)', min: 0, max: 50 },
+};
+
+// Env var mapping for settings (key → env var name)
+const SETTINGS_ENV_MAP = {
+    'upload.maxSizeMb': 'MAX_UPLOAD_SIZE',
+    'video.crf':        'VIDEO_CRF',
+    'video.preset':     'VIDEO_PRESET',
+    'gif.fps':          'GIF_FPS',
+    'gif.width':        'GIF_WIDTH',
+    'thumbnail.size':   'THUMBNAIL_SIZE',
+    'flight.djiApiKey': 'DJI_API_KEY',
+};
+
+// In-memory cache: { key: { value, expiry } }
+const _settingsCache = {};
+const SETTINGS_CACHE_TTL = 5000; // 5 seconds
+
+/**
+ * Resolve a single setting value: SQLite → env var → hardcoded default.
+ * Cached for SETTINGS_CACHE_TTL ms.
+ */
+function getSetting(key) {
+    const def = SETTINGS_DEFAULTS[key];
+    if (!def) return undefined;
+
+    const cached = _settingsCache[key];
+    if (cached && Date.now() < cached.expiry) return cached.value;
+
+    // 1. SQLite
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    if (row) {
+        _settingsCache[key] = { value: row.value, expiry: Date.now() + SETTINGS_CACHE_TTL };
+        return row.value;
+    }
+
+    // 2. Environment variable
+    const envName = SETTINGS_ENV_MAP[key];
+    if (envName && process.env[envName]) {
+        const envVal = process.env[envName];
+        _settingsCache[key] = { value: envVal, expiry: Date.now() + SETTINGS_CACHE_TTL };
+        return envVal;
+    }
+
+    // 3. Hardcoded default
+    _settingsCache[key] = { value: def.default, expiry: Date.now() + SETTINGS_CACHE_TTL };
+    return def.default;
+}
+
+/**
+ * Build the full settings response object for the API.
+ * Returns all settings with resolved values, defaults, and metadata.
+ */
+function getAllSettings() {
+    const dbRows = {};
+    for (const row of db.prepare('SELECT key, value FROM settings').all()) {
+        dbRows[row.key] = row.value;
+    }
+
+    const result = {};
+    for (const [key, def] of Object.entries(SETTINGS_DEFAULTS)) {
+        const dbVal = dbRows[key];
+        const envName = SETTINGS_ENV_MAP[key];
+        const envVal = envName && process.env[envName] ? process.env[envName] : null;
+        const resolved = dbVal ?? envVal ?? def.default;
+
+        result[key] = {
+            value: resolved,
+            default: def.default,
+            isCustom: dbVal !== undefined,
+            label: def.label,
+            group: def.group,
+            type: def.type,
+        };
+        if (def.description) result[key].description = def.description;
+        if (def.min !== undefined) result[key].min = def.min;
+        if (def.max !== undefined) result[key].max = def.max;
+        if (def.options) result[key].options = def.options;
+    }
+    return result;
+}
+
+/**
+ * Validate a setting value against its definition.
+ * Returns null if valid, or an error string.
+ */
+function validateSetting(key, value) {
+    const def = SETTINGS_DEFAULTS[key];
+    if (!def) return 'Unknown setting: ' + key;
+
+    if (def.type === 'number') {
+        const num = Number(value);
+        if (isNaN(num)) return key + ': must be a number';
+        if (def.min !== undefined && num < def.min) return key + ': minimum is ' + def.min;
+        if (def.max !== undefined && num > def.max) return key + ': maximum is ' + def.max;
+    }
+    if (def.type === 'select') {
+        if (!def.options.includes(value)) return key + ': must be one of ' + def.options.join(', ');
+    }
+    return null;
+}
+
+// --- Settings API handlers ---
+
+function handleGetSettings(req, res) {
+    sendJson(res, 200, getAllSettings());
+}
+
+function handlePutSettings(req, res) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+        let updates;
+        try {
+            updates = JSON.parse(body);
+        } catch {
+            return sendJson(res, 400, { error: 'Invalid JSON' });
+        }
+
+        if (typeof updates !== 'object' || Array.isArray(updates)) {
+            return sendJson(res, 400, { error: 'Expected object of key-value pairs' });
+        }
+
+        const errors = [];
+        const valid = {};
+        for (const [key, value] of Object.entries(updates)) {
+            const err = validateSetting(key, String(value));
+            if (err) errors.push(err);
+            else valid[key] = String(value);
+        }
+
+        if (errors.length > 0) {
+            return sendJson(res, 400, { error: 'Validation failed', details: errors });
+        }
+
+        const upsert = db.prepare(
+            'INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime(\'now\')) ' +
+            'ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at'
+        );
+        const tx = db.transaction(() => {
+            for (const [key, value] of Object.entries(valid)) {
+                upsert.run(key, value);
+                delete _settingsCache[key];
+            }
+        });
+        tx();
+
+        db.prepare(
+            'INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)'
+        ).run(actor, 'update_settings', null, JSON.stringify(valid), req.headers['x-real-ip'] || req.socket.remoteAddress);
+
+        sendJson(res, 200, getAllSettings());
+    });
+}
+
+function handleDeleteSetting(req, res, key) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    if (!SETTINGS_DEFAULTS[key]) {
+        return sendJson(res, 400, { error: 'Unknown setting: ' + key });
+    }
+
+    db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+    delete _settingsCache[key];
+
+    db.prepare(
+        'INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)'
+    ).run(actor, 'reset_setting', key, null, req.headers['x-real-ip'] || req.socket.remoteAddress);
+
+    const settings = getAllSettings();
+    sendJson(res, 200, settings[key]);
+}
 
 // --- Cloudflare Access auth ---
 
@@ -61,7 +259,26 @@ const DB_PATH = process.env.DB_PATH || '/data/vitrine.db';
  * Defense in depth: Cloudflare injects this header on every authenticated request.
  */
 function requireAuth(req, res) {
-    const user = req.headers['cf-access-authenticated-user-email'];
+    let user = req.headers['cf-access-authenticated-user-email'];
+
+    // Fallback: decode CF_Authorization JWT cookie for CF Access-bypassed paths
+    // (e.g. /api/collections/* bypassed so Tauri can read without auth, but
+    // the browser still carries the cookie from the main CF Access app)
+    if (!user) {
+        const cookieHeader = req.headers.cookie || '';
+        const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
+        if (match) {
+            try {
+                const payload = JSON.parse(Buffer.from(match[1].split('.')[1], 'base64url').toString());
+                if (payload.email) {
+                    user = payload.email;
+                    // Set on req so downstream checkCsrf() can find it
+                    req.headers['cf-access-authenticated-user-email'] = user;
+                }
+            } catch (_) { /* invalid or expired JWT — ignore */ }
+        }
+    }
+
     if (!user) {
         sendJson(res, 401, { error: 'Unauthorized' });
         return null;
@@ -191,6 +408,40 @@ function initDb() {
             PRIMARY KEY (collection_id, archive_id)
         );
         CREATE INDEX IF NOT EXISTS idx_ca_archive ON collection_archives(archive_id);
+
+        CREATE TABLE IF NOT EXISTS media (
+            id          TEXT PRIMARY KEY,
+            archive_id  INTEGER REFERENCES archives(id) ON DELETE SET NULL,
+            title       TEXT,
+            mode        TEXT,
+            duration_ms INTEGER,
+            status      TEXT DEFAULT 'pending',
+            error_msg   TEXT,
+            trim_start  REAL DEFAULT 0,
+            trim_end    REAL DEFAULT 0,
+            created_at  TEXT DEFAULT (datetime('now')),
+            mp4_path    TEXT,
+            gif_path    TEXT,
+            thumb_path  TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_media_archive ON media(archive_id);
+        CREATE INDEX IF NOT EXISTS idx_media_status ON media(status);
+
+        CREATE TABLE IF NOT EXISTS settings (
+            key        TEXT PRIMARY KEY,
+            value      TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS archive_versions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            archive_id  INTEGER NOT NULL REFERENCES archives(id) ON DELETE CASCADE,
+            filename    TEXT    NOT NULL,
+            size        INTEGER NOT NULL,
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_av_archive ON archive_versions(archive_id);
     `);
 }
 
@@ -269,6 +520,13 @@ function archiveHash(archiveUrl) {
     return crypto.createHash('sha256').update(archiveUrl).digest('hex').slice(0, 16);
 }
 
+/**
+ * Generate a random 16-character hex ID for media records.
+ */
+function generateMediaId() {
+    return crypto.randomBytes(8).toString('hex');
+}
+
 
 /**
  * Resolve the thumbnail URL for an archive.
@@ -303,6 +561,92 @@ function extractArchiveParam(viewerUrl) {
         return parsed.searchParams.get('archive') || '';
     } catch {
         return '';
+    }
+}
+
+/**
+ * Generate a mosaic thumbnail for a collection from its archive thumbnails.
+ * Layout: 2x2 grid for 4+, 2x1 for 2-3, single for 1, branded placeholder for 0.
+ * Output: 640x360 JPEG at 85% quality saved to THUMBS_DIR as collection-{slug}-auto.jpg.
+ * Returns the URL path string or null on error.
+ */
+async function generateCollectionMosaic(collectionId, slug) {
+    const WIDTH = 640, HEIGHT = 360;
+    const NAVY = { r: 8, g: 24, b: 42 };
+    const autoPath = path.join(THUMBS_DIR, `collection-${slug}-auto.jpg`);
+
+    const rows = db.prepare(`
+        SELECT a.thumbnail FROM archives a
+        JOIN collection_archives ca ON ca.archive_id = a.id
+        WHERE ca.collection_id = ?
+        ORDER BY ca.sort_order ASC
+    `).all(collectionId);
+
+    const thumbPaths = [];
+    for (const row of rows) {
+        if (!row.thumbnail) continue;
+        const p = path.join(HTML_ROOT, row.thumbnail);
+        if (fs.existsSync(p)) thumbPaths.push(p);
+        if (thumbPaths.length >= 4) break;
+    }
+
+    try {
+        if (thumbPaths.length === 0) {
+            const name = db.prepare('SELECT name FROM collections WHERE id = ?').get(collectionId)?.name || '';
+            const escapedName = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+            const svg = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+                <rect width="100%" height="100%" fill="#08182a"/>
+                <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central"
+                    font-family="sans-serif" font-size="28" fill="#FEC03A">${escapedName}</text>
+            </svg>`;
+            await sharp(Buffer.from(svg)).jpeg({ quality: 85 }).toFile(autoPath);
+        } else if (thumbPaths.length === 1) {
+            await sharp(thumbPaths[0]).resize(WIDTH, HEIGHT, { fit: 'cover' }).jpeg({ quality: 85 }).toFile(autoPath);
+        } else if (thumbPaths.length <= 3) {
+            const halfW = WIDTH / 2;
+            const tiles = await Promise.all(
+                thumbPaths.slice(0, 2).map(p => sharp(p).resize(Math.round(halfW), HEIGHT, { fit: 'cover' }).toBuffer())
+            );
+            await sharp({ create: { width: WIDTH, height: HEIGHT, channels: 3, background: NAVY } })
+                .composite([
+                    { input: tiles[0], left: 0, top: 0 },
+                    { input: tiles[1], left: Math.round(halfW), top: 0 },
+                ]).jpeg({ quality: 85 }).toFile(autoPath);
+        } else {
+            const halfW = Math.round(WIDTH / 2);
+            const halfH = Math.round(HEIGHT / 2);
+            const tiles = await Promise.all(
+                thumbPaths.slice(0, 4).map(p => sharp(p).resize(halfW, halfH, { fit: 'cover' }).toBuffer())
+            );
+            await sharp({ create: { width: WIDTH, height: HEIGHT, channels: 3, background: NAVY } })
+                .composite([
+                    { input: tiles[0], left: 0, top: 0 },
+                    { input: tiles[1], left: halfW, top: 0 },
+                    { input: tiles[2], left: 0, top: halfH },
+                    { input: tiles[3], left: halfW, top: halfH },
+                ]).jpeg({ quality: 85 }).toFile(autoPath);
+        }
+        console.log(`[meta-server] Generated mosaic for collection "${slug}" at ${autoPath}`);
+        return `/thumbs/collection-${slug}-auto.jpg`;
+    } catch (err) {
+        console.error(`[meta-server] Failed to generate mosaic for collection "${slug}":`, err);
+        return null;
+    }
+}
+
+/**
+ * Regenerate the auto mosaic for a collection unless a manual thumbnail is set.
+ * Updates the DB thumbnail field if a new mosaic is generated.
+ */
+async function maybeRegenerateMosaic(collectionId, slug) {
+    const row = db.prepare('SELECT thumbnail FROM collections WHERE id = ?').get(collectionId);
+    if (!row) return;
+    const isManual = row.thumbnail && row.thumbnail.includes(`collection-${slug}.jpg`) && !row.thumbnail.includes('-auto');
+    if (isManual) return;
+    const autoPath = await generateCollectionMosaic(collectionId, slug);
+    if (autoPath) {
+        db.prepare('UPDATE collections SET thumbnail = ?, updated_at = datetime(\'now\') WHERE id = ?').run(autoPath, collectionId);
     }
 }
 
@@ -518,6 +862,60 @@ function handleHealth(req, res) {
     res.end('ok');
 }
 
+/**
+ * Proxy DJI keychain requests to avoid browser CORS restrictions.
+ * POST /api/dji-keychains  — body: KeychainsRequest JSON from dji-log-parser-js
+ * Forwards to DJI's API server-side with the configured API key.
+ */
+function handleDjiKeychains(req, res) {
+    if (req.method !== 'POST') {
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Method not allowed' }));
+    }
+
+    const apiKey = getSetting('flight.djiApiKey') || process.env.DJI_API_KEY || '';
+    console.log('[meta-server] DJI keychains proxy — apiKey resolved:', apiKey ? '***' + apiKey.slice(-4) : '(empty)', '| env:', process.env.DJI_API_KEY ? 'set' : 'unset');
+    if (!apiKey) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'DJI API key not configured. Set DJI_API_KEY env var or configure via admin settings.' }));
+    }
+
+    let body = '';
+    req.on('data', chunk => { body += chunk; if (body.length > 1e6) req.destroy(); });
+    req.on('end', () => {
+        const postData = Buffer.from(body, 'utf-8');
+        const options = {
+            hostname: 'dev.dji.com',
+            port: 443,
+            path: '/openapi/v1/flight-records/keychains',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Api-Key': apiKey,
+                'Content-Length': postData.length,
+            },
+        };
+
+        const proxyReq = https.request(options, (proxyRes) => {
+            let data = '';
+            proxyRes.on('data', chunk => { data += chunk; });
+            proxyRes.on('end', () => {
+                res.writeHead(proxyRes.statusCode, { 'Content-Type': 'application/json' });
+                res.end(data);
+            });
+        });
+
+        proxyReq.on('error', (err) => {
+            console.error('[meta-server] DJI keychains proxy error:', err.message);
+            res.writeHead(502, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to reach DJI API: ' + err.message }));
+        });
+
+        proxyReq.write(postData);
+        proxyReq.end();
+    });
+}
+
 // --- Admin Helpers ---
 
 /**
@@ -588,7 +986,7 @@ function parseMultipartUpload(req) {
 
         let bb;
         try {
-            bb = busboy({ headers: req.headers, limits: { fileSize: MAX_UPLOAD_SIZE } });
+            bb = busboy({ headers: req.headers, limits: { fileSize: parseInt(getSetting('upload.maxSizeMb'), 10) * 1024 * 1024 } });
         } catch (err) {
             return reject(err);
         }
@@ -668,6 +1066,66 @@ function handleLibraryPage(req, res) {
 }
 
 /**
+ * GET /api/auth-callback — CF Access auth relay for Tauri app.
+ * After CF Access authenticates the user, this reads the CF_Authorization
+ * JWT cookie and redirects to the vitrine3d:// deep link with the token.
+ */
+function handleAuthCallback(req, res) {
+    if (!requireAuth(req, res)) return;
+
+    const cookieHeader = req.headers.cookie || '';
+    const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
+    const token = match ? match[1] : '';
+
+    const deepLink = 'vitrine3d://auth?token=' + encodeURIComponent(token);
+
+    // Detect Android/mobile — Chrome blocks window.location.href to custom schemes
+    // but honours intent:// URIs and user-initiated <a> clicks.
+    const ua = (req.headers['user-agent'] || '').toLowerCase();
+    const isMobile = /android|iphone|ipad|mobile/i.test(ua);
+
+    // Android intent:// URI — tells Chrome to launch the app by package scheme
+    // without ERR_UNKNOWN_URL_SCHEME. Falls back gracefully if app not installed.
+    const intentUri = 'intent://auth?token=' + encodeURIComponent(token) +
+        '#Intent;scheme=vitrine3d;end';
+
+    const html = '<!DOCTYPE html>\n' +
+        '<html><head><meta charset="utf-8"><title>Vitrine3D — Authenticated</title>\n' +
+        '<style>\n' +
+        'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;\n' +
+        '       background: #08182a; color: #e8ecf0; display: flex; align-items: center;\n' +
+        '       justify-content: center; height: 100vh; margin: 0; text-align: center; }\n' +
+        '.card { max-width: 400px; padding: 40px; }\n' +
+        'h1 { font-size: 1.2rem; margin-bottom: 12px; }\n' +
+        'p { color: rgba(140,160,180,0.7); font-size: 0.9rem; line-height: 1.5; }\n' +
+        'a { color: #FEC03A; text-decoration: none; }\n' +
+        '.btn { display: inline-block; margin-top: 20px; padding: 14px 32px;\n' +
+        '       background: #FEC03A; color: #08182a; border-radius: 8px;\n' +
+        '       font-weight: 600; font-size: 1rem; }\n' +
+        '</style>\n' +
+        '</head><body><div class="card">\n' +
+        '<h1>Authentication Successful</h1>\n' +
+        (isMobile
+            // Mobile: show a prominent tap button (intent:// URI works on Android)
+            ? '<p>Tap below to return to the app.</p>\n' +
+              '<a class="btn" href="' + intentUri.replace(/"/g, '&quot;') + '">Open Vitrine3D</a>\n' +
+              '<p style="margin-top: 16px; font-size: 0.8rem;">\n' +
+              'Or try <a href="' + deepLink.replace(/"/g, '&quot;') + '">this link</a> if the button doesn\'t work.</p>\n'
+            // Desktop: auto-redirect via JS (works on Windows/macOS/Linux)
+            : '<p>Returning to Vitrine3D...</p>\n' +
+              '<p style="margin-top: 24px; font-size: 0.8rem;">\n' +
+              'If the app didn\'t open, <a href="' + deepLink.replace(/"/g, '&quot;') + '">click here</a>.</p>\n'
+        ) +
+        '<p style="font-size: 0.75rem; color: rgba(140,160,180,0.4);">You can close this tab after returning.</p>\n' +
+        '</div>\n' +
+        (isMobile ? '' : '<script>window.location.href = ' + JSON.stringify(deepLink) + ';</script>\n') +
+        '</body></html>';
+
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(html);
+}
+
+/**
  * GET /api/archives — list all archives
  */
 function handleListArchives(req, res) {
@@ -718,7 +1176,7 @@ function handleAuditLog(req, res) {
         const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
         const total = db.prepare(`SELECT COUNT(*) AS cnt FROM audit_log ${where}`).get(...params).cnt;
-        const entries = db.prepare(`SELECT * FROM audit_log ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
+        const entries = db.prepare(`SELECT * FROM audit_log ${where} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
 
         const actors = db.prepare('SELECT DISTINCT actor FROM audit_log WHERE actor IS NOT NULL ORDER BY actor').all().map(r => r.actor);
         const actions = db.prepare('SELECT DISTINCT action FROM audit_log WHERE action IS NOT NULL ORDER BY action').all().map(r => r.action);
@@ -816,6 +1274,164 @@ function handleDeleteOrphan(req, res, filename) {
 }
 
 /**
+ * Prune old backup versions for an archive, keeping only maxVersions most recent.
+ * Must be called inside an existing db.transaction().
+ * @param {number} archiveId - The archive's DB row id
+ * @param {number} maxVersions - Max backups to retain
+ */
+function pruneArchiveVersions(archiveId, maxVersions) {
+    const versions = db.prepare(
+        'SELECT id, filename FROM archive_versions WHERE archive_id = ? ORDER BY created_at DESC, id DESC'
+    ).all(archiveId);
+
+    const toDelete = versions.slice(maxVersions);
+    const deleteStmt = db.prepare('DELETE FROM archive_versions WHERE id = ?');
+
+    for (const v of toDelete) {
+        const fullPath = path.join(ARCHIVES_DIR, v.filename);
+        deleteStmt.run(v.id);
+        try { fs.unlinkSync(fullPath); } catch {}
+    }
+
+    // Clean up empty history subdirectory
+    if (toDelete.length > 0) {
+        const histDir = path.dirname(path.join(ARCHIVES_DIR, versions[0].filename));
+        try {
+            const remaining = fs.readdirSync(histDir);
+            if (remaining.length === 0) fs.rmdirSync(histDir);
+        } catch {}
+    }
+}
+
+/**
+ * Back up an existing archive file to history/ and replace it with a new upload.
+ * Handles backup rotation, DB upsert, metadata extraction, and audit logging.
+ * Called by both handleUploadArchive and handleCompleteChunk when a file already exists.
+ *
+ * @param {Object} existingRow - The existing archives DB row (from SELECT * WHERE filename = ?)
+ * @param {string} tmpPath - Path to the newly uploaded temp file
+ * @param {string} filename - The target archive filename
+ * @param {Object} req - HTTP request (for actor extraction)
+ * @returns {Object} The updated archive DB row
+ */
+function backupAndReplace(existingRow, tmpPath, filename, req) {
+    const finalPath = path.join(ARCHIVES_DIR, filename);
+    const ext = path.extname(filename);
+    const basename = path.basename(filename, ext);
+    const maxVersions = parseInt(getSetting('backup.maxVersions'), 10) || 0;
+
+    let backupRelPath = null;
+    let existingSize = 0;
+
+    // --- Phase 1: Filesystem operations (outside transaction) ---
+    // If these fail, no DB state has changed — safe to abort.
+
+    if (maxVersions > 0) {
+        const histDir = path.join(ARCHIVES_DIR, 'history', basename);
+        if (!fs.existsSync(histDir)) {
+            fs.mkdirSync(histDir, { recursive: true });
+        }
+
+        const timestamp = new Date().toISOString().replace(/:/g, '-');
+        const backupFilename = basename + '.' + timestamp + ext;
+        backupRelPath = path.join('history', basename, backupFilename);
+        const backupFullPath = path.join(ARCHIVES_DIR, backupRelPath);
+
+        existingSize = fs.statSync(finalPath).size;
+
+        // Move existing file to history (rename if same FS, copy+delete otherwise)
+        try {
+            fs.renameSync(finalPath, backupFullPath);
+        } catch {
+            try {
+                fs.copyFileSync(finalPath, backupFullPath);
+                fs.unlinkSync(finalPath);
+            } catch (copyErr) {
+                // Clean up partial backup on failure
+                try { fs.unlinkSync(backupFullPath); } catch {}
+                throw copyErr;
+            }
+        }
+    } else {
+        // No backup — just remove existing file
+        try { fs.unlinkSync(finalPath); } catch {}
+    }
+
+    // Move new upload into place
+    try {
+        fs.renameSync(tmpPath, finalPath);
+    } catch {
+        fs.copyFileSync(tmpPath, finalPath);
+        try { fs.unlinkSync(tmpPath); } catch {}
+    }
+
+    // Extract metadata (slow — runs external shell script, keep outside transaction)
+    const archiveUrl = '/archives/' + filename;
+    const hash = archiveHash(archiveUrl);
+    runExtractMeta(finalPath);
+
+    let metaRaw = {};
+    const metaJsonPath = path.join(META_DIR, hash + '.json');
+    try { metaRaw = JSON.parse(fs.readFileSync(metaJsonPath, 'utf8')); } catch (_) {}
+
+    const thumbPath = '/thumbs/' + hash + '.jpg';
+    const thumbExists = fs.existsSync(path.join(HTML_ROOT, 'thumbs', hash + '.jpg'));
+    const newSize = fs.statSync(finalPath).size;
+
+    // --- Phase 2: DB operations (inside transaction) ---
+    // If the transaction fails, the file is already in place but DB is consistent.
+    // Compensating FS rollback is not attempted — the file on disk is the newer version
+    // which is the correct state even if the DB update needs to be retried.
+
+    const doDbUpdates = db.transaction(() => {
+        // Record backup version
+        if (maxVersions > 0 && backupRelPath) {
+            db.prepare(
+                'INSERT INTO archive_versions (archive_id, filename, size) VALUES (?, ?, ?)'
+            ).run(existingRow.id, backupRelPath, existingSize);
+
+            pruneArchiveVersions(existingRow.id, maxVersions);
+        }
+
+        // Upsert archives row (uuid only used on first insert — preserved on conflict)
+        db.prepare(`
+            INSERT INTO archives
+                (uuid, hash, filename, title, description, thumbnail, asset_types, metadata_raw, size, updated_at)
+            VALUES
+                (@uuid, @hash, @filename, @title, @description, @thumbnail, @asset_types, @metadata_raw, @size, datetime('now'))
+            ON CONFLICT(hash) DO UPDATE SET
+                filename    = excluded.filename,
+                title       = excluded.title,
+                description = excluded.description,
+                thumbnail   = excluded.thumbnail,
+                asset_types = excluded.asset_types,
+                metadata_raw= excluded.metadata_raw,
+                size        = excluded.size,
+                updated_at  = excluded.updated_at
+        `).run({
+            uuid: crypto.randomUUID(),
+            hash,
+            filename,
+            title: metaRaw.title || null,
+            description: metaRaw.description || null,
+            thumbnail: thumbExists ? thumbPath : null,
+            asset_types: (metaRaw.asset_types || metaRaw.assets) ? JSON.stringify(metaRaw.asset_types || metaRaw.assets) : null,
+            metadata_raw: JSON.stringify(metaRaw),
+            size: newSize,
+        });
+
+        // Audit log
+        const actor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
+        db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
+          .run(actor, 'upload_replace', filename, JSON.stringify({ hash, size: newSize, backed_up: maxVersions > 0 }), req.headers['x-real-ip'] || null);
+
+        return db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+    });
+
+    return doDbUpdates();
+}
+
+/**
  * POST /api/archives — upload a new archive
  */
 async function handleUploadArchive(req, res) {
@@ -830,10 +1446,15 @@ async function handleUploadArchive(req, res) {
             fs.mkdirSync(ARCHIVES_DIR, { recursive: true });
         }
 
-        // Check for duplicate
+        // If file already exists, backup and replace instead of rejecting
         if (fs.existsSync(finalPath)) {
-            try { fs.unlinkSync(tmpPath); } catch {}
-            return sendJson(res, 409, { error: 'File already exists: ' + filename });
+            const existingRow = db.prepare('SELECT * FROM archives WHERE filename = ?').get(filename);
+            if (existingRow) {
+                const updatedRow = backupAndReplace(existingRow, tmpPath, filename, req);
+                return sendJson(res, 200, buildArchiveObjectFromRow(updatedRow));
+            }
+            // Edge case: file on disk but no DB row — remove orphan and proceed as new upload
+            try { fs.unlinkSync(finalPath); } catch {}
         }
 
         // Move from temp to archives (rename if same filesystem, copy+delete otherwise)
@@ -879,7 +1500,7 @@ async function handleUploadArchive(req, res) {
             title: metaRaw.title || null,
             description: metaRaw.description || null,
             thumbnail: thumbExists ? thumbPath : null,
-            asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+            asset_types: (metaRaw.asset_types || metaRaw.assets) ? JSON.stringify(metaRaw.asset_types || metaRaw.assets) : null,
             metadata_raw: JSON.stringify(metaRaw),
             size: fs.statSync(finalPath).size,
         });
@@ -893,7 +1514,7 @@ async function handleUploadArchive(req, res) {
         sendJson(res, 201, buildArchiveObjectFromRow(uploadedRow));
     } catch (err) {
         if (err.message === 'LIMIT') {
-            sendJson(res, 413, { error: 'Upload exceeds maximum size (' + Math.round(MAX_UPLOAD_SIZE / 1024 / 1024) + ' MB)' });
+            sendJson(res, 413, { error: 'Upload exceeds maximum size (' + getSetting('upload.maxSizeMb') + ' MB)' });
         } else {
             console.error('[admin] Upload error:', err.message);
             sendJson(res, 500, { error: err.message });
@@ -928,8 +1549,12 @@ function handleDeleteArchive(req, res, hash) {
     // Delete sidecar files
     try { fs.unlinkSync(path.join(META_DIR, hash + '.json')); } catch {}
     try { fs.unlinkSync(path.join(THUMBS_DIR, hash + '.jpg')); } catch {}
+    // Delete history directory for this archive (backup files)
+    const deleteBasename = path.parse(row.filename).name;
+    const historyDir = path.join(ARCHIVES_DIR, 'history', deleteBasename);
+    try { fs.rmSync(historyDir, { recursive: true }); } catch {}
 
-    // Delete from DB + audit log atomically
+    // Delete from DB + audit log atomically (archive_versions cascade-deleted)
     const deleteActor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
     db.transaction(() => {
         db.prepare('DELETE FROM archives WHERE hash = ?').run(hash);
@@ -978,7 +1603,7 @@ function handleRegenerateArchive(req, res, hash) {
         title: metaRaw.title || null,
         description: metaRaw.description || null,
         thumbnail: thumbExists ? thumbPath : null,
-        asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+        asset_types: (metaRaw.asset_types || metaRaw.assets) ? JSON.stringify(metaRaw.asset_types || metaRaw.assets) : null,
         metadata_raw: JSON.stringify(metaRaw),
         hash,
     });
@@ -1037,6 +1662,20 @@ function handleRenameArchive(req, res, hash) {
             // Rename the file
             fs.renameSync(oldFilePath, newPath);
 
+            // Rename history directory if it exists
+            const oldBasename = path.parse(oldRow.filename).name;
+            const newBasename = path.parse(sanitized).name;
+            const oldHistDir = path.join(ARCHIVES_DIR, 'history', oldBasename);
+            const newHistDir = path.join(ARCHIVES_DIR, 'history', newBasename);
+            if (fs.existsSync(oldHistDir)) {
+                if (fs.existsSync(newHistDir)) {
+                    // Conflict — revert file rename and abort
+                    fs.renameSync(newPath, oldFilePath);
+                    return sendJson(res, 409, { error: 'History directory conflict: ' + newBasename });
+                }
+                fs.renameSync(oldHistDir, newHistDir);
+            }
+
             // Clean old sidecar files
             try { fs.unlinkSync(path.join(META_DIR, hash + '.json')); } catch {}
             try { fs.unlinkSync(path.join(THUMBS_DIR, hash + '.jpg')); } catch {}
@@ -1076,10 +1715,15 @@ function handleRenameArchive(req, res, hash) {
                     title: metaRaw.title || null,
                     description: metaRaw.description || null,
                     thumbnail: thumbExists ? thumbPath : null,
-                    asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+                    asset_types: (metaRaw.asset_types || metaRaw.assets) ? JSON.stringify(metaRaw.asset_types || metaRaw.assets) : null,
                     metadata_raw: JSON.stringify(metaRaw),
                     oldHash: hash,
                 });
+                // Update version filenames to reflect new basename
+                db.prepare(
+                    'UPDATE archive_versions SET filename = replace(filename, ?, ?) WHERE archive_id = ?'
+                ).run('history/' + oldBasename + '/', 'history/' + newBasename + '/', oldRow.id);
+
                 db.prepare(`INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)`)
                   .run(renameActor, 'rename', hash, JSON.stringify({ old: oldRow.filename, new: sanitized }), req.headers['x-real-ip'] || null);
             })();
@@ -1090,6 +1734,105 @@ function handleRenameArchive(req, res, hash) {
             sendJson(res, 500, { error: err.message });
         }
     });
+}
+
+// --- Version History API Handlers ---
+
+/**
+ * GET /api/archives/:hash/versions — list backup versions for an archive
+ */
+function handleListVersions(req, res, hash) {
+    if (!requireAuth(req, res)) return;
+    const row = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+    if (!row) return sendJson(res, 404, { error: 'Archive not found' });
+
+    const versions = db.prepare(
+        'SELECT id, size, created_at FROM archive_versions WHERE archive_id = ? ORDER BY created_at DESC, id DESC'
+    ).all(row.id);
+
+    sendJson(res, 200, { versions });
+}
+
+/**
+ * GET /api/archives/:hash/versions/:id/download — download a specific backup
+ */
+function handleDownloadVersion(req, res, hash, versionId) {
+    if (!requireAuth(req, res)) return;
+    const row = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+    if (!row) return sendJson(res, 404, { error: 'Archive not found' });
+
+    const version = db.prepare(
+        'SELECT * FROM archive_versions WHERE id = ? AND archive_id = ?'
+    ).get(versionId, row.id);
+    if (!version) return sendJson(res, 404, { error: 'Version not found' });
+
+    // Path traversal protection: resolved path must be under ARCHIVES_DIR/history/
+    const fullPath = path.join(ARCHIVES_DIR, version.filename);
+    try {
+        const realPath = fs.realpathSync(fullPath);
+        const realHistoryDir = fs.realpathSync(path.join(ARCHIVES_DIR, 'history'));
+        if (!realPath.startsWith(realHistoryDir + '/') && !realPath.startsWith(realHistoryDir + '\\')) {
+            return sendJson(res, 403, { error: 'Access denied' });
+        }
+    } catch {
+        return sendJson(res, 404, { error: 'Backup file not found on disk' });
+    }
+
+    const stat = fs.statSync(fullPath);
+    const downloadName = path.basename(version.filename);
+    res.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': 'attachment; filename="' + downloadName + '"',
+        'Content-Length': stat.size,
+    });
+    fs.createReadStream(fullPath).pipe(res);
+}
+
+/**
+ * DELETE /api/archives/:hash/versions/:id — delete a specific backup
+ */
+function handleDeleteVersion(req, res, hash, versionId) {
+    if (!requireAuth(req, res)) return;
+    if (!checkCsrf(req, res)) return;
+    const row = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+    if (!row) return sendJson(res, 404, { error: 'Archive not found' });
+
+    const version = db.prepare(
+        'SELECT * FROM archive_versions WHERE id = ? AND archive_id = ?'
+    ).get(versionId, row.id);
+    if (!version) return sendJson(res, 404, { error: 'Version not found' });
+
+    // Path traversal protection
+    const fullPath = path.join(ARCHIVES_DIR, version.filename);
+    try {
+        const realPath = fs.realpathSync(fullPath);
+        const realHistoryDir = fs.realpathSync(path.join(ARCHIVES_DIR, 'history'));
+        if (!realPath.startsWith(realHistoryDir + '/') && !realPath.startsWith(realHistoryDir + '\\')) {
+            return sendJson(res, 403, { error: 'Access denied' });
+        }
+    } catch {
+        // File already gone from disk — still delete DB row
+    }
+
+    // Delete file from disk
+    try { fs.unlinkSync(fullPath); } catch {}
+
+    // Delete DB row + audit
+    const actor = req.headers['cf-access-authenticated-user-email'] || 'unknown';
+    db.transaction(() => {
+        db.prepare('DELETE FROM archive_versions WHERE id = ?').run(versionId);
+        db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
+          .run(actor, 'delete_version', hash, JSON.stringify({ version_id: versionId }), req.headers['x-real-ip'] || null);
+    })();
+
+    // Clean up empty history subdirectory
+    const histSubdir = path.dirname(fullPath);
+    try {
+        const remaining = fs.readdirSync(histSubdir);
+        if (remaining.length === 0) fs.rmdirSync(histSubdir);
+    } catch {}
+
+    sendJson(res, 200, { deleted: true });
 }
 
 // --- Collection API Handlers ---
@@ -1142,10 +1885,6 @@ function handleGetCollection(req, res, slug) {
         const collection = buildCollectionObject(row);
         collection.archives = archiveRows.map(buildArchiveObjectFromRow);
 
-        if (!collection.thumbnail && collection.archives.length > 0) {
-            collection.thumbnail = collection.archives[0].thumbnail;
-        }
-
         sendJson(res, 200, collection);
     } catch (err) {
         sendJson(res, 500, { error: err.message });
@@ -1189,7 +1928,7 @@ function handleCreateCollection(req, res) {
             `).run(slug, name, description, thumbnail, theme);
 
             db.prepare(`INSERT INTO audit_log (actor, action, target, ip) VALUES (?, ?, ?, ?)`)
-                .run(actor, 'create_collection', slug, req.socket.remoteAddress);
+                .run(actor, 'create_collection', slug, req.headers['x-real-ip'] || req.socket.remoteAddress);
 
             const row = db.prepare('SELECT c.*, 0 AS archive_count FROM collections c WHERE slug = ?').get(slug);
             sendJson(res, 201, buildCollectionObject(row));
@@ -1248,7 +1987,7 @@ function handleUpdateCollection(req, res, slug) {
             db.prepare('UPDATE collections SET ' + setClauses.join(', ') + ' WHERE id = ?').run(...values);
 
             db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
-                .run(actor, 'update_collection', updates.slug || slug, JSON.stringify(updates), req.socket.remoteAddress);
+                .run(actor, 'update_collection', updates.slug || slug, JSON.stringify(updates), req.headers['x-real-ip'] || req.socket.remoteAddress);
 
             const updatedRow = db.prepare(`
                 SELECT c.*, COUNT(ca.archive_id) AS archive_count
@@ -1285,7 +2024,7 @@ function handleDeleteCollection(req, res, slug) {
         db.prepare('DELETE FROM collections WHERE id = ?').run(row.id);
 
         db.prepare('INSERT INTO audit_log (actor, action, target, ip) VALUES (?, ?, ?, ?)')
-            .run(actor, 'delete_collection', slug, req.socket.remoteAddress);
+            .run(actor, 'delete_collection', slug, req.headers['x-real-ip'] || req.socket.remoteAddress);
 
         sendJson(res, 200, { ok: true });
     } catch (err) {
@@ -1334,9 +2073,12 @@ function handleAddCollectionArchives(req, res, slug) {
             db.prepare("UPDATE collections SET updated_at = datetime('now') WHERE id = ?").run(coll.id);
 
             db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
-                .run(actor, 'add_to_collection', slug, JSON.stringify({ hashes, added }), req.socket.remoteAddress);
+                .run(actor, 'add_to_collection', slug, JSON.stringify({ hashes, added }), req.headers['x-real-ip'] || req.socket.remoteAddress);
 
             sendJson(res, 200, { ok: true, added });
+            maybeRegenerateMosaic(coll.id, slug).catch(err =>
+                console.error('[meta-server] Auto-mosaic regeneration failed after adding archives:', err)
+            );
         } catch (err) {
             sendJson(res, 500, { error: err.message });
         }
@@ -1364,9 +2106,12 @@ function handleRemoveCollectionArchive(req, res, slug, archiveHash) {
         db.prepare("UPDATE collections SET updated_at = datetime('now') WHERE id = ?").run(coll.id);
 
         db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
-            .run(actor, 'remove_from_collection', slug, archiveHash, req.socket.remoteAddress);
+            .run(actor, 'remove_from_collection', slug, archiveHash, req.headers['x-real-ip'] || req.socket.remoteAddress);
 
         sendJson(res, 200, { ok: true });
+        maybeRegenerateMosaic(coll.id, slug).catch(err =>
+            console.error('[meta-server] Auto-mosaic regeneration failed after removing archive:', err)
+        );
     } catch (err) {
         sendJson(res, 500, { error: err.message });
     }
@@ -1409,6 +2154,192 @@ function handleReorderCollection(req, res, slug) {
             sendJson(res, 500, { error: err.message });
         }
     });
+}
+
+/**
+ * POST /api/collections/:slug/thumbnail — upload a manual thumbnail image.
+ * Accepts .jpg/.jpeg/.png/.webp, converts to 640x360 JPEG, saves as collection-{slug}.jpg.
+ */
+async function handleUploadCollectionThumbnail(req, res, slug) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    let tmpPath;
+    try {
+        const upload = await parseMultipartUpload(req);
+        tmpPath = upload.tmpPath;
+        const ext = path.extname(upload.filename).toLowerCase();
+        if (!['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
+            try { fs.unlinkSync(tmpPath); } catch {}
+            return sendJson(res, 400, { error: 'Invalid image type. Allowed: jpg, jpeg, png, webp' });
+        }
+
+        const coll = db.prepare('SELECT id FROM collections WHERE slug = ?').get(slug);
+        if (!coll) {
+            try { fs.unlinkSync(tmpPath); } catch {}
+            return sendJson(res, 404, { error: 'Collection not found' });
+        }
+
+        const destPath = path.join(THUMBS_DIR, `collection-${slug}.jpg`);
+        await sharp(tmpPath).resize(640, 360, { fit: 'cover' }).jpeg({ quality: 85 }).toFile(destPath);
+        try { fs.unlinkSync(tmpPath); } catch {}
+
+        const thumbUrl = `/thumbs/collection-${slug}.jpg`;
+        db.prepare("UPDATE collections SET thumbnail = ?, updated_at = datetime('now') WHERE id = ?").run(thumbUrl, coll.id);
+
+        db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
+            .run(actor, 'upload_collection_thumbnail', slug, thumbUrl, req.headers['x-real-ip'] || req.socket.remoteAddress);
+
+        console.log(`[meta-server] Collection thumbnail uploaded for "${slug}" by ${actor}`);
+        sendJson(res, 200, { ok: true, thumbnail: thumbUrl });
+    } catch (err) {
+        if (tmpPath) { try { fs.unlinkSync(tmpPath); } catch {} }
+        console.error('[meta-server] handleUploadCollectionThumbnail error:', err);
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * DELETE /api/collections/:slug/thumbnail — delete the manual thumbnail and regenerate auto mosaic.
+ */
+async function handleDeleteCollectionThumbnail(req, res, slug) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    try {
+        const coll = db.prepare('SELECT id FROM collections WHERE slug = ?').get(slug);
+        if (!coll) return sendJson(res, 404, { error: 'Collection not found' });
+
+        const manualPath = path.join(THUMBS_DIR, `collection-${slug}.jpg`);
+        try { fs.unlinkSync(manualPath); } catch {}
+
+        db.prepare("UPDATE collections SET thumbnail = NULL, updated_at = datetime('now') WHERE id = ?").run(coll.id);
+
+        const autoThumb = await generateCollectionMosaic(coll.id, slug);
+        if (autoThumb) {
+            db.prepare("UPDATE collections SET thumbnail = ?, updated_at = datetime('now') WHERE id = ?").run(autoThumb, coll.id);
+        }
+
+        db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
+            .run(actor, 'delete_collection_thumbnail', slug, '', req.headers['x-real-ip'] || req.socket.remoteAddress);
+
+        console.log(`[meta-server] Collection thumbnail deleted for "${slug}" by ${actor}`);
+        sendJson(res, 200, { ok: true, thumbnail: autoThumb });
+    } catch (err) {
+        console.error('[meta-server] handleDeleteCollectionThumbnail error:', err);
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * POST /api/collections/:slug/generate-thumbnail — force-regenerate the auto mosaic.
+ */
+async function handleGenerateCollectionThumbnail(req, res, slug) {
+    const actor = requireAuth(req, res);
+    if (!actor) return;
+    if (!checkCsrf(req, res)) return;
+
+    try {
+        const coll = db.prepare('SELECT id FROM collections WHERE slug = ?').get(slug);
+        if (!coll) return sendJson(res, 404, { error: 'Collection not found' });
+
+        const autoThumb = await generateCollectionMosaic(coll.id, slug);
+        if (autoThumb) {
+            db.prepare("UPDATE collections SET thumbnail = ?, updated_at = datetime('now') WHERE id = ?").run(autoThumb, coll.id);
+        }
+
+        db.prepare('INSERT INTO audit_log (actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?)')
+            .run(actor, 'generate_collection_thumbnail', slug, autoThumb || '', req.headers['x-real-ip'] || req.socket.remoteAddress);
+
+        console.log(`[meta-server] Collection thumbnail regenerated for "${slug}" by ${actor}`);
+        sendJson(res, 200, { ok: true, thumbnail: autoThumb });
+    } catch (err) {
+        console.error('[meta-server] handleGenerateCollectionThumbnail error:', err);
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+// Share page HTML (lazy-loaded)
+let _sharePageHtml = null;
+function getSharePageHtml() {
+    if (_sharePageHtml === null) {
+        try { _sharePageHtml = fs.readFileSync('/opt/share-page.html', 'utf8'); }
+        catch { _sharePageHtml = ''; }
+    }
+    return _sharePageHtml;
+}
+
+/**
+ * GET /share/:mediaId — serve the share preview page for a media item.
+ * Reads the share-page.html template and substitutes {{PLACEHOLDER}} values.
+ */
+function handleSharePage(req, res, mediaId) {
+    const row = db.prepare(`
+        SELECT m.*, a.hash AS archive_hash, a.title AS archive_title,
+               a.description AS archive_description, a.filename AS archive_filename,
+               a.uuid AS archive_uuid
+        FROM media m
+        LEFT JOIN archives a ON a.id = m.archive_id
+        WHERE m.id = ? AND m.status = 'ready'
+    `).get(mediaId);
+
+    if (!row) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Share not found');
+        return;
+    }
+
+    const template = getSharePageHtml();
+    if (!template) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Share page template not found');
+        return;
+    }
+
+    const title = escapeHtml(row.title || row.archive_title || SITE_NAME);
+    const description = escapeHtml(row.archive_description || SITE_DESCRIPTION);
+    const creator = escapeHtml('');
+    // Absolute URLs for OG meta tags (crawlers need full URLs)
+    const mp4AbsUrl = row.mp4_path ? SITE_URL + row.mp4_path : '';
+    const thumbAbsUrl = row.thumb_path ? SITE_URL + row.thumb_path : '';
+    // Relative paths for in-page elements — nginx sub_filter rewrites src="/ to include SITE_URL
+    const mp4RelUrl = row.mp4_path || '';
+    const thumbRelUrl = row.thumb_path || '';
+
+    let view3dLink = '';
+    if (row.archive_uuid) {
+        view3dLink = '<a class="btn-primary" href="/view/' + encodeURIComponent(row.archive_uuid) + '?autoload=true">View in 3D</a>';
+    } else if (row.archive_filename) {
+        view3dLink = '<a class="btn-primary" href="/?archive=/archives/' + encodeURIComponent(row.archive_filename) + '">View in 3D</a>';
+    }
+
+    let gifLink = '';
+    if (row.gif_path) {
+        gifLink = '<a class="btn-secondary" href="' + escapeHtml(row.gif_path) + '" download>Download GIF</a>';
+    }
+
+    const html = template
+        .replace(/\{\{TITLE\}\}/g, title)
+        .replace(/\{\{DESCRIPTION\}\}/g, description)
+        .replace(/\{\{SITE_NAME\}\}/g, escapeHtml(SITE_NAME))
+        .replace(/\{\{SITE_URL\}\}/g, escapeHtml(SITE_URL))
+        .replace(/\{\{MEDIA_ID\}\}/g, escapeHtml(mediaId))
+        .replace(/\{\{MP4_URL\}\}/g, escapeHtml(mp4AbsUrl))
+        .replace(/\{\{THUMB_URL\}\}/g, escapeHtml(thumbAbsUrl))
+        .replace(/\{\{MP4_REL\}\}/g, escapeHtml(mp4RelUrl))
+        .replace(/\{\{THUMB_REL\}\}/g, escapeHtml(thumbRelUrl))
+        .replace(/\{\{CREATOR\}\}/g, creator)
+        .replace(/\{\{LOGO_URL\}\}/g, '/themes/' + (DEFAULT_KIOSK_THEME || 'editorial') + '/logo.png')
+        .replace(/\{\{VIEW_3D_LINK\}\}/g, view3dLink)
+        .replace(/\{\{GIF_LINK\}\}/g, gifLink);
+
+    res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache'
+    });
+    res.end(html);
 }
 
 /**
@@ -1686,9 +2617,6 @@ async function handleCompleteChunk(req, res, uploadId) {
 
         if (!fs.existsSync(ARCHIVES_DIR)) fs.mkdirSync(ARCHIVES_DIR, { recursive: true });
         const finalPath = path.join(ARCHIVES_DIR, filename);
-        if (fs.existsSync(finalPath)) {
-            return sendJson(res, 409, { error: 'File already exists: ' + filename });
-        }
 
         // Assemble chunks in order via streaming
         const tmpPath = path.join('/tmp', 'v3d_assembled_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex'));
@@ -1709,6 +2637,17 @@ async function handleCompleteChunk(req, res, uploadId) {
 
         // Clean up chunk dir before moving (best-effort)
         try { fs.rmSync(chunkDir, { recursive: true, force: true }); } catch {}
+
+        // If file already exists, backup and replace instead of rejecting
+        if (fs.existsSync(finalPath)) {
+            const existingRow = db.prepare('SELECT * FROM archives WHERE filename = ?').get(filename);
+            if (existingRow) {
+                const updatedRow = backupAndReplace(existingRow, tmpPath, filename, req);
+                return sendJson(res, 200, buildArchiveObjectFromRow(updatedRow));
+            }
+            // Edge case: file on disk but no DB row — remove orphan and proceed as new upload
+            try { fs.unlinkSync(finalPath); } catch {}
+        }
 
         try {
             fs.renameSync(tmpPath, finalPath);
@@ -1751,7 +2690,7 @@ async function handleCompleteChunk(req, res, uploadId) {
             title: metaRaw.title || null,
             description: metaRaw.description || null,
             thumbnail: thumbExists ? thumbPath : null,
-            asset_types: metaRaw.asset_types ? JSON.stringify(metaRaw.asset_types) : null,
+            asset_types: (metaRaw.asset_types || metaRaw.assets) ? JSON.stringify(metaRaw.asset_types || metaRaw.assets) : null,
             metadata_raw: JSON.stringify(metaRaw),
             size: fs.statSync(finalPath).size,
         });
@@ -1768,9 +2707,322 @@ async function handleCompleteChunk(req, res, uploadId) {
     }
 }
 
+// --- Media Transcode Pipeline ---
+
+/**
+ * Finalise a completed transcode: update DB with paths, clean up raw + palette files.
+ */
+function finishTranscode(mediaId, mp4Path, gifPath, thumbPath, mediaDir, rawPath, palettePath) {
+    db.prepare(`
+        UPDATE media SET status = 'ready', mp4_path = ?, gif_path = ?, thumb_path = ? WHERE id = ?
+    `).run(
+        mp4Path.replace(HTML_ROOT, '') || null,
+        gifPath.replace(HTML_ROOT, '') || null,
+        thumbPath.replace(HTML_ROOT, '') || null,
+        mediaId
+    );
+    // Clean up raw WebM and GIF palette
+    try { fs.unlinkSync(rawPath); } catch {}
+    try { fs.unlinkSync(palettePath); } catch {}
+}
+
+/**
+ * Run ffmpeg transcode pipeline for a media record (non-blocking, callback-based).
+ * Steps: MP4 conversion → thumbnail → GIF palette → GIF encode → DB update.
+ */
+function transcodeMedia(mediaId) {
+    const row = db.prepare('SELECT * FROM media WHERE id = ?').get(mediaId);
+    if (!row) return;
+
+    const mediaDir = path.join(MEDIA_ROOT, mediaId);
+    const rawPath = path.join(mediaDir, 'raw.webm');
+    const mp4Path = path.join(mediaDir, 'output.mp4');
+    const thumbPath_ = path.join(mediaDir, 'thumb.jpg');
+    const palettePath = path.join(mediaDir, 'palette.png');
+    const gifPath = path.join(mediaDir, 'output.gif');
+
+    db.prepare("UPDATE media SET status = 'processing' WHERE id = ?").run(mediaId);
+
+    const trimStart = Number.isFinite(row.trim_start) ? row.trim_start : 0;
+    const trimEnd = Number.isFinite(row.trim_end) ? row.trim_end : 0;
+
+    // Build ffmpeg trim args
+    const trimArgs = [];
+    if (trimStart > 0) { trimArgs.push('-ss', String(trimStart)); }
+    if (trimEnd > trimStart && trimEnd < Infinity) { trimArgs.push('-to', String(trimEnd)); }
+
+    // Step 1: WebM → MP4
+    const mp4Args = [
+        ...trimArgs,
+        '-i', rawPath,
+        '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
+        '-c:v', 'libx264',
+        '-preset', getSetting('video.preset'),
+        '-crf', getSetting('video.crf'),
+        '-movflags', '+faststart',
+        '-an',
+        '-y', mp4Path
+    ];
+
+    execFile('ffmpeg', mp4Args, (err) => {
+        if (err) {
+            console.error('[media] ffmpeg MP4 error:', err.message);
+            db.prepare("UPDATE media SET status = 'error', error_msg = ? WHERE id = ?").run(err.message, mediaId);
+            return;
+        }
+
+        // Step 2: Thumbnail — first frame as 512x512 JPEG
+        const thumbArgs = [
+            '-i', mp4Path,
+            '-vframes', '1',
+            '-vf', 'scale=' + getSetting('thumbnail.size') + ':' + getSetting('thumbnail.size') + ':force_original_aspect_ratio=decrease,pad=' + getSetting('thumbnail.size') + ':' + getSetting('thumbnail.size') + ':(ow-iw)/2:(oh-ih)/2',
+            '-y', thumbPath_
+        ];
+
+        execFile('ffmpeg', thumbArgs, (err2) => {
+            if (err2) {
+                console.error('[media] ffmpeg thumbnail error:', err2.message);
+                // Non-fatal — continue with GIF
+            }
+
+            // Step 3: GIF palette generation — use transcoded MP4 (stable timestamps)
+            const paletteArgs = [
+                '-i', mp4Path,
+                '-vf', 'fps=' + getSetting('gif.fps') + ',scale=' + getSetting('gif.width') + ':-1:flags=lanczos,palettegen',
+                '-y', palettePath
+            ];
+
+            execFile('ffmpeg', paletteArgs, (err3) => {
+                if (err3) {
+                    console.error('[media] ffmpeg palette error:', err3.message);
+                    // Skip GIF, still mark ready with MP4 + thumb only
+                    finishTranscode(mediaId, mp4Path, '', thumbPath_, mediaDir, rawPath, palettePath);
+                    return;
+                }
+
+                // Step 4: GIF encode — from MP4 (already trimmed, stable frame timing)
+                const gifArgs = [
+                    '-i', mp4Path,
+                    '-i', palettePath,
+                    '-lavfi', 'fps=' + getSetting('gif.fps') + ',scale=' + getSetting('gif.width') + ':-1:flags=lanczos[x];[x][1:v]paletteuse',
+                    '-y', gifPath
+                ];
+
+                execFile('ffmpeg', gifArgs, (err4) => {
+                    if (err4) {
+                        console.error('[media] ffmpeg GIF error:', err4.message);
+                        finishTranscode(mediaId, mp4Path, '', thumbPath_, mediaDir, rawPath, palettePath);
+                        return;
+                    }
+                    finishTranscode(mediaId, mp4Path, gifPath, thumbPath_, mediaDir, rawPath, palettePath);
+                });
+            });
+        });
+    });
+}
+
+// --- Media API Handlers ---
+
+/**
+ * Convert a media DB row into an API response object.
+ */
+function buildMediaObject(row) {
+    return {
+        id: row.id,
+        archive_id: row.archive_id || null,
+        archive_hash: row.archive_hash || null,
+        archive_title: row.archive_title || null,
+        title: row.title || null,
+        mode: row.mode || null,
+        duration_ms: row.duration_ms || 0,
+        status: row.status,
+        error_msg: row.error_msg || null,
+        trim_start: row.trim_start || 0,
+        trim_end: row.trim_end || 0,
+        created_at: row.created_at ? row.created_at.replace(' ', 'T') + 'Z' : null,
+        mp4_path: row.mp4_path || null,
+        gif_path: row.gif_path || null,
+        thumb_path: row.thumb_path || null,
+        share_url: '/share/' + row.id,
+    };
+}
+
+/**
+ * GET /api/media/:id — get a single media record by ID, joined with archive info.
+ */
+function handleGetMedia(req, res, mediaId) {
+    try {
+        const row = db.prepare(`
+            SELECT m.*, a.hash AS archive_hash, a.title AS archive_title
+            FROM media m
+            LEFT JOIN archives a ON a.id = m.archive_id
+            WHERE m.id = ?
+        `).get(mediaId);
+        if (!row) return sendJson(res, 404, { error: 'Media not found' });
+        sendJson(res, 200, buildMediaObject(row));
+    } catch (err) {
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * GET /api/media — list media records, optionally filtered by archive_hash query param.
+ */
+function handleListMedia(req, res, query) {
+    try {
+        let sql = `
+            SELECT m.*, a.hash AS archive_hash, a.title AS archive_title
+            FROM media m
+            LEFT JOIN archives a ON a.id = m.archive_id
+        `;
+        const params = [];
+        if (query.archive_hash) {
+            sql += ' WHERE a.hash = ?';
+            params.push(query.archive_hash);
+        }
+        sql += ' ORDER BY m.created_at DESC';
+        const rows = db.prepare(sql).all(...params);
+        sendJson(res, 200, { media: rows.map(buildMediaObject) });
+    } catch (err) {
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * DELETE /api/media/:id — delete media files and DB row.
+ */
+function handleDeleteMedia(req, res, mediaId) {
+    if (!requireAuth(req, res)) return;
+    if (!checkCsrf(req, res)) return;
+
+    try {
+        const row = db.prepare('SELECT * FROM media WHERE id = ?').get(mediaId);
+        if (!row) return sendJson(res, 404, { error: 'Media not found' });
+
+        // Delete media directory (contains all generated files)
+        const mediaDir = path.join(MEDIA_ROOT, mediaId);
+        try { fs.rmSync(mediaDir, { recursive: true, force: true }); } catch {}
+
+        db.prepare('DELETE FROM media WHERE id = ?').run(mediaId);
+
+        sendJson(res, 200, { deleted: true, id: mediaId });
+    } catch (err) {
+        sendJson(res, 500, { error: err.message });
+    }
+}
+
+/**
+ * POST /api/media/upload — upload a WebM recording and kick off transcoding.
+ * Multipart fields: video (file), archive_hash, title, mode, duration_ms, trim_start, trim_end
+ */
+function handleMediaUpload(req, res) {
+    if (!requireAuth(req, res)) return;
+
+    const id = generateMediaId();
+    const mediaDir = path.join(MEDIA_ROOT, id);
+    let rawPath = path.join(mediaDir, 'raw.webm');
+
+    let archiveHash_ = '';
+    let title = '';
+    let mode = '';
+    let duration_ms = 0;
+    let trim_start = 0;
+    let trim_end = 0;
+
+    let bb;
+    try {
+        bb = busboy({ headers: req.headers, limits: { fileSize: 200 * 1024 * 1024 } });
+    } catch (err) {
+        return sendJson(res, 400, { error: err.message });
+    }
+
+    let fileReceived = false;
+    let settled = false;
+
+    function finish(err) {
+        if (settled) return;
+        settled = true;
+        if (err) {
+            try { fs.rmSync(mediaDir, { recursive: true, force: true }); } catch {}
+            if (err.message === 'LIMIT') {
+                return sendJson(res, 413, { error: 'Upload exceeds 200 MB limit' });
+            }
+            return sendJson(res, 500, { error: err.message });
+        }
+
+        // Look up archive_id from hash or URL
+        let archive_id = null;
+        if (archiveHash_) {
+            // archiveHash_ may be a hash, a relative path, or a full URL — try all
+            let archiveRow = db.prepare('SELECT id FROM archives WHERE hash = ?').get(archiveHash_);
+            if (!archiveRow) {
+                // Try treating it as a URL/path and computing the hash
+                let pathForHash = archiveHash_;
+                // Strip origin from full URLs to get just the pathname
+                try { pathForHash = new URL(archiveHash_).pathname; } catch { /* already a path or hash */ }
+                const computed = archiveHash(pathForHash);
+                archiveRow = db.prepare('SELECT id FROM archives WHERE hash = ?').get(computed);
+            }
+            if (archiveRow) archive_id = archiveRow.id;
+        }
+
+        try {
+            db.prepare(`
+                INSERT INTO media (id, archive_id, title, mode, duration_ms, status, trim_start, trim_end)
+                VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
+            `).run(id, archive_id, title || null, mode || null, duration_ms || 0, trim_start || 0, trim_end || 0);
+        } catch (dbErr) {
+            try { fs.rmSync(mediaDir, { recursive: true, force: true }); } catch {}
+            return sendJson(res, 500, { error: dbErr.message });
+        }
+
+        sendJson(res, 200, { id, status: 'pending' });
+
+        // Kick off transcode asynchronously
+        transcodeMedia(id);
+    }
+
+    bb.on('field', (name, val) => {
+        if (name === 'archive_hash') archiveHash_ = val;
+        else if (name === 'title') title = val;
+        else if (name === 'mode') mode = val;
+        else if (name === 'duration_ms') duration_ms = parseInt(val, 10) || 0;
+        else if (name === 'trim_start') { trim_start = parseFloat(val); if (!Number.isFinite(trim_start) || trim_start < 0) trim_start = 0; }
+        else if (name === 'trim_end') { trim_end = parseFloat(val); if (!Number.isFinite(trim_end) || trim_end < 0) trim_end = 0; }
+    });
+
+    bb.on('file', (fieldname, file, info) => {
+        if (fieldname !== 'video') {
+            file.resume();
+            return;
+        }
+        fileReceived = true;
+        try { fs.mkdirSync(mediaDir, { recursive: true }); } catch {}
+        const writeStream = fs.createWriteStream(rawPath);
+        writeStream.on('error', finish);
+        file.on('limit', () => {
+            req.unpipe(bb);
+            bb.destroy();
+            finish(new Error('LIMIT'));
+        });
+        file.pipe(writeStream);
+    });
+
+    bb.on('close', () => {
+        if (!fileReceived) return finish(new Error('No video field in upload'));
+        finish(null);
+    });
+
+    bb.on('error', finish);
+    req.on('error', finish);
+    req.pipe(bb);
+}
+
 // --- Server ---
 
 initDb();
+if (!fs.existsSync(MEDIA_ROOT)) fs.mkdirSync(MEDIA_ROOT, { recursive: true });
+
 const server = http.createServer((req, res) => {
     const parsed = url.parse(req.url);
     const pathname = parsed.pathname;
@@ -1809,6 +3061,28 @@ const server = http.createServer((req, res) => {
         return handleCollectionPage(req, res, collPageMatch[1]);
     }
 
+    // Collection data API (public, bypasses /api/ CF Access gate)
+    const collDataMatch = pathname.match(/^\/collection\/([a-z0-9][a-z0-9-]{0,79})\/data$/);
+    if (collDataMatch && req.method === 'GET') {
+        return handleGetCollection(req, res, collDataMatch[1]);
+    }
+
+    // Share preview pages: /share/{16-char-hex-id}
+    const shareMatch = pathname.match(/^\/share\/([a-f0-9]{16})$/);
+    if (shareMatch) return handleSharePage(req, res, shareMatch[1]);
+
+    // Media routes (GET/LIST public; DELETE auth-gated inside handler)
+    const parsedUrl = url.parse(req.url, true);
+    const mediaMatch = pathname.match(/^\/api\/media\/([a-f0-9]{16})$/);
+    if (pathname === '/api/media' && req.method === 'GET') return handleListMedia(req, res, parsedUrl.query || {});
+    if (mediaMatch && req.method === 'GET') return handleGetMedia(req, res, mediaMatch[1]);
+    if (mediaMatch && req.method === 'DELETE') return handleDeleteMedia(req, res, mediaMatch[1]);
+
+    // DJI keychain proxy (no admin auth needed — API key is server-side)
+    if (pathname === '/api/dji-keychains' && req.method === 'POST') {
+        return handleDjiKeychains(req, res);
+    }
+
     // Admin routes (only when enabled)
     if (ADMIN_ENABLED) {
         if (pathname === '/admin' && req.method === 'GET') {
@@ -1825,6 +3099,16 @@ const server = http.createServer((req, res) => {
         }
         if (pathname === '/api/storage' && req.method === 'GET') {
             return handleStorage(req, res);
+        }
+        if (pathname === '/api/settings' && req.method === 'GET') {
+            return handleGetSettings(req, res);
+        }
+        if (pathname === '/api/settings' && req.method === 'PUT') {
+            return handlePutSettings(req, res);
+        }
+        const settingKeyMatch = pathname.match(/^\/api\/settings\/(.+)$/);
+        if (settingKeyMatch && req.method === 'DELETE') {
+            return handleDeleteSetting(req, res, decodeURIComponent(settingKeyMatch[1]));
         }
         const orphanMatch = pathname.match(/^\/api\/storage\/orphans\/(.+)$/);
         if (orphanMatch && req.method === 'DELETE') {
@@ -1846,6 +3130,24 @@ const server = http.createServer((req, res) => {
                 handleCompleteChunk(req, res, chunkCompleteMatch[1].toLowerCase());
                 return;
             }
+        }
+
+        // Match /api/archives/:hash/versions/:id/download
+        const versionDownloadMatch = pathname.match(/^\/api\/archives\/([a-f0-9]{16})\/versions\/(\d+)\/download$/);
+        if (versionDownloadMatch && req.method === 'GET') {
+            return handleDownloadVersion(req, res, versionDownloadMatch[1], parseInt(versionDownloadMatch[2], 10));
+        }
+
+        // Match /api/archives/:hash/versions/:id (DELETE)
+        const versionIdMatch = pathname.match(/^\/api\/archives\/([a-f0-9]{16})\/versions\/(\d+)$/);
+        if (versionIdMatch && req.method === 'DELETE') {
+            return handleDeleteVersion(req, res, versionIdMatch[1], parseInt(versionIdMatch[2], 10));
+        }
+
+        // Match /api/archives/:hash/versions (GET)
+        const versionsMatch = pathname.match(/^\/api\/archives\/([a-f0-9]{16})\/versions$/);
+        if (versionsMatch && req.method === 'GET') {
+            return handleListVersions(req, res, versionsMatch[1]);
         }
 
         // Match /api/archives/:hash/regenerate
@@ -1870,10 +3172,26 @@ const server = http.createServer((req, res) => {
         const collSlugAdminMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})$/);
         if (collSlugAdminMatch) {
             const cSlug = collSlugAdminMatch[1];
+            const action = (url.parse(req.url, true).query.action || '').toString();
+
+            // Query-param actions (flat URLs for CF Access bypass compatibility)
+            if (action === 'add-archives' && req.method === 'POST') return handleAddCollectionArchives(req, res, cSlug);
+            if (action === 'remove-archive' && req.method === 'DELETE') {
+                const hash = (url.parse(req.url, true).query.hash || '').toString();
+                if (/^[a-f0-9]{16}$/.test(hash)) return handleRemoveCollectionArchive(req, res, cSlug, hash);
+                return sendJson(res, 400, { error: 'Invalid hash' });
+            }
+            if (action === 'reorder' && req.method === 'PATCH') return handleReorderCollection(req, res, cSlug);
+            if (action === 'upload-thumbnail' && req.method === 'POST') return handleUploadCollectionThumbnail(req, res, cSlug);
+            if (action === 'delete-thumbnail' && req.method === 'DELETE') return handleDeleteCollectionThumbnail(req, res, cSlug);
+            if (action === 'generate-thumbnail' && req.method === 'POST') return handleGenerateCollectionThumbnail(req, res, cSlug);
+
+            // Default slug actions (no action param)
             if (req.method === 'PATCH') return handleUpdateCollection(req, res, cSlug);
             if (req.method === 'DELETE') return handleDeleteCollection(req, res, cSlug);
         }
 
+        // Legacy sub-path routes (backward compatibility)
         const collArchivesMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})\/archives$/);
         if (collArchivesMatch && req.method === 'POST') {
             return handleAddCollectionArchives(req, res, collArchivesMatch[1]);
@@ -1889,12 +3207,29 @@ const server = http.createServer((req, res) => {
             return handleReorderCollection(req, res, collOrderMatch[1]);
         }
 
+        const collThumbMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})\/thumbnail$/);
+        if (collThumbMatch) {
+            if (req.method === 'POST') return handleUploadCollectionThumbnail(req, res, collThumbMatch[1]);
+            if (req.method === 'DELETE') return handleDeleteCollectionThumbnail(req, res, collThumbMatch[1]);
+        }
+
+        const collGenThumbMatch = pathname.match(/^\/api\/collections\/([a-z0-9][a-z0-9-]{0,79})\/generate-thumbnail$/);
+        if (collGenThumbMatch && req.method === 'POST') {
+            return handleGenerateCollectionThumbnail(req, res, collGenThumbMatch[1]);
+        }
+
+        if (req.method === 'GET' && pathname === '/api/auth-callback') {
+            return handleAuthCallback(req, res);
+        }
         if (req.method === 'GET' && pathname === '/api/me') {
             return handleMe(req, res);
         }
         if (req.method === 'GET' && pathname === '/api/csrf-token') {
             return handleCsrfToken(req, res);
         }
+
+        // Media routes
+        if (pathname === '/api/media/upload' && req.method === 'POST') return handleMediaUpload(req, res);
     }
 
     // Default: bot HTML response (nginx only routes bots here)

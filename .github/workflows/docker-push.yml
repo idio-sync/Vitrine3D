@@ -22,6 +22,8 @@ jobs:
 
       - name: Install dependencies and build
         run: npm install --legacy-peer-deps && npm run build
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
 
       - name: Login to Docker Hub
         id: login_docker_hub

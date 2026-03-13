@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Vitrine3D</title>
 
     <!-- Open Graph fallback tags (overridden by meta-server for bot requests when OG_ENABLED=true) -->
@@ -68,7 +68,7 @@
 
             <div class="rail-sep rail-library-sep" style="display:none"></div>
 
-            <!-- ── Authoring: Compose ─────────────────────── -->
+            <!-- ── Build: Compose the scene ──────────────── -->
 
             <!-- Assets — Load splats, meshes, point clouds -->
             <button class="tool-btn active" data-tool="assets" data-tooltip="Assets  A" title="Load and configure 3D assets">
@@ -102,7 +102,7 @@
 
             <div class="rail-sep"></div>
 
-            <!-- ── Authoring: Narrate ──────────────────────── -->
+            <!-- ── Narrate: Add context ────────────────────── -->
 
             <!-- Annotate — Place annotation markers -->
             <button class="tool-btn" data-tool="annotate" data-tooltip="Annotate  N" title="Place and edit annotation markers">
@@ -120,6 +120,14 @@
                     <circle cx="19" cy="8" r="2"/>
                     <path d="M7 6c2.5 0 3 6 5 12"/>
                     <path d="M14 18c2-6 2.5-10 5-10"/>
+                </svg>
+            </button>
+
+            <!-- Flight Path — Drone flight analysis -->
+            <button class="tool-btn" data-tool="flightpath" data-tooltip="Flight Path  P" id="btn-tool-flightpath" title="Flight path stats, playback, and management" style="display:none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 20 C6 16, 8 8, 12 6 S18 8, 21 4"/>
+                    <path d="M17 4h4v4"/>
                 </svg>
             </button>
 
@@ -141,10 +149,9 @@
                 </svg>
             </button>
 
-            <div class="rail-spacer"></div>
             <div class="rail-sep"></div>
 
-            <!-- ── Viewing Tools ───────────────────────────── -->
+            <!-- ── Inspect: Analysis tools ─────────────────── -->
 
             <!-- Measure — Measure distances on model -->
             <button class="tool-btn" data-tool="measure" data-tooltip="Measure  M" title="Measure distances between points">
@@ -168,16 +175,20 @@
 
             <div class="rail-sep"></div>
 
-            <!-- ── Utility ─────────────────────────────────── -->
+            <!-- ── Output ──────────────────────────────────── -->
 
             <!-- Export — Package as archive -->
-            <button class="tool-btn" data-tool="export" data-tooltip="Export  E" id="btn-export-archive" title="Export scene as .a3d/.a3z archive">
+            <button class="tool-btn" data-tool="export" data-tooltip="Export  E" id="btn-export-archive" title="Export scene as .ddim archive">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="7 10 12 15 17 10"/>
                     <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
             </button>
+
+            <div class="rail-spacer"></div>
+
+            <!-- ── Bottom: View + Links ────────────────────── -->
 
             <!-- Fullscreen -->
             <button class="tool-btn" data-tool="fullscreen" data-tooltip="Fullscreen  F11" id="btn-fullscreen" title="Toggle fullscreen mode">
@@ -242,17 +253,32 @@
                 </div>
             </div>
 
-            <!-- Viewport overlay: Display mode pill -->
-            <div class="vp-display-pill" id="vp-display-pill">
-                <button class="vp-pill-btn" id="btn-model" data-mode="model">Model</button>
-                <button class="vp-pill-btn" id="btn-splat" data-mode="splat">Splat</button>
-                <button class="vp-pill-btn" id="btn-pointcloud" data-mode="pointcloud">Cloud</button>
-                <button class="vp-pill-btn" id="btn-stl" data-mode="stl">STL</button>
-                <button class="vp-pill-btn active" id="btn-both" data-mode="both">M/S</button>
-                <button class="vp-pill-btn" id="btn-split" data-mode="split">Split</button>
+            <!-- Recording indicator -->
+            <div id="rec-indicator" style="display:none; position:absolute; top:12px; left:12px; z-index:100; align-items:center; gap:6px; background:rgba(0,0,0,0.6); padding:4px 10px; border-radius:4px;">
+                <span style="width:8px; height:8px; border-radius:50%; background:#e53935; animation:rec-pulse 1s infinite; display:inline-block;"></span>
+                <span style="font-size:11px; color:#fff; font-weight:600;">REC</span>
+                <span id="rec-timer" style="font-size:11px; color:#ccc; font-family:monospace;">0:00</span>
             </div>
 
-            <!-- Quality toggle moved to status bar -->
+            <!-- Viewport overlay: Display mode pill + quality toggle row -->
+            <div class="vp-display-row">
+                <div class="hidden" id="quality-toggle-container">
+                    <button id="btn-quality-sd" class="quality-toggle-btn" data-tier="sd">SD</button>
+                    <button id="btn-quality-hd" class="quality-toggle-btn active" data-tier="hd">HD</button>
+                </div>
+                <div class="vp-display-pill" id="vp-display-pill">
+                    <button class="vp-pill-btn" id="btn-model" data-mode="model">Model</button>
+                    <button class="vp-pill-btn" id="btn-splat" data-mode="splat">Splat</button>
+                    <button class="vp-pill-btn" id="btn-pointcloud" data-mode="pointcloud">Cloud</button>
+                    <button class="vp-pill-btn" id="btn-stl" data-mode="stl">STL</button>
+                    <button class="vp-pill-btn active" id="btn-both" data-mode="both">M/S</button>
+                    <button class="vp-pill-btn" id="btn-split" data-mode="split">Split</button>
+                </div>
+                <div class="vp-overlay-pill hidden" id="vp-overlay-pill">
+                    <button class="vp-pill-btn active" id="btn-overlay-sfm" style="display:none">SfM Cameras</button>
+                    <button class="vp-pill-btn active" id="btn-overlay-flightpath" style="display:none">Flight Paths</button>
+                </div>
+            </div>
 
             <!-- Viewport hints and indicators -->
             <div id="transform-hint" class="hidden">
@@ -277,6 +303,7 @@
             </div>
             <div id="proxy-mesh-indicator" class="hidden">
                 Viewing display proxy &middot; <a href="#" id="proxy-load-full-link">Load full resolution</a>
+                <button class="prop-btn mt4" id="btn-load-full-res" style="display:none;">Load Full Resolution</button>
             </div>
 
             <!-- Library overlay — replaces canvas when Library mode is active -->
@@ -310,20 +337,20 @@
                 <div class="library-upload" id="library-upload">
                     <div class="library-upload-content">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12V3"/><path d="M4 6l4-4 4 4"/><path d="M2 14h12"/></svg>
-                        <span>Drop .a3d or .a3z files here, or <button class="library-upload-browse" id="library-upload-browse">browse</button></span>
+                        <span>Drop .ddim files here, or <button class="library-upload-browse" id="library-upload-browse">browse</button></span>
                     </div>
                     <div class="library-upload-progress">
                         <span class="library-progress-name" id="library-progress-name"></span>
                         <div class="library-progress-track"><div class="library-progress-fill" id="library-progress-fill"></div></div>
                         <span class="library-progress-pct" id="library-progress-pct">0%</span>
                     </div>
-                    <input type="file" id="library-file-input" accept=".a3d,.a3z" multiple hidden>
+                    <input type="file" id="library-file-input" accept=".ddim,.a3d,.a3z" multiple hidden>
                 </div>
                 <div class="library-gallery" id="library-gallery"></div>
                 <div class="library-empty" id="library-empty" style="display:none">
                     <svg width="40" height="40" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1" opacity="0.2"><path d="M16 6l10 5.5v9L16 26 6 20.5v-9L16 6z"/><path d="M16 15.5V26"/><path d="M6 11.5L16 17l10-5.5"/></svg>
                     <p>No archives yet</p>
-                    <p class="library-empty-hint">Upload .a3d or .a3z files to build your library</p>
+                    <p class="library-empty-hint">Upload .ddim files to build your library</p>
                 </div>
                 <div class="library-auth" id="library-auth" style="display:none">
                     <p>Authentication required</p>
@@ -380,6 +407,7 @@
                             <div class="swatch" data-color="#4a4a4a" style="background:#4a4a4a;" title="Medium Gray"></div>
                             <div class="swatch" data-color="#808080" style="background:#808080;" title="Gray"></div>
                             <div class="swatch" data-color="#f0f0f0" style="background:#f0f0f0; border-color:#555;" title="Light Gray"></div>
+                            <div class="swatch" data-color="#11304e" style="background:#11304e;" title="Editorial Navy"></div>
                             <div class="swatch-custom" title="Custom color">
                                 <input type="color" id="bg-color-picker" value="#1a1a2e">
                                 <span>Custom</span>
@@ -541,6 +569,19 @@
                                 <button id="btn-set-max-height-current" class="prop-btn" style="font-size: 10px; padding: 2px 8px; white-space: nowrap;">Set to current</button>
                             </div>
                         </div>
+
+                        <div class="cb-row mt6">
+                            <input type="checkbox" id="meta-viewer-lock-max-distance">
+                            <label for="meta-viewer-lock-max-distance">Limit Camera Distance</label>
+                        </div>
+                        <span class="prop-hint">Cap how far the camera can zoom out from the target.</span>
+                        <div id="max-distance-controls" style="display: none; margin-top: 4px; padding-left: 24px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label for="meta-viewer-max-distance-value" style="white-space: nowrap; font-size: 12px;">Max Dist:</label>
+                                <input type="number" id="meta-viewer-max-distance-value" step="0.1" min="0.1" style="width: 80px; font-size: 12px;" placeholder="0.0">
+                                <button id="btn-set-max-distance-current" class="prop-btn" style="font-size: 10px; padding: 2px 8px; white-space: nowrap;">Set to current</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -562,6 +603,26 @@
                             <label for="meta-viewer-annotations-visible">Show Annotations</label>
                         </div>
                         <span class="prop-hint">Display annotation markers when the viewer opens.</span>
+                    </div>
+                </div>
+
+                <!-- Rendering Preset -->
+                <div class="prop-section archived">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Rendering Preset</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <select class="prop-select mb4" id="rendering-preset-select">
+                            <option value="">None (manual settings)</option>
+                            <option value="technical">Technical</option>
+                            <option value="studio">Studio</option>
+                            <option value="outdoor">Outdoor</option>
+                            <option value="dramatic">Dramatic</option>
+                            <option value="custom" disabled>Custom</option>
+                        </select>
+                        <span class="prop-hint">Applies HDR environment, tone mapping, lighting, and post-processing as a unified look. Individual settings below can override.</span>
                     </div>
                 </div>
 
@@ -653,15 +714,96 @@
                         <div id="meta-viewer-env-controls" class="mt6" style="display:none;">
                             <select class="prop-select mb4" id="meta-viewer-env-preset">
                                 <option value="">None</option>
-                                <option value="preset:0">Outdoor</option>
-                                <option value="preset:1">Studio</option>
-                                <option value="preset:2">Sunset</option>
+                                <option value="Studio">Studio</option>
+                                <option value="Outdoor">Outdoor</option>
+                                <option value="Studio (Dramatic)">Studio (Dramatic)</option>
+                                <option value="Dark Studio">Dark Studio</option>
+                                <option value="Sunset">Sunset</option>
                             </select>
                             <div class="cb-row mt4">
                                 <input type="checkbox" id="meta-viewer-env-as-background">
                                 <label for="meta-viewer-env-as-background">Show as Background</label>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- SfM Camera Defaults -->
+                <div class="prop-section archived" id="sfm-camera-section" style="display:none;">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">SfM Cameras</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="cb-row">
+                            <input type="checkbox" id="sfm-show-on-load">
+                            <label for="sfm-show-on-load">Show on Load</label>
+                        </div>
+
+                        <label class="prop-label mt6">Display Mode</label>
+                        <select class="prop-select mb4" id="sfm-display-mode">
+                            <option value="frustums">Frustums</option>
+                            <option value="markers">Markers</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Drone Flight -->
+                <div class="prop-section archived" id="drone-flight-section" style="display:none;">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Drone Flight</span>
+                        <span class="archive-tag">archived</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <label class="prop-label">Path Color</label>
+                        <select class="prop-select mb4" id="flight-color-mode">
+                            <option value="speed">Speed</option>
+                            <option value="altitude">Altitude</option>
+                            <option value="climbrate">Climb Rate</option>
+                        </select>
+                        <span class="prop-hint">Color the flight path by the selected metric.</span>
+
+                        <div class="cb-row mt6">
+                            <input type="checkbox" id="flight-show-endpoints" checked>
+                            <label for="flight-show-endpoints">Show Takeoff / Landing Markers</label>
+                        </div>
+
+                        <div class="cb-row">
+                            <input type="checkbox" id="flight-show-direction" checked>
+                            <label for="flight-show-direction">Show Direction Indicators</label>
+                        </div>
+
+                        <hr class="prop-divider mt6 mb6">
+
+                        <div class="cb-row">
+                            <input type="checkbox" id="flight-show-on-load">
+                            <label for="flight-show-on-load">Show on Load</label>
+                        </div>
+
+                        <label class="prop-label mt6">Line Color</label>
+                        <input type="color" class="prop-color-input" id="flight-line-color" value="#00ffff">
+
+                        <div class="sl-row mt6">
+                            <div class="sl-hd">
+                                <span class="sl-label">Line Opacity</span>
+                                <span class="sl-val" id="flight-line-opacity-value">100%</span>
+                            </div>
+                            <input type="range" id="flight-line-opacity" min="0" max="100" step="1" value="100">
+                        </div>
+
+                        <div class="cb-row mt6">
+                            <input type="checkbox" id="flight-show-markers" checked>
+                            <label for="flight-show-markers">Show Markers</label>
+                        </div>
+
+                        <label class="prop-label mt6">Marker Density</label>
+                        <select class="prop-select mb4" id="flight-marker-density">
+                            <option value="off">Off</option>
+                            <option value="sparse">Sparse (~200)</option>
+                            <option value="all" selected>All</option>
+                        </select>
                     </div>
                 </div>
 
@@ -905,9 +1047,11 @@
                     <div class="prop-section-body">
                         <select class="prop-select mb4" id="env-map-select">
                             <option value="">None</option>
-                            <option value="preset:0">Outdoor</option>
-                            <option value="preset:1">Studio</option>
-                            <option value="preset:2">Sunset</option>
+                            <option value="Studio">Studio</option>
+                            <option value="Outdoor">Outdoor</option>
+                            <option value="Studio (Dramatic)">Studio (Dramatic)</option>
+                            <option value="Dark Studio">Dark Studio</option>
+                            <option value="Sunset">Sunset</option>
                         </select>
                         <div class="prop-btn-row mb4">
                             <label for="hdr-file-input" class="prop-btn" style="font-size:10px; cursor:pointer; margin-bottom:0;">HDR File</label>
@@ -1013,6 +1157,28 @@
                     </div>
                 </div>
 
+                <!-- SfM Cameras -->
+                <div class="prop-section">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">SfM Cameras</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div id="colmap-info" style="display:none;">
+                            <span class="prop-hint">Cameras: <span id="colmap-camera-count">0</span></span>
+                            <div class="prop-btn-row mt4">
+                                <button class="prop-btn" id="btn-colmap-frustums">Frustums</button>
+                                <button class="prop-btn" id="btn-colmap-markers">Markers</button>
+                            </div>
+                            <div class="sl-row">
+                                <div class="sl-hd"><span class="sl-label">Scale</span><span class="sl-val" id="colmap-scale-value">1.0</span></div>
+                                <input type="range" id="colmap-scale" min="0.1" max="10" step="0.1" value="1">
+                            </div>
+                        </div>
+                        <span id="colmap-no-data" class="prop-hint">No SfM data loaded.</span>
+                    </div>
+                </div>
+
                 </div><!-- /vs-tab-editor -->
 
             </div>
@@ -1031,10 +1197,10 @@
                     </div>
                     <div class="prop-section-body">
                         <div class="prop-btn-row">
-                            <label for="archive-input" class="prop-btn accent" style="cursor:pointer; margin-bottom:0;">Open .a3d / .a3z</label>
-                            <button class="prop-btn" id="btn-load-archive-url" style="font-size:10px; color:var(--text-muted); margin-bottom:0;">From URL...</button>
+                            <label for="archive-input" class="prop-btn accent" style="cursor:pointer; margin-bottom:0;">Open .ddim</label>
+                            <button class="prop-btn" id="btn-load-archive-url" style="color:var(--text-muted); margin-bottom:0;">From URL...</button>
                         </div>
-                        <input type="file" id="archive-input" accept=".a3d,.a3z" style="display:none" />
+                        <input type="file" id="archive-input" accept=".ddim,.a3d,.a3z" style="display:none" />
                         <span id="archive-filename" class="prop-hint">Loads a complete scene with all assets and metadata</span>
                     </div>
                 </div>
@@ -1049,7 +1215,7 @@
                         <span class="prop-label">3D Model</span>
                         <div class="prop-btn-row">
                             <label for="model-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#6a8bce;">+</span> File</label>
-                            <button class="prop-btn" id="btn-load-model-url" style="margin-bottom:0;">From URL...</button>
+                            <button class="prop-btn danger" id="btn-remove-model" disabled>Remove</button>
                         </div>
                         <input type="file" id="model-input" accept=".glb,.gltf,.obj,.mtl,.png,.jpg,.jpeg,.tga,.bmp,.webp" multiple style="display:none" />
                         <span id="model-filename" class="prop-hint">.glb, .obj (+.mtl)</span>
@@ -1059,20 +1225,12 @@
                         <span class="prop-label mt4">Gaussian Splat</span>
                         <div class="prop-btn-row">
                             <label for="splat-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:var(--accent-text);">+</span> File</label>
-                            <button class="prop-btn" id="btn-load-splat-url" style="margin-bottom:0;">From URL...</button>
+                            <button class="prop-btn danger" id="btn-remove-splat" disabled>Remove</button>
                         </div>
                         <input type="file" id="splat-input" accept=".ply,.splat,.ksplat,.spz,.sog" style="display:none" />
                         <span id="splat-filename" class="prop-hint">.ply, .splat, .ksplat, .spz</span>
                         <div class="prop-row" id="splat-vertices-row" style="display:none"><span class="prop-row-label">Status</span><span class="font-mono" id="splat-vertices" style="font-size:10px; color:var(--text-secondary);">-</span></div>
 
-                        <span class="prop-label mt4">Point Cloud</span>
-                        <div class="prop-btn-row">
-                            <label for="pointcloud-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#c4863a;">+</span> File</label>
-                            <button class="prop-btn" id="btn-load-pointcloud-url" style="margin-bottom:0;">From URL...</button>
-                        </div>
-                        <input type="file" id="pointcloud-input" accept=".e57" style="display:none" />
-                        <span id="pointcloud-filename" class="prop-hint">.e57</span>
-                        <div class="prop-row" id="pointcloud-points-row" style="display:none"><span class="prop-row-label">Points</span><span class="font-mono" id="pointcloud-points" style="font-size:10px; color:var(--text-secondary);">-</span></div>
                     </div>
                 </div>
 
@@ -1083,10 +1241,19 @@
                         <span class="prop-section-chevron">&#9654;</span>
                     </div>
                     <div class="prop-section-body">
-                        <span class="prop-label">STL Model</span>
+                        <span class="prop-label">Point Cloud</span>
+                        <div class="prop-btn-row">
+                            <label for="pointcloud-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#c4863a;">+</span> File</label>
+                            <button class="prop-btn danger" id="btn-remove-pointcloud" disabled>Remove</button>
+                        </div>
+                        <input type="file" id="pointcloud-input" accept=".e57" style="display:none" />
+                        <span id="pointcloud-filename" class="prop-hint">.e57</span>
+                        <div class="prop-row" id="pointcloud-points-row" style="display:none"><span class="prop-row-label">Points</span><span class="font-mono" id="pointcloud-points" style="font-size:10px; color:var(--text-secondary);">-</span></div>
+
+                        <span class="prop-label mt4">STL Model</span>
                         <div class="prop-btn-row">
                             <label for="stl-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#9a7bce;">+</span> File</label>
-                            <button class="prop-btn" id="btn-load-stl-url" style="margin-bottom:0;">From URL...</button>
+                            <button class="prop-btn danger" id="btn-remove-stl" disabled>Remove</button>
                         </div>
                         <input type="file" id="stl-input" accept=".stl" style="display:none" />
                         <span id="stl-filename" class="prop-hint">.stl</span>
@@ -1094,7 +1261,7 @@
                         <span class="prop-label mt4">CAD Model</span>
                         <div class="prop-btn-row">
                             <label for="cad-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#4a9e6b;">+</span> File</label>
-                            <button class="prop-btn" id="btn-load-cad-url" style="margin-bottom:0;">From URL...</button>
+                            <button class="prop-btn danger" id="btn-remove-cad" disabled>Remove</button>
                         </div>
                         <input type="file" id="cad-input" accept=".step,.stp,.iges,.igs" style="display:none" />
                         <span id="cad-filename" class="prop-hint">.step, .iges</span>
@@ -1102,10 +1269,94 @@
                         <span class="prop-label mt4">CAD Drawing</span>
                         <div class="prop-btn-row">
                             <label for="drawing-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#7bce9a;">+</span> File</label>
-                            <button class="prop-btn" id="btn-load-drawing-url" style="margin-bottom:0;">From URL...</button>
+                            <button class="prop-btn danger" id="btn-remove-drawing" disabled>Remove</button>
                         </div>
                         <input type="file" id="drawing-input" accept=".dxf" style="display:none" />
                         <span id="drawing-filename" class="prop-hint">.dxf</span>
+
+                    </div>
+                </div>
+
+                <!-- Data Overlays — flight paths, SfM cameras -->
+                <div class="prop-section">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Data Overlays</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <span class="prop-label">Flight Path</span>
+                        <div class="prop-btn-row">
+                            <label for="flightpath-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#4FC3F7;">+</span> File</label>
+                            <button class="prop-btn danger" id="btn-remove-flightpath" disabled>Remove</button>
+                        </div>
+                        <input type="file" id="flightpath-input" accept=".csv,.kml,.kmz,.srt,.txt" style="display:none" />
+                        <span id="flightpath-filename" class="prop-hint">.csv, .kml, .kmz, .srt, .txt</span>
+
+                        <span class="prop-label mt4">SfM Cameras</span>
+                        <div class="prop-btn-row">
+                            <label for="colmap-cameras-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#CE93D8;">+</span> cameras.bin</label>
+                            <label for="colmap-images-input" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#CE93D8;">+</span> images.bin</label>
+                        </div>
+                        <label for="colmap-points3d-input" class="prop-btn" style="cursor:pointer; margin-top:4px;"><span style="color:#CE93D8;">+</span> points3D.bin</label>
+                        <input type="file" id="colmap-cameras-input" accept=".bin" style="display:none" />
+                        <input type="file" id="colmap-images-input" accept=".bin" style="display:none" />
+                        <input type="file" id="colmap-points3d-input" accept=".bin" style="display:none" />
+                        <div id="colmap-file-status" class="prop-hint" style="margin-top:4px;">
+                            <span id="colmap-status-cameras">&#9675; cameras.bin</span><br>
+                            <span id="colmap-status-images">&#9675; images.bin</span><br>
+                            <span id="colmap-status-points3d">&#9675; points3D.bin</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- HD Web Optimization -->
+                <div class="prop-section hidden" id="web-opt-section">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Web Optimization</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div class="prop-hint" id="web-opt-current-faces">
+                            Current faces: &mdash;
+                        </div>
+
+                        <label class="prop-label mt4">Target mode</label>
+                        <select class="prop-select" id="web-opt-mode">
+                            <option value="faces">Face count</option>
+                            <option value="ratio">Ratio</option>
+                        </select>
+
+                        <div id="web-opt-faces-row" class="mt4">
+                            <label class="prop-label">Target face count</label>
+                            <input type="number" class="prop-input" id="web-opt-target-faces"
+                                   min="1000" step="1000" value="1000000" />
+                        </div>
+                        <div id="web-opt-ratio-row" class="mt4" style="display:none">
+                            <label class="prop-label">Target ratio</label>
+                            <input type="number" class="prop-input" id="web-opt-target-ratio"
+                                   min="0.01" max="0.99" step="0.01" value="0.5" />
+                            <span class="prop-hint" id="web-opt-ratio-estimate"></span>
+                        </div>
+
+                        <label class="prop-label mt4">
+                            <input type="checkbox" id="web-opt-draco" checked />
+                            Draco compression
+                        </label>
+
+                        <div class="mt4" style="display: flex; gap: 4px;">
+                            <button class="prop-btn" id="btn-web-opt-generate">Optimize</button>
+                            <button class="prop-btn small danger hidden" id="btn-web-opt-revert">Revert</button>
+                        </div>
+
+                        <div id="web-opt-status" class="prop-hint mt4 hidden"></div>
+
+                        <!-- Progress bar -->
+                        <div id="web-opt-progress" class="hidden mt4">
+                            <div class="progress-bar">
+                                <div class="progress-bar-fill" id="web-opt-progress-fill"></div>
+                            </div>
+                            <span class="prop-hint" id="web-opt-progress-text">Preparing...</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1125,6 +1376,10 @@
                             <option value="high">High</option>
                             <option value="custom">Custom</option>
                         </select>
+
+                        <label class="prop-label">
+                            <input type="checkbox" id="decimation-draco" checked /> Draco compress
+                        </label>
 
                         <!-- Face count display -->
                         <div id="decimation-face-counts" class="prop-hint mt4">
@@ -1211,12 +1466,20 @@
                         </div>
                         <div class="prop-subsection-body hidden" id="decimation-manual-body">
                             <label for="proxy-mesh-input" class="prop-btn" style="font-size:10px; cursor:pointer;">Mesh Proxy (.glb, .obj)</label>
-                            <input type="file" id="proxy-mesh-input" accept=".glb,.gltf,.obj" style="display:none" />
+                            <input type="file" id="proxy-mesh-input" accept=".glb,.gltf,.obj,.mtl,.png,.jpg,.jpeg,.tga,.bmp,.webp" multiple style="display:none" />
                             <span id="proxy-mesh-filename" class="prop-hint">No proxy loaded</span>
 
                             <label for="proxy-splat-input" class="prop-btn mt4" style="font-size:10px; cursor:pointer;">Splat Proxy (.ply, .spz)</label>
                             <input type="file" id="proxy-splat-input" accept=".ply,.spz,.ksplat,.sog,.splat" style="display:none" />
                             <span id="proxy-splat-filename" class="prop-hint">No proxy loaded</span>
+                        </div>
+
+                        <div class="mt4" style="padding: 4px 0;">
+                            <label style="font-size: 10px; display: flex; align-items: flex-start; gap: 4px; cursor: pointer;">
+                                <input type="checkbox" id="chk-splat-lod" checked style="margin-top: 2px;" />
+                                <span>Generate Splat LOD at archive export</span>
+                            </label>
+                            <span class="prop-hint" style="font-size: 9px; margin-left: 18px; display: block;">Requires .spz or .ply input. .sog files use runtime LOD instead.</span>
                         </div>
                     </div>
                 </div>
@@ -1269,11 +1532,13 @@
                         <div class="seg-ctrl" id="object-select-group" style="flex-wrap: wrap;">
                             <button class="seg-btn active" id="btn-select-none">None</button>
                             <button class="seg-btn" id="btn-select-splat" style="display:none;">Splat</button>
-                            <button class="seg-btn" id="btn-select-model" style="display:none;">Model</button>
+                            <button class="seg-btn" id="btn-select-mesh" style="display:none;">Mesh</button>
                             <button class="seg-btn" id="btn-select-pointcloud" style="display:none;">Point Cloud</button>
                             <button class="seg-btn" id="btn-select-stl" style="display:none;">STL</button>
                             <button class="seg-btn" id="btn-select-cad" style="display:none;">CAD</button>
                             <button class="seg-btn" id="btn-select-drawing" style="display:none;">Drawing</button>
+                            <button class="seg-btn" id="btn-select-flightpath" style="display:none;">Flight Path</button>
+                            <button class="seg-btn" id="btn-select-colmap" style="display:none;">SfM Cameras</button>
                             <button class="seg-btn" id="btn-select-both" style="display:none;">All</button>
                         </div>
                         <span id="transform-object-label" class="prop-hint mt4" style="display:block; font-style:italic;">No object selected</span>
@@ -1340,25 +1605,25 @@
                                 <div class="xyz-block">
                                     <span class="prop-label">Position</span>
                                     <div class="xyz-inputs">
-                                        <div class="xyz-field"><span class="xyz-axis-label x">X</span><input class="xyz-input" type="number" id="transform-pos-x" value="0" step="0.1"></div>
-                                        <div class="xyz-field"><span class="xyz-axis-label y">Y</span><input class="xyz-input" type="number" id="transform-pos-y" value="0" step="0.1"></div>
-                                        <div class="xyz-field"><span class="xyz-axis-label z">Z</span><input class="xyz-input" type="number" id="transform-pos-z" value="0" step="0.1"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label x">X</span><input class="xyz-input" type="number" id="transform-pos-x" value="0" step="0.001"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label y">Y</span><input class="xyz-input" type="number" id="transform-pos-y" value="0" step="0.001"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label z">Z</span><input class="xyz-input" type="number" id="transform-pos-z" value="0" step="0.001"></div>
                                     </div>
                                 </div>
                                 <div class="xyz-block">
                                     <span class="prop-label">Rotation (deg)</span>
                                     <div class="xyz-inputs">
-                                        <div class="xyz-field"><span class="xyz-axis-label x">X</span><input class="xyz-input" type="number" id="transform-rot-x" value="0" step="1"></div>
-                                        <div class="xyz-field"><span class="xyz-axis-label y">Y</span><input class="xyz-input" type="number" id="transform-rot-y" value="0" step="1"></div>
-                                        <div class="xyz-field"><span class="xyz-axis-label z">Z</span><input class="xyz-input" type="number" id="transform-rot-z" value="0" step="1"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label x">X</span><input class="xyz-input" type="number" id="transform-rot-x" value="0" step="0.1"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label y">Y</span><input class="xyz-input" type="number" id="transform-rot-y" value="0" step="0.1"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label z">Z</span><input class="xyz-input" type="number" id="transform-rot-z" value="0" step="0.1"></div>
                                     </div>
                                 </div>
                                 <div class="xyz-block">
                                     <span class="prop-label">Scale</span>
                                     <div class="xyz-inputs">
-                                        <div class="xyz-field"><span class="xyz-axis-label x">X</span><input class="xyz-input" type="number" id="transform-scale-x" value="1" step="0.01" min="0.01"></div>
-                                        <div class="xyz-field"><span class="xyz-axis-label y">Y</span><input class="xyz-input" type="number" id="transform-scale-y" value="1" step="0.01" min="0.01"></div>
-                                        <div class="xyz-field"><span class="xyz-axis-label z">Z</span><input class="xyz-input" type="number" id="transform-scale-z" value="1" step="0.01" min="0.01"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label x">X</span><input class="xyz-input" type="number" id="transform-scale-x" value="1" step="0.001" min="0.01"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label y">Y</span><input class="xyz-input" type="number" id="transform-scale-y" value="1" step="0.001" min="0.01"></div>
+                                        <div class="xyz-field"><span class="xyz-axis-label z">Z</span><input class="xyz-input" type="number" id="transform-scale-z" value="1" step="0.001" min="0.01"></div>
                                     </div>
                                 </div>
                             </div>
@@ -1381,6 +1646,8 @@
                         <button class="prop-btn accent" id="btn-align">Align Objects</button>
                         <button class="prop-btn mt4" id="btn-center-at-origin">Center at Origin</button>
                         <button class="prop-btn mt4" id="btn-reset-alignment">Reset All Transforms</button>
+                        <button class="prop-btn mt4" id="btn-align-from-camera-data" disabled title="Load camera data (cameras.bin, images.bin, points3D.bin) to enable">Align from Camera Data</button>
+                        <span id="icp-align-result" class="prop-hint mt4" style="display:none;"></span>
                     </div>
                 </div>
 
@@ -1402,6 +1669,7 @@
                             Click a point on the 3D model to place a new annotation marker.
                         </p>
                         <button class="prop-btn accent" id="btn-annotate">+ Place Annotation</button>
+                        <button class="prop-btn accent mt4" id="btn-sidebar-add-annotation" style="display:none;">+ Add Annotation</button>
                         <button class="prop-btn mt4" id="btn-toggle-annotations" style="display:none;">Toggle Annotations</button>
                     </div>
                 </div>
@@ -1534,6 +1802,100 @@
 
 
             <!-- ========================================================
+                 FLIGHT PATH PANE
+                 ======================================================== -->
+            <div class="props-pane" id="pane-flightpath">
+
+                <!-- Flight Stats -->
+                <div class="prop-section open">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Flight Stats</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div id="flight-stats-empty" class="prop-hint">No flight paths loaded.</div>
+                        <div id="flight-stats-content" style="display:none;">
+                            <div class="prop-row"><span class="prop-row-label">Duration</span><span class="font-mono" id="fp-stat-duration" style="font-size:10px; color:var(--text-secondary);">—</span></div>
+                            <div class="prop-row"><span class="prop-row-label">Distance</span><span class="font-mono" id="fp-stat-distance" style="font-size:10px; color:var(--text-secondary);">—</span></div>
+                            <div class="prop-row"><span class="prop-row-label">Max Altitude</span><span class="font-mono" id="fp-stat-max-alt" style="font-size:10px; color:var(--text-secondary);">—</span></div>
+                            <div class="prop-row"><span class="prop-row-label">Max Speed</span><span class="font-mono" id="fp-stat-max-speed" style="font-size:10px; color:var(--text-secondary);">—</span></div>
+                            <div class="prop-row"><span class="prop-row-label">Avg Speed</span><span class="font-mono" id="fp-stat-avg-speed" style="font-size:10px; color:var(--text-secondary);">—</span></div>
+                            <div class="prop-row"><span class="prop-row-label">Points</span><span class="font-mono" id="fp-stat-points" style="font-size:10px; color:var(--text-secondary);">—</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Path List -->
+                <div class="prop-section open">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Paths</span>
+                        <span id="fp-path-count" style="font-size:10px; color:var(--text-muted); margin-left:auto; margin-right:6px;"></span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div id="fp-path-list"></div>
+                        <div class="prop-btn-row mt6">
+                            <label for="flightpath-input-pane" class="prop-btn" style="cursor:pointer; margin-bottom:0;"><span style="color:#4FC3F7;">+</span> Import</label>
+                        </div>
+                        <input type="file" id="flightpath-input-pane" accept=".csv,.kml,.kmz,.srt,.txt" style="display:none" />
+                    </div>
+                </div>
+
+                <!-- Playback -->
+                <div class="prop-section open">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Playback</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <button class="prop-btn small" id="fp-play-btn" title="Play / Pause">&#9654;</button>
+                            <button class="prop-btn small" id="fp-stop-btn" title="Stop">&#9632;</button>
+                            <select class="prop-select" id="fp-speed" style="flex:1; min-width:0;">
+                                <option value="0.5">0.5x</option>
+                                <option value="1" selected>1x</option>
+                                <option value="2">2x</option>
+                                <option value="5">5x</option>
+                                <option value="10">10x</option>
+                            </select>
+                        </div>
+                        <div style="margin-top:8px;">
+                            <input type="range" id="fp-scrubber" min="0" max="1000" value="0" style="width:100%;">
+                            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted);">
+                                <span id="fp-time-current">00:00</span>
+                                <span id="fp-time-total">00:00</span>
+                            </div>
+                        </div>
+                        <!-- Camera Mode -->
+                        <div class="prop-label mt8 mb4">Camera</div>
+                        <div class="seg-ctrl mb4">
+                            <button class="seg-btn active" id="fp-cam-orbit">Orbit</button>
+                            <button class="seg-btn" id="fp-cam-chase">Chase</button>
+                            <button class="seg-btn" id="fp-cam-fpv">FPV</button>
+                        </div>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <button class="prop-btn small" id="fp-recenter-btn" style="display:none;" title="Re-center view">Re-center</button>
+                            <div class="cb-row" id="fp-pip-row" style="display:none;">
+                                <input type="checkbox" id="fp-pip-toggle">
+                                <label for="fp-pip-toggle">PiP</label>
+                            </div>
+                        </div>
+
+                        <!-- Telemetry Readout -->
+                        <div id="fp-telemetry" style="display:none; margin-top:8px; font-size:10px; color:var(--text-secondary);">
+                            <div style="display:flex; gap:12px;">
+                                <span>Alt: <span class="font-mono" id="fp-telem-alt">—</span></span>
+                                <span>Spd: <span class="font-mono" id="fp-telem-speed">—</span></span>
+                                <span>Hdg: <span class="font-mono" id="fp-telem-heading">—</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+
+            <!-- ========================================================
                  CROSS-SECTION PANE
                  ======================================================== -->
             <div class="props-pane" id="pane-crosssection">
@@ -1653,7 +2015,8 @@
                         <span class="prop-section-chevron">&#9654;</span>
                     </div>
                     <div class="prop-section-body">
-                        <button class="prop-btn accent" id="btn-capture-screenshot">Capture Screenshot</button>
+                        <button class="prop-btn accent" id="btn-download-screenshot">Download Screenshot</button>
+                        <button class="prop-btn mt4" id="btn-capture-screenshot">Capture Screenshot for Archive</button>
                         <button class="prop-btn mt4" id="btn-set-preview">Set Archive Preview Image</button>
                         <p class="prop-hint mt4">A preview is captured automatically during export. Taking a manual preview overrides that.</p>
                         <div id="manual-preview-status" style="display:none; margin-top:6px;">
@@ -1661,6 +2024,79 @@
                             <button id="btn-clear-manual-preview" style="font-size:9px; margin-left:6px; background:none; border:none; color:var(--danger); cursor:pointer;">Clear</button>
                         </div>
                         <div id="screenshots-list" class="mt4"></div>
+                    </div>
+                </div>
+
+                <!-- Recording -->
+                <div class="prop-section open">
+                    <div class="prop-section-hd">
+                        <span class="prop-section-title">Recording</span>
+                        <span class="prop-section-chevron">&#9654;</span>
+                    </div>
+                    <div class="prop-section-body">
+                        <!-- Mode selector -->
+                        <div id="rec-mode-selector" style="display:flex; gap:4px; margin-bottom:8px;">
+                            <button class="prop-btn rec-mode-btn active" data-rec-mode="turntable" title="Turntable (360° rotation)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M3.6 9h16.8M3.6 15h16.8"/></svg>
+                                <span style="font-size:9px;">Turntable</span>
+                            </button>
+                            <button class="prop-btn rec-mode-btn" data-rec-mode="walkthrough" title="Replay walkthrough">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 3l14 9-14 9V3z"/></svg>
+                                <span style="font-size:9px;">Walkthrough</span>
+                            </button>
+                            <button class="prop-btn rec-mode-btn" data-rec-mode="annotation-tour" title="Annotation tour">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                                <span style="font-size:9px;">Tour</span>
+                            </button>
+                            <button class="prop-btn rec-mode-btn" data-rec-mode="free" title="Free camera recording">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+                                <span style="font-size:9px;">Free</span>
+                            </button>
+                        </div>
+
+                        <!-- Mode options (shown/hidden per mode) -->
+                        <div id="rec-options-turntable" class="rec-options">
+                            <label class="prop-label" style="font-size:10px;">Speed</label>
+                            <input type="range" id="rec-turntable-speed" min="1" max="5" value="2" style="width:100%;">
+                            <label style="font-size:10px; display:flex; align-items:center; gap:4px; margin-top:4px;">
+                                <input type="checkbox" id="rec-turntable-full360" checked> Full 360&deg;
+                            </label>
+                        </div>
+                        <div id="rec-options-walkthrough" class="rec-options hidden">
+                            <p class="prop-hint">Plays the current walkthrough sequence while recording.</p>
+                        </div>
+                        <div id="rec-options-annotation-tour" class="rec-options hidden">
+                            <label class="prop-label" style="font-size:10px;">Dwell per annotation</label>
+                            <input type="range" id="rec-tour-dwell" min="1" max="8" value="3" style="width:100%;">
+                            <span id="rec-tour-dwell-label" style="font-size:10px; color:#999;">3s</span>
+                        </div>
+                        <div id="rec-options-free" class="rec-options hidden">
+                            <p class="prop-hint">Move the camera freely. Click stop when done.</p>
+                        </div>
+
+                        <!-- Record / Stop button -->
+                        <div style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+                            <button class="prop-btn accent" id="btn-rec-start" style="display:flex; align-items:center; gap:6px;">
+                                <span style="width:10px; height:10px; border-radius:50%; background:#e53935; display:inline-block;"></span>
+                                Record
+                            </button>
+                            <button class="prop-btn" id="btn-rec-stop" style="display:none; align-items:center; gap:6px;">
+                                <span style="width:10px; height:10px; background:#e53935; display:inline-block;"></span>
+                                Stop
+                            </button>
+                            <span id="rec-elapsed" style="font-size:10px; color:#999; font-family:monospace;"></span>
+                        </div>
+
+                        <!-- Trim UI container (populated by recording-trim.ts) -->
+                        <div id="rec-trim-container" class="hidden" style="margin-top:8px;"></div>
+
+                        <!-- Upload status -->
+                        <div id="rec-upload-status" class="hidden" style="margin-top:8px;">
+                            <span id="rec-upload-text" style="font-size:10px; color:var(--accent);"></span>
+                        </div>
+
+                        <!-- Recording result preview (shown when transcode completes) -->
+                        <div id="rec-result-preview" class="hidden" style="margin-top:8px;"></div>
                     </div>
                 </div>
 
@@ -1682,12 +2118,12 @@
                     </div>
                     <!-- Main mode tabs -->
                     <div class="sidebar-mode-tabs">
-                        <button class="sidebar-mode-tab active" data-mode="view">View</button>
-                        <button class="sidebar-mode-tab" data-mode="edit">Edit</button>
+                        <button class="sidebar-mode-tab" data-mode="view">View</button>
+                        <button class="sidebar-mode-tab active" data-mode="edit">Edit</button>
                     </div>
 
                     <!-- View Mode Content -->
-                    <div class="sidebar-mode-content active" id="sidebar-view">
+                    <div class="sidebar-mode-content" id="sidebar-view">
                         <div class="display-content">
                             <h1 class="display-title" id="display-title">Untitled</h1>
                             <p class="display-description" id="display-description"></p>
@@ -1742,7 +2178,7 @@
 
                     <!-- KIOSK-STRIP-START: metadata edit tab -->
                     <!-- Edit Mode Content -->
-                    <div class="sidebar-mode-content" id="sidebar-edit">
+                    <div class="sidebar-mode-content active" id="sidebar-edit">
                         <div class="metadata-profile-bar">
                             <div class="metadata-profile-selector" id="metadata-profile-selector">
                                 <button class="profile-btn" data-profile="basic">Basic</button>
@@ -2393,12 +2829,12 @@
                         </div>
                         <div class="prop-section-body">
                             <div class="radio-row">
-                                <input type="radio" name="export-format" value="a3d" id="fmt-a3d" checked>
-                                <label for="fmt-a3d">.a3d (Standard)</label>
+                                <input type="radio" name="export-format" value="ddim" id="fmt-ddim" checked>
+                                <label for="fmt-ddim">.ddim (Direct Dimensions Archive)</label>
                             </div>
                             <div class="radio-row">
-                                <input type="radio" name="export-format" value="a3z" id="fmt-a3z">
-                                <label for="fmt-a3z">.a3z (Compressed)</label>
+                                <input type="radio" name="export-format" value="zip" id="fmt-zip">
+                                <label for="fmt-zip">.zip (Standard ZIP)</label>
                             </div>
                         </div>
                     </div>
@@ -2416,11 +2852,17 @@
                             <div class="cb-row">
                                 <input type="checkbox" id="archive-include-model" checked disabled><label for="archive-include-model">3D Model</label>
                             </div>
+                            <div class="cb-row cb-subrow" id="export-draco-hd-row" style="display:none;">
+                                <input type="checkbox" id="export-draco-hd" checked><label for="export-draco-hd">Draco compress</label>
+                            </div>
                             <div class="cb-row">
                                 <input type="checkbox" id="archive-include-pointcloud" checked disabled><label for="archive-include-pointcloud">Point Cloud</label>
                             </div>
                             <div class="cb-row">
                                 <input type="checkbox" id="archive-include-annotations" checked disabled><label for="archive-include-annotations">Annotations</label>
+                            </div>
+                            <div class="cb-row">
+                                <input type="checkbox" id="chk-export-camera-data"><label for="chk-export-camera-data">Camera Data</label>
                             </div>
                         </div>
                     </div>
@@ -2434,24 +2876,10 @@
                         <div class="prop-section-body">
                             <button class="prop-btn accent" id="btn-export-download" style="margin-bottom:6px;">Download Archive</button>
                             <button class="prop-btn" id="btn-save-to-library" style="display:none; margin-bottom:6px;">Save to Library</button>
-                            <!-- DEPRECATED: downloadable offline viewer — do not re-enable -->
-                            <button class="prop-btn" id="btn-download-viewer" style="display:none">Download Offline Viewer</button>
                             <button class="prop-btn mt4" id="btn-export-cancel" style="display:none;">Cancel Export</button>
                         </div>
                     </div>
 
-                    <!-- Share -->
-                    <div class="prop-section open">
-                        <div class="prop-section-hd">
-                            <span class="prop-section-title">Share</span>
-                            <span class="prop-section-chevron">&#9654;</span>
-                        </div>
-                        <div class="prop-section-body">
-                            <button class="prop-btn" id="btn-share">Copy Share Link</button>
-                            <p class="prop-hint mt4">Only works for files loaded via URL.</p>
-                            <button class="prop-btn mt4" id="btn-preview-kiosk">Preview Kiosk Mode</button>
-                        </div>
-                    </div>
 
                     <!-- Archive Info -->
                     <div class="prop-section" id="archive-metadata-section" style="display:none;">
@@ -2521,18 +2949,34 @@
                             <span class="prop-section-chevron">&#9654;</span>
                         </div>
                         <div class="prop-section-body">
-                            <button class="prop-btn accent" id="library-action-open" style="width:100%; margin-bottom:4px;">Open in Editor</button>
-                            <button class="prop-btn" id="library-action-view" style="width:100%; margin-bottom:4px;">Open in New Tab</button>
                             <div style="display:flex; gap:4px;">
+                                <button class="prop-btn accent" id="library-action-open" style="flex:1; width:auto; margin-bottom:0;">Open in Editor</button>
+                                <button class="prop-btn" id="library-action-view" style="flex:1; width:auto; margin-bottom:0;">Open in Kiosk View</button>
+                            </div>
+                            <div style="display:flex; gap:4px; margin-top:4px;">
                                 <button class="prop-btn" id="library-action-share" style="flex:1; width:auto; margin-bottom:0;">Share</button>
-                                <button class="prop-btn" id="library-action-copy" style="flex:1; width:auto; margin-bottom:0;">Copy URL</button>
+                                <button class="prop-btn" id="library-action-download" style="flex:1; width:auto; margin-bottom:0;">Download Archive</button>
                             </div>
                             <div style="display:flex; gap:4px; margin-top:4px;">
                                 <button class="prop-btn" id="library-action-rename" style="flex:1; width:auto; margin-bottom:0;">Rename</button>
                                 <button class="prop-btn danger" id="library-action-delete" style="flex:1; width:auto; margin-bottom:0;">Delete</button>
                             </div>
-                            <button class="prop-btn" id="library-action-regenerate" style="width:100%; margin-top:4px;">Regenerate Metadata</button>
+                            <button class="prop-btn" id="library-action-regenerate" style="width:100%; margin-top:4px;">Regenerate Metadata &amp; Preview (Debug)</button>
                         </div>
+                    </div>
+                    <div class="prop-section open" id="library-recordings-section" style="display:none">
+                        <div class="prop-section-hd">
+                            <span class="prop-section-title">Recordings</span>
+                            <span class="prop-section-chevron">&#9654;</span>
+                        </div>
+                        <div class="prop-section-body" id="library-detail-recordings"></div>
+                    </div>
+                    <div class="prop-section" id="library-versions-section" style="display:none">
+                        <div class="prop-section-hd">
+                            <span class="prop-section-title">Version History</span>
+                            <span class="prop-section-chevron">&#9654;</span>
+                        </div>
+                        <div class="prop-section-body" id="library-detail-versions"></div>
                     </div>
                     <div class="prop-section open" id="library-assets-section" style="display:none">
                         <div class="prop-section-hd">
@@ -2579,10 +3023,6 @@
                 </div>
             </div>
             <div class="status-right">
-                <div class="status-item hidden" id="quality-toggle-container">
-                    <button id="btn-quality-sd" class="quality-toggle-btn" data-tier="sd">SD</button>
-                    <button id="btn-quality-hd" class="quality-toggle-btn active" data-tier="hd">HD</button>
-                </div>
                 <div class="status-item" id="status-filename">
                 </div>
             </div>
@@ -2721,6 +3161,16 @@
                 </div>
             </div>
         </div>
+
+    <!-- PiP FPV overlay label -->
+    <div id="fp-pip-overlay" style="display:none; position:fixed; bottom:16px; right:16px; pointer-events:none; z-index:10;">
+        <div style="border:2px solid rgba(255,255,255,0.3); border-radius:4px; overflow:hidden;">
+            <div style="background:rgba(0,0,0,0.6); color:white; font-size:10px; padding:2px 6px; text-align:center;">FPV</div>
+        </div>
+    </div>
+
+    <!-- Flight path telemetry tooltip -->
+    <div id="flight-tooltip" style="display:none; position:fixed; pointer-events:none; background:rgba(0,0,0,0.85); color:#fff; padding:6px 10px; border-radius:4px; font-size:11px; line-height:1.5; z-index:10000; font-family:monospace;"></div>
 
     <script src="../pre-module.js"></script>
     <script type="module" src="../main.ts"></script>

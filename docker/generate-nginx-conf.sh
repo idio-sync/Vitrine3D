@@ -12,7 +12,7 @@ export DEFAULT_KIOSK_THEME="${DEFAULT_KIOSK_THEME:-editorial}"
 export APP_TITLE="${APP_TITLE:-Vitrine3D}"
 
 # Substitute environment variables in the config template
-envsubst '${DEFAULT_ARCHIVE_URL} ${DEFAULT_SPLAT_URL} ${DEFAULT_MODEL_URL} ${DEFAULT_POINTCLOUD_URL} ${ALLOWED_DOMAINS} ${KIOSK_LOCK} ${ARCHIVE_PATH_PREFIX} ${LOD_BUDGET_SD} ${LOD_BUDGET_HD} ${ADMIN_ENABLED} ${CHUNKED_UPLOAD} ${DEFAULT_KIOSK_THEME} ${APP_TITLE}' \
+envsubst '${DEFAULT_ARCHIVE_URL} ${DEFAULT_SPLAT_URL} ${DEFAULT_MODEL_URL} ${DEFAULT_POINTCLOUD_URL} ${ALLOWED_DOMAINS} ${KIOSK_LOCK} ${ARCHIVE_PATH_PREFIX} ${LOD_BUDGET_SD} ${LOD_BUDGET_HD} ${ADMIN_ENABLED} ${CHUNKED_UPLOAD} ${DEFAULT_KIOSK_THEME} ${APP_TITLE} ${SPARK_VERSION} ${DJI_API_KEY}' \
     < /usr/share/nginx/html/config.js.template \
     > /usr/share/nginx/html/config.js
 
@@ -233,12 +233,27 @@ location ~ "^/view/[a-f0-9]{16}$" {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
 }
+
+# Share pages for media recordings: /share/{16-hex-id}
+location ~ "^/share/[a-f0-9]{16}$" {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
 VIEWEOF
 
     # Collection pages: /collection/{slug} — proxy to meta-server for HTML injection
     cat >> /etc/nginx/conf.d/view-proxy.conf.inc <<'COLLEOF'
 # Collection pages: /collection/{slug}
 location ~ "^/collection/[a-z0-9][a-z0-9-]{0,79}$" {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+# Collection data API (public, bypasses /api/ CF Access gate)
+location ~ "^/collection/[a-z0-9][a-z0-9-]{0,79}/data$" {
     proxy_pass http://127.0.0.1:3001;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;

@@ -153,7 +153,7 @@ interface SavedTransform {
 /** SplatMesh interface (minimal, for Spark.js internals) */
 interface SplatMesh extends Object3D {
     packedSplats?: {
-        splatCount?: number;
+        numSplats?: number;
         forEachSplat?: (callback: (index: number, center: Point3D) => void) => void;
     };
 }
@@ -278,7 +278,7 @@ function computeSplatBoundsFromPositions(splatMeshObj: Object3D): SplatBounds {
     const splatMesh = splatMeshObj as SplatMesh;
     if (splatMesh.packedSplats && typeof splatMesh.packedSplats.forEachSplat === 'function') {
         let count = 0;
-        const splatCount = splatMesh.packedSplats.splatCount || 0;
+        const splatCount = splatMesh.packedSplats.numSplats || 0;
 
         if (splatCount > 0) {
             const maxSamples = 10000;
@@ -674,7 +674,7 @@ export class LandmarkAlignment {
         if (this._rmseEl) this._rmseEl.classList.add('hidden');
 
         // Remove listeners
-        this.renderer.domElement.removeEventListener('click', this._onClickBound);
+        this.renderer.domElement.removeEventListener('click', this._onClickBound, { capture: true });
         document.removeEventListener('keydown', this._onKeyDownBound);
         this.renderer.domElement.style.cursor = 'default';
 
@@ -830,7 +830,7 @@ export class LandmarkAlignment {
      * Manual raycasting for splat meshes (Spark.js doesn't implement Three.js raycast)
      * Samples splat points and finds the closest one to the ray.
      */
-    private _raycastSplatMesh(splatMeshObj: Object3D): { point: Vector3; distance: number } | null {
+    private _raycastSplatMesh(splatMeshObj: Object3D): { point: Vector3; distance: number; object: Object3D } | null {
         const splatMesh = splatMeshObj as SplatMesh;
         if (!splatMesh.packedSplats || typeof splatMesh.packedSplats.forEachSplat !== 'function') {
             log.warn('[_raycastSplatMesh] No packedSplats or forEachSplat method');
@@ -844,7 +844,7 @@ export class LandmarkAlignment {
         let closestPoint: Vector3 | null = null;
         let closestDistance = Infinity;
 
-        const splatCount = (splatMesh.packedSplats as any).splatCount || 0;
+        const splatCount = (splatMesh.packedSplats as any).numSplats || 0;
         if (splatCount === 0) {
             log.warn('[_raycastSplatMesh] splatCount is 0');
             return null;
@@ -882,7 +882,8 @@ export class LandmarkAlignment {
             log.info(`[_raycastSplatMesh] Hit! Point: [${closestPoint.x.toFixed(3)}, ${closestPoint.y.toFixed(3)}, ${closestPoint.z.toFixed(3)}]`);
             return {
                 point: closestPoint,
-                distance: ray.origin.distanceTo(closestPoint)
+                distance: ray.origin.distanceTo(closestPoint),
+                object: splatMeshObj
             };
         }
 

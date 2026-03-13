@@ -123,6 +123,7 @@ export interface ViewerSettings {
     lockDistance?: number | null;
     lockAboveGround?: boolean;
     maxCameraHeight?: number | null;
+    maxCameraDistance?: number | null;
     ambientIntensity?: number | null;
     hemisphereIntensity?: number | null;
     directional1Intensity?: number | null;
@@ -133,9 +134,21 @@ export interface ViewerSettings {
     toneMappingExposure?: number | null;
     environmentPreset?: string | null;
     environmentAsBackground?: boolean | null;
+    renderingPreset?: string | null;
     measurementScale?: number | null;
     measurementUnit?: string | null;
     postProcessing?: PostProcessingEffectConfig | null;
+    flightColorMode?: string;
+    flightShowEndpoints?: boolean;
+    flightShowDirection?: boolean;
+    // View defaults (overlay visibility on load)
+    sfmVisible?: boolean;
+    sfmDisplayMode?: string;
+    flightVisible?: boolean;
+    flightLineColor?: string;
+    flightLineOpacity?: number;
+    flightShowMarkers?: boolean;
+    flightMarkerDensity?: string;
 }
 
 export interface MaterialStandard {
@@ -179,6 +192,15 @@ export interface DataEntry {
     source_category?: string;
     size_bytes?: number;
     _parameters?: DataEntryParameters;
+    decimation?: {
+        preset?: string;
+        targetRatio?: number;
+        errorThreshold?: number;
+        textureMaxRes?: number;
+        textureFormat?: string;
+        resultFaces?: number;
+        [key: string]: any;
+    };
 }
 
 export interface IntegrityData {
@@ -297,6 +319,7 @@ export interface Manifest {
         lock_distance: number | null;
         lock_above_ground: boolean;
         max_camera_height: number | null;
+        max_camera_distance: number | null;
         ambient_intensity: number | null;
         hemisphere_intensity: number | null;
         directional1_intensity: number | null;
@@ -307,6 +330,7 @@ export interface Manifest {
         tone_mapping_exposure: number | null;
         environment_preset: string | null;
         environment_as_background: boolean | null;
+        rendering_preset: string | null;
         measurement_scale: number | null;
         measurement_unit: string | null;
         post_processing: PostProcessingEffectConfig | null;
@@ -437,7 +461,7 @@ export interface MetadataSummary {
 }
 
 export interface CreateArchiveOptions {
-    format?: 'a3d' | 'a3z';
+    format?: 'ddim' | 'zip';
     includeHashes?: boolean;
 }
 
@@ -459,6 +483,14 @@ export interface CaptureScreenshotOptions {
 
 // ===== Hash Calculation Functions =====
 
+/** Convert an ArrayBuffer hash digest to a hex string. */
+function hexFromBuffer(buffer: ArrayBuffer): string {
+    const arr = new Uint8Array(buffer);
+    let hex = '';
+    for (let i = 0; i < arr.length; i++) hex += HEX_TABLE[arr[i]];
+    return hex;
+}
+
 async function calculateSHA256(data: Blob | ArrayBuffer, onProgress: ((progress: number) => void) | null = null): Promise<string | null> {
     if (!CRYPTO_AVAILABLE) {
         log.warn('✗ crypto.subtle not available (requires HTTPS). Skipping hash.');
@@ -467,9 +499,8 @@ async function calculateSHA256(data: Blob | ArrayBuffer, onProgress: ((progress:
 
     let buffer: ArrayBuffer;
     if (data instanceof Blob) {
-        // For large blobs, read in chunks to reduce memory pressure
-        if (data.size > 10 * 1024 * 1024 && data.stream) {
-            // Use streaming approach for files > 10MB
+        if (onProgress && data.size > 10 * 1024 * 1024 && data.stream) {
+            // Stream with progress reporting for large blobs
             return await calculateSHA256Streaming(data, onProgress);
         }
         buffer = await data.arrayBuffer();
@@ -478,68 +509,34 @@ async function calculateSHA256(data: Blob | ArrayBuffer, onProgress: ((progress:
     }
 
     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-
-    // Fast hex conversion using lookup table
-    const hashArray = new Uint8Array(hashBuffer);
-    let hex = '';
-    for (let i = 0; i < hashArray.length; i++) {
-        hex += HEX_TABLE[hashArray[i]];
-    }
-    return hex;
+    return hexFromBuffer(hashBuffer);
 }
 
-async function calculateSHA256Streaming(blob: Blob, onProgress: ((progress: number) => void) | null = null): Promise<string | null> {
-    if (!CRYPTO_AVAILABLE) {
-        log.warn('✗ crypto.subtle not available (requires HTTPS). Skipping hash.');
-        return null;
-    }
-
-    const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks
-    const totalSize = blob.size;
-
-    // We need to accumulate chunks and hash at the end
-    // Unfortunately, SubtleCrypto doesn't support incremental hashing
-    // So we read in chunks but still need full buffer for hashing
-    // The benefit is more responsive UI during the read phase
-
+async function calculateSHA256Streaming(blob: Blob, onProgress: (progress: number) => void): Promise<string | null> {
+    // Read via stream for progress reporting, then hash the full buffer once.
+    // SubtleCrypto doesn't support incremental hashing, so we must accumulate.
+    // Using blob.stream() avoids the old double-buffer (chunks[] + combined[]).
+    const reader = blob.stream().getReader();
+    let loaded = 0;
     const chunks: Uint8Array[] = [];
-    let offset = 0;
 
-    while (offset < totalSize) {
-        const end = Math.min(offset + CHUNK_SIZE, totalSize);
-        const chunk = blob.slice(offset, end);
-        const arrayBuffer = await chunk.arrayBuffer();
-        chunks.push(new Uint8Array(arrayBuffer));
-
-        if (onProgress) {
-            onProgress(end / totalSize);
-        }
-
-        offset = end;
-
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.length;
+        onProgress(loaded / blob.size);
         // Yield to UI thread between chunks
         await new Promise(resolve => setTimeout(resolve, 0));
     }
 
-    // Combine chunks
-    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-    const combined = new Uint8Array(totalLength);
-    let position = 0;
-    for (const chunk of chunks) {
-        combined.set(chunk, position);
-        position += chunk.length;
-    }
+    // Single copy: combine chunks into one buffer for hashing
+    const combined = new Uint8Array(loaded);
+    let pos = 0;
+    for (const c of chunks) { combined.set(c, pos); pos += c.length; }
 
-    // Hash the combined buffer
     const hashBuffer = await crypto.subtle.digest('SHA-256', combined.buffer);
-
-    // Fast hex conversion
-    const hashArray = new Uint8Array(hashBuffer);
-    let hex = '';
-    for (let i = 0; i < hashArray.length; i++) {
-        hex += HEX_TABLE[hashArray[i]];
-    }
-    return hex;
+    return hexFromBuffer(hashBuffer);
 }
 
 // ===== Archive Creator Class =====
@@ -674,6 +671,7 @@ export class ArchiveCreator {
                 lock_distance: null,
                 lock_above_ground: false,
                 max_camera_height: null,
+                max_camera_distance: null,
                 ambient_intensity: null,
                 hemisphere_intensity: null,
                 directional1_intensity: null,
@@ -684,6 +682,7 @@ export class ArchiveCreator {
                 tone_mapping_exposure: null,
                 environment_preset: null,
                 environment_as_background: null,
+                rendering_preset: null,
                 measurement_scale: null,
                 measurement_unit: null,
                 post_processing: null,
@@ -1159,6 +1158,7 @@ export class ArchiveCreator {
         if (settings.lockDistance !== undefined) this.manifest.viewer_settings.lock_distance = settings.lockDistance;
         if (settings.lockAboveGround !== undefined) this.manifest.viewer_settings.lock_above_ground = settings.lockAboveGround;
         if (settings.maxCameraHeight !== undefined) this.manifest.viewer_settings.max_camera_height = settings.maxCameraHeight;
+        if (settings.maxCameraDistance !== undefined) this.manifest.viewer_settings.max_camera_distance = settings.maxCameraDistance;
         if (settings.ambientIntensity !== undefined) this.manifest.viewer_settings.ambient_intensity = settings.ambientIntensity;
         if (settings.hemisphereIntensity !== undefined) this.manifest.viewer_settings.hemisphere_intensity = settings.hemisphereIntensity;
         if (settings.directional1Intensity !== undefined) this.manifest.viewer_settings.directional1_intensity = settings.directional1Intensity;
@@ -1169,9 +1169,21 @@ export class ArchiveCreator {
         if (settings.toneMappingExposure !== undefined) this.manifest.viewer_settings.tone_mapping_exposure = settings.toneMappingExposure;
         if (settings.environmentPreset !== undefined) this.manifest.viewer_settings.environment_preset = settings.environmentPreset;
         if (settings.environmentAsBackground !== undefined) this.manifest.viewer_settings.environment_as_background = settings.environmentAsBackground;
+        if (settings.renderingPreset !== undefined) this.manifest.viewer_settings.rendering_preset = settings.renderingPreset;
         if (settings.measurementScale !== undefined) this.manifest.viewer_settings.measurement_scale = settings.measurementScale;
         if (settings.measurementUnit !== undefined) this.manifest.viewer_settings.measurement_unit = settings.measurementUnit;
         if (settings.postProcessing !== undefined) this.manifest.viewer_settings.post_processing = settings.postProcessing;
+        if (settings.flightColorMode !== undefined) this.manifest.viewer_settings.flight_color_mode = settings.flightColorMode;
+        if (settings.flightShowEndpoints !== undefined) this.manifest.viewer_settings.flight_show_endpoints = settings.flightShowEndpoints;
+        if (settings.flightShowDirection !== undefined) this.manifest.viewer_settings.flight_show_direction = settings.flightShowDirection;
+        // View defaults
+        if (settings.sfmVisible !== undefined) this.manifest.viewer_settings.sfm_visible = settings.sfmVisible;
+        if (settings.sfmDisplayMode !== undefined) this.manifest.viewer_settings.sfm_display_mode = settings.sfmDisplayMode;
+        if (settings.flightVisible !== undefined) this.manifest.viewer_settings.flight_visible = settings.flightVisible;
+        if (settings.flightLineColor !== undefined) this.manifest.viewer_settings.flight_line_color = settings.flightLineColor;
+        if (settings.flightLineOpacity !== undefined) this.manifest.viewer_settings.flight_line_opacity = settings.flightLineOpacity;
+        if (settings.flightShowMarkers !== undefined) this.manifest.viewer_settings.flight_show_markers = settings.flightShowMarkers;
+        if (settings.flightMarkerDensity !== undefined) this.manifest.viewer_settings.flight_marker_density = settings.flightMarkerDensity;
     }
 
     setAlignment(data: {
@@ -1435,6 +1447,82 @@ export class ArchiveCreator {
                 position: options.position || [0, 0, 0],
                 rotation: options.rotation || [0, 0, 0],
                 scale: options.scale !== undefined ? options.scale : 1,
+                ...(options.parameters || {})
+            }
+        };
+
+        return entryKey;
+    }
+
+    addFlightPath(blob: Blob, fileName: string, options: AddAssetOptions & { flightMeta?: any } = {}): string {
+        const index = this._countEntriesOfType('flightpath_');
+        const entryKey = `flightpath_${index}`;
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
+        const archivePath = `assets/flightpath_${index}.${ext}`;
+
+        this.files.set(archivePath, { blob, originalName: fileName });
+
+        this.manifest.data_entries[entryKey] = {
+            file_name: archivePath,
+            created_by: options.created_by || "unknown",
+            _created_by_version: options.created_by_version || "",
+            _source_notes: options.source_notes || "",
+            role: 'flightpath',
+            _source_format: ext === 'csv' ? 'dji-csv' : ext,
+            original_name: fileName,
+            _parameters: {
+                position: options.position || [0, 0, 0],
+                rotation: options.rotation || [0, 0, 0],
+                scale: options.scale !== undefined ? options.scale : 1,
+                ...(options.parameters || {})
+            },
+            _flight_meta: options.flightMeta || {},
+        };
+
+        return entryKey;
+    }
+
+    addEnvironment(blob: Blob, fileName: string): string {
+        const entryKey = 'environment_0';
+        const ext = fileName.split('.').pop()?.toLowerCase() || 'hdr';
+        const archivePath = `assets/environment_0.${ext}`;
+
+        this.files.set(archivePath, { blob, originalName: fileName });
+
+        this.manifest.data_entries[entryKey] = {
+            file_name: archivePath,
+            created_by: "vitrine3d",
+            _created_by_version: "",
+            _source_notes: "",
+            role: 'environment',
+            original_name: fileName,
+        };
+
+        return entryKey;
+    }
+
+    addColmap(camerasBlob: Blob, imagesBlob: Blob, options: AddAssetOptions & { points3DBlob?: Blob } = {}): string {
+        const index = this._countEntriesOfType('colmap_sfm_');
+        const entryKey = `colmap_sfm_${index}`;
+
+        this.files.set(`assets/colmap_sfm_${index}/cameras.bin`, { blob: camerasBlob, originalName: 'cameras.bin' });
+        this.files.set(`assets/colmap_sfm_${index}/images.bin`, { blob: imagesBlob, originalName: 'images.bin' });
+        if (options.points3DBlob) {
+            this.files.set(`assets/colmap_sfm_${index}/points3D.bin`, { blob: options.points3DBlob, originalName: 'points3D.bin' });
+        }
+
+        this.manifest.data_entries[entryKey] = {
+            file_name: `assets/colmap_sfm_${index}/`,
+            created_by: options.created_by || "unknown",
+            _created_by_version: options.created_by_version || "",
+            _source_notes: options.source_notes || "",
+            role: 'colmap_sfm',
+            original_name: 'colmap_sfm',
+            _parameters: {
+                position: options.position || [0, 0, 0],
+                rotation: options.rotation || [0, 0, 0],
+                scale: options.scale !== undefined ? options.scale : 1,
+                hasPoints3D: !!options.points3DBlob,
                 ...(options.parameters || {})
             }
         };
@@ -1836,7 +1924,7 @@ export class ArchiveCreator {
     async createArchive(options: CreateArchiveOptions = {}, onProgress: ((percent: number, stage: string) => void) | null = null): Promise<Blob> {
         log.debug('✓ createArchive called with options:', options);
         const {
-            format = 'a3d',
+            format: _format = 'a3d',
             includeHashes = true,
         } = options;
 
@@ -1936,7 +2024,7 @@ export class ArchiveCreator {
         log.debug('✓ downloadArchive called with options:', options);
         const {
             filename = 'archive',
-            format = 'a3d',
+            format = 'ddim',
             ...createOptions
         } = options;
 
@@ -1954,7 +2042,7 @@ export class ArchiveCreator {
                 const path = await save({
                     title: 'Save Archive',
                     defaultPath: downloadName,
-                    filters: [{ name: '3D Archive', extensions: [format] }],
+                    filters: [{ name: 'Direct Dimensions Archive', extensions: [format] }],
                 });
                 if (path) {
                     const buffer = new Uint8Array(await blob.arrayBuffer());
@@ -2013,8 +2101,10 @@ export class ArchiveCreator {
         }
 
         // Check that all referenced files exist
+        // Skip directory-prefix entries (trailing /) — multi-file assets like colmap
+        // store individual files under the directory, not the directory itself
         for (const entry of Object.values(this.manifest.data_entries)) {
-            if (!this.files.has(entry.file_name)) {
+            if (!entry.file_name.endsWith('/') && !this.files.has(entry.file_name)) {
                 errors.push(`Missing file: ${entry.file_name}`);
             }
         }
@@ -2046,16 +2136,28 @@ export async function captureScreenshot(canvas: HTMLCanvasElement, options: Capt
         throw new Error('Failed to get 2D context from temporary canvas');
     }
 
-    // Draw the source canvas, cropping to square from center
+    // Draw the source canvas, cropping from center to match the output aspect ratio
     const srcWidth = canvas.width;
     const srcHeight = canvas.height;
-    const minDim = Math.min(srcWidth, srcHeight);
-    const srcX = (srcWidth - minDim) / 2;
-    const srcY = (srcHeight - minDim) / 2;
+    const targetAspect = width / height;
+    const srcAspect = srcWidth / srcHeight;
+
+    let cropW: number, cropH: number;
+    if (srcAspect > targetAspect) {
+        // Source is wider than target — crop sides
+        cropH = srcHeight;
+        cropW = srcHeight * targetAspect;
+    } else {
+        // Source is taller than target — crop top/bottom
+        cropW = srcWidth;
+        cropH = srcWidth / targetAspect;
+    }
+    const srcX = (srcWidth - cropW) / 2;
+    const srcY = (srcHeight - cropH) / 2;
 
     ctx.drawImage(
         canvas,
-        srcX, srcY, minDim, minDim,
+        srcX, srcY, cropW, cropH,
         0, 0, width, height
     );
 

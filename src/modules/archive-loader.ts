@@ -13,7 +13,7 @@ import { Logger } from './utilities.js';
 const log = Logger.getLogger('ArchiveLoader');
 
 // Supported archive extensions
-const ARCHIVE_EXTENSIONS = ['a3d', 'a3z'];
+const _ARCHIVE_EXTENSIONS = ['ddim', 'a3d', 'a3z'];
 
 // Supported file formats within archives
 const SUPPORTED_FORMATS: Record<string, string[]> = {
@@ -72,6 +72,9 @@ interface ContentInfo {
     hasThumbnail: boolean;
     hasSourceFiles: boolean;
     sourceFileCount: number;
+    hasFlightPath: boolean;
+    flightPathCount: number;
+    hasEnvironment: boolean;
 }
 
 interface ArchiveMetadata {
@@ -227,16 +230,22 @@ export class ArchiveLoader {
     private _ipcCloseFn: (() => Promise<void>) | null = null;
     private _fileSize: number = 0;
     private _fileCache: Map<string, Uint8Array> = new Map();
+    private _blobUrlMap: Map<string, string> = new Map(); // sanitized filename → blob URL
     private _fileIndex: FileIndexEntry[] = [];
     private _centralDir: Map<string, CentralDirEntry> | null = null;
+    private _contentInfoCache: ContentInfo | null = null;
     manifest: ArchiveManifest | null = null;
-    blobUrls: string[] = [];
+
+    /** All currently live blob URLs (read-only view). */
+    get blobUrls(): string[] {
+        return Array.from(this._blobUrlMap.values());
+    }
 
     /**
      * Check if archive data is available (either File reference or raw buffer).
      */
     private get _hasData(): boolean {
-        return !!(this._file || this._rawData || this._url || this._ipcReadFn);
+        return !!(this._file || this._rawData || this._url || this._ipcReadFn || this._fileCache?.size);
     }
 
     /**
@@ -284,24 +293,30 @@ export class ArchiveLoader {
         if (onProgress && response.headers.get('content-length')) {
             const contentLength = parseInt(response.headers.get('content-length')!, 10);
             const reader = response.body!.getReader();
-            const chunks: Uint8Array[] = [];
-            let receivedLength = 0;
+            // Pre-allocate the final buffer using Content-Length — chunks write directly
+            // into it at their offset, halving peak memory vs. accumulate-then-copy.
+            const arrayBuffer = new Uint8Array(contentLength);
+            let position = 0;
 
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                chunks.push(value);
-                receivedLength += value.length;
-                onProgress(receivedLength / contentLength);
+                if (position + value.length > arrayBuffer.length) {
+                    // Server sent more bytes than Content-Length declared — treat as error
+                    throw new Error('Download exceeded declared Content-Length; archive may be corrupt');
+                }
+                arrayBuffer.set(value, position);
+                position += value.length;
+                onProgress(position / contentLength);
             }
 
-            const arrayBuffer = new Uint8Array(receivedLength);
-            let position = 0;
-            for (const chunk of chunks) {
-                arrayBuffer.set(chunk, position);
-                position += chunk.length;
-            }
-            await this.loadFromArrayBuffer(arrayBuffer.buffer);
+            // Trim to actual bytes received — Content-Length may exceed reality
+            // (e.g. chunked transfer, server misconfiguration). Trailing zeros
+            // would corrupt ZIP central directory parsing.
+            const finalBuffer = position === contentLength
+                ? arrayBuffer.buffer
+                : arrayBuffer.buffer.slice(0, position);
+            await this.loadFromArrayBuffer(finalBuffer);
         } else {
             const arrayBuffer = await response.arrayBuffer();
             await this.loadFromArrayBuffer(arrayBuffer);
@@ -314,7 +329,17 @@ export class ArchiveLoader {
      * Range requests — no full download needed. Total transfer is ~100KB.
      */
     async loadRemoteIndex(url: string): Promise<number> {
-        const head = await fetch(url, { method: 'HEAD' });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        let head: Response;
+        try {
+            head = await fetch(url, { method: 'HEAD', signal: controller.signal });
+        } catch (e: any) {
+            clearTimeout(timeoutId);
+            if (e.name === 'AbortError') throw new Error('Server did not respond to HEAD request within 10 seconds');
+            throw e;
+        }
+        clearTimeout(timeoutId);
         if (!head.ok) throw new Error(`HTTP ${head.status}: ${head.statusText}`);
 
         const size = parseInt(head.headers.get('content-length')!, 10);
@@ -408,14 +433,16 @@ export class ArchiveLoader {
                 // Server ignored Range header and returned the full file (status 200).
                 // Buffer it once and switch to in-memory mode so every subsequent
                 // read is an instant subarray — no more redundant full downloads.
-                log.info('Range not supported, switching to in-memory mode');
+                // NOTE: No progress bar is available in this path — the loading overlay
+                // will appear to stall. This is a server configuration limitation.
+                log.warn('Range requests not supported by server (got 200 instead of 206); downloading full archive without progress tracking. Consider enabling Accept-Ranges on the server.');
                 this._rawData = new Uint8Array(await resp.arrayBuffer());
                 this._url = null;
                 return this._rawData.subarray(offset, offset + length);
             }
             throw new Error(`Range request failed: HTTP ${resp.status}`);
         }
-        throw new Error('No archive data available');
+        throw new Error('No archive data available (raw data was released; only previously cached files can be accessed)');
     }
 
     /**
@@ -585,11 +612,16 @@ export class ArchiveLoader {
         const compressedData = await this._readBytes(dataOffset, entry.compressedSize);
 
         // Decompress based on compression method
+        const MAX_UNCOMPRESSED_SIZE = 2 * 1024 * 1024 * 1024; // 2 GB per-file safety limit
         let fileData: Uint8Array;
         if (entry.method === 0) {
             // Stored (no compression) — use bytes directly
             fileData = compressedData;
         } else if (entry.method === 8) {
+            // Guard against decompression bombs
+            if (entry.uncompressedSize > MAX_UNCOMPRESSED_SIZE) {
+                throw new Error(`File "${filename}" uncompressed size (${entry.uncompressedSize} bytes) exceeds safety limit`);
+            }
             // Deflate — decompress with fflate inflateSync
             fileData = inflateSync(compressedData);
         } else {
@@ -769,6 +801,22 @@ export class ArchiveLoader {
      * Extract a file from the archive as a blob URL.
      * Decompresses on demand and caches the result.
      */
+    /**
+     * Extract a file as raw bytes, bypassing Blob/URL creation.
+     * Use this when you need the bytes directly (e.g., to pass to a WASM decoder)
+     * and want to avoid the overhead of a Blob + fetch round-trip.
+     * The result is cached, so repeated calls are free.
+     */
+    async extractFileRaw(filename: string): Promise<Uint8Array | null> {
+        if (!this._hasData) throw new Error('No archive loaded');
+        const sanitization = sanitizeArchiveFilename(filename);
+        if (!sanitization.safe) {
+            log.error(` Rejected unsafe filename: ${filename} - ${sanitization.error}`);
+            throw new Error(`Invalid filename in archive: ${sanitization.error}`);
+        }
+        return this._extractSingle(sanitization.sanitized);
+    }
+
     async extractFile(filename: string): Promise<ExtractedFile | null> {
         if (!this._hasData) {
             throw new Error('No archive loaded');
@@ -788,12 +836,17 @@ export class ArchiveLoader {
             return null;
         }
 
-        // Convert Uint8Array to Blob
-        // Create a new Uint8Array with standard ArrayBuffer to satisfy TypeScript
-        const standardBuffer = new Uint8Array(fileData);
-        const blob = new Blob([standardBuffer]);
+        // Convert Uint8Array to Blob.
+        // Blob constructor requires ArrayBuffer-backed views; only copy if backed by SharedArrayBuffer.
+        const blobData: Uint8Array<ArrayBuffer> = fileData.buffer instanceof ArrayBuffer
+            ? (fileData as Uint8Array<ArrayBuffer>)
+            : new Uint8Array(fileData);
+        const blob = new Blob([blobData]);
         const url = URL.createObjectURL(blob);
-        this.blobUrls.push(url);
+        // Revoke any previous blob URL for this filename to prevent memory leaks
+        const prevUrl = this._blobUrlMap.get(safeFilename);
+        if (prevUrl) URL.revokeObjectURL(prevUrl);
+        this._blobUrlMap.set(safeFilename, url);
 
         return { blob, url, name: safeFilename };
     }
@@ -905,7 +958,18 @@ export class ArchiveLoader {
         return cads.length > 0 ? cads[0].entry : null;
     }
 
+    getFlightPathEntries(): Array<{ key: string; entry: ManifestDataEntry }> {
+        return this.findEntriesByPrefix('flightpath_');
+    }
+
+    getEnvironmentEntry(): { entry: ManifestDataEntry; key: string } | null {
+        const entries = this.findEntriesByPrefix('environment_');
+        return entries.length > 0 ? { entry: entries[0].entry, key: entries[0].key } : null;
+    }
+
     getContentInfo(): ContentInfo {
+        if (this._contentInfoCache) return this._contentInfoCache;
+
         const scene = this.getSceneEntry();
         const mesh = this.getMeshEntry();
         const meshProxy = this.getMeshProxyEntry();
@@ -916,8 +980,10 @@ export class ArchiveLoader {
         const thumbnail = this.getThumbnailEntry();
 
         const sourceFiles = this.getSourceFileEntries();
+        const flightPaths = this.getFlightPathEntries();
+        const environment = this.getEnvironmentEntry();
 
-        return {
+        this._contentInfoCache = {
             hasSplat: scene !== null && isFormatSupported(scene.file_name, 'splat'),
             hasMesh: mesh !== null && isFormatSupported(mesh.file_name, 'mesh'),
             hasMeshProxy: meshProxy !== null && isFormatSupported(meshProxy.file_name, 'mesh'),
@@ -927,8 +993,12 @@ export class ArchiveLoader {
             hasCAD: cad !== null && isFormatSupported(cad.file_name, 'cad'),
             hasThumbnail: thumbnail !== null && isFormatSupported(thumbnail.file_name, 'thumbnail'),
             hasSourceFiles: sourceFiles.length > 0,
-            sourceFileCount: sourceFiles.length
+            sourceFileCount: sourceFiles.length,
+            hasFlightPath: flightPaths.length > 0,
+            flightPathCount: flightPaths.length,
+            hasEnvironment: environment !== null
         };
+        return this._contentInfoCache;
     }
 
     // =========================================================================
@@ -978,9 +1048,79 @@ export class ArchiveLoader {
     }
 
     /**
+     * True if a remote source (URL or IPC handle) is still available for
+     * on-demand re-extraction after releaseRawData() is called.
+     * When false, _fileCache is the only remaining data source.
+     */
+    get canRefetch(): boolean {
+        return !!(this._url || this._ipcReadFn);
+    }
+
+    /**
+     * Extract a STORE-compressed file directly as an ArrayBuffer via a single Range request,
+     * bypassing _fileCache and Blob creation entirely.
+     *
+     * For archives packed with STORE (method=0 — all .ddim archives), the raw file bytes
+     * sit at a fixed offset in the ZIP. A single Range request returns them verbatim with
+     * no decompression needed. This eliminates the Uint8Array _fileCache copy and the
+     * subsequent Blob copy, reducing peak RAM by ~60% for large mesh files.
+     *
+     * Returns null when not applicable (non-URL source, non-STORE entry, or Range failure).
+     * Callers should fall back to extractFile() when null is returned.
+     */
+    async extractFileBuffer(filename: string): Promise<ArrayBuffer | null> {
+        if (!this._url) return null;
+
+        const sanitization = sanitizeArchiveFilename(filename);
+        if (!sanitization.safe) {
+            log.error(` Rejected unsafe filename: ${filename} - ${sanitization.error}`);
+            throw new Error(`Invalid filename in archive: ${sanitization.error}`);
+        }
+        const safeFilename = sanitization.sanitized;
+
+        // If already cached, return a copy of the cached bytes (avoids re-fetch)
+        if (this._fileCache.has(safeFilename)) {
+            const cached = this._fileCache.get(safeFilename)!;
+            return cached.buffer.slice(cached.byteOffset, cached.byteOffset + cached.byteLength) as ArrayBuffer;
+        }
+
+        const entry = this._centralDir?.get(safeFilename);
+        if (!entry) return null;
+
+        // Only STORE entries can be used directly — compressed entries need decompression
+        if (entry.method !== 0) return null;
+
+        // Read local header to compute the exact data start offset
+        const localHeader = await this._readBytes(entry.offset, 30);
+        const lhView = new DataView(localHeader.buffer, localHeader.byteOffset, 30);
+        if (lhView.getUint32(0, true) !== 0x04034b50) {
+            throw new Error(`Invalid local file header for ${safeFilename}`);
+        }
+        const localNameLen = lhView.getUint16(26, true);
+        const localExtraLen = lhView.getUint16(28, true);
+        const dataOffset = entry.offset + 30 + localNameLen + localExtraLen;
+
+        // Single Range request for the raw file bytes
+        const resp = await fetch(this._url, {
+            headers: { Range: `bytes=${dataOffset}-${dataOffset + entry.compressedSize - 1}` }
+        });
+
+        if (resp.status !== 206) {
+            // Server doesn't support Range or returned full file — let _readBytes handle fallback
+            log.warn(`extractFileBuffer: Range request returned ${resp.status}, falling back`);
+            return null;
+        }
+
+        log.info(`extractFileBuffer: ${safeFilename} (${(entry.compressedSize / 1024 / 1024).toFixed(1)} MB) fetched via single Range request`);
+        return resp.arrayBuffer();
+    }
+
+    /**
      * Release the raw ZIP data to free memory.
      * Call this after all needed assets have been extracted and cached.
-     * After calling this, no new files can be extracted.
+     * After calling this, only previously cached files and Range-based
+     * extraction (via _url) remain available. Files not yet in _fileCache
+     * can still be extracted if the archive was loaded via loadRemoteIndex().
      */
     releaseRawData(): void {
         const hadData = this._hasData;
@@ -992,13 +1132,53 @@ export class ArchiveLoader {
     }
 
     /**
+     * Evict a single file from the decompressed cache to free memory.
+     * Use after a renderer has consumed the data and no re-extraction is needed.
+     */
+    evictFileCache(filename: string): void {
+        const sanitization = sanitizeArchiveFilename(filename);
+        const key = sanitization.safe ? sanitization.sanitized : filename;
+        if (this._fileCache.delete(key)) {
+            log.info(`Evicted file cache for: ${key}`);
+        }
+    }
+
+    /**
+     * Revoke the blob URL for a specific file and remove it from tracking.
+     * Use after the renderer has consumed the blob (no longer needs the URL).
+     */
+    revokeBlobForFile(filename: string): void {
+        const sanitization = sanitizeArchiveFilename(filename);
+        const key = sanitization.safe ? sanitization.sanitized : filename;
+        const url = this._blobUrlMap.get(key);
+        if (url) {
+            URL.revokeObjectURL(url);
+            this._blobUrlMap.delete(key);
+            log.info(`Revoked blob URL for: ${key}`);
+        }
+    }
+
+    /**
+     * Remove a blob URL from tracking without revoking it.
+     * Use when the caller wants to keep the URL alive beyond this loader's lifecycle.
+     */
+    removeBlobUrl(url: string): void {
+        for (const [key, val] of this._blobUrlMap) {
+            if (val === url) {
+                this._blobUrlMap.delete(key);
+                return;
+            }
+        }
+    }
+
+    /**
      * Clean up all created blob URLs
      */
     cleanup(): void {
-        for (const url of this.blobUrls) {
+        for (const url of this._blobUrlMap.values()) {
             URL.revokeObjectURL(url);
         }
-        this.blobUrls = [];
+        this._blobUrlMap.clear();
     }
 
     /**
@@ -1014,6 +1194,7 @@ export class ArchiveLoader {
         this._ipcHandleId = null;
         this._fileSize = 0;
         this._centralDir = null;
+        this._contentInfoCache = null;
         this._fileCache?.clear();
         this._fileCache = null as any;
         this._fileIndex = null as any;

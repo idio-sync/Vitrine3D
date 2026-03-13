@@ -17,16 +17,30 @@ jobs:
         include:
           - platform: ubuntu-22.04
             target: linux
+            variant: editorial
+            config_args: ""
+            release_name: "Vitrine3D"
           - platform: windows-latest
             target: windows
+            variant: editorial
+            config_args: ""
+            release_name: "Vitrine3D"
           - platform: macos-latest
             target: macos
+            variant: editorial
+            config_args: ""
+            release_name: "Vitrine3D"
+          - platform: windows-latest
+            target: windows
+            variant: pass
+            config_args: "--config ./src-tauri/tauri.pass.conf.json"
+            release_name: "Direct Dimensions PASS Viewer"
 
     runs-on: ${{ matrix.platform }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -38,9 +52,9 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install npm devDependencies
         run: npm install
@@ -64,22 +78,24 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SITE_URL: ${{ vars.SITE_URL }}
         with:
           tagName: ${{ steps.release_tag.outputs.tag }}
-          releaseName: 'Vitrine3D ${{ steps.release_tag.outputs.tag }}'
+          releaseName: '${{ matrix.release_name }} ${{ steps.release_tag.outputs.tag }}'
           releaseBody: 'Desktop release for Windows, Linux, and macOS.'
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.config_args }}
 
   build-android:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -91,9 +107,9 @@ jobs:
         run: sdkmanager --install "ndk;27.2.12479018"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install npm dependencies
         run: npm install
@@ -112,12 +128,84 @@ jobs:
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> $GITHUB_ENV
+          echo "SITE_URL=${{ vars.SITE_URL }}" >> $GITHUB_ENV
 
       - name: Initialize Android scaffold
         run: npx tauri android init
 
+      - name: Copy custom app icons into scaffold
+        run: |
+          RES_DIR=$(find src-tauri/gen/android -type d -name "mipmap-hdpi" | head -1 | xargs dirname)
+          if [ -n "$RES_DIR" ]; then
+            echo "Copying icons to $RES_DIR"
+            cp -r src-tauri/icons/android/* "$RES_DIR/"
+          else
+            echo "::warning::No mipmap directory found in scaffold"
+          fi
+
+      - name: Inspect Android scaffold
+        run: |
+          echo "=== Scaffold structure ==="
+          find src-tauri/gen/android -type f | head -60
+          echo ""
+          echo "=== AndroidManifest.xml ==="
+          find src-tauri/gen/android -name "AndroidManifest.xml" -exec cat {} \;
+          echo ""
+          echo "=== styles.xml (if any) ==="
+          find src-tauri/gen/android -name "styles.xml" -exec echo "--- {} ---" \; -exec cat {} \;
+          echo ""
+          echo "=== themes.xml (if any) ==="
+          find src-tauri/gen/android -name "themes.xml" -exec echo "--- {} ---" \; -exec cat {} \;
+
+      - name: Enable display cutout support
+        run: |
+          # Try styles.xml first, then themes.xml (Tauri version dependent)
+          THEME_FILE=$(find src-tauri/gen/android -name "styles.xml" -path "*/values/*" -o -name "themes.xml" -path "*/values/*" | head -1)
+          if [ -n "$THEME_FILE" ]; then
+            echo "Patching $THEME_FILE for cutout support"
+            sed -i 's|</style>|    <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>\n    </style>|' "$THEME_FILE"
+          else
+            # Fall back to AndroidManifest.xml activity attribute
+            MANIFEST=$(find src-tauri/gen/android -name "AndroidManifest.xml" -path "*/main/*" | head -1)
+            if [ -n "$MANIFEST" ]; then
+              echo "Patching $MANIFEST for cutout support"
+              sed -i 's|android:name=".MainActivity"|android:name=".MainActivity" android:windowLayoutInDisplayCutoutMode="shortEdges"|' "$MANIFEST"
+            else
+              echo "::warning::No theme or manifest file found — skipping cutout patch"
+            fi
+          fi
+
+      - name: Register vitrine3d:// deep link scheme
+        run: |
+          MANIFEST=$(find src-tauri/gen/android -name "AndroidManifest.xml" -path "*/main/*" | head -1)
+          if [ -n "$MANIFEST" ]; then
+            echo "Patching $MANIFEST with vitrine3d:// intent filter"
+            # Insert intent filter before the closing </activity> tag
+            sed -i 's|</activity>|<intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="vitrine3d"/></intent-filter></activity>|' "$MANIFEST"
+            echo "=== Patched manifest ==="
+            cat "$MANIFEST"
+          else
+            echo "::warning::No AndroidManifest.xml found — skipping deep link patch"
+          fi
+
       - name: Build APK
-        run: npx tauri android build --apk --target aarch64 --target armv7
+        run: npx tauri android build --apk --target aarch64 --target armv7 --debug
+
+      - name: Locate built APKs
+        id: apks
+        run: |
+          echo "=== All APK files ==="
+          find src-tauri/gen/android -name "*.apk" -type f
+          # Prefer universal, fall back to arch-specific
+          APK=$(find src-tauri/gen/android -name "*.apk" -path "*/universal/*" -type f | head -1)
+          if [ -z "$APK" ]; then
+            APK=$(find src-tauri/gen/android -name "*.apk" -path "*/aarch64/*" -type f | head -1)
+          fi
+          if [ -z "$APK" ]; then
+            APK=$(find src-tauri/gen/android -name "*.apk" -type f | head -1)
+          fi
+          echo "Selected: $APK"
+          echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
 
       - name: Determine release tag
         id: release_tag
@@ -130,11 +218,11 @@ jobs:
           fi
 
       - name: Upload APK to release
+        if: steps.apks.outputs.apk_path != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_tag.outputs.tag }}
           draft: true
-          files: |
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
+          files: ${{ steps.apks.outputs.apk_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

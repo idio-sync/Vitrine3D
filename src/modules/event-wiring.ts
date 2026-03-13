@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { Logger, notify } from './utilities.js';
 import { ENVIRONMENT } from './constants.js';
+import { setupExportFormatToggle } from './export-controller.js';
 import {
     addListener,
     setupCollapsibles,
@@ -30,9 +31,20 @@ import {
     updateModelTextures
 } from './file-handlers.js';
 import * as postProcessing from './post-processing.js';
-import type { EventWiringDeps } from '@/types.js';
+import { RENDERING_PRESETS, applyPreset } from './rendering-presets.js';
+import type { ApplyPresetDeps } from './rendering-presets.js';
+import type { EventWiringDeps, AppState } from '@/types.js';
 
 const log = Logger.getLogger('event-wiring');
+
+/** Write a uniform scale value to all three transform-scale inputs. */
+function writeScaleInputs(value: string, excludeAxis?: string): void {
+    for (const a of ['x', 'y', 'z']) {
+        if (a === excludeAxis) continue;
+        const el = document.getElementById(`transform-scale-${a}`) as HTMLInputElement | null;
+        if (el) el.value = value;
+    }
+}
 
 // ============================================================
 // MAIN EXPORT
@@ -55,6 +67,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             if (tool === 'library') onLibraryActivated();
             // Populate metadata display when opening the metadata pane
             if (tool === 'metadata') deps.metadata.populateMetadataDisplay();
+            // Refresh transform inputs when opening the transform pane
+            if (tool === 'transform') deps.transform.updateTransformInputs();
             // Show/hide transform gizmo and orbit center line based on active tool
             if (sceneRefs.transformControls) {
                 try {
@@ -72,7 +86,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 if (sceneRefs.splatMesh) {
                     deps.transform.setSelectedObject('splat' as any);
                 } else if (sceneRefs.modelGroup && sceneRefs.modelGroup.children.length > 0) {
-                    deps.transform.setSelectedObject('model' as any);
+                    deps.transform.setSelectedObject('mesh' as any);
                 }
             }
             // Cross-section: activate when entering, deactivate when leaving
@@ -101,6 +115,52 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-split', 'click', () => deps.display.setDisplayMode('split'));
     addListener('btn-stl', 'click', () => deps.display.setDisplayMode('stl'));
 
+    // ─── Overlay toggle pill ────────────────────────────────
+    addListener('btn-overlay-sfm', 'click', () => {
+        const btn = document.getElementById('btn-overlay-sfm');
+        if (!btn) return;
+        const nowActive = !btn.classList.contains('active');
+        btn.classList.toggle('active', nowActive);
+        if (deps.overlay?.toggleSfm) deps.overlay.toggleSfm(nowActive);
+    });
+
+    addListener('btn-overlay-flightpath', 'click', () => {
+        const btn = document.getElementById('btn-overlay-flightpath');
+        if (!btn) return;
+        const nowActive = !btn.classList.contains('active');
+        btn.classList.toggle('active', nowActive);
+        if (deps.overlay?.toggleFlightPath) deps.overlay.toggleFlightPath(nowActive);
+    });
+
+    // ─── View default settings ──────────────────────────────
+    addListener('sfm-show-on-load', 'change', () => {
+        deps.state.viewDefaults.sfmCameras.visible = (document.getElementById('sfm-show-on-load') as HTMLInputElement)?.checked ?? false;
+    });
+    addListener('sfm-display-mode', 'change', () => {
+        deps.state.viewDefaults.sfmCameras.displayMode = ((document.getElementById('sfm-display-mode') as HTMLSelectElement)?.value as any) ?? 'frustums';
+    });
+    addListener('flight-show-on-load', 'change', () => {
+        deps.state.viewDefaults.flightPath.visible = (document.getElementById('flight-show-on-load') as HTMLInputElement)?.checked ?? false;
+    });
+    addListener('flight-line-color', 'input', () => {
+        deps.state.viewDefaults.flightPath.lineColor = (document.getElementById('flight-line-color') as HTMLInputElement)?.value ?? '#00ffff';
+    });
+    addListener('flight-line-opacity', 'input', () => {
+        const val = parseInt((document.getElementById('flight-line-opacity') as HTMLInputElement)?.value ?? '100', 10);
+        deps.state.viewDefaults.flightPath.lineOpacity = val / 100;
+        const label = document.getElementById('flight-line-opacity-value');
+        if (label) label.textContent = `${val}%`;
+    });
+    addListener('flight-show-markers', 'change', () => {
+        const checked = (document.getElementById('flight-show-markers') as HTMLInputElement)?.checked ?? true;
+        deps.state.viewDefaults.flightPath.showMarkers = checked;
+        const densitySelect = document.getElementById('flight-marker-density') as HTMLSelectElement | null;
+        if (densitySelect) densitySelect.disabled = !checked;
+    });
+    addListener('flight-marker-density', 'change', () => {
+        deps.state.viewDefaults.flightPath.markerDensity = ((document.getElementById('flight-marker-density') as HTMLSelectElement)?.value as any) ?? 'all';
+    });
+
     // ─── File inputs ─────────────────────────────────────────
     addListener('splat-input', 'change', deps.files.handleSplatFile);
     addListener('model-input', 'change', deps.files.handleModelFile);
@@ -109,33 +169,26 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('proxy-mesh-input', 'change', deps.files.handleProxyMeshFile);
     addListener('proxy-splat-input', 'change', deps.files.handleProxySplatFile);
     addListener('stl-input', 'change', deps.files.handleSTLFile);
-    addListener('btn-load-stl-url', 'click', deps.files.handleLoadSTLFromUrlPrompt);
     addListener('cad-input', 'change', deps.files.handleCADFile);
-    addListener('btn-load-cad-url', 'click', deps.files.handleLoadCADFromUrlPrompt);
     addListener('drawing-input', 'change', deps.files.handleDrawingFile);
-    addListener('btn-load-drawing-url', 'click', deps.files.handleLoadDrawingFromUrlPrompt);
     addListener('source-files-input', 'change', deps.files.handleSourceFilesInput);
-    addListener('btn-load-pointcloud-url', 'click', deps.files.handleLoadPointcloudFromUrlPrompt);
     addListener('btn-load-archive-url', 'click', deps.files.handleLoadArchiveFromUrlPrompt);
     addListener('btn-load-full-res', 'click', deps.files.handleLoadFullResMesh);
     addListener('proxy-load-full-link', 'click', (e: Event) => { e.preventDefault(); deps.files.handleLoadFullResMesh(); });
     addListener('btn-quality-sd', 'click', () => deps.files.switchQualityTier('sd'));
     addListener('btn-quality-hd', 'click', () => deps.files.switchQualityTier('hd'));
 
+    // ─── Asset remove buttons ────────────────────────────────
+    addListener('btn-remove-splat', 'click', deps.files.removeSplat);
+    addListener('btn-remove-model', 'click', deps.files.removeModel);
+    addListener('btn-remove-pointcloud', 'click', deps.files.removePointcloud);
+    addListener('btn-remove-stl', 'click', deps.files.removeSTL);
+    addListener('btn-remove-cad', 'click', deps.files.removeCAD);
+    addListener('btn-remove-drawing', 'click', deps.files.removeDrawing);
+    addListener('btn-remove-flightpath', 'click', deps.files.removeFlightPath);
+
     // ─── Tauri native file dialogs ───────────────────────────
     deps.tauri.wireNativeDialogsIfAvailable();
-
-    // ─── URL load buttons ────────────────────────────────────
-    const splatUrlBtn = document.getElementById('btn-load-splat-url');
-    const modelUrlBtn = document.getElementById('btn-load-model-url');
-    log.info(' URL buttons found - splat:', !!splatUrlBtn, 'model:', !!modelUrlBtn);
-
-    if (splatUrlBtn) {
-        splatUrlBtn.addEventListener('click', deps.files.handleLoadSplatFromUrlPrompt);
-    }
-    if (modelUrlBtn) {
-        modelUrlBtn.addEventListener('click', deps.files.handleLoadModelFromUrlPrompt);
-    }
 
     // ─── Splat settings ──────────────────────────────────────
     addListener('splat-scale', 'input', (e: Event) => {
@@ -144,6 +197,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (valueEl) valueEl.textContent = scale.toFixed(1);
         if (sceneRefs.splatMesh) {
             sceneRefs.splatMesh.scale.setScalar(scale);
+            // Sync transform pane XYZ inputs
+            writeScaleInputs(scale.toFixed(3));
         }
     });
 
@@ -155,6 +210,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (valueEl) valueEl.textContent = scale.toFixed(1);
         if (sceneRefs.modelGroup) {
             sceneRefs.modelGroup.scale.setScalar(scale);
+            // Sync transform pane XYZ inputs
+            writeScaleInputs(scale.toFixed(3));
         }
     });
 
@@ -234,6 +291,8 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (valueEl) valueEl.textContent = scale.toFixed(1);
         if (sceneRefs.pointcloudGroup) {
             sceneRefs.pointcloudGroup.scale.setScalar(scale);
+            // Sync transform pane XYZ inputs
+            writeScaleInputs(scale.toFixed(3));
         }
     });
 
@@ -256,15 +315,6 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-center-at-origin', 'click', deps.alignment.centerAtOrigin);
     addListener('btn-reset-alignment', 'click', deps.alignment.resetAlignment);
 
-    // ─── Share ───────────────────────────────────────────────
-    addListener('btn-share', 'click', deps.share.copyShareLink);
-
-    // ─── Preview kiosk mode ──────────────────────────────────
-    addListener('btn-preview-kiosk', 'click', () => {
-        const url = new URL(window.location.href);
-        url.searchParams.set('kiosk', 'true');
-        window.open(url.toString(), '_blank');
-    });
 
     // ─── Camera buttons ──────────────────────────────────────
     addListener('btn-reset-camera', 'click', deps.camera.resetCamera);
@@ -277,6 +327,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         const valueEl = document.getElementById('ambient-intensity-value');
         if (valueEl) valueEl.textContent = intensity.toFixed(1);
         if (sceneRefs.ambientLight) sceneRefs.ambientLight.intensity = intensity;
+        markPresetAsCustom();
     });
 
     addListener('hemisphere-intensity', 'input', (e: Event) => {
@@ -284,6 +335,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         const valueEl = document.getElementById('hemisphere-intensity-value');
         if (valueEl) valueEl.textContent = intensity.toFixed(1);
         if (sceneRefs.hemisphereLight) sceneRefs.hemisphereLight.intensity = intensity;
+        markPresetAsCustom();
     });
 
     addListener('directional1-intensity', 'input', (e: Event) => {
@@ -291,6 +343,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         const valueEl = document.getElementById('directional1-intensity-value');
         if (valueEl) valueEl.textContent = intensity.toFixed(1);
         if (sceneRefs.directionalLight1) sceneRefs.directionalLight1.intensity = intensity;
+        markPresetAsCustom();
     });
 
     addListener('directional2-intensity', 'input', (e: Event) => {
@@ -298,16 +351,19 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         const valueEl = document.getElementById('directional2-intensity-value');
         if (valueEl) valueEl.textContent = intensity.toFixed(1);
         if (sceneRefs.directionalLight2) sceneRefs.directionalLight2.intensity = intensity;
+        markPresetAsCustom();
     });
 
     // ─── Transform controls ─────────────────────────────────
     addListener('btn-select-none', 'click', () => deps.transform.setSelectedObject('none' as any));
     addListener('btn-select-splat', 'click', () => deps.transform.setSelectedObject('splat' as any));
-    addListener('btn-select-model', 'click', () => deps.transform.setSelectedObject('model' as any));
+    addListener('btn-select-mesh', 'click', () => deps.transform.setSelectedObject('mesh' as any));
     addListener('btn-select-pointcloud', 'click', () => deps.transform.setSelectedObject('pointcloud' as any));
     addListener('btn-select-stl', 'click', () => deps.transform.setSelectedObject('stl' as any));
     addListener('btn-select-cad', 'click', () => deps.transform.setSelectedObject('cad' as any));
     addListener('btn-select-drawing', 'click', () => deps.transform.setSelectedObject('drawing' as any));
+    addListener('btn-select-flightpath', 'click', () => deps.transform.setSelectedObject('flightpath' as any));
+    addListener('btn-select-colmap', 'click', () => deps.transform.setSelectedObject('colmap'));
     addListener('btn-select-both', 'click', () => deps.transform.setSelectedObject('both' as any));
     const pivotSection = document.getElementById('rotation-pivot-section');
     const scaleLockSection = document.getElementById('scale-lock-section');
@@ -346,11 +402,12 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     // ─── Transform pane inputs ────────────────────────────────
     (['x', 'y', 'z'] as const).forEach(axis => {
         addListener(`transform-pos-${axis}`, 'change', (e: Event) => {
+            deps.undo.captureBeforeNumericEdit();
             const val = parseFloat((e.target as HTMLInputElement).value) || 0;
             const sel = state.selectedObject;
             if (sel === 'splat' && sceneRefs.splatMesh) {
                 (sceneRefs.splatMesh as any).position[axis] = val;
-            } else if (sel === 'model' && sceneRefs.modelGroup) {
+            } else if (sel === 'mesh' && sceneRefs.modelGroup) {
                 (sceneRefs.modelGroup as any).position[axis] = val;
             } else if (sel === 'pointcloud' && sceneRefs.pointcloudGroup) {
                 (sceneRefs.pointcloudGroup as any).position[axis] = val;
@@ -360,6 +417,10 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 (sceneRefs as any).cadGroup.position[axis] = val;
             } else if (sel === 'drawing' && (sceneRefs as any).drawingGroup) {
                 (sceneRefs as any).drawingGroup.position[axis] = val;
+            } else if (sel === 'flightpath' && sceneManager?.flightPathGroup) {
+                sceneManager.flightPathGroup.position[axis] = val;
+            } else if (sel === 'colmap' && sceneManager?.colmapGroup) {
+                sceneManager.colmapGroup.position[axis] = val;
             } else if (sel === 'both') {
                 if (sceneRefs.splatMesh) (sceneRefs.splatMesh as any).position[axis] = val;
                 if (sceneRefs.modelGroup) (sceneRefs.modelGroup as any).position[axis] = val;
@@ -367,15 +428,19 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 if ((sceneRefs as any).stlGroup) (sceneRefs as any).stlGroup.position[axis] = val;
                 if ((sceneRefs as any).cadGroup) (sceneRefs as any).cadGroup.position[axis] = val;
                 if ((sceneRefs as any).drawingGroup) (sceneRefs as any).drawingGroup.position[axis] = val;
+                if (sceneManager?.flightPathGroup) sceneManager.flightPathGroup.position[axis] = val;
+                if (sceneManager?.colmapGroup) sceneManager.colmapGroup.position[axis] = val;
             }
+            deps.undo.pushAfterNumericEdit();
         });
         addListener(`transform-rot-${axis}`, 'change', (e: Event) => {
+            deps.undo.captureBeforeNumericEdit();
             const val = parseFloat((e.target as HTMLInputElement).value) || 0;
             const rad = THREE.MathUtils.degToRad(val);
             const sel = state.selectedObject;
             if (sel === 'splat' && sceneRefs.splatMesh) {
                 (sceneRefs.splatMesh as any).rotation[axis] = rad;
-            } else if (sel === 'model' && sceneRefs.modelGroup) {
+            } else if (sel === 'mesh' && sceneRefs.modelGroup) {
                 (sceneRefs.modelGroup as any).rotation[axis] = rad;
             } else if (sel === 'pointcloud' && sceneRefs.pointcloudGroup) {
                 (sceneRefs.pointcloudGroup as any).rotation[axis] = rad;
@@ -385,6 +450,10 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 (sceneRefs as any).cadGroup.rotation[axis] = rad;
             } else if (sel === 'drawing' && (sceneRefs as any).drawingGroup) {
                 (sceneRefs as any).drawingGroup.rotation[axis] = rad;
+            } else if (sel === 'flightpath' && sceneManager?.flightPathGroup) {
+                sceneManager.flightPathGroup.rotation[axis] = rad;
+            } else if (sel === 'colmap' && sceneManager?.colmapGroup) {
+                sceneManager.colmapGroup.rotation[axis] = rad;
             } else if (sel === 'both') {
                 if (sceneRefs.splatMesh) (sceneRefs.splatMesh as any).rotation[axis] = rad;
                 if (sceneRefs.modelGroup) (sceneRefs.modelGroup as any).rotation[axis] = rad;
@@ -392,9 +461,13 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 if ((sceneRefs as any).stlGroup) (sceneRefs as any).stlGroup.rotation[axis] = rad;
                 if ((sceneRefs as any).cadGroup) (sceneRefs as any).cadGroup.rotation[axis] = rad;
                 if ((sceneRefs as any).drawingGroup) (sceneRefs as any).drawingGroup.rotation[axis] = rad;
+                if (sceneManager?.flightPathGroup) sceneManager.flightPathGroup.rotation[axis] = rad;
+                if (sceneManager?.colmapGroup) sceneManager.colmapGroup.rotation[axis] = rad;
             }
+            deps.undo.pushAfterNumericEdit();
         });
         addListener(`transform-scale-${axis}`, 'change', (e: Event) => {
+            deps.undo.captureBeforeNumericEdit();
             const val = parseFloat((e.target as HTMLInputElement).value);
             if (isNaN(val) || val <= 0) return;
             const sel = state.selectedObject;
@@ -405,7 +478,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             };
             if (sel === 'splat' && sceneRefs.splatMesh) {
                 apply(sceneRefs.splatMesh);
-            } else if (sel === 'model' && sceneRefs.modelGroup) {
+            } else if (sel === 'mesh' && sceneRefs.modelGroup) {
                 apply(sceneRefs.modelGroup);
             } else if (sel === 'pointcloud' && sceneRefs.pointcloudGroup) {
                 apply(sceneRefs.pointcloudGroup);
@@ -415,6 +488,10 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 apply((sceneRefs as any).cadGroup);
             } else if (sel === 'drawing' && (sceneRefs as any).drawingGroup) {
                 apply((sceneRefs as any).drawingGroup);
+            } else if (sel === 'flightpath' && sceneManager?.flightPathGroup) {
+                apply(sceneManager.flightPathGroup);
+            } else if (sel === 'colmap' && sceneManager?.colmapGroup) {
+                apply(sceneManager.colmapGroup);
             } else if (sel === 'both') {
                 if (sceneRefs.splatMesh) apply(sceneRefs.splatMesh);
                 if (sceneRefs.modelGroup) apply(sceneRefs.modelGroup);
@@ -422,18 +499,14 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                 if ((sceneRefs as any).stlGroup) apply((sceneRefs as any).stlGroup);
                 if ((sceneRefs as any).cadGroup) apply((sceneRefs as any).cadGroup);
                 if ((sceneRefs as any).drawingGroup) apply((sceneRefs as any).drawingGroup);
+                if (sceneManager?.flightPathGroup) apply(sceneManager.flightPathGroup);
+                if (sceneManager?.colmapGroup) apply(sceneManager.colmapGroup);
             }
             if (uniform) {
                 // Sync the other two axis inputs
-                const formatted = val.toFixed(2);
-                for (const a of ['x', 'y', 'z'] as const) {
-                    if (a !== axis) {
-                        const el = document.getElementById(`transform-scale-${a}`) as HTMLInputElement | null;
-                        if (el) el.value = formatted;
-                    }
-                }
+                writeScaleInputs(val.toFixed(2), axis);
                 // Sync sidebar scale slider
-                const sliderId = sel === 'splat' ? 'splat-scale' : sel === 'model' ? 'model-scale' : null;
+                const sliderId = sel === 'splat' ? 'splat-scale' : sel === 'mesh' ? 'model-scale' : null;
                 if (sliderId) {
                     const slider = document.getElementById(sliderId) as HTMLInputElement | null;
                     if (slider) slider.value = String(val);
@@ -441,6 +514,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
                     if (label) label.textContent = val.toFixed(1);
                 }
             }
+            deps.undo.pushAfterNumericEdit();
         });
     });
 
@@ -508,11 +582,10 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-export-cancel', 'click', hideExportPanel);
     addListener('btn-export-download', 'click', deps.export.downloadArchive);
     addListener('btn-save-to-library', 'click', deps.export.saveToLibrary);
-
-    // Generic viewer download button
-    addListener('btn-download-viewer', 'click', deps.export.downloadGenericViewer);
+    setupExportFormatToggle();
 
     // ─── Screenshot controls ─────────────────────────────────
+    addListener('btn-download-screenshot', 'click', deps.screenshots.downloadScreenshot);
     addListener('btn-capture-screenshot', 'click', deps.screenshots.captureScreenshotToList);
     addListener('btn-set-preview', 'click', deps.screenshots.showViewfinder);
     addListener('btn-capture-preview', 'click', deps.screenshots.captureManualPreview);
@@ -523,6 +596,33 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (status) status.style.display = 'none';
         notify.success('Manual preview cleared');
     });
+
+    // ─── Recording controls ────────────────────────────────
+    if (deps.recording) {
+        // Mode selector buttons
+        document.querySelectorAll('.rec-mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.rec-mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const mode = (btn as HTMLElement).dataset.recMode || 'free';
+                document.querySelectorAll('.rec-options').forEach(el => el.classList.add('hidden'));
+                const optionsEl = document.getElementById(`rec-options-${mode}`);
+                if (optionsEl) optionsEl.classList.remove('hidden');
+            });
+        });
+
+        // Dwell time slider label sync
+        const dwellSlider = document.getElementById('rec-tour-dwell') as HTMLInputElement | null;
+        const dwellLabel = document.getElementById('rec-tour-dwell-label');
+        if (dwellSlider && dwellLabel) {
+            dwellSlider.addEventListener('input', () => {
+                dwellLabel.textContent = `${dwellSlider.value}s`;
+            });
+        }
+
+        addListener('btn-rec-start', 'click', deps.recording.startRecording);
+        addListener('btn-rec-stop', 'click', deps.recording.stopRecording);
+    }
 
     // ─── Metadata panel controls ─────────────────────────────
     addListener('btn-close-sidebar', 'click', deps.metadata.hideMetadataPanel);
@@ -596,6 +696,10 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-load-bg-image-url', 'click', async () => {
         const url = prompt('Enter background image URL:');
         if (!url || !sceneManager) return;
+        if (deps.validateUrl) {
+            const result = deps.validateUrl(url, 'background image');
+            if (!result.valid) { notify.error(result.error || 'Invalid URL'); return; }
+        }
         try {
             await sceneManager.loadBackgroundImage(url);
             const statusRow = document.getElementById('bg-image-status');
@@ -621,12 +725,14 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     // ─── Scene settings — Tone mapping ───────────────────────
     addListener('tone-mapping-select', 'change', (e: Event) => {
         if (sceneManager) sceneManager.setToneMapping((e.target as HTMLSelectElement).value);
+        markPresetAsCustom();
     });
 
     addListener('tone-mapping-exposure', 'input', (e: Event) => {
         const val = parseFloat((e.target as HTMLInputElement).value);
         document.getElementById('tone-mapping-exposure-value')!.textContent = val.toFixed(1);
         if (sceneManager) sceneManager.setToneMappingExposure(val);
+        markPresetAsCustom();
     });
 
     // ─── Scene settings — Post-Processing ────────────────────
@@ -636,7 +742,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         if (ppControls) ppControls.style.display = checked ? '' : 'none';
         if (checked && sceneManager.rendererType === 'webgpu') {
             // Force switch to WebGL — EffectComposer is WebGL-only
-            notify('Switching to WebGL for post-processing effects');
+            notify.info('Switching to WebGL for post-processing effects');
             await sceneManager.switchRenderer('webgl');
             // onRendererChanged callback in main.ts re-enables post-processing
         }
@@ -774,28 +880,136 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         postProcessing.setUberEffects({ grain: { ...cfg, intensity: val } });
     });
 
+    /** Flag to suppress Custom flip during programmatic syncing from applyPreset. */
+    let _suppressPresetFlip = false;
+
+    /** Flip the rendering preset dropdown to "Custom" when any individual control changes. */
+    function markPresetAsCustom() {
+        if (_suppressPresetFlip) return;
+        if (deps.state.renderingPreset && deps.state.renderingPreset !== 'custom') {
+            deps.state.renderingPreset = 'custom';
+            const presetSelect = document.getElementById('rendering-preset-select') as HTMLSelectElement | null;
+            if (presetSelect) presetSelect.value = 'custom';
+        }
+    }
+
+    /** Sync live scene control UI elements to match a preset's values. */
+    function syncLiveControlsToPreset(preset: import('./rendering-presets.js').RenderingPreset) {
+        const setSlider = (id: string, val: number) => {
+            const el = document.getElementById(id) as HTMLInputElement | null;
+            if (el) { el.value = String(val); }
+            const valEl = document.getElementById(id + '-value');
+            if (valEl) valEl.textContent = val.toFixed(1);
+        };
+        setSlider('ambient-intensity', preset.ambientIntensity);
+        setSlider('hemisphere-intensity', preset.hemisphereIntensity);
+        setSlider('directional1-intensity', preset.directional1Intensity);
+        setSlider('directional2-intensity', preset.directional2Intensity);
+        const toneSelect = document.getElementById('tone-mapping-select') as HTMLSelectElement | null;
+        if (toneSelect) toneSelect.value = preset.toneMapping;
+        setSlider('tone-mapping-exposure', preset.toneMappingExposure);
+        const envSelect = document.getElementById('env-map-select') as HTMLSelectElement | null;
+        if (envSelect) envSelect.value = preset.hdri || '';
+        const envBgCb = document.getElementById('toggle-env-background') as HTMLInputElement | null;
+        if (envBgCb) envBgCb.checked = preset.envAsBackground;
+    }
+
+    /** Sync archived (View Settings) controls to match a preset's values. */
+    function syncArchivedControlsToPreset(preset: import('./rendering-presets.js').RenderingPreset) {
+        const setSlider = (id: string, val: number) => {
+            const el = document.getElementById(id) as HTMLInputElement | null;
+            if (el) { el.value = String(val); }
+            const valEl = document.getElementById(id + '-value');
+            if (valEl) valEl.textContent = val.toFixed(1);
+        };
+        setSlider('meta-viewer-ambient-intensity', preset.ambientIntensity);
+        setSlider('meta-viewer-hemisphere-intensity', preset.hemisphereIntensity);
+        setSlider('meta-viewer-directional1-intensity', preset.directional1Intensity);
+        setSlider('meta-viewer-directional2-intensity', preset.directional2Intensity);
+        const toneMethod = document.getElementById('meta-viewer-tone-mapping-method') as HTMLSelectElement | null;
+        if (toneMethod) toneMethod.value = preset.toneMapping;
+        setSlider('meta-viewer-tone-mapping-exposure', preset.toneMappingExposure);
+        const envPreset = document.getElementById('meta-viewer-env-preset') as HTMLSelectElement | null;
+        if (envPreset) envPreset.value = preset.hdri || '';
+        const envBg = document.getElementById('meta-viewer-env-as-background') as HTMLInputElement | null;
+        if (envBg) envBg.checked = preset.envAsBackground;
+    }
+
+    // ─── Rendering Presets ──────────────────────────────────
+    addListener('rendering-preset-select', 'change', async (e: Event) => {
+        const name = (e.target as HTMLSelectElement).value;
+        if (!name || name === 'custom') return;
+
+        showLoading('Applying rendering preset...');
+        try {
+            const presetDeps: ApplyPresetDeps = {
+                sceneManager,
+                postProcessing: deps.sceneManager?.postProcessing || null,
+                state: deps.state,
+            };
+            await applyPreset(name, presetDeps);
+
+            // Auto-check the "save with archive" checkboxes
+            const lightingCb = document.getElementById('meta-viewer-lighting-enabled') as HTMLInputElement | null;
+            const toneCb = document.getElementById('meta-viewer-tone-mapping-enabled') as HTMLInputElement | null;
+            const envCb = document.getElementById('meta-viewer-env-enabled') as HTMLInputElement | null;
+            if (lightingCb) { lightingCb.checked = true; lightingCb.dispatchEvent(new Event('change')); }
+            if (toneCb) { toneCb.checked = true; toneCb.dispatchEvent(new Event('change')); }
+            if (envCb) { envCb.checked = true; envCb.dispatchEvent(new Event('change')); }
+
+            // Sync all live controls to preset values (suppress Custom flip during sync)
+            const preset = RENDERING_PRESETS[name];
+            if (preset) {
+                _suppressPresetFlip = true;
+                try {
+                    syncLiveControlsToPreset(preset);
+                    syncArchivedControlsToPreset(preset);
+                } finally {
+                    _suppressPresetFlip = false;
+                }
+            }
+
+            notify.success(`Preset "${RENDERING_PRESETS[name]?.label || name}" applied`);
+        } catch (err: any) {
+            notify.error('Failed to apply preset: ' + err.message);
+        } finally {
+            hideLoading();
+        }
+    });
+
     // ─── Scene settings — Environment map (IBL) ─────────────
     addListener('env-map-select', 'change', async (e: Event) => {
         const value = (e.target as HTMLSelectElement).value;
         if (!value) {
             if (sceneManager) sceneManager.clearEnvironment();
+            deps.state.environmentBlob = null;
+            markPresetAsCustom();
             return;
         }
-        if (value.startsWith('preset:')) {
-            const index = parseInt(value.split(':')[1]);
-            const presets = ENVIRONMENT.PRESETS.filter((p: any) => p.url);
-            if (presets[index]) {
-                showLoading('Loading HDR environment...');
+        const preset = ENVIRONMENT.PRESETS.find((p: any) => p.name === value);
+        if (preset?.url) {
+            showLoading('Loading HDR environment...');
+            try {
+                // Fetch raw blob for archive bundling
+                const response = await fetch(preset.url);
+                const blob = await response.blob();
+                deps.state.environmentBlob = blob;
+
+                // Load into Three.js via blob URL
+                const blobUrl = URL.createObjectURL(blob);
                 try {
-                    await sceneManager.loadHDREnvironment(presets[index].url);
-                    notify.success('Environment loaded');
-                } catch (err: any) {
-                    notify.error('Failed to load environment: ' + err.message);
+                    await sceneManager.loadHDREnvironment(blobUrl);
                 } finally {
-                    hideLoading();
+                    URL.revokeObjectURL(blobUrl);
                 }
+                notify.success('Environment loaded');
+            } catch (err: any) {
+                notify.error('Failed to load environment: ' + err.message);
+            } finally {
+                hideLoading();
             }
         }
+        markPresetAsCustom();
     });
 
     addListener('hdr-file-input', 'change', async (e: Event) => {
@@ -809,6 +1023,11 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             const select = document.getElementById('env-map-select') as HTMLSelectElement | null;
             if (select) select.value = '';
             notify.success('Environment loaded from file');
+            // Store blob for archive bundling
+            deps.state.environmentBlob = file;
+            deps.state.renderingPreset = 'custom';
+            const presetSelect = document.getElementById('rendering-preset-select') as HTMLSelectElement | null;
+            if (presetSelect) presetSelect.value = 'custom';
         } catch (err: any) {
             notify.error('Failed to load HDR: ' + err.message);
         } finally {
@@ -819,12 +1038,24 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     addListener('btn-load-hdr-url', 'click', async () => {
         const url = prompt('Enter HDR file URL (.hdr):');
         if (!url) return;
+        if (deps.validateUrl) {
+            const result = deps.validateUrl(url, 'HDR file');
+            if (!result.valid) { notify.error(result.error || 'Invalid URL'); return; }
+        }
         showLoading('Loading HDR environment...');
         try {
             await sceneManager.loadHDREnvironment(url);
             const select = document.getElementById('env-map-select') as HTMLSelectElement | null;
             if (select) select.value = '';
             notify.success('Environment loaded from URL');
+            // Fetch and store blob for archive bundling
+            try {
+                const resp = await fetch(url);
+                deps.state.environmentBlob = await resp.blob();
+            } catch { /* non-critical — archive just won't include HDR */ }
+            deps.state.renderingPreset = 'custom';
+            const presetSelect = document.getElementById('rendering-preset-select') as HTMLSelectElement | null;
+            if (presetSelect) presetSelect.value = 'custom';
         } catch (err: any) {
             notify.error('Failed to load HDR: ' + err.message);
         } finally {
@@ -835,11 +1066,15 @@ export function setupUIEvents(deps: EventWiringDeps): void {
     // ─── Scene settings — Environment as background ──────────
     addListener('toggle-env-background', 'change', (e: Event) => {
         if (sceneManager) sceneManager.setEnvironmentAsBackground((e.target as HTMLInputElement).checked);
+        markPresetAsCustom();
     });
 
     // ─── Scene settings — Shadows ────────────────────────────
     addListener('toggle-shadows', 'change', (e: Event) => {
-        if (sceneManager) sceneManager.enableShadows((e.target as HTMLInputElement).checked);
+        if (sceneManager) {
+            sceneManager.enableShadows((e.target as HTMLInputElement).checked);
+            if ((e.target as HTMLInputElement).checked) sceneManager.fitShadowToScene();
+        }
         const opacityGroup = document.getElementById('shadow-opacity-group');
         if (opacityGroup) opacityGroup.style.display = (e.target as HTMLInputElement).checked ? '' : 'none';
     });
@@ -876,7 +1111,18 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             return;
         }
 
-        if (e.ctrlKey || e.metaKey) return;
+        // Handle Ctrl/Cmd shortcuts
+        if (e.ctrlKey || e.metaKey) {
+            const key = e.key.toLowerCase();
+            if (key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                deps.undo.performUndo();
+            } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+                e.preventDefault();
+                deps.undo.performRedo();
+            }
+            return;
+        }
 
         const key = e.key.toLowerCase();
 
@@ -887,11 +1133,12 @@ export function setupUIEvents(deps: EventWiringDeps): void {
             case 'a': activateTool('assets'); activatedTool = 'assets'; break;
             case 't':
                 activateTool('transform'); activatedTool = 'transform';
+                deps.transform.updateTransformInputs();
                 if (state.selectedObject === 'none') {
                     if (sceneRefs.splatMesh) {
                         deps.transform.setSelectedObject('splat' as any);
                     } else if (sceneRefs.modelGroup && sceneRefs.modelGroup.children.length > 0) {
-                        deps.transform.setSelectedObject('model' as any);
+                        deps.transform.setSelectedObject('mesh' as any);
                     }
                 }
                 break;
@@ -1059,6 +1306,80 @@ export function setupUIEvents(deps: EventWiringDeps): void {
         });
     }
 
+    // ─── SfM Camera settings ─────────────────────────────────
+    let pendingCamerasBin: ArrayBuffer | null = null;
+    let pendingImagesBin: ArrayBuffer | null = null;
+    let pendingPoints3DBin: ArrayBuffer | null = null;
+
+    const updateColmapStatus = () => {
+        const camEl = document.getElementById('colmap-status-cameras');
+        const imgEl = document.getElementById('colmap-status-images');
+        const ptsEl = document.getElementById('colmap-status-points3d');
+        if (camEl) camEl.textContent = pendingCamerasBin || deps.colmap.hasData ? '● cameras.bin' : '○ cameras.bin';
+        if (imgEl) imgEl.textContent = pendingImagesBin || deps.colmap.hasData ? '● images.bin' : '○ images.bin';
+        if (ptsEl) ptsEl.textContent = deps.colmap.hasPoints3D ? '● points3D.bin' : '○ points3D.bin';
+
+        const alignBtn = document.getElementById('btn-align-from-camera-data') as HTMLButtonElement | null;
+        if (alignBtn) {
+            const ready = deps.colmap.hasData && deps.colmap.hasPoints3D && deps.state.splatLoaded;
+            alignBtn.disabled = !ready;
+            alignBtn.title = ready ? 'Auto-align using ICP on camera data' : 'Load camera data (cameras.bin, images.bin, points3D.bin) and a splat to enable';
+        }
+    };
+
+    const tryLoadColmap = () => {
+        if (!pendingCamerasBin || !pendingImagesBin) return;
+        deps.colmap.loadFromBuffers(pendingCamerasBin, pendingImagesBin);
+        pendingCamerasBin = null;
+        pendingImagesBin = null;
+        updateColmapStatus();
+    };
+
+    addListener('colmap-cameras-input', 'change', async (e: Event) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        pendingCamerasBin = await file.arrayBuffer();
+        tryLoadColmap();
+        updateColmapStatus();
+    });
+
+    addListener('colmap-images-input', 'change', async (e: Event) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        pendingImagesBin = await file.arrayBuffer();
+        tryLoadColmap();
+        updateColmapStatus();
+    });
+
+    addListener('colmap-points3d-input', 'change', async (e: Event) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        const buffer = await file.arrayBuffer();
+        const { parsePoints3D } = await import('./colmap-alignment.js');
+        const result = parsePoints3D(buffer);
+        if (result) {
+            deps.colmap.loadPoints3D(result.positions, result.count);
+            deps.colmap.points3DBuffer = buffer;
+        }
+        updateColmapStatus();
+    });
+
+    addListener('btn-colmap-frustums', 'click', () => deps.colmap.setDisplayMode('frustums'));
+    addListener('btn-colmap-markers', 'click', () => deps.colmap.setDisplayMode('markers'));
+
+    addListener('colmap-scale', 'input', (e: Event) => {
+        const scale = parseFloat((e.target as HTMLInputElement).value);
+        const valueEl = document.getElementById('colmap-scale-value');
+        if (valueEl) valueEl.textContent = scale.toFixed(1);
+        deps.colmap.setFrustumScale(scale);
+    });
+
+    addListener('btn-align-from-camera-data', 'click', async () => {
+        if (deps.colmap.alignFromCameraData) {
+            await deps.colmap.alignFromCameraData();
+        }
+    });
+
     // ─── Setup collapsible sections ──────────────────────────
     setupCollapsibles();
 
@@ -1081,7 +1402,7 @@ export function setupUIEvents(deps: EventWiringDeps): void {
  * roughness, metalness, specularF0.
  */
 function clearDebugViews(state: any, deps: EventWiringDeps, activeView: string): void {
-    const views: Record<string, { stateKey: string; cbId: string; update: () => void; styleGroupId?: string }> = {
+    const views: Record<string, { stateKey: keyof AppState; cbId: string; update: () => void; styleGroupId?: string }> = {
         wireframe:  { stateKey: 'modelWireframe',  cbId: 'model-wireframe',   update: deps.display.updateModelWireframe },
         matcap:     { stateKey: 'modelMatcap',      cbId: 'model-matcap',      update: deps.display.updateModelMatcap, styleGroupId: 'matcap-style-group' },
         normals:    { stateKey: 'modelNormals',     cbId: 'model-normals',     update: deps.display.updateModelNormals },

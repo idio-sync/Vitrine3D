@@ -7,7 +7,7 @@
 //   FRAME_ANCESTORS=origins   CSP frame-ancestors for iframe embedding
 //
 // Supports URL parameters for embedding:
-//   ?archive=URL     - Archive container file (.a3d, .a3z) - takes priority over splat/model
+//   ?archive=URL     - Archive container file (.ddim) - takes priority over splat/model
 //   ?splat=URL       - Default splat file to load
 //   ?model=URL       - Default model file to load
 //   ?pointcloud=URL  - Default E57 point cloud file to load
@@ -36,12 +36,12 @@
 //   add them to the ALLOWED_EXTERNAL_DOMAINS array below.
 //
 // Examples:
-//   viewer.website.com?archive=/assets/scene.a3d&controls=minimal
+//   viewer.website.com?archive=/assets/scene.ddim&controls=minimal
 //   viewer.website.com?splat=/assets/scene.ply&model=/assets/model.glb&controls=minimal
 //   viewer.website.com?splat=https://example.com/file.ply&controls=none&mode=split
 //   viewer.website.com?splat=/scene.ply&model=/model.glb&alignment=/alignment.json
 //   viewer.website.com?splat=/scene.ply&sp=0,1,0&sr=0,3.14,0&ss=1.5
-//   viewer.website.com?archive=/scene.a3d&toolbar=hide&sidebar=view (viewer mode)
+//   viewer.website.com?archive=/scene.ddim&toolbar=hide&sidebar=view (viewer mode)
 
 (function() {
     // Parse URL parameters
@@ -229,6 +229,26 @@
         libraryEnabled: false,
 
         // Spark.js renderer version: '2.0' (default, with LOD) or '0.1' (legacy OldSparkRenderer)
-        sparkVersion: '2.0'
+        sparkVersion: '2.0',
+
+        // DJI API key for decrypting v13+ binary flight logs (empty in local dev, set via admin settings or Docker env var)
+        djiApiKey: ''
     };
+
+    // Fetch server-managed settings (non-blocking — modules await settingsReady if needed)
+    window.APP_CONFIG.settingsReady = fetch('/api/settings')
+        .then(function(res) { return res.ok ? res.json() : Promise.reject(res.statusText); })
+        .then(function(settings) {
+            var s = settings;
+            if (s['lod.budgetSd'])           window.APP_CONFIG.lodBudgetSd = Number(s['lod.budgetSd'].value);
+            if (s['lod.budgetHd'])           window.APP_CONFIG.lodBudgetHd = Number(s['lod.budgetHd'].value);
+            if (s['renderer.maxPixelRatio']) window.APP_CONFIG.maxPixelRatio = Number(s['renderer.maxPixelRatio'].value);
+            if (s['recording.bitrate'])      window.APP_CONFIG.recordingBitrate = Number(s['recording.bitrate'].value);
+            if (s['recording.framerate'])    window.APP_CONFIG.recordingFramerate = Number(s['recording.framerate'].value);
+            if (s['recording.maxDuration'])  window.APP_CONFIG.recordingMaxDuration = Number(s['recording.maxDuration'].value);
+            if (s['flight.djiApiKey'])       window.APP_CONFIG.djiApiKey = s['flight.djiApiKey'].value;
+        })
+        .catch(function() {
+            // Silently fail — local dev / Tauri won't have this endpoint
+        });
 })();

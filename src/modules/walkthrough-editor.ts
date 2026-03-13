@@ -6,6 +6,7 @@
  */
 
 import { Logger } from './logger.js';
+import { escapeHtml } from './utilities.js';
 import { WALKTHROUGH } from './constants.js';
 import type { Walkthrough, WalkthroughTransition } from '../types.js';
 
@@ -34,6 +35,16 @@ let walkthrough: Walkthrough = {
     loop: false,
 };
 
+/** Reset editor state (call when loading a new archive). */
+export function resetWalkthroughEditor(): void {
+    walkthrough = { title: 'Building Tour', stops: [], auto_play: true, loop: false };
+    selectedStopIndex = -1;
+    const editor = document.getElementById('walkthrough-stop-editor');
+    if (editor) editor.classList.add('hidden');
+    const container = document.getElementById('walkthrough-stop-list');
+    if (container) container.innerHTML = '';
+}
+
 // =============================================================================
 // INIT
 // =============================================================================
@@ -55,6 +66,13 @@ export function getWalkthroughData(): Walkthrough {
 }
 
 export function setWalkthroughData(wt: Walkthrough): void {
+    // Sanitize transition values from untrusted archive data
+    const validTransitions = ['fly', 'fade', 'cut'];
+    for (const stop of wt.stops) {
+        if (!validTransitions.includes(stop.transition)) {
+            stop.transition = 'fly';
+        }
+    }
     walkthrough = wt;
     syncSettingsToDOM();
     renderStopList();
@@ -124,7 +142,7 @@ export function renderStopList(): void {
             <span class="wt-stop-badge">${i + 1}</span>
             <div class="wt-stop-info">
                 <span class="wt-stop-name">${escapeHtml(stop.title || 'Untitled')}</span>
-                <span class="wt-stop-meta">${stop.transition}${stop.annotation_id ? ' \u00b7 linked' : ''}</span>
+                <span class="wt-stop-meta">${escapeHtml(stop.transition)}${stop.annotation_id ? ' \u00b7 linked' : ''}</span>
             </div>
             <span class="wt-stop-drag-handle" title="Drag to reorder">&#8942;&#8942;</span>
         </div>
@@ -165,12 +183,18 @@ export function selectStop(index: number): void {
     if (!editor) return;
     editor.classList.remove('hidden');
 
-    (document.getElementById('wt-stop-title') as HTMLInputElement).value = stop.title || '';
-    (document.getElementById('wt-stop-description') as HTMLTextAreaElement).value = stop.description || '';
-    (document.getElementById('wt-stop-transition') as HTMLSelectElement).value = stop.transition;
-    (document.getElementById('wt-stop-fly-duration') as HTMLInputElement).value = String(stop.fly_duration ?? WALKTHROUGH.DEFAULT_FLY_DURATION);
-    (document.getElementById('wt-stop-fade-duration') as HTMLInputElement).value = String(stop.fade_duration ?? WALKTHROUGH.DEFAULT_FADE_DURATION);
-    (document.getElementById('wt-stop-dwell') as HTMLInputElement).value = String(stop.dwell_time);
+    const titleEl = document.getElementById('wt-stop-title') as HTMLInputElement | null;
+    if (titleEl) titleEl.value = stop.title || '';
+    const descEl = document.getElementById('wt-stop-description') as HTMLTextAreaElement | null;
+    if (descEl) descEl.value = stop.description || '';
+    const transEl = document.getElementById('wt-stop-transition') as HTMLSelectElement | null;
+    if (transEl) transEl.value = stop.transition;
+    const flyDurEl = document.getElementById('wt-stop-fly-duration') as HTMLInputElement | null;
+    if (flyDurEl) flyDurEl.value = String(stop.fly_duration ?? WALKTHROUGH.DEFAULT_FLY_DURATION);
+    const fadeDurEl = document.getElementById('wt-stop-fade-duration') as HTMLInputElement | null;
+    if (fadeDurEl) fadeDurEl.value = String(stop.fade_duration ?? WALKTHROUGH.DEFAULT_FADE_DURATION);
+    const dwellEl = document.getElementById('wt-stop-dwell') as HTMLInputElement | null;
+    if (dwellEl) dwellEl.value = String(stop.dwell_time);
 
     // Show/hide duration rows based on transition type
     updateDurationRowVisibility(stop.transition);
@@ -345,7 +369,3 @@ function reorderStop(fromIndex: number, toIndex: number): void {
 // =============================================================================
 // UTILITIES
 // =============================================================================
-
-function escapeHtml(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}

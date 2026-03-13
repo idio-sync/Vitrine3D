@@ -1,3 +1,32 @@
+# Resolve real client IP from Cloudflare edge servers.
+# CF-Connecting-IP contains the original client IP; without this, $remote_addr
+# shows Cloudflare's edge IP (or Docker bridge IP behind other reverse proxies).
+# Cloudflare IPv4 ranges: https://www.cloudflare.com/ips-v4
+set_real_ip_from 173.245.48.0/20;
+set_real_ip_from 103.21.244.0/22;
+set_real_ip_from 103.22.200.0/22;
+set_real_ip_from 103.31.4.0/22;
+set_real_ip_from 141.101.64.0/18;
+set_real_ip_from 108.162.192.0/18;
+set_real_ip_from 190.93.240.0/20;
+set_real_ip_from 188.114.96.0/20;
+set_real_ip_from 197.234.240.0/22;
+set_real_ip_from 198.41.128.0/17;
+set_real_ip_from 162.158.0.0/15;
+set_real_ip_from 104.16.0.0/13;
+set_real_ip_from 104.24.0.0/14;
+set_real_ip_from 172.64.0.0/13;
+set_real_ip_from 131.0.72.0/22;
+# Cloudflare IPv6 ranges: https://www.cloudflare.com/ips-v6
+set_real_ip_from 2400:cb00::/32;
+set_real_ip_from 2606:4700::/32;
+set_real_ip_from 2803:f800::/32;
+set_real_ip_from 2405:b500::/32;
+set_real_ip_from 2405:8100::/32;
+set_real_ip_from 2a06:98c0::/29;
+set_real_ip_from 2c0f:f248::/32;
+real_ip_header CF-Connecting-IP;
+
 # CORS origin matching — populated by entrypoint from CORS_ORIGINS env var.
 # When CORS_ORIGINS is empty (default), $cors_origin is always "" and no
 # Access-Control-Allow-Origin header is emitted (same-origin only).
@@ -80,6 +109,14 @@ server {
         add_header Vary "Origin" always;
     }
 
+    # Serve media files (video recordings, GIFs, thumbnails)
+    location /media/ {
+        alias /usr/share/nginx/html/media/;
+        expires 7d;
+        add_header Cache-Control "public";
+        add_header Access-Control-Allow-Origin "*";
+    }
+
     # Rewrite absolute asset paths in HTML so browsers load them from the canonical origin.
     # Required when this container is sub-path proxied (e.g. jakemarino.fyi/view/* → viewer.jakemarino.fyi).
     # Driven by SITE_URL (e.g. https://viewer.jakemarino.fyi) — leave unset for normal direct access.
@@ -106,8 +143,15 @@ server {
         add_header Cache-Control "public";
     }
 
-    # Serve archive files (.a3d, .a3z) with proper headers
-    location ~* \.(a3d|a3z)$ {
+    # Block direct access to backup history files (must use authenticated API)
+    location ^~ /archives/history/ {
+        deny all;
+        return 403;
+    }
+
+    # Serve archive files (.ddim, .a3d, .a3z) with proper headers
+    # Range header must be in Allow-Headers for cross-origin byte-range requests (used by loadRemoteIndex)
+    location ~* \.(ddim|a3d|a3z)$ {
         expires 1d;
         add_header Cache-Control "public";
         add_header Access-Control-Allow-Origin $cors_origin always;
@@ -116,7 +160,7 @@ server {
         add_header Vary "Origin" always;
         # Serve as application/zip for proper handling
         types {
-            application/zip a3d a3z;
+            application/zip ddim a3d a3z;
         }
     }
 

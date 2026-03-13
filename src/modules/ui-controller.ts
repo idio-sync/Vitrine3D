@@ -129,6 +129,31 @@ export function updateDisplayPill(loaded: { splat: boolean; model: boolean; poin
     if (pill) pill.style.display = count > 0 ? '' : 'none';
 }
 
+/**
+ * Show/hide overlay toggle pill buttons based on which overlay types are loaded.
+ * Each button appears individually when its data is present and starts active (visible).
+ */
+export function updateOverlayPill(loaded: { sfm: boolean; flightpath: boolean }): void {
+    const show = (id: string, visible: boolean) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const wasHidden = el.style.display === 'none';
+        el.style.display = visible ? '' : 'none';
+        // Reset to active when a button first appears (new data loaded)
+        if (visible && wasHidden) el.classList.add('active');
+    };
+
+    show('btn-overlay-sfm', loaded.sfm);
+    show('btn-overlay-flightpath', loaded.flightpath);
+
+    // Show container only if at least one overlay type is loaded
+    const pill = document.getElementById('vp-overlay-pill');
+    if (pill) {
+        const anyLoaded = loaded.sfm || loaded.flightpath;
+        pill.classList.toggle('hidden', !anyLoaded);
+    }
+}
+
 // =============================================================================
 // LOADING OVERLAY
 // =============================================================================
@@ -210,6 +235,7 @@ const TOOL_PANE_MAP: Record<string, { pane: string; title: string }> = {
     metadata:     { pane: 'pane-metadata',     title: 'Metadata' },
     export:       { pane: 'pane-export',       title: 'Export' },
     library:      { pane: 'pane-library',      title: 'Library' },
+    flightpath:   { pane: 'pane-flightpath',   title: 'Flight Path' },
 };
 
 /**
@@ -263,11 +289,13 @@ export function activateTool(toolName: string): void {
     if (annotationLines) annotationLines.style.display = isLibrary ? 'none' : '';
     const displayPill = document.getElementById('vp-display-pill');
     if (displayPill) displayPill.style.display = isLibrary ? 'none' : '';
+    const overlayPill = document.getElementById('vp-overlay-pill');
+    if (overlayPill) overlayPill.style.display = isLibrary ? 'none' : '';
 
     log.debug(`Tool activated: ${toolName}`);
 }
 
-interface ControlsPanelDeps {
+export interface ControlsPanelDeps {
     state: AppState;
     config?: { controlsMode?: string; showControls?: boolean };
     onWindowResize?: () => void;
@@ -355,7 +383,9 @@ export function updateTransformInputs(
     pointcloudGroup?: any, // THREE.Group
     stlGroup?: any, // THREE.Group
     cadGroup?: any, // THREE.Group
-    drawingGroup?: any // THREE.Group
+    drawingGroup?: any, // THREE.Group
+    flightpathGroup?: any, // THREE.Group
+    colmapGroup?: any // THREE.Group
 ): void {
     // Helper to safely set input value
     const setInputValue = (id: string, value: string | number): void => {
@@ -392,23 +422,25 @@ export function updateTransformInputs(
     if (selection !== 'none') {
         let src: any = null;
         if (selection === 'splat' && splatMesh) src = splatMesh;
-        else if (selection === 'model' && modelGroup) src = modelGroup;
+        else if (selection === 'mesh' && modelGroup) src = modelGroup;
         else if (selection === 'pointcloud' && pointcloudGroup) src = pointcloudGroup;
         else if (selection === 'stl' && stlGroup) src = stlGroup;
         else if (selection === 'cad' && cadGroup) src = cadGroup;
         else if (selection === 'drawing' && drawingGroup) src = drawingGroup;
-        else if (selection === 'both') src = splatMesh || modelGroup || pointcloudGroup || stlGroup || cadGroup || drawingGroup;
+        else if (selection === 'flightpath' && flightpathGroup) src = flightpathGroup;
+        else if (selection === 'colmap' && colmapGroup) src = colmapGroup;
+        else if (selection === 'both') src = splatMesh || modelGroup || pointcloudGroup || stlGroup || cadGroup || drawingGroup || flightpathGroup || colmapGroup;
 
         if (src) {
-            setInputValue('transform-pos-x', src.position.x.toFixed(2));
-            setInputValue('transform-pos-y', src.position.y.toFixed(2));
-            setInputValue('transform-pos-z', src.position.z.toFixed(2));
-            setInputValue('transform-rot-x', THREE.MathUtils.radToDeg(src.rotation.x).toFixed(1));
-            setInputValue('transform-rot-y', THREE.MathUtils.radToDeg(src.rotation.y).toFixed(1));
-            setInputValue('transform-rot-z', THREE.MathUtils.radToDeg(src.rotation.z).toFixed(1));
-            setInputValue('transform-scale-x', src.scale.x.toFixed(2));
-            setInputValue('transform-scale-y', src.scale.y.toFixed(2));
-            setInputValue('transform-scale-z', src.scale.z.toFixed(2));
+            setInputValue('transform-pos-x', src.position.x.toFixed(3));
+            setInputValue('transform-pos-y', src.position.y.toFixed(3));
+            setInputValue('transform-pos-z', src.position.z.toFixed(3));
+            setInputValue('transform-rot-x', THREE.MathUtils.radToDeg(src.rotation.x).toFixed(3));
+            setInputValue('transform-rot-y', THREE.MathUtils.radToDeg(src.rotation.y).toFixed(3));
+            setInputValue('transform-rot-z', THREE.MathUtils.radToDeg(src.rotation.z).toFixed(3));
+            setInputValue('transform-scale-x', src.scale.x.toFixed(3));
+            setInputValue('transform-scale-y', src.scale.y.toFixed(3));
+            setInputValue('transform-scale-z', src.scale.z.toFixed(3));
         }
     }
 }
@@ -424,7 +456,9 @@ export function updateTransformPaneSelection(
     pointcloudGroup?: any,
     stlGroup?: any,
     cadGroup?: any,
-    drawingGroup?: any
+    drawingGroup?: any,
+    flightpathGroup?: any,
+    colmapGroup?: any
 ): void {
     const label = document.getElementById('transform-object-label');
     const emptyHint = document.getElementById('transform-empty-hint');
@@ -440,6 +474,8 @@ export function updateTransformPaneSelection(
         stl: 'STL selected',
         cad: 'CAD selected',
         drawing: 'Drawing selected',
+        flightpath: 'Flight Path selected',
+        colmap: 'SfM Cameras selected',
         both: 'All objects (linked)',
     };
     if (label) label.textContent = labels[selection] || 'No object selected';
@@ -454,24 +490,26 @@ export function updateTransformPaneSelection(
     if (showValues) {
         let src: any = null;
         if (selection === 'splat' && splatMesh) src = splatMesh;
-        else if (selection === 'model' && modelGroup) src = modelGroup;
+        else if (selection === 'mesh' && modelGroup) src = modelGroup;
         else if (selection === 'pointcloud' && pointcloudGroup) src = pointcloudGroup;
         else if (selection === 'stl' && stlGroup) src = stlGroup;
         else if (selection === 'cad' && cadGroup) src = cadGroup;
         else if (selection === 'drawing' && drawingGroup) src = drawingGroup;
-        else if (selection === 'both') src = splatMesh || modelGroup || pointcloudGroup || stlGroup || cadGroup || drawingGroup;
+        else if (selection === 'flightpath' && flightpathGroup) src = flightpathGroup;
+        else if (selection === 'colmap' && colmapGroup) src = colmapGroup;
+        else if (selection === 'both') src = splatMesh || modelGroup || pointcloudGroup || stlGroup || cadGroup || drawingGroup || flightpathGroup || colmapGroup;
 
         if (src) {
             const setVal = (id: string, value: string | number): void => {
                 const el = document.getElementById(id) as HTMLInputElement | null;
                 if (el) el.value = String(value);
             };
-            setVal('transform-pos-x', src.position.x.toFixed(2));
-            setVal('transform-pos-y', src.position.y.toFixed(2));
-            setVal('transform-pos-z', src.position.z.toFixed(2));
-            setVal('transform-rot-x', THREE.MathUtils.radToDeg(src.rotation.x).toFixed(1));
-            setVal('transform-rot-y', THREE.MathUtils.radToDeg(src.rotation.y).toFixed(1));
-            setVal('transform-rot-z', THREE.MathUtils.radToDeg(src.rotation.z).toFixed(1));
+            setVal('transform-pos-x', src.position.x.toFixed(3));
+            setVal('transform-pos-y', src.position.y.toFixed(3));
+            setVal('transform-pos-z', src.position.z.toFixed(3));
+            setVal('transform-rot-x', THREE.MathUtils.radToDeg(src.rotation.x).toFixed(3));
+            setVal('transform-rot-y', THREE.MathUtils.radToDeg(src.rotation.y).toFixed(3));
+            setVal('transform-rot-z', THREE.MathUtils.radToDeg(src.rotation.z).toFixed(3));
         }
     }
 }

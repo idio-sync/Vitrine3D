@@ -13,19 +13,24 @@ import type { Annotation, DisplayMode } from '@/types.js';
 import { normalizeScale } from '@/types.js';
 import { SceneManager } from './scene-manager.js';
 import { createSparkRenderer, isSparkV2 } from './spark-compat.js';
+import type { SplatMesh } from '@sparkjsdev/spark';
+import type { SparkRenderer } from '@sparkjsdev/spark';
+import type { FlightPathManager } from './flight-path.js';
+import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 // Local AssetType (not exported from types.ts)
 type AssetType = 'splat' | 'mesh' | 'pointcloud';
+
 import { FlyControls } from './fly-controls.js';
 import { AnnotationSystem } from './annotation-system.js';
 import { MeasurementSystem } from './measurement-system.js';
 import { CrossSectionTool } from './cross-section.js';
-import { CAMERA, ASSET_STATE, QUALITY_TIER, WALKTHROUGH, COLORS } from './constants.js';
+import { CAMERA, ASSET_STATE, QUALITY_TIER, WALKTHROUGH, COLORS, SPARK_DEFAULTS } from './constants.js';
 import { WalkthroughEngine } from './walkthrough-engine.js';
 import type { WalkthroughPlaybackState } from './walkthrough-engine.js';
 import type { Walkthrough, WalkthroughStop } from '../types.js';
-import { resolveQualityTier, hasAnyProxy, getLodBudget } from './quality-tier.js';
-import { Logger, notify, parseMarkdown, resolveAssetRefs, fetchWithProgress, downloadBlob } from './utilities.js';
+import { resolveQualityTier, hasAnyProxy, getLodBudget, runGpuBenchmark } from './quality-tier.js';
+import { Logger, notify, parseMarkdown, resolveAssetRefs, fetchWithProgress, downloadBlob, errMsg, escapeHtml, formatBytes } from './utilities.js';
 import {
     showLoading, hideLoading, updateProgress,
     setDisplayMode, setupCollapsibles, addListener,
@@ -60,13 +65,14 @@ import { loadCADFromBlobUrl } from './cad-loader.js';
 import { KIOSK_SECTION_TIERS, EDITORIAL_SECTION_TIERS, isTierVisible } from './metadata-profile.js';
 import type { MetadataProfile } from './metadata-profile.js';
 import * as postProcessing from './post-processing.js';
+import { initCollectionsBrowser, showCollectionsBrowser, handleViewerBack } from './collections-browser.js';
 
 
 // =============================================================================
 // TYPE DEFINITIONS
 // =============================================================================
 
-type FileCategory = 'splat' | 'model' | 'pointcloud' | 'archive';
+type FileCategory = 'splat' | 'mesh' | 'pointcloud' | 'archive';
 type SheetSnap = 'peek' | 'half' | 'full';
 
 interface KioskState {
@@ -77,7 +83,7 @@ interface KioskState {
     pointcloudLoaded: boolean;
     archiveLoaded: boolean;
     archiveLoader: ArchiveLoader | null;
-    archiveManifest: any;
+    archiveManifest: Record<string, unknown> | null;
     archiveFileName: string | null;
     currentArchiveUrl: string | null;
     currentSplatUrl: string | null;
@@ -85,7 +91,7 @@ interface KioskState {
     flyModeActive: boolean;
     annotationsVisible: boolean;
     assetStates: Record<string, string>;
-    imageAssets: Map<string, any>;
+    imageAssets: Map<string, string>;
     qualityTier: string;
     qualityResolved: string;
     meshBackgroundColor: string | null;
@@ -95,6 +101,7 @@ interface KioskState {
 
 interface AppConfig {
     home?: boolean;
+    kiosk?: boolean;
     theme?: string;
     layout?: string;
     defaultArchiveUrl?: string;
@@ -109,14 +116,14 @@ interface AppConfig {
         pointcloud?: { position?: number[]; rotation?: number[]; scale?: number };
     };
     _resolvedLayout?: string;
-    _themeMeta?: any;
+    _themeMeta?: Record<string, unknown>;
     _layoutModule?: LayoutModule | null;
 }
 
 interface WindowWithConfig extends Window {
     APP_CONFIG?: AppConfig;
-    __TAURI__?: any;
-    __KIOSK_THEME_ASSETS__?: Record<string, any>;
+    __TAURI__?: Record<string, unknown>;
+    __KIOSK_THEME_ASSETS__?: Record<string, string>;
 }
 
 declare const window: WindowWithConfig;
@@ -132,7 +139,7 @@ function camelToSnake(str: string): string {
 }
 
 /** Recursively convert all object keys from camelCase to snake_case */
-function deepSnakeKeys(obj: any): any {
+function deepSnakeKeys(obj: unknown): unknown {
     if (Array.isArray(obj)) return obj.map(deepSnakeKeys);
     if (obj !== null && typeof obj === 'object') {
         const result = {};
@@ -148,7 +155,7 @@ function deepSnakeKeys(obj: any): any {
  * Normalize a manifest to canonical snake_case keys and lift common fields.
  * Handles manifests created with either camelCase or snake_case conventions.
  */
-function normalizeManifest(raw: any): any {
+function normalizeManifest(raw: Record<string, unknown>): Record<string, unknown> {
     const m = deepSnakeKeys(raw);
     // Lift project fields to top level for convenient access
     if (m.project) {
@@ -179,7 +186,7 @@ function formatDisplayDate(raw: string, style: 'long' | 'medium' = 'long'): stri
 // =============================================================================
 
 let sceneManager: SceneManager | null = null;
-let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: any, controls: any, modelGroup: THREE.Group, pointcloudGroup: THREE.Group;
+let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, controls: OrbitControls, modelGroup: THREE.Group, pointcloudGroup: THREE.Group;
 let flyControls: FlyControls | null = null;
 let annotationSystem: AnnotationSystem | null = null;
 let walkthroughEngine: WalkthroughEngine | null = null;
@@ -188,8 +195,9 @@ let walkthroughPlayerEl: HTMLElement | null = null;
 let walkthroughFadeEl: HTMLElement | null = null;
 let crossSection: CrossSectionTool | null = null;
 let measurementSystem: MeasurementSystem | null = null;
-let sparkRenderer: any = null; // SparkRenderer instance
-let splatMesh: any = null; // TODO: SplatMesh type
+let flightPathManager: FlightPathManager | null = null;
+let sparkRenderer: SparkRenderer | null = null;
+let splatMesh: SplatMesh | null = null;
 let fpsElement: HTMLElement | null = null;
 let currentPopupAnnotationId: string | null = null;
 let annotationLineEl: SVGLineElement | null = null;
@@ -201,6 +209,7 @@ const _prevCamPos = new THREE.Vector3();
 const _prevCamQuat = new THREE.Quaternion();
 let _markersDirty = true;
 let _sidebarTransitioning = false;
+let _initPromise: Promise<void> = Promise.resolve(); // resolved once init() completes
 
 /** Get the resolved layout module, if any. */
 function getLayoutModule(): LayoutModule | null {
@@ -230,20 +239,23 @@ const state: KioskState = {
     splatBackgroundColor: null
 };
 
+/** Tracks in-flight asset load promises so concurrent callers await the same operation. */
+const assetLoadingPromises = new Map<string, Promise<boolean>>();
+
 // =============================================================================
 // FILE FORMAT CLASSIFICATION
 // =============================================================================
 
 const FILE_CATEGORIES = {
-    archive:    ['.a3d', '.a3z'],
-    model:      ['.glb', '.gltf', '.obj', '.stl'],
+    archive:    ['.ddim', '.a3d', '.a3z'],
+    mesh:       ['.glb', '.gltf', '.obj', '.stl'],
     splat:      ['.ply', '.splat', '.ksplat', '.spz', '.sog'],
     pointcloud: ['.e57']
 };
 /**
  * Classify a filename into its asset category.
  * @param {string} filename
- * @returns {'splat'|'model'|'pointcloud'|'archive'|null}
+ * @returns {'splat'|'mesh'|'pointcloud'|'archive'|null}
  */
 function classifyFile(filename: string): FileCategory | null {
     const ext = '.' + filename.split('.').pop().toLowerCase();
@@ -258,6 +270,12 @@ function classifyFile(filename: string): FileCategory | null {
 // =============================================================================
 
 export async function init(): Promise<void> {
+    const p = _doInit();
+    _initPromise = p;
+    return p;
+}
+
+async function _doInit(): Promise<void> {
     log.info('Kiosk viewer initializing...');
     document.body.classList.add('kiosk-mode');
 
@@ -280,19 +298,25 @@ export async function init(): Promise<void> {
     pointcloudGroup = sceneManager.pointcloudGroup;
     fpsElement = document.getElementById('fps-counter');
 
+    // Resolve quality tier (without benchmark — benchmark runs when a model is loaded)
+    const glCtxInit = renderer ? renderer.getContext() : null;
+    state.qualityResolved = resolveQualityTier(state.qualityTier, glCtxInit);
+    log.info('Quality tier resolved at init:', state.qualityResolved);
+
     // Create SparkRenderer only when starting with WebGL — Spark.js requires
     // WebGL context (uses .flush()). If starting with WebGPU, SparkRenderer
     // will be created in onRendererChanged when switching to WebGL for splat loading.
     if (sceneManager.rendererType === 'webgl') {
-        const lodBudget = getLodBudget(state.qualityResolved || QUALITY_TIER.HD);
+        const lodBudget = getLodBudget(state.qualityResolved);
         sparkRenderer = createSparkRenderer({
             renderer: renderer,
-            clipXY: 2.0,           // Prevent edge popping without excessive overdraw (default: 1.4)
+            clipXY: SPARK_DEFAULTS.CLIP_XY,
             autoUpdate: true,
-            minAlpha: 3 / 255,     // Cull near-invisible splats
-            // LOD (Spark 2.0) — device-tier-aware splat budget
+            minAlpha: SPARK_DEFAULTS.MIN_ALPHA,
             lodSplatCount: lodBudget,
-            behindFoveate: 0.1,    // Aggressive behind-camera culling
+            behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
+            coneFov: SPARK_DEFAULTS.CONE_FOV,
+            coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
         });
         scene.add(sparkRenderer);
         log.info(`SparkRenderer created with clipXY=2.0, minAlpha=3/255, lodSplatCount=${lodBudget}`);
@@ -310,7 +334,7 @@ export async function init(): Promise<void> {
     crossSection = new CrossSectionTool(scene, camera, renderer, controls, modelGroup, pointcloudGroup, null);
 
     // Register callback for renderer switches (WebGPU <-> WebGL)
-    sceneManager.onRendererChanged = (newRenderer: any) => {
+    sceneManager.onRendererChanged = (newRenderer: THREE.WebGLRenderer) => {
         renderer = newRenderer;
         controls = sceneManager!.controls;
         if (annotationSystem) annotationSystem.updateRenderer(newRenderer);
@@ -324,14 +348,16 @@ export async function init(): Promise<void> {
             scene.remove(sparkRenderer);
             if (sparkRenderer.dispose) sparkRenderer.dispose();
         }
-        const lodBudget = getLodBudget(state.qualityResolved || QUALITY_TIER.HD);
+        const lodBudget = getLodBudget(state.qualityResolved);
         sparkRenderer = createSparkRenderer({
             renderer: newRenderer,
-            clipXY: 2.0,
+            clipXY: SPARK_DEFAULTS.CLIP_XY,
             autoUpdate: true,
-            minAlpha: 3 / 255,
+            minAlpha: SPARK_DEFAULTS.MIN_ALPHA,
             lodSplatCount: lodBudget,
-            behindFoveate: 0.1,
+            behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
+            coneFov: SPARK_DEFAULTS.CONE_FOV,
+            coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
         });
         scene.add(sparkRenderer);
         log.info('Renderer changed to', sceneManager!.rendererType, `- SparkRenderer recreated (lodSplatCount=${lodBudget})`);
@@ -358,7 +384,7 @@ export async function init(): Promise<void> {
         }
         // Highlight the corresponding sidebar item
         document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
-        const item = document.querySelector(`.kiosk-anno-item[data-anno-id="${annotation.id}"]`);
+        const item = document.querySelector(`.kiosk-anno-item[data-anno-id="${CSS.escape(annotation.id)}"]`);
         if (item) item.classList.add('active');
 
         // Notify layout module of selection
@@ -374,6 +400,7 @@ export async function init(): Promise<void> {
 
     // Create measurement system
     measurementSystem = new MeasurementSystem(scene, camera, renderer, controls);
+    measurementSystem.onMeasurementChanged = () => { getLayoutModule()?.onMeasurementChanged?.(); };
 
     // Create kiosk-only DOM elements before theme init (layout modules customize them)
     createFilePicker();
@@ -400,6 +427,11 @@ export async function init(): Promise<void> {
     config._resolvedLayout = layoutStyle;
     config._themeMeta = themeMeta;
     config._layoutModule = themeMeta.layoutModule || null;
+
+    // Apply theme scene background color (overrides default SCENE_BACKGROUND)
+    if (themeMeta.sceneBg && sceneManager) {
+        sceneManager.setBackgroundColor(themeMeta.sceneBg);
+    }
 
     if (hasLayoutModule) {
         document.body.classList.add(`kiosk-${layoutStyle}`);
@@ -431,6 +463,19 @@ export async function init(): Promise<void> {
     } else if (requestedLayout !== 'sidebar') {
         log.warn(`Layout "${requestedLayout}" requested but no layout module available — using sidebar`);
     }
+
+    // Initialize collections browser (public, no auth required)
+    const libraryUrl = (import.meta.env.VITE_APP_LIBRARY_URL as string | undefined) || '';
+    if (config.home && libraryUrl) {
+        initCollectionsBrowser({
+            loadArchiveFromUrl,
+            libraryBaseUrl: libraryUrl,
+            onViewerBack: cleanupCurrentScene,
+        });
+    }
+
+    // Inject library button after layout module may have replaced picker HTML
+    injectLibraryButton();
 
     // Wire up UI
     setupViewerUI();
@@ -529,6 +574,11 @@ function setupSidebarTransitionObserver(): void {
     };
 
     const classObserver = new MutationObserver(() => {
+        // Mobile uses .mobile-open with position:fixed — no margin-right transition,
+        // so the sidebar freeze/slide animation is not applicable. Skip entirely.
+        if (overlay.classList.contains('mobile-open') || window.matchMedia('(max-width: 699px)').matches) {
+            return;
+        }
         const isOpening = overlay.classList.contains('open');
 
         // If already transitioning (rapid toggle), clean up previous
@@ -606,48 +656,64 @@ function createFilePicker(): HTMLElement {
     picker.id = 'kiosk-file-picker';
     picker.className = 'hidden';
 
-    // "Browse Library" button — shown only on Tauri home screen when server URL is configured
-    const config = window.APP_CONFIG || {};
-    const libraryUrl = (import.meta.env.VITE_APP_LIBRARY_URL as string | undefined) || '';
-    const showLibrary = config.home && libraryUrl;
-    const libraryHtml = showLibrary
-        ? `<button id="kiosk-library-btn" class="kiosk-library-btn" type="button">Browse Library</button>`
-        : '';
-
     picker.innerHTML = `
         <div class="kiosk-picker-content">
             <h1>Vitrine3D</h1>
             <p>Open a 3D file or archive to view its content.</p>
-            ${libraryHtml}
             <div class="kiosk-picker-box" id="kiosk-drop-zone">
                 <div class="kiosk-picker-icon">&#128194;</div>
                 <p>Select a <strong>3D file</strong> or <strong>archive</strong></p>
                 <button id="kiosk-picker-btn" type="button">Select File</button>
                 <p class="kiosk-picker-hint">or drag and drop it here</p>
                 <p class="kiosk-picker-formats">
-                    Archives: .a3d, .a3z<br>
+                    Archives: .ddim<br>
                     Models: .glb, .gltf, .obj, .stl<br>
                     Splats: .ply, .splat, .ksplat, .spz, .sog<br>
                     Point Clouds: .e57
                 </p>
             </div>
-            <input type="file" id="kiosk-picker-input" accept=".a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">
+            <input type="file" id="kiosk-picker-input" accept=".ddim,.a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57,*/*" multiple style="display:none">
         </div>
     `;
 
-    // Wire up library button
-    if (showLibrary) {
-        const libraryBtn = picker.querySelector('#kiosk-library-btn');
-        if (libraryBtn) {
-            libraryBtn.addEventListener('click', () => {
-                log.info('Navigating to library:', libraryUrl);
-                window.location.href = libraryUrl + '/library';
-            });
-        }
-    }
-
     document.body.appendChild(picker);
     return picker;
+}
+
+/**
+ * Inject the "Browse Library" button into the file picker.
+ * Called AFTER layout module customization so it survives innerHTML replacement.
+ */
+function injectLibraryButton(): void {
+    const config = window.APP_CONFIG || {};
+    const libraryUrl = (import.meta.env.VITE_APP_LIBRARY_URL as string | undefined) || '';
+    if (!config.home || !libraryUrl) return;
+
+    const picker = document.getElementById('kiosk-file-picker');
+    if (!picker) return;
+
+    // Don't double-inject
+    if (picker.querySelector('#kiosk-library-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'kiosk-library-btn';
+    btn.className = 'kiosk-library-btn';
+    btn.type = 'button';
+    btn.textContent = 'Browse Library';
+
+    // Insert after the "Browse Files" / "Select File" button so it sits alongside it
+    const browseBtn = picker.querySelector('#kiosk-picker-btn');
+    if (browseBtn && browseBtn.parentElement) {
+        browseBtn.parentElement.insertBefore(btn, browseBtn.nextSibling);
+    } else {
+        const dropZone = picker.querySelector('#kiosk-drop-zone');
+        if (dropZone) dropZone.appendChild(btn);
+        else picker.appendChild(btn);
+    }
+
+    btn.addEventListener('click', () => { void showCollectionsBrowser(); });
+
+    log.info('Library button injected');
 }
 
 function createClickGate(): HTMLElement {
@@ -699,12 +765,12 @@ function setupFilePicker(): void {
         //   unnecessary overhead that delay the loading screen with metadata.
         if (window.__TAURI__) {
             const archiveUrl = config.defaultArchiveUrl;
-            const isFilesystemPath = /^[A-Za-z]:[\\\/]|^[\\\/]/.test(archiveUrl);
+            const isFilesystemPath = /^[A-Za-z]:[/\\]|^[/\\]/.test(archiveUrl);
             if (isFilesystemPath) {
                 log.info('Tauri: loading archive from filesystem path:', archiveUrl);
                 (async () => {
                     try {
-                        await loadArchiveFromIpc(archiveUrl, archiveUrl.split(/[\\/]/).pop() || 'archive.a3d');
+                        await loadArchiveFromIpc(archiveUrl, archiveUrl.split(/[\\/]/).pop() || 'archive.ddim');
                     } catch {
                         loadArchiveFromTauri(archiveUrl);
                     }
@@ -714,7 +780,7 @@ function setupFilePicker(): void {
                 // to an asset protocol URL (https://asset.localhost/...) which supports
                 // HTTP Range requests. The frontend dist server (tauri://localhost/) does
                 // NOT support Range — it returns 200 with the full file every time.
-                const name = archiveUrl.split('/').pop()?.split('?')[0] || 'archive.a3d';
+                const name = archiveUrl.split('/').pop()?.split('?')[0] || 'archive.ddim';
                 (async () => {
                     try {
                         const absPath = await window.__TAURI__!.path.resolveResource(archiveUrl);
@@ -748,6 +814,17 @@ function setupFilePicker(): void {
         return;
     }
 
+    // Layout modules that handle their own empty state (e.g. industrial with File > Open menu)
+    // initialise their full UI immediately instead of showing the generic file picker
+    const layoutModule = getLayoutModule();
+    if (layoutModule?.handlesEmptyState) {
+        layoutModule.setup(null, createLayoutDeps());
+        setupSidebarTransitionObserver();
+        createViewSwitcher();
+        syncQualityButtons();
+        return;
+    }
+
     if (picker) picker.classList.remove('hidden');
 
     const btn = document.getElementById('kiosk-picker-btn');
@@ -755,37 +832,79 @@ function setupFilePicker(): void {
     const dropZone = document.getElementById('kiosk-drop-zone');
 
     if (btn && input) {
-        // In Tauri, use native OS file dialog instead of browser file input
+        // In Tauri, use native OS file dialog. On Android, the dialog returns
+        // content:// URIs — the Rust ipc_open_file command transparently copies
+        // these to a temp file via ContentResolver, so the IPC path works on
+        // all platforms. Skip extension filters on Android (custom extensions
+        // like .ddim/.a3d/.a3z have no MIME mapping and become unselectable).
         if (window.__TAURI__) {
+            const isAndroid = /android/i.test(navigator.userAgent);
             btn.addEventListener('click', async () => {
                 try {
-                    const { openFileDialogPathOnly } = await import('./tauri-bridge.js');
+                    const { openFileDialogPathOnly, ipcOpenFile, ipcReadBytes, ipcCloseFile } = await import('./tauri-bridge.js');
                     const result = await openFileDialogPathOnly({
-                        filterKey: 'all',
-                        onDialogClose: () => showLoading('Loading archive...', true),
+                        filterKey: isAndroid ? 'none' : 'all',
+                        onDialogClose: () => showLoading('Loading file...', true),
                     });
                     if (!result) return;
-                    picker.classList.add('hidden');
+                    picker!.classList.add('hidden');
 
-                    const ext = result.name.split('.').pop()?.toLowerCase() ?? '';
-                    if (ext === 'a3d' || ext === 'a3z') {
-                        // Archive: IPC byte serving is fastest — reads bytes directly from
-                        // disk via Rust. Falls back to asset URL Range requests, then full read.
-                        try {
-                            await loadArchiveFromIpc(result.filePath, result.name);
-                        } catch {
-                            await loadArchiveFromAssetUrl(result.assetUrl, result.name, () => loadArchiveFromTauri(result.filePath));
+                    if (isAndroid && result.filePath.startsWith('content://')) {
+                        // Android content:// URIs: detect file type from magic bytes
+                        // via a small IPC read, then route accordingly.
+                        // ipc_open_file handles content:// URIs transparently
+                        // (copies to temp file via ContentResolver).
+                        updateProgress(5, 'Reading file...');
+
+                        // Read just the header to detect file type — avoids loading
+                        // the entire archive into memory (which causes OOM on large
+                        // multi-asset archives with display proxies).
+                        const { handleId: probeId, size: probeSize } = await ipcOpenFile(result.filePath);
+                        const header = await ipcReadBytes(probeId, 0, Math.min(4, probeSize));
+                        await ipcCloseFile(probeId);
+
+                        const isZip = header.length >= 4 && header[0] === 0x50 && header[1] === 0x4B;
+                        const name = isZip && !result.name.match(/\.(ddim|a3d|a3z|zip)$/i)
+                            ? result.name.replace(/\.[^.]*$/, '') + '.ddim'  // Assume archive
+                            : result.name;
+
+                        if (isZip) {
+                            // Use IPC byte-serving for archives — only the central
+                            // directory (~64KB) is read initially, and individual
+                            // files are extracted on-demand. This prevents OOM on
+                            // archives with proxies where releaseRawData() is skipped.
+                            log.info('Android: detected ZIP archive, using IPC byte-serving');
+                            await loadArchiveFromIpc(result.filePath, name);
+                        } else {
+                            // Non-archive files (splats, models): read fully into memory
+                            log.info('Android: non-archive file, reading fully');
+                            const { handleId: readId, size: readSize } = await ipcOpenFile(result.filePath);
+                            const bytes = await ipcReadBytes(readId, 0, readSize);
+                            await ipcCloseFile(readId);
+                            const file = new File([bytes as BlobPart], name);
+                            handlePickedFiles([file], null);
                         }
                     } else {
-                        // Direct file (splat, mesh, etc.): full content needed by renderer.
-                        // Read by path using the already-resolved filePath — no second dialog.
-                        updateProgress(5, 'Reading file...');
-                        const contents = await window.__TAURI__!.fs.readFile(result.filePath);
-                        const file = new File([contents as BlobPart], result.name);
-                        handlePickedFiles([file], null);
+                        // Desktop / non-content paths: use IPC byte serving for archives,
+                        // full read for direct files.
+                        const ext = result.name.split('.').pop()?.toLowerCase() ?? '';
+                        if (ext === 'a3d' || ext === 'a3z') {
+                            try {
+                                await loadArchiveFromIpc(result.filePath, result.name);
+                            } catch {
+                                await loadArchiveFromAssetUrl(result.assetUrl, result.name, () => loadArchiveFromTauri(result.filePath));
+                            }
+                        } else {
+                            updateProgress(5, 'Reading file...');
+                            const { handleId, size } = await ipcOpenFile(result.filePath);
+                            const contents = await ipcReadBytes(handleId, 0, size);
+                            await ipcCloseFile(handleId);
+                            const file = new File([contents as BlobPart], result.name);
+                            handlePickedFiles([file], null);
+                        }
                     }
                 } catch (err) {
-                    log.error('Native file dialog failed:', err.message, err);
+                    log.error('Native file dialog failed:', (err as Error).message, err);
                     hideLoading();
                     notify.error('Could not open file: ' + (err as Error).message);
                 }
@@ -856,7 +975,7 @@ function handlePickedFiles(fileList: FileList | File[], pickerElement: HTMLEleme
 /**
  * Load a single direct (non-archive) file into the kiosk viewer.
  * @param {File} mainFile - The primary file
- * @param {'splat'|'model'|'pointcloud'} category - Detected category
+ * @param {'splat'|'mesh'|'pointcloud'} category - Detected category
  * @param {File[]} allFiles - All dropped files (for OBJ+MTL pairs)
  */
 async function handleDirectFile(mainFile: File, category: FileCategory, allFiles: File[]): Promise<void> {
@@ -868,7 +987,7 @@ async function handleDirectFile(mainFile: File, category: FileCategory, allFiles
 
         if (category === 'splat') {
             await loadSplatFromFile(mainFile, createSplatDeps());
-        } else if (category === 'model') {
+        } else if (category === 'mesh') {
             await loadModelFromFile(allFiles as any || [mainFile], createModelDeps());
         } else if (category === 'pointcloud') {
             await loadPointcloudFromFile(mainFile, createPointcloudDeps());
@@ -879,7 +998,7 @@ async function handleDirectFile(mainFile: File, category: FileCategory, allFiles
     } catch (err) {
         log.error(`Failed to load ${category}:`, err);
         hideLoading();
-        notify.error(`Failed to load ${category}: ${err.message}`);
+        notify.error(`Failed to load ${category}: ${errMsg(err)}`);
         // Show picker again for retry
         const picker = document.getElementById('kiosk-file-picker');
         if (picker) picker.classList.remove('hidden');
@@ -950,7 +1069,7 @@ async function loadDirectFilesFromUrls(config: AppConfig): Promise<void> {
     } catch (err) {
         log.error('Failed to load from URLs:', err);
         hideLoading();
-        notify.error(`Failed to load: ${err.message}`);
+        notify.error(`Failed to load: ${errMsg(err)}`);
         const picker = document.getElementById('kiosk-file-picker');
         if (picker) picker.classList.remove('hidden');
     }
@@ -987,6 +1106,7 @@ function onDirectFileLoaded(fileName: string | null): void {
     if (state.modelLoaded) {
         sceneManager.enableShadows(true);
         sceneManager.applyShadowProperties(modelGroup);
+        sceneManager.fitShadowToScene();
     }
 
     // Enable auto-rotate
@@ -1066,16 +1186,22 @@ async function showClickGate(archiveUrl: string): Promise<void> {
             }
         }
 
-        // Show content types
+        // Show content types (model first)
         const typesEl = document.getElementById('kiosk-gate-types');
-        const types = [];
+        const types: string[] = [];
+        if (contentInfo.hasMesh) types.push('Model');
         if (contentInfo.hasSplat) types.push('Gaussian Splat');
-        if (contentInfo.hasMesh) types.push('Mesh');
         if (contentInfo.hasPointcloud) types.push('Point Cloud');
-        
+
         if (typesEl) {
-            typesEl.innerHTML = '';
-            types.forEach(t => {
+            typesEl.textContent = '';
+            types.forEach((t, i) => {
+                if (i > 0) {
+                    const plus = document.createElement('span');
+                    plus.className = 'kiosk-gate-plus';
+                    plus.textContent = '+';
+                    typesEl.appendChild(plus);
+                }
                 const span = document.createElement('span');
                 span.className = 'kiosk-gate-pill';
                 span.textContent = t;
@@ -1086,11 +1212,11 @@ async function showClickGate(archiveUrl: string): Promise<void> {
         // Remove poster blob URL from loader's tracked URLs before dispose
         // so it isn't revoked before the <img> finishes loading
         if (posterBlobUrl) {
-            loader.blobUrls = loader.blobUrls.filter(u => u !== posterBlobUrl);
+            loader.removeBlobUrl(posterBlobUrl);
         }
         loader.dispose();
     } catch (e) {
-        log.warn('Could not extract poster via Range requests:', e.message);
+        log.warn('Could not extract poster via Range requests:', errMsg(e));
         // Fallback: generic play button without poster (still functional)
     }
 
@@ -1105,7 +1231,47 @@ async function showClickGate(archiveUrl: string): Promise<void> {
 }
 
 async function loadArchiveFromUrl(url: string): Promise<void> {
-    const fileName = url.split('/').pop()?.split('?')[0] || 'archive.a3d';
+    // Run GPU benchmark (~500ms) before loading — runs after click-gate dismissal
+    // so we only benchmark when someone actually intends to view a model.
+    // Result is cached, so subsequent loads skip the benchmark.
+    if (renderer) {
+        await runGpuBenchmark(renderer);
+        const gl = renderer.getContext();
+        state.qualityResolved = resolveQualityTier(state.qualityTier, gl);
+        log.info('Quality tier resolved after benchmark:', state.qualityResolved);
+    }
+
+    const fileName = url.split('/').pop()?.split('?')[0] || 'archive.ddim';
+
+    // In Tauri, browser fetch is blocked by CF Access (intercepts cross-origin
+    // requests from tauri://localhost before they reach the server). Download
+    // via Rust-side reqwest instead — no CORS restrictions — then load via
+    // IPC byte-serving so only the ZIP central directory is read initially.
+    if (window.__TAURI__) {
+        showLoading('Downloading...', true);
+        try {
+            updateProgress(5, 'Connecting...');
+            const { ipcReadBytes, ipcCloseFile } = await import('./tauri-bridge.js');
+            const [handleId, size] = await window.__TAURI__!.core.invoke<[string, number]>(
+                'api_download_to_temp', { url }
+            );
+            updateProgress(30, 'Loading archive...');
+            const archiveLoader = new ArchiveLoader();
+            // Fake openFn — handle already opened by api_download_to_temp
+            const fakeOpenFn = async (_p: string) => ({ handleId, size });
+            await archiveLoader.loadFromIpc(fakeOpenFn, ipcReadBytes, ipcCloseFile, '');
+            state.archiveSourceUrl = url;
+            await handleArchiveFile(new File([], fileName), archiveLoader);
+            return;
+        } catch (err: unknown) {
+            log.error('Tauri: failed to download archive from URL:', err);
+            hideLoading();
+            notify.error(`Failed to load archive: ${errMsg(err)}`);
+            const picker = document.getElementById('kiosk-file-picker');
+            if (picker) picker.classList.remove('hidden');
+            return;
+        }
+    }
 
     // Try Range-based loading first — only downloads ~64KB central directory,
     // then extracts files on demand via targeted HTTP Range requests.
@@ -1117,8 +1283,8 @@ async function loadArchiveFromUrl(url: string): Promise<void> {
         state.archiveSourceUrl = url;
         handleArchiveFile(new File([], fileName), archiveLoader);
         return;
-    } catch (rangeError: any) {
-        log.info('Range-based loading unavailable, falling back to full download:', rangeError.message);
+    } catch (rangeError: unknown) {
+        log.info('Range-based loading unavailable, falling back to full download:', errMsg(rangeError));
     }
 
     // Fallback: full download (server doesn't support Range requests)
@@ -1141,7 +1307,7 @@ async function loadArchiveFromUrl(url: string): Promise<void> {
     } catch (err) {
         log.error('Failed to load archive from URL:', err);
         hideLoading();
-        notify.error(`Failed to load archive: ${err.message}`);
+        notify.error(`Failed to load archive: ${errMsg(err)}`);
         // Fall back to showing file picker
         const picker = document.getElementById('kiosk-file-picker');
         if (picker) picker.classList.remove('hidden');
@@ -1159,14 +1325,14 @@ async function loadArchiveFromTauri(filePath: string): Promise<void> {
         const { readFile } = window.__TAURI__.fs;
         updateProgress(5, 'Reading file...');
         const contents = await readFile(filePath);
-        const fileName = filePath.split(/[\\/]/).pop() || 'archive.a3d';
+        const fileName = filePath.split(/[\\/]/).pop() || 'archive.ddim';
         const file = new File([contents], fileName);
         state.archiveSourceUrl = null;
         handleArchiveFile(file);
     } catch (err) {
         log.error('Failed to load archive from filesystem:', err);
         hideLoading();
-        notify.error(`Failed to load archive: ${err.message}`);
+        notify.error(`Failed to load archive: ${errMsg(err)}`);
         const picker = document.getElementById('kiosk-file-picker');
         if (picker) picker.classList.remove('hidden');
     }
@@ -1186,7 +1352,7 @@ async function loadBundledArchiveFromFetch(url: string): Promise<void> {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
         const buffer = await response.arrayBuffer();
-        const fileName = url.split('/').pop()?.split('?')[0] || 'archive.a3d';
+        const fileName = url.split('/').pop()?.split('?')[0] || 'archive.ddim';
         const file = new File([buffer], fileName);
         state.archiveSourceUrl = null;
         handleArchiveFile(file);
@@ -1241,6 +1407,32 @@ async function loadArchiveFromIpc(filePath: string, name: string): Promise<void>
     await handleArchiveFile(new File([], name), archiveLoader);
 }
 
+/**
+ * Public entry point for loading a file from a filesystem path.
+ * Used by file association handling (OS double-click on .ddim, .glb, .ply, etc.).
+ * Detects the file type and routes to the appropriate loader.
+ */
+export async function loadArchiveFromFilePath(filePath: string, fileName: string): Promise<void> {
+    await _initPromise;
+
+    const category = classifyFile(fileName);
+
+    if (category === 'archive') {
+        await loadArchiveFromIpc(filePath, fileName);
+    } else if (category) {
+        // Non-archive file: read fully via IPC, then route to direct file loader
+        showLoading('Loading file...', true);
+        const { ipcOpenFile, ipcReadBytes, ipcCloseFile } = await import('./tauri-bridge.js');
+        const { handleId, size } = await ipcOpenFile(filePath);
+        const contents = await ipcReadBytes(handleId, 0, size);
+        await ipcCloseFile(handleId);
+        const file = new File([contents as BlobPart], fileName);
+        handlePickedFiles([file], null);
+    } else {
+        notify.warning(`Unsupported file format: ${fileName.split('.').pop()}`);
+    }
+}
+
 // =============================================================================
 // ARCHIVE PROCESSING
 // =============================================================================
@@ -1251,18 +1443,16 @@ async function ensureAssetLoaded(assetType: AssetType, onProgress?: (percent: nu
 
     if (state.assetStates[assetType] === ASSET_STATE.LOADED) return true;
     if (state.assetStates[assetType] === ASSET_STATE.ERROR) return false;
+    // Already loading — await the in-flight promise instead of polling
     if (state.assetStates[assetType] === ASSET_STATE.LOADING) {
-        return new Promise(resolve => {
-            const check = () => {
-                if (state.assetStates[assetType] === ASSET_STATE.LOADED) resolve(true);
-                else if (state.assetStates[assetType] === ASSET_STATE.ERROR) resolve(false);
-                else setTimeout(check, 50);
-            };
-            check();
-        });
+        const pending = assetLoadingPromises.get(assetType);
+        if (pending) return pending;
+        return false;
     }
 
     showInlineLoading(assetType);
+
+    const loadPromise = (async () => {
     try {
         const result = await loadArchiveAsset(state.archiveLoader, assetType, { ...createArchiveDeps(), onProgress });
         if (result.loaded) {
@@ -1277,7 +1467,12 @@ async function ensureAssetLoaded(assetType: AssetType, onProgress?: (percent: nu
         return false;
     } finally {
         hideInlineLoading(assetType);
+        assetLoadingPromises.delete(assetType);
     }
+    })();
+
+    assetLoadingPromises.set(assetType, loadPromise);
+    return loadPromise;
 }
 
 // Trigger lazy loading of assets needed for a display mode
@@ -1325,6 +1520,14 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             await sceneManager.ensureWebGLRenderer();
         }
 
+        // Apply resolved LOD budget to SparkRenderer AFTER renderer switch —
+        // ensureWebGLRenderer may recreate SparkRenderer with the HD default,
+        // so we must override lodSplatCount after that completes.
+        if (sparkRenderer && isSparkV2) {
+            sparkRenderer.lodSplatCount = getLodBudget(state.qualityResolved);
+            log.info(`SparkRenderer lodSplatCount set to ${sparkRenderer.lodSplatCount} before asset load`);
+        }
+
         // Show branded loading screen with thumbnail, title, and content types
         await showBrandedLoading(archiveLoader);
 
@@ -1345,6 +1548,19 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         }
         updateProgress(30, 'Loading 3D data...');
         const primaryType = getPrimaryAssetType(state.displayMode, contentInfo);
+
+        // Progressive loading: if device is HD-capable and archive has a mesh proxy,
+        // load SD first for fast time-to-interactive, then upgrade to HD in background.
+        // Mobile devices (iOS/Android) stay SD — they only get HD via explicit toggle.
+        const shouldProgressiveLoad = state.qualityResolved === 'hd'
+            && contentInfo.hasMeshProxy
+            && (primaryType === 'mesh');
+        const originalQualityResolved = state.qualityResolved;
+        if (shouldProgressiveLoad) {
+            state.qualityResolved = 'sd';
+            log.info('Progressive load: using SD proxy for initial display');
+        }
+
         const primaryLoaded = await ensureAssetLoaded(primaryType as AssetType, (pct, stage) => {
             // Map 0-100% from loadArchiveAsset onto 30-80% of the overall progress bar
             updateProgress(30 + pct * 0.5, stage);
@@ -1362,6 +1578,11 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 notify.warning('Archive does not contain any viewable content.');
                 return;
             }
+        }
+
+        // Restore original quality tier after SD-first initial load
+        if (shouldProgressiveLoad) {
+            state.qualityResolved = originalQualityResolved;
         }
 
         // Load CAD asset if present
@@ -1385,6 +1606,127 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                         cadGrp.scale.set(...cs as [number, number, number]);
                     }
                 }
+            }
+        }
+
+        // Load flight paths from archive
+        if (contentInfo.hasFlightPath && sceneManager.flightPathGroup) {
+            const fpEntries = archiveLoader.getFlightPathEntries();
+            if (fpEntries.length > 0) {
+                const { FlightPathManager } = await import('./flight-path.js');
+                flightPathManager = new FlightPathManager(
+                    sceneManager.flightPathGroup,
+                    sceneManager.scene,
+                    sceneManager.camera,
+                    sceneManager.renderer
+                );
+                const fpTooltip = document.getElementById('flight-tooltip');
+                if (fpTooltip) flightPathManager.setupTooltip(fpTooltip);
+
+                for (const { key, entry } of fpEntries) {
+                    const fileData = await archiveLoader.extractFile(entry.file_name);
+                    if (!fileData) continue;
+                    const text = await fileData.blob.text();
+                    try {
+                        flightPathManager.importFromText(text, entry.original_name || entry.file_name);
+                    } catch (err) {
+                        log.warn(`Failed to load flight path ${key}:`, err);
+                    }
+                }
+
+                // Apply saved transform from manifest
+                if (flightPathManager.hasData) {
+                    const transform = archiveLoader.getEntryTransform(fpEntries[0].entry);
+                    const group = sceneManager.flightPathGroup;
+                    const fs = normalizeScale(transform.scale);
+                    if (transform.position.some((v: number) => v !== 0) ||
+                        transform.rotation.some((v: number) => v !== 0) ||
+                        fs.some((v: number) => v !== 1)) {
+                        group.position.fromArray(transform.position);
+                        group.rotation.set(...transform.rotation as [number, number, number]);
+                        group.scale.set(...fs as [number, number, number]);
+                    }
+                }
+
+                // Apply view defaults from manifest
+                const vs = manifest.viewer_settings || {};
+                if (flightPathManager.setLineOpacity && vs.flight_line_opacity !== undefined) {
+                    flightPathManager.setLineOpacity(vs.flight_line_opacity);
+                }
+                if (flightPathManager.setMarkerDensity) {
+                    if (vs.flight_show_markers === false) {
+                        flightPathManager.setMarkerDensity('off');
+                    } else if (vs.flight_marker_density) {
+                        flightPathManager.setMarkerDensity(vs.flight_marker_density);
+                    }
+                }
+
+                // Show toggle button if paths loaded
+                if (flightPathManager.hasData) {
+                    const fpStartVisible = vs.flight_visible !== undefined ? vs.flight_visible : true;
+                    flightPathManager.setVisible(fpStartVisible);
+                    const toggleBtn = document.getElementById('btn-toggle-flightpath');
+                    if (toggleBtn) {
+                        toggleBtn.style.display = '';
+                        toggleBtn.classList.toggle('active', fpStartVisible);
+                        let fpVisible = fpStartVisible;
+                        toggleBtn.addEventListener('click', () => {
+                            fpVisible = !fpVisible;
+                            flightPathManager.setVisible(fpVisible);
+                            toggleBtn.classList.toggle('active', fpVisible);
+                        });
+                    }
+
+                    // Notify layout module so it can add flight log UI to its ribbon
+                    getLayoutModule()?.onFlightPathLoaded?.(flightPathManager);
+                }
+            }
+        }
+
+        // Load colmap SfM cameras
+        const colmapEntries = Object.entries(manifest.data_entries || {})
+            .filter(([, entry]) => (entry as any).role === 'colmap_sfm');
+        if (colmapEntries.length > 0 && sceneManager.colmapGroup) {
+            const { ColmapManager } = await import('./colmap-loader.js');
+            const colmapGroup = sceneManager.colmapGroup;
+            const manager = new ColmapManager(colmapGroup);
+            for (const [key, entry] of colmapEntries) {
+                const basePath = (entry as any).file_name || `assets/${key}/`;
+                const camerasRaw = await archiveLoader.extractFileRaw(`${basePath}cameras.bin`);
+                const imagesRaw = await archiveLoader.extractFileRaw(`${basePath}images.bin`);
+                if (camerasRaw && imagesRaw) {
+                    manager.loadFromBuffers(camerasRaw.buffer, imagesRaw.buffer);
+                } else {
+                    log.warn(`Failed to extract colmap files for ${key}`);
+                }
+            }
+            // Apply stored transform from first entry
+            const entryData = colmapEntries[0][1] as any;
+            if (entryData._parameters) {
+                const p = entryData._parameters;
+                if (p.position) colmapGroup.position.set(...(p.position as [number, number, number]));
+                if (p.rotation) colmapGroup.rotation.set(...(p.rotation as [number, number, number]));
+                if (p.scale != null) {
+                    const s = typeof p.scale === 'number' ? p.scale : 1;
+                    colmapGroup.scale.setScalar(s);
+                }
+            }
+            // Apply view defaults
+            const sfmVs = manifest.viewer_settings || {};
+            const sfmStartVisible = sfmVs.sfm_visible !== undefined ? sfmVs.sfm_visible : true;
+            colmapGroup.visible = sfmStartVisible;
+            if (sfmVs.sfm_display_mode) manager.setDisplayMode(sfmVs.sfm_display_mode);
+
+            // Show toggle button
+            const toggleBtn = document.getElementById('btn-toggle-cameras');
+            if (toggleBtn) {
+                toggleBtn.style.display = '';
+                toggleBtn.classList.toggle('active', sfmStartVisible);
+                toggleBtn.addEventListener('click', () => {
+                    const visible = colmapGroup.visible;
+                    colmapGroup.visible = !visible;
+                    toggleBtn.classList.toggle('active', !visible);
+                });
             }
         }
 
@@ -1412,14 +1754,14 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         const imageEntries = archiveLoader.getImageEntries();
         if (imageEntries.length > 0) {
             state.imageAssets.clear();
-            await Promise.all(imageEntries.map(async (entry: any) => {
+            await Promise.all(imageEntries.map(async (entry: { file_name: string; getData: () => Promise<Uint8Array> }) => {
                 try {
                     const data = await archiveLoader.extractFile(entry.file_name);
                     if (data) {
                         state.imageAssets.set(entry.file_name, { blob: data.blob, url: data.url, name: entry.file_name });
                     }
-                } catch (e: any) {
-                    log.warn('Failed to extract image:', entry.file_name, e.message);
+                } catch (e: unknown) {
+                    log.warn('Failed to extract image:', entry.file_name, errMsg(e));
                 }
             }));
             log.info(`Extracted ${state.imageAssets.size} embedded images`);
@@ -1487,6 +1829,7 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         // Enable shadows in kiosk mode
         sceneManager.enableShadows(true);
         sceneManager.applyShadowProperties(modelGroup);
+        sceneManager.fitShadowToScene();
 
         // Enable auto-rotate by default in kiosk mode, unless manifest overrides it
         const savedAutoRotate = manifest?.viewer_settings?.auto_rotate;
@@ -1523,18 +1866,23 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             if (manifest.viewer_settings.single_sided !== undefined) {
                 const side = manifest.viewer_settings.single_sided ? THREE.FrontSide : THREE.DoubleSide;
                 if (modelGroup) {
-                    modelGroup.traverse((child: any) => {
+                    modelGroup.traverse((child: THREE.Object3D) => {
                         if (child.isMesh && child.material) {
                             const mats = Array.isArray(child.material) ? child.material : [child.material];
-                            mats.forEach((m: any) => { m.side = side; m.needsUpdate = true; });
+                            mats.forEach((m: THREE.Material) => { (m as THREE.MeshStandardMaterial).side = side; m.needsUpdate = true; });
                         }
                     });
                 }
             }
-            // Per-mode background overrides (with backward compat for legacy background_color)
+            // Background: legacy universal bg sets savedBackgroundColor;
+            // per-mode overrides only apply when explicitly set in manifest.
             const legacyBg = manifest.viewer_settings.background_color || null;
-            state.meshBackgroundColor = manifest.viewer_settings.mesh_background_color || legacyBg;
-            state.splatBackgroundColor = manifest.viewer_settings.splat_background_color || legacyBg;
+            state.meshBackgroundColor = manifest.viewer_settings.mesh_background_color || null;
+            state.splatBackgroundColor = manifest.viewer_settings.splat_background_color || null;
+            if (legacyBg) {
+                sceneManager?.setBackgroundColor(legacyBg);
+            }
+            log.info(`[BG] manifest bg: legacy=${legacyBg}, mesh=${state.meshBackgroundColor}, splat=${state.splatBackgroundColor}, mode=${state.displayMode}`);
             applyBackgroundForMode(state.displayMode);
             // Apply saved camera position and target (overrides fitCameraToScene result)
             const savedCamPos = manifest.viewer_settings.camera_position;
@@ -1555,6 +1903,8 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 if (manifest.viewer_settings.lock_distance != null) {
                     controls.minDistance = manifest.viewer_settings.lock_distance;
                     controls.maxDistance = manifest.viewer_settings.lock_distance;
+                } else if (manifest.viewer_settings.max_camera_distance != null) {
+                    controls.maxDistance = manifest.viewer_settings.max_camera_distance;
                 }
 
                 // Keep camera above ground
@@ -1600,15 +1950,15 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
 
             // Apply saved lighting intensities
             if (manifest.viewer_settings.ambient_intensity != null) {
-                const ambientLight = scene?.children.find((c: any) => c.isAmbientLight);
+                const ambientLight = scene?.children.find((c: THREE.Object3D) => (c as THREE.AmbientLight).isLight && c.type === 'AmbientLight') as THREE.AmbientLight | undefined;
                 if (ambientLight) (ambientLight as any).intensity = manifest.viewer_settings.ambient_intensity;
             }
             if (manifest.viewer_settings.hemisphere_intensity != null) {
-                const hemiLight = scene?.children.find((c: any) => c.isHemisphereLight);
+                const hemiLight = scene?.children.find((c: THREE.Object3D) => (c as THREE.HemisphereLight).isLight && c.type === 'HemisphereLight') as THREE.HemisphereLight | undefined;
                 if (hemiLight) (hemiLight as any).intensity = manifest.viewer_settings.hemisphere_intensity;
             }
             if (manifest.viewer_settings.directional1_intensity != null || manifest.viewer_settings.directional2_intensity != null) {
-                const dirLights = scene?.children.filter((c: any) => c.isDirectionalLight) || [];
+                const dirLights = scene?.children.filter((c: THREE.Object3D) => (c as THREE.DirectionalLight).isLight && c.type === 'DirectionalLight') as THREE.DirectionalLight[] || [];
                 if (dirLights[0] && manifest.viewer_settings.directional1_intensity != null) (dirLights[0] as any).intensity = manifest.viewer_settings.directional1_intensity;
                 if (dirLights[1] && manifest.viewer_settings.directional2_intensity != null) (dirLights[1] as any).intensity = manifest.viewer_settings.directional2_intensity;
             }
@@ -1629,7 +1979,28 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 renderer.toneMappingExposure = manifest.viewer_settings.tone_mapping_exposure;
             }
 
-            // NOTE: environment_preset IBL would require async HDR loading; skipped here.
+            // Load bundled HDR environment from archive
+            if (archiveLoader) {
+                const envEntry = archiveLoader.getEnvironmentEntry();
+                if (envEntry) {
+                    try {
+                        const envData = await archiveLoader.extractFile(envEntry.entry.file_name);
+                        if (envData) {
+                            try {
+                                await sceneManager!.loadHDREnvironment(envData.url);
+                                if (manifest.viewer_settings.environment_as_background) {
+                                    sceneManager!.setEnvironmentAsBackground(true);
+                                }
+                            } finally {
+                                URL.revokeObjectURL(envData.url);
+                            }
+                            log.info('Loaded HDR environment from archive');
+                        }
+                    } catch (err: any) {
+                        log.warn('Failed to load HDR from archive:', err.message);
+                    }
+                }
+            }
 
             // Apply saved measurement calibration
             if (manifest.viewer_settings.measurement_scale != null &&
@@ -1650,7 +2021,8 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             log.info('Applied viewer settings:', manifest.viewer_settings);
 
             // Apply post-processing from archive settings
-            if (manifest.viewer_settings.post_processing) {
+            // Skip on SD tier — render targets double GPU memory and Safari kills the tab
+            if (manifest.viewer_settings.post_processing && state.qualityResolved !== QUALITY_TIER.SD) {
                 const ppSettings = manifest.viewer_settings.post_processing;
                 // Check if any effect is enabled
                 const anyEnabled = ppSettings.ssao?.enabled || ppSettings.bloom?.enabled ||
@@ -1666,6 +2038,9 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         }
 
         updateProgress(100, 'Complete');
+
+        // DEBUG: check final background state
+        log.info(`[BG-DEBUG] Final scene.background:`, scene?.background, `savedBg:`, sceneManager?.savedBackgroundColor, `state: mesh=${state.meshBackgroundColor} splat=${state.splatBackgroundColor}`);
 
         // Smooth entry transition: fade overlay + camera ease-in
         smoothTransitionIn();
@@ -1697,10 +2072,10 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             hideMetadataSidebar();
         }
 
-        // Show quality toggle if archive has proxies OR splat is loaded (Spark 2.0 LOD budget).
+        // Show quality toggle if archive has proxies, splat (Spark 2.0 LOD budget), or mesh.
         // Layout modules with their own toggle handle this independently.
         const hasSplat = contentInfo.hasSplat || contentInfo.hasSceneProxy;
-        if ((hasAnyProxy(contentInfo) || hasSplat) && !layoutModule?.hasOwnQualityToggle) {
+        if ((hasAnyProxy(contentInfo) || hasSplat || contentInfo.hasMesh) && !layoutModule?.hasOwnQualityToggle) {
             showQualityToggle();
         }
 
@@ -1708,55 +2083,103 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         notify.success(`Loaded: ${file.name}`);
 
         // === Phase 3: Background-load remaining assets ===
+
+        // Progressive mesh upgrade: load HD in background, atomically swap SD→HD
+        if (shouldProgressiveLoad && state.archiveLoader) {
+            showBgLoadingIndicator();
+            log.info('Progressive load: starting background HD mesh upgrade');
+            setTimeout(async () => {
+                try {
+                    // loadArchiveFullResMesh parses HD off-scene, then calls swapMeshChildren
+                    // for an atomic replacement — SD stays visible until HD is ready.
+                    const result = await loadArchiveFullResMesh(state.archiveLoader!, createArchiveDeps());
+                    if (result.loaded) {
+                        // Free source data: THREE.js holds parsed geometry, blobs + cache are consumed
+                        const proxyEntry = state.archiveLoader!.getMeshProxyEntry();
+                        if (proxyEntry) {
+                            state.archiveLoader!.revokeBlobForFile(proxyEntry.file_name);
+                            state.archiveLoader!.evictFileCache(proxyEntry.file_name);
+                        }
+                        const meshEntry = state.archiveLoader!.getMeshEntry();
+                        if (meshEntry) {
+                            state.archiveLoader!.revokeBlobForFile(meshEntry.file_name);
+                            state.archiveLoader!.evictFileCache(meshEntry.file_name);
+                        }
+                        log.info(`Progressive load: HD mesh swapped (${result.faceCount?.toLocaleString()} faces)`);
+                        const facesEl = document.getElementById('model-faces');
+                        if (facesEl && result.faceCount) facesEl.textContent = result.faceCount.toLocaleString();
+                    } else {
+                        log.warn('Progressive load: HD mesh upgrade failed, keeping SD proxy');
+                    }
+                } catch (e: unknown) {
+                    log.warn('Progressive load: HD mesh upgrade failed, keeping SD proxy:', errMsg(e));
+                } finally {
+                    hideBgLoadingIndicator();
+                }
+            }, 100);
+        }
+
         const remainingTypes = ['splat', 'mesh', 'pointcloud'].filter(
             t => state.assetStates[t] === ASSET_STATE.UNLOADED
+                // When progressive load is handling HD mesh upgrade, exclude mesh
+                // from background loading to prevent concurrent mesh loads racing.
+                && !(t === 'mesh' && shouldProgressiveLoad)
         );
-        if (remainingTypes.length > 0) {
-            setTimeout(async () => {
-                for (const type of remainingTypes) {
-                    const typeAvailable = (type === 'splat' && contentInfo.hasSplat) ||
-                                          (type === 'mesh' && contentInfo.hasMesh) ||
-                                          (type === 'pointcloud' && contentInfo.hasPointcloud);
-                    if (typeAvailable) {
-                        log.info(`Background loading: ${type}`);
-                        await ensureAssetLoaded(type as AssetType);
-                        // Update settings visibility after background load
-                        showRelevantSettings(state.splatLoaded, state.modelLoaded, state.pointcloudLoaded);
-                        // Update visibility to match current display mode
-                        const deps = createDisplayModeDeps();
-                        if (deps.updateVisibility) deps.updateVisibility();
-                        // Re-apply viewer settings to newly loaded meshes
-                        if (type === 'mesh' && manifest.viewer_settings?.single_sided !== undefined) {
-                            const side = manifest.viewer_settings.single_sided ? THREE.FrontSide : THREE.DoubleSide;
-                            modelGroup.traverse((child: any) => {
-                                if (child.isMesh && child.material) {
-                                    const mats = Array.isArray(child.material) ? child.material : [child.material];
-                                    mats.forEach((m: any) => { m.side = side; m.needsUpdate = true; });
-                                }
-                            });
+        setTimeout(async () => {
+            for (const type of remainingTypes) {
+                const typeAvailable = (type === 'splat' && contentInfo.hasSplat && state.qualityResolved !== QUALITY_TIER.SD) ||
+                                      (type === 'mesh' && contentInfo.hasMesh) ||
+                                      (type === 'pointcloud' && contentInfo.hasPointcloud);
+                if (typeAvailable) {
+                    log.info(`Background loading: ${type}`);
+                    await ensureAssetLoaded(type as AssetType);
+                    // Update settings visibility after background load
+                    showRelevantSettings(state.splatLoaded, state.modelLoaded, state.pointcloudLoaded);
+                    // Update visibility to match current display mode
+                    const deps = createDisplayModeDeps();
+                    if (deps.updateVisibility) deps.updateVisibility();
+                    // Re-apply viewer settings to newly loaded meshes
+                    if (type === 'mesh' && manifest.viewer_settings?.single_sided !== undefined) {
+                        const side = manifest.viewer_settings.single_sided ? THREE.FrontSide : THREE.DoubleSide;
+                        modelGroup.traverse((child: THREE.Object3D) => {
+                            if (child.isMesh && child.material) {
+                                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                                mats.forEach((m: THREE.Material) => { (m as THREE.MeshStandardMaterial).side = side; m.needsUpdate = true; });
+                            }
+                        });
+                    }
+                    // After splat loads: revoke blob URL and evict raw bytes — Spark.js holds GPU data
+                    if (type === 'splat' && state.archiveLoader) {
+                        const splatEntry = state.archiveLoader.getSceneEntry();
+                        if (splatEntry) {
+                            state.archiveLoader.revokeBlobForFile(splatEntry.file_name);
+                            // Only evict if no scene proxy (proxy switching re-uses cached bytes)
+                            if (!contentInfo.hasSceneProxy) {
+                                state.archiveLoader.evictFileCache(splatEntry.file_name);
+                            }
                         }
                     }
+                    // After non-progressive mesh loads: revoke blob URL (THREE.js holds parsed data)
+                    if (type === 'mesh' && state.archiveLoader && !shouldProgressiveLoad) {
+                        const meshEntry = state.archiveLoader.getMeshEntry();
+                        if (meshEntry) state.archiveLoader.revokeBlobForFile(meshEntry.file_name);
+                    }
                 }
-                // Re-apply global alignment to ensure late-loaded assets get
-                // correct transforms (alignment may have been skipped earlier
-                // when the asset didn't exist yet).
-                // Skip camera — it was already set from viewer_settings or
-                // fitCameraToScene during initial load; overwriting it here
-                // would cause an abrupt jump after the background load.
-                if (globalAlignment) {
-                    applyGlobalAlignment(globalAlignment, { skipCamera: true });
-                }
-                // Keep archive data available for export downloads
-                log.info('All archive assets loaded, raw data retained for export');
-            }, 100);
-        } else {
-            log.info('Archive data retained for export');
-        }
+            }
+            // Re-apply global alignment to ensure late-loaded assets get correct transforms.
+            // Skip camera — it was set from viewer_settings or fitCameraToScene during initial load.
+            if (globalAlignment) {
+                applyGlobalAlignment(globalAlignment, { skipCamera: true });
+            }
+            // Release raw ZIP data: all assets extracted, re-extraction uses _fileCache
+            state.archiveLoader?.releaseRawData();
+            log.info('Background load complete, raw archive data released');
+        }, 100);
 
     } catch (e) {
         log.error('Error loading archive:', e);
         hideLoading();
-        notify.error(`Failed to load archive: ${e.message}`);
+        notify.error(`Failed to load archive: ${errMsg(e)}`);
         // Show picker again so user can retry
         const picker = document.getElementById('kiosk-file-picker');
         if (picker) picker.classList.remove('hidden');
@@ -1824,6 +2247,15 @@ async function switchQualityTier(newTier: string): Promise<void> {
         log.info(`SparkRenderer lodSplatCount updated to ${getLodBudget(newTier)}`);
     }
 
+    // Adjust renderer resolution — universal quality control that takes effect even
+    // when no proxy assets exist (makes SD/HD visible for models and low-proxy splats).
+    // setPixelRatio alone doesn't resize the drawing buffer; onWindowResize applies it.
+    if (renderer) {
+        const targetRatio = newTier === 'hd' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+        renderer.setPixelRatio(targetRatio);
+        onWindowResize();
+    }
+
     const archiveLoader = state.archiveLoader;
     if (!archiveLoader) {
         // No archive — just LOD budget change, remove loading state
@@ -1840,24 +2272,50 @@ async function switchQualityTier(newTier: string): Promise<void> {
     try {
         // Switch splat if proxy exists
         if (contentInfo.hasSceneProxy) {
+            // Identify the entry being replaced so we can free its memory after swap
+            const oldSplatEntry = newTier === 'hd'
+                ? archiveLoader.getSceneProxyEntry()
+                : archiveLoader.getSceneEntry();
             if (newTier === 'hd') {
                 await loadArchiveFullResSplat(archiveLoader, deps);
             } else {
                 await loadArchiveProxySplat(archiveLoader, deps);
             }
+            // Free replaced splat: blob URL + cached bytes (Range re-fetch on demand)
+            if (oldSplatEntry) {
+                archiveLoader.revokeBlobForFile(oldSplatEntry.file_name);
+                archiveLoader.evictFileCache(oldSplatEntry.file_name);
+            }
         }
         // Switch mesh if proxy exists
         if (contentInfo.hasMeshProxy) {
+            // Identify the entry being replaced so we can free its memory after swap
+            const oldMeshEntry = newTier === 'hd'
+                ? archiveLoader.getMeshProxyEntry()
+                : archiveLoader.getMeshEntry();
             if (newTier === 'hd') {
                 await loadArchiveFullResMesh(archiveLoader, deps);
             } else {
                 await loadArchiveProxyMesh(archiveLoader, deps);
             }
+            // Free replaced mesh: blob URL + cached bytes (Range re-fetch on demand)
+            if (oldMeshEntry) {
+                archiveLoader.revokeBlobForFile(oldMeshEntry.file_name);
+                archiveLoader.evictFileCache(oldMeshEntry.file_name);
+            }
+            // Also free the newly loaded asset's source data — Three.js holds parsed geometry
+            const newMeshEntry = newTier === 'hd'
+                ? archiveLoader.getMeshEntry()
+                : archiveLoader.getMeshProxyEntry();
+            if (newMeshEntry) {
+                archiveLoader.revokeBlobForFile(newMeshEntry.file_name);
+                archiveLoader.evictFileCache(newMeshEntry.file_name);
+            }
         }
         log.info(`Quality tier switched to ${newTier}`);
     } catch (e) {
         log.error('Error switching quality tier:', e);
-        notify.error(`Failed to switch quality: ${e.message}`);
+        notify.error(`Failed to switch quality: ${errMsg(e)}`);
     } finally {
         document.querySelectorAll('.quality-toggle-btn').forEach(btn => {
             btn.classList.remove('loading');
@@ -1869,7 +2327,7 @@ async function switchQualityTier(newTier: string): Promise<void> {
 // DEPS BUILDERS (matching the deps pattern used by file-handlers.js)
 // =============================================================================
 
-function createArchiveDeps(): any {
+function createArchiveDeps() {
     return {
         scene,
         modelGroup,
@@ -1941,7 +2399,7 @@ function createArchiveDeps(): any {
     };
 }
 
-function createSplatDeps(): any {
+function createSplatDeps() {
     return {
         scene,
         getSplatMesh: () => splatMesh,
@@ -1953,7 +2411,7 @@ function createSplatDeps(): any {
     };
 }
 
-function createModelDeps(): any {
+function createModelDeps() {
     return {
         modelGroup,
         state,
@@ -1962,7 +2420,7 @@ function createModelDeps(): any {
     };
 }
 
-function createPointcloudDeps(): any {
+function createPointcloudDeps() {
     return {
         pointcloudGroup,
         state,
@@ -1971,7 +2429,7 @@ function createPointcloudDeps(): any {
     };
 }
 
-function createDisplayModeDeps(): any {
+function createDisplayModeDeps() {
     const canvasRight = document.getElementById('viewer-canvas-right');
     return {
         state,
@@ -1983,11 +2441,12 @@ function createDisplayModeDeps(): any {
             const showPointcloud = state.displayMode === 'pointcloud' || state.displayMode === 'both' || state.displayMode === 'split';
 
             // Helper to set opacity on all materials in an object
-            const setOpacity = (obj: any, opacity: number) => {
-                obj.traverse((child: any) => {
-                    if (child.material) {
-                        const mats = Array.isArray(child.material) ? child.material : [child.material];
-                        mats.forEach((m: any) => {
+            const setOpacity = (obj: THREE.Object3D, opacity: number) => {
+                obj.traverse((child: THREE.Object3D) => {
+                    const mesh = child as THREE.Mesh;
+                    if (mesh.material) {
+                        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                        mats.forEach((m: THREE.Material) => {
                             m.transparent = true;
                             m.opacity = opacity;
                             m.needsUpdate = true;
@@ -1997,14 +2456,15 @@ function createDisplayModeDeps(): any {
             };
 
             // Helper to animate fade-in for regular meshes
-            const fadeIn = (obj: any, duration: number = 500) => {
+            const fadeIn = (obj: THREE.Object3D, duration: number = 500) => {
                 obj.visible = true;
                 // Save original transparency state before fade-in overrides it
-                const savedStates = new Map<any, { transparent: boolean; opacity: number }>();
-                obj.traverse((child: any) => {
-                    if (child.material) {
-                        const mats = Array.isArray(child.material) ? child.material : [child.material];
-                        mats.forEach((m: any) => {
+                const savedStates = new Map<THREE.Material, { transparent: boolean; opacity: number }>();
+                obj.traverse((child: THREE.Object3D) => {
+                    const mesh = child as THREE.Mesh;
+                    if (mesh.material) {
+                        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                        mats.forEach((m: THREE.Material) => {
                             savedStates.set(m, { transparent: m.transparent, opacity: m.opacity });
                         });
                     }
@@ -2021,10 +2481,11 @@ function createDisplayModeDeps(): any {
                         // Restore original transparency state so opaque meshes
                         // render in the opaque pass with depth writing — required
                         // for correct depth interleaving with Gaussian splats.
-                        obj.traverse((child: any) => {
-                            if (child.material) {
-                                const mats = Array.isArray(child.material) ? child.material : [child.material];
-                                mats.forEach((m: any) => {
+                        obj.traverse((child: THREE.Object3D) => {
+                            const mesh = child as THREE.Mesh;
+                            if (mesh.material) {
+                                const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                                mats.forEach((m: THREE.Material) => {
                                     const saved = savedStates.get(m);
                                     if (saved) {
                                         m.transparent = saved.transparent;
@@ -2043,7 +2504,7 @@ function createDisplayModeDeps(): any {
             };
 
             // Helper to animate fade-in for SplatMesh (uses .opacity property)
-            const fadeInSplat = (splat: any, duration: number = 500) => {
+            const fadeInSplat = (splat: SplatMesh, duration: number = 500) => {
                 splat.visible = true;
                 splat.opacity = 0;
                 const startTime = performance.now();
@@ -2078,10 +2539,104 @@ function createDisplayModeDeps(): any {
 }
 
 /**
+ * Unified single-file loader for the industrial theme's File > Open menu.
+ * Routes by extension to the appropriate loader already available in kiosk-main.
+ */
+async function loadSingleFile(file: File): Promise<void> {
+    const name = file.name.toLowerCase();
+    const ext = name.includes('.') ? name.split('.').pop()! : '';
+
+    const ARCHIVE_EXTS = ['ddim', 'a3d', 'a3z'];
+    const MESH_EXTS    = ['glb', 'gltf', 'obj', 'stl', 'drc'];
+    const SPLAT_EXTS   = ['ply', 'splat', 'sog', 'ksplat', 'spz'];
+    const E57_EXTS     = ['e57'];
+    const CAD_EXTS     = ['step', 'stp', 'iges', 'igs'];
+    const FLIGHT_EXTS  = ['csv', 'kml', 'kmz', 'srt'];
+
+    if (ARCHIVE_EXTS.includes(ext)) {
+        state.archiveSourceUrl = null;
+        await handleArchiveFile(file);
+    } else if (MESH_EXTS.includes(ext)) {
+        await loadModelFromFile([file] as any, createModelDeps());
+        getLayoutModule()?.onAssetLoaded?.();
+    } else if (SPLAT_EXTS.includes(ext)) {
+        await loadSplatFromFile(file, createSplatDeps());
+        getLayoutModule()?.onAssetLoaded?.();
+    } else if (E57_EXTS.includes(ext)) {
+        await loadPointcloudFromFile(file, createPointcloudDeps());
+        getLayoutModule()?.onAssetLoaded?.();
+    } else if (CAD_EXTS.includes(ext)) {
+        const { loadCADFromFile } = await import('./cad-loader.js');
+        await loadCADFromFile(file, { cadGroup: sceneManager.cadGroup, state, showLoading, hideLoading });
+        getLayoutModule()?.onAssetLoaded?.();
+    } else if (FLIGHT_EXTS.includes(ext)) {
+        if (flightPathManager) await flightPathManager.importFromFile(file);
+        else notify.warning('Flight path viewer not available.');
+    } else {
+        notify.warning(`Unsupported file type: .${ext || '(none)'}`);
+    }
+}
+
+/**
+ * Dispose the current scene's GPU resources and archive data.
+ * Called when navigating back from viewer to the collections browser
+ * so accumulated archives don't leak GPU memory.
+ */
+function cleanupCurrentScene(): void {
+    // Dispose splat mesh (releases GPU buffers)
+    if (splatMesh) {
+        if (splatMesh.dispose) splatMesh.dispose();
+        if (scene) scene.remove(splatMesh);
+        splatMesh = null;
+    }
+    // Clear model group children (geometry + materials)
+    if (modelGroup) {
+        while (modelGroup.children.length > 0) {
+            const child = modelGroup.children[0];
+            modelGroup.remove(child);
+            child.traverse?.((obj: THREE.Object3D) => {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+                    mats.forEach((m: THREE.Material) => { if ((m as THREE.MeshStandardMaterial).map) (m as THREE.MeshStandardMaterial).map!.dispose(); m.dispose(); });
+                }
+            });
+        }
+    }
+    // Clear pointcloud group
+    if (pointcloudGroup) {
+        while (pointcloudGroup.children.length > 0) {
+            const child = pointcloudGroup.children[0];
+            pointcloudGroup.remove(child);
+            child.traverse?.((obj: THREE.Object3D) => {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) obj.material.dispose?.();
+            });
+        }
+    }
+    // Dispose archive loader (revokes blob URLs, releases raw data)
+    if (state.archiveLoader) {
+        state.archiveLoader.dispose();
+        state.archiveLoader = null;
+    }
+    // Clean up layout module DOM elements (titles, ribbons, overlays, etc.)
+    getLayoutModule()?.cleanup?.();
+
+    // Reset relevant state
+    state.splatLoaded = false;
+    state.modelLoaded = false;
+    state.pointcloudLoaded = false;
+    state.archiveLoaded = false;
+    state.assetStates = { splat: 'unloaded', mesh: 'unloaded', pointcloud: 'unloaded', cad: 'unloaded', flightpath: 'unloaded' };
+    state.archiveSourceUrl = null;
+    log.info('Scene cleaned up for collection browser navigation');
+}
+
+/**
  * Build the dependency object for theme layout modules.
  * Layout modules receive everything via this object — no ES imports.
  */
-function createLayoutDeps(): any {
+function createLayoutDeps() {
     return {
         Logger,
         escapeHtml,
@@ -2111,6 +2666,7 @@ function createLayoutDeps(): any {
         themeAssets: window.__KIOSK_THEME_ASSETS__ || {},
         hasAnyProxy: hasAnyProxy(state.archiveLoader ? state.archiveLoader.getContentInfo() : {}),
         hasSplat: !!(state.archiveLoader?.getContentInfo()?.hasSplat || state.splatLoaded),
+        hasMesh: !!(state.archiveLoader?.getContentInfo()?.hasMesh || state.modelLoaded),
         qualityResolved: state.qualityResolved,
         switchQualityTier,
         metadataProfile: state.archiveManifest?.metadata_profile || 'archival',
@@ -2121,6 +2677,22 @@ function createLayoutDeps(): any {
         pointcloudGroup,
         setLocalClippingEnabled: (enabled: boolean) => sceneManager?.setLocalClippingEnabled(enabled),
         applyBackgroundForMode,
+        flightPathManager,
+        loadFile: loadSingleFile,
+        THREE,
+        toggleFlyMode,
+        toggleGrid: (on: boolean) => {
+            const cb = document.getElementById('toggle-gridlines') as HTMLInputElement | null;
+            if (cb) { cb.checked = on; sceneManager?.toggleGrid(on); }
+        },
+        setAutoRotate: (on: boolean) => {
+            if (controls) controls.autoRotate = on;
+        },
+        getAutoRotate: () => !!(controls && controls.autoRotate),
+        getFlyModeActive: () => state.flyModeActive,
+        sparkRenderer,
+        getSplatBudget: () => (sparkRenderer ? sparkRenderer.lodSplatCount : getLodBudget(state.qualityResolved)),
+        setSplatBudget: (n: number) => { if (sparkRenderer) sparkRenderer.lodSplatCount = n; },
     };
 }
 
@@ -2237,6 +2809,7 @@ function setupViewerUI(): void {
         controls.autoRotate = !controls.autoRotate;
         const btn = document.getElementById('btn-auto-rotate');
         if (btn) btn.classList.toggle('active', controls.autoRotate);
+        getLayoutModule()?.onAutoRotateChange?.(controls.autoRotate);
     });
 
     // Disable auto-rotate on manual interaction so users can inspect freely
@@ -2245,6 +2818,7 @@ function setupViewerUI(): void {
             controls.autoRotate = false;
             const btn = document.getElementById('btn-auto-rotate');
             if (btn) btn.classList.remove('active');
+            getLayoutModule()?.onAutoRotateChange?.(false);
         }
     });
 
@@ -2560,6 +3134,14 @@ function setupViewerUI(): void {
     // On mobile, move annotation toggle out of toolbar so position:fixed works
     // (backdrop-filter on toolbar creates a containing block that breaks fixed positioning)
     repositionAnnotationToggle();
+
+    // Back to library button (Tauri only, shown when navigating from in-app library)
+    const backBtn = document.createElement('button');
+    backBtn.id = 'kiosk-back-library';
+    backBtn.className = 'kiosk-back-library hidden';
+    backBtn.innerHTML = '<span class="back-arrow">\u2190</span> <span class="back-label">Library</span>';
+    backBtn.addEventListener('click', handleViewerBack);
+    document.body.appendChild(backBtn);
 }
 
 function setupViewerKeyboardShortcuts(): void {
@@ -2605,10 +3187,10 @@ function applyBackgroundForMode(mode: string): void {
     else if (mode === 'splat' || mode === 'both') color = state.splatBackgroundColor;
 
     if (color) {
-        // Use setBackgroundColor to sync savedBackgroundColor — prevents theme
-        // color from being restored by clearEnvironment / setEnvironmentAsBackground
+        // Set scene.background directly — do NOT use setBackgroundColor here,
+        // as that would clobber savedBackgroundColor (the general/universal bg).
         log.info(`Applying background override for "${mode}": ${color}`);
-        sceneManager?.setBackgroundColor(color);
+        if (scene) scene.background = new THREE.Color(color);
     } else {
         // Restore theme/default background
         scene.background = sceneManager?.savedBackgroundColor?.clone()
@@ -2673,7 +3255,7 @@ function createInfoOverlay(): void {
     document.body.appendChild(overlay);
 }
 
-function populateInfoOverlay(manifest: any): void {
+function populateInfoOverlay(manifest: Record<string, unknown>): void {
     const overlay = document.getElementById('kiosk-info-overlay');
     if (!overlay) return;
 
@@ -2795,7 +3377,7 @@ function createWallLabel(): void {
     document.body.appendChild(label);
 }
 
-function populateWallLabel(manifest: any): void {
+function populateWallLabel(manifest: Record<string, unknown>): void {
     const label = document.getElementById('kiosk-wall-label');
     if (!label) return;
 
@@ -2858,11 +3440,11 @@ function createViewSwitcher(): void {
     const contentInfo = state.archiveLoader ? state.archiveLoader.getContentInfo() : null;
     const types: { mode: string; label: string }[] = [];
     if (contentInfo) {
-        if (contentInfo.hasMesh) types.push({ mode: 'model', label: 'Mesh' });
+        if (contentInfo.hasMesh) types.push({ mode: 'model', label: 'Model' });
         if (contentInfo.hasSplat) types.push({ mode: 'splat', label: 'Scan' });
         if (contentInfo.hasPointcloud) types.push({ mode: 'pointcloud', label: 'Points' });
     } else {
-        if (state.modelLoaded) types.push({ mode: 'model', label: 'Mesh' });
+        if (state.modelLoaded) types.push({ mode: 'model', label: 'Model' });
         if (state.splatLoaded) types.push({ mode: 'splat', label: 'Scan' });
         if (state.pointcloudLoaded) types.push({ mode: 'pointcloud', label: 'Points' });
     }
@@ -3016,7 +3598,7 @@ function resetOrbitCenter(): void {
     controls.update();
 }
 
-function applyGlobalAlignment(alignment: any, opts?: { skipCamera?: boolean }): void {
+function applyGlobalAlignment(alignment: Record<string, unknown>, opts?: { skipCamera?: boolean }): void {
     if (!alignment) return;
 
     // Apply object transforms (position, rotation, scale)
@@ -3442,7 +4024,7 @@ function populateAnnotationList(): void {
 
 // --- Detailed metadata helpers ---
 
-function hasValue(val: any): boolean {
+function hasValue(val: unknown): boolean {
     if (val === null || val === undefined || val === '') return false;
     if (Array.isArray(val)) return val.length > 0;
     if (typeof val === 'object') {
@@ -3451,10 +4033,7 @@ function hasValue(val: any): boolean {
     return true;
 }
 
-function escapeHtml(str: any): string {
-    if (typeof str !== 'string') str = String(str);
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+// escapeHtml imported from utilities.ts
 
 /** Check if a URL scheme is safe for use in href/src attributes */
 function isSafeUrl(url: string): boolean {
@@ -3468,7 +4047,7 @@ function isSafeUrl(url: string): boolean {
 }
 
 /** Escape HTML, then convert [title](url) markdown links and bare URLs to clickable <a> tags */
-function linkifyValue(str: any): string {
+function linkifyValue(str: string): string {
     let html = escapeHtml(str);
     // Markdown links: [text](url)
     html = html.replace(
@@ -3507,7 +4086,7 @@ function createDetailSection(title: string): { section: HTMLElement; content: HT
     return { section, content };
 }
 
-function addDetailRow(container: HTMLElement, label: string, value: any): void {
+function addDetailRow(container: HTMLElement, label: string, value: unknown): void {
     if (!hasValue(value)) return;
     const row = document.createElement('div');
     row.className = 'display-detail';
@@ -3516,7 +4095,7 @@ function addDetailRow(container: HTMLElement, label: string, value: any): void {
     container.appendChild(row);
 }
 
-function populateDetailedMetadata(manifest: any): void {
+function populateDetailedMetadata(manifest: Record<string, unknown>): void {
     if (!manifest) return;
 
     const viewContent = document.querySelector('#sidebar-view .display-content');
@@ -3551,7 +4130,7 @@ function populateDetailedMetadata(manifest: any): void {
         }
         const texMaps = qm.texture_maps || manifest._meta?.quality?.texture_maps;
         if (Array.isArray(texMaps) && texMaps.length > 0) {
-            texMaps.forEach((m: any) => {
+            texMaps.forEach((m: { type?: string; width?: number; height?: number }) => {
                 const label = (m.type || '').replace(/([A-Z])/g, ' $1').replace(/^./, (s: string) => s.toUpperCase());
                 addDetailRow(content, `  ${label}`, `${m.width}×${m.height}`);
             });
@@ -3757,12 +4336,7 @@ function populateDetailedMetadata(manifest: any): void {
     log.info(`Populated ${filteredSections.length} detailed metadata sections`);
 }
 
-function formatBytes(bytes: number): string {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
-}
+// formatBytes imported from utilities.ts
 
 function populateSourceFilesList(archiveLoader: ArchiveLoader): void {
     const sourceEntries = archiveLoader.getSourceFileEntries();
@@ -3810,7 +4384,7 @@ function populateSourceFilesList(archiveLoader: ArchiveLoader): void {
     // Guidance note
     const note = document.createElement('div');
     note.style.cssText = 'font-size:0.75em;opacity:0.5;margin-top:8px;font-style:italic;';
-    note.textContent = 'Source files are included in the .a3d archive. Unpack to access.';
+    note.textContent = 'Source files are included in the .ddim archive. Unpack to access.';
     content.appendChild(note);
 
     viewContent.appendChild(section);
@@ -3828,7 +4402,7 @@ function updateInfoPanel(): void {
     }
     if (modelGroup && modelGroup.children.length > 0) {
         let faceCount = 0;
-        modelGroup.traverse((child: any) => {
+        modelGroup.traverse((child: THREE.Object3D) => {
             if (child.isMesh && child.geometry) {
                 const idx = child.geometry.index;
                 faceCount += idx ? idx.count / 3 : (child.geometry.getAttribute('position')?.count || 0) / 3;
@@ -3838,7 +4412,7 @@ function updateInfoPanel(): void {
     }
     if (pointcloudGroup && pointcloudGroup.children.length > 0) {
         let pointCount = 0;
-        pointcloudGroup.traverse((child: any) => {
+        pointcloudGroup.traverse((child: THREE.Object3D) => {
             if (child.isPoints && child.geometry) {
                 const pos = child.geometry.getAttribute('position');
                 if (pos) pointCount += pos.count;
@@ -3848,7 +4422,7 @@ function updateInfoPanel(): void {
     }
 }
 
-function populateDisplayStats(annotationSystem: any): void {
+function populateDisplayStats(annotationSystem: AnnotationSystem | null): void {
     // Update display stats in sidebar
     const splatStat = document.getElementById('display-splat-stat');
     const splatCount = document.getElementById('display-splat-count');
@@ -3999,6 +4573,25 @@ function hideEl(id: string): void {
     if (el) el.style.display = 'none';
 }
 
+/** Show the background loading indicator (bottom-left spinner) */
+function showBgLoadingIndicator(): void {
+    const el = document.getElementById('bg-loading-indicator');
+    if (el) {
+        el.classList.remove('hidden', 'fade-out');
+    }
+}
+
+/** Hide the background loading indicator with a fade-out */
+function hideBgLoadingIndicator(): void {
+    const el = document.getElementById('bg-loading-indicator');
+    if (!el || el.classList.contains('hidden')) return;
+    el.classList.add('fade-out');
+    setTimeout(() => {
+        el.classList.add('hidden');
+        el.classList.remove('fade-out');
+    }, 300);
+}
+
 /**
  * Move scene settings into the metadata sidebar as a "Settings" tab.
  * In the new layout, scene settings live in #pane-scene inside the props panel.
@@ -4083,12 +4676,12 @@ function createExportSection(): void {
     // --- Full archive download (only when loaded from URL) ---
     if (state.archiveSourceUrl) {
         const archiveBtn = createExportButton(
-            'Download Full Archive (.a3d)',
-            `${baseName}.a3d`,
+            'Download Full Archive (.ddim)',
+            `${baseName}.ddim`,
             async (_btn) => {
                 const a = document.createElement('a');
                 a.href = state.archiveSourceUrl;
-                a.download = `${baseName}.a3d`;
+                a.download = `${baseName}.ddim`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -4156,7 +4749,7 @@ function createExportButton(label: string, filename: string, onClick: (btn: HTML
             await onClick(btn);
         } catch (err) {
             log.error('Export failed:', err);
-            notify.error(`Export failed: ${err.message}`);
+            notify.error(`Export failed: ${errMsg(err)}`);
         } finally {
             btn.disabled = false;
             btn.textContent = origText;
@@ -4383,7 +4976,7 @@ function showMobileAnnotationDetail(annotation: Annotation): void {
     }
 
     // Find annotation number from marker
-    const marker = document.querySelector(`.annotation-marker[data-annotation-id="${annotation.id}"]`);
+    const marker = document.querySelector(`.annotation-marker[data-annotation-id="${CSS.escape(annotation.id)}"]`);
     const number = marker ? marker.textContent.trim() : '?';
 
     // Render full content
@@ -4403,7 +4996,7 @@ function showMobileAnnotationDetail(annotation: Annotation): void {
         </div>
         <div class="mobile-anno-header">
             <span class="mobile-anno-number">${number}</span>
-            <h2 class="mobile-anno-title">${annotation.title || 'Untitled'}</h2>
+            <h2 class="mobile-anno-title">${escapeHtml(annotation.title || 'Untitled')}</h2>
         </div>
         <div class="mobile-anno-body">${bodyHtml}</div>
     `;
@@ -4475,7 +5068,7 @@ function navigateAnnotation(direction: number): void {
 
     // Update sidebar list active state
     document.querySelectorAll('.kiosk-anno-item.active').forEach(c => c.classList.remove('active'));
-    const item = document.querySelector(`.kiosk-anno-item[data-anno-id="${newAnno.id}"]`);
+    const item = document.querySelector(`.kiosk-anno-item[data-anno-id="${CSS.escape(newAnno.id)}"]`);
     if (item) item.classList.add('active');
 
     // Show single marker if annotations are globally hidden
@@ -4571,10 +5164,10 @@ async function showBrandedLoading(archiveLoader: ArchiveLoader): Promise<void> {
             }
         }
 
-        // Build content type labels
-        const types = [];
+        // Build content type labels (model first)
+        const types: string[] = [];
+        if (contentInfo.hasMesh) types.push('Model');
         if (contentInfo.hasSplat) types.push('Gaussian Splat');
-        if (contentInfo.hasMesh) types.push('Mesh');
         if (contentInfo.hasPointcloud) types.push('Point Cloud');
         if (typesEl && types.length > 0) {
             typesEl.textContent = types.join(' + ');
@@ -4587,7 +5180,7 @@ async function showBrandedLoading(archiveLoader: ArchiveLoader): Promise<void> {
 
         updateProgress(20, 'Preparing scene...');
     } catch (e) {
-        log.warn('Could not show branded loading:', e.message);
+        log.warn('Could not show branded loading:', errMsg(e));
     }
 }
 
@@ -4803,6 +5396,6 @@ function animate(): void {
 
         sceneManager.updateFPS(fpsElement);
     } catch (e) {
-        console.warn('[animate] frame error:', e);
+        log.warn('Frame error:', e);
     }
 }
