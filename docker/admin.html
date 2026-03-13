@@ -628,6 +628,19 @@ tr:last-child td { border-bottom: none; }
     border-color: var(--border-default);
 }
 
+.gpu-info-banner {
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    border-radius: 6px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.gpu-status { font-size: 10px; margin-right: 4px; }
+.gpu-ok { color: #22c55e; }
+.gpu-none { color: var(--text-tertiary); }
+
 /* Settings tab — sticky save bar */
 .settings-actions {
     position: sticky;
@@ -1305,7 +1318,7 @@ async function loadSettingsTab() {
 
 // Group descriptions for better UX context
 const GROUP_DESCRIPTIONS = {
-    'Video Transcode': 'Controls FFmpeg encoding when converting recordings to MP4.',
+    'Video Transcode': 'Controls FFmpeg encoding when converting recordings to MP4. Hardware encoding requires /dev/dri GPU passthrough.',
     'Video Recording': 'WebM capture settings for in-browser screen recording.',
     'GIF Generation': 'Output parameters for animated GIF exports.',
     'Media Output': 'Dimensions and quality for generated thumbnails and previews.',
@@ -1375,6 +1388,25 @@ function renderSettings() {
         html += '</div></div>';
     }
     container.innerHTML = html;
+
+    // Fetch GPU capabilities and show info banner in Video Transcode group
+    fetch('/api/gpu').then(r => r.json()).then(gpu => {
+        const vtGroup = document.getElementById('sg-video-transcode');
+        if (!vtGroup) return;
+        const header = vtGroup.querySelector('.settings-group-header');
+        const banner = document.createElement('div');
+        banner.className = 'gpu-info-banner';
+        if (gpu.vaapi) {
+            banner.innerHTML = '<span class="gpu-status gpu-ok">&#9679;</span> ' +
+                '<strong>GPU:</strong> ' + escapeHtml(gpu.device) +
+                ' &mdash; ' + gpu.encoders.filter(e => e !== 'libx264').join(', ');
+        } else {
+            banner.innerHTML = '<span class="gpu-status gpu-none">&#9679;</span> ' +
+                'No GPU detected &mdash; software encoding only';
+        }
+        header.after(banner);
+    }).catch(() => {});
+
     document.getElementById('settings-actions').style.display = 'flex';
 
     // Wire reset buttons
