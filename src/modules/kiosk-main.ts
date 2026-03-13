@@ -2632,6 +2632,7 @@ async function loadSingleFile(file: File): Promise<void> {
     if (ARCHIVE_EXTS.includes(ext)) {
         state.archiveSourceUrl = null;
         await handleArchiveFile(file);
+        getLayoutModule()?.onAssetLoaded?.();
     } else if (MESH_EXTS.includes(ext)) {
         await loadModelFromFile([file] as any, createModelDeps());
         getLayoutModule()?.onAssetLoaded?.();
@@ -2648,6 +2649,7 @@ async function loadSingleFile(file: File): Promise<void> {
     } else if (FLIGHT_EXTS.includes(ext)) {
         if (flightPathManager) await flightPathManager.importFromFile(file);
         else notify.warning('Flight path viewer not available.');
+        getLayoutModule()?.onAssetLoaded?.();
     } else {
         notify.warning(`Unsupported file type: .${ext || '(none)'}`);
     }
