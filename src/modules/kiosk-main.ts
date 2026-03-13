@@ -436,7 +436,10 @@ async function _doInit(): Promise<void> {
                 parentRenderLoop: { pause: pauseRender, resume: resumeRender },
                 theme: state.theme || null,
                 isEditor: false,
-                imageAssets: state.imageAssets
+                imageAssets: state.imageAssets,
+                parentBackgroundColor: scene?.background instanceof THREE.Color
+                    ? '#' + scene.background.getHexString()
+                    : undefined,
             });
             await viewer.open(anno, result.blob);
         });
