@@ -1,10 +1,11 @@
 /**
- * Flight Log Parsers — Pure functions for parsing DJI drone telemetry files.
+ * Flight Log Parsers — Pure functions for parsing drone telemetry files.
  *
  * Supported formats:
  * - DJI CSV (exported from DJI Fly / DJI Pilot 2 / AirData)
  * - KML/KMZ (Google Earth format, exported by many flight tools)
  * - SRT (DJI subtitle telemetry embedded in video files)
+ * - GPX (universal exchange format — used for pre-decoded DJI binary logs in archives)
  *
  * All parsers return FlightPoint[] with GPS coords converted to local 3D space.
  */
@@ -51,6 +52,7 @@ export function detectFormat(fileName: string, contentPeek: string): string | nu
     if (ext === 'kml') return 'kml';
     if (ext === 'kmz') return 'kmz';
     if (ext === 'srt') return 'srt';
+    if (ext === 'gpx') return 'gpx';
 
     // Content-based detection (for files with ambiguous extensions like .txt)
     const lower = contentPeek.toLowerCase();
@@ -252,4 +254,122 @@ export function parseSrt(srtText: string): FlightPoint[] {
     }
 
     return points;
+}
+
+// ===== GPX Parser =====
+
+export function parseGpx(gpxText: string): FlightPoint[] {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(gpxText, 'text/xml');
+
+    // Collect all <trkpt> elements (GPX 1.0/1.1, with or without namespace)
+    const trkpts = [
+        ...Array.from(doc.getElementsByTagName('trkpt')),
+        ...Array.from(doc.getElementsByTagNameNS('http://www.topografix.com/GPX/1/1', 'trkpt')),
+    ];
+    const seen = new Set<Element>();
+
+    const points: FlightPoint[] = [];
+    let originLat = 0, originLon = 0, originAlt = 0;
+    let baseTime = 0;
+
+    for (const pt of trkpts) {
+        if (seen.has(pt)) continue;
+        seen.add(pt);
+
+        const lat = parseFloat(pt.getAttribute('lat') || '');
+        const lon = parseFloat(pt.getAttribute('lon') || '');
+        if (isNaN(lat) || isNaN(lon)) continue;
+
+        // Elevation — <ele> child
+        const eleEl = pt.getElementsByTagName('ele')[0] ?? pt.getElementsByTagNameNS('http://www.topografix.com/GPX/1/1', 'ele')[0];
+        const alt = eleEl ? parseFloat(eleEl.textContent || '0') : 0;
+
+        // Time — <time> child → ms since flight start
+        const timeEl = pt.getElementsByTagName('time')[0] ?? pt.getElementsByTagNameNS('http://www.topografix.com/GPX/1/1', 'time')[0];
+        let timestamp = points.length * 1000;
+        if (timeEl?.textContent) {
+            const t = Date.parse(timeEl.textContent);
+            if (!isNaN(t)) {
+                if (points.length === 0) baseTime = t;
+                timestamp = t - baseTime;
+            }
+        }
+
+        // Extensions — speed, heading, gimbalPitch, gimbalYaw
+        let speed: number | undefined;
+        let heading: number | undefined;
+        let gimbalPitch: number | undefined;
+        let gimbalYaw: number | undefined;
+        const extensions = pt.getElementsByTagName('extensions')[0];
+        if (extensions) {
+            speed = parseExtVal(extensions, 'speed');
+            heading = parseExtVal(extensions, 'heading');
+            gimbalPitch = parseExtVal(extensions, 'gimbalPitch');
+            gimbalYaw = parseExtVal(extensions, 'gimbalYaw');
+        }
+
+        if (points.length === 0) {
+            originLat = lat;
+            originLon = lon;
+            originAlt = alt;
+        }
+
+        const local = gpsToLocal(lat, lon, alt, originLat, originLon, originAlt);
+        points.push({ ...local, lat, lon, alt, timestamp, speed, heading, gimbalPitch, gimbalYaw });
+    }
+
+    return points;
+}
+
+/** Extract a numeric value from a GPX <extensions> block by tag name. */
+function parseExtVal(extensions: Element, tag: string): number | undefined {
+    // Try bare tag name first, then namespaced
+    const el = extensions.getElementsByTagName(tag)[0]
+        ?? extensions.getElementsByTagNameNS('http://vitrine3d.app/gpx/1', tag)[0];
+    if (!el?.textContent) return undefined;
+    const n = parseFloat(el.textContent);
+    return isNaN(n) ? undefined : n;
+}
+
+// ===== GPX Serializer =====
+
+/** Convert FlightPoint[] to a GPX 1.1 XML string with Vitrine3D extensions for telemetry. */
+export function flightPointsToGpx(points: FlightPoint[], name = 'Flight Path'): string {
+    const lines: string[] = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<gpx version="1.1" creator="Vitrine3D"',
+        '     xmlns="http://www.topografix.com/GPX/1/1"',
+        '     xmlns:v3d="http://vitrine3d.app/gpx/1">',
+        '<trk>',
+        `<name>${escapeXml(name)}</name>`,
+        '<trkseg>',
+    ];
+
+    // Use a synthetic base time (epoch) so timestamps are absolute ISO strings
+    const baseTime = Date.now();
+
+    for (const p of points) {
+        lines.push(`<trkpt lat="${p.lat}" lon="${p.lon}">`);
+        lines.push(`<ele>${p.alt}</ele>`);
+        lines.push(`<time>${new Date(baseTime + p.timestamp).toISOString()}</time>`);
+
+        const exts: string[] = [];
+        if (p.speed !== undefined) exts.push(`<v3d:speed>${p.speed}</v3d:speed>`);
+        if (p.heading !== undefined) exts.push(`<v3d:heading>${p.heading}</v3d:heading>`);
+        if (p.gimbalPitch !== undefined) exts.push(`<v3d:gimbalPitch>${p.gimbalPitch}</v3d:gimbalPitch>`);
+        if (p.gimbalYaw !== undefined) exts.push(`<v3d:gimbalYaw>${p.gimbalYaw}</v3d:gimbalYaw>`);
+        if (exts.length > 0) {
+            lines.push(`<extensions>${exts.join('')}</extensions>`);
+        }
+
+        lines.push('</trkpt>');
+    }
+
+    lines.push('</trkseg>', '</trk>', '</gpx>');
+    return lines.join('\n');
+}
+
+function escapeXml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

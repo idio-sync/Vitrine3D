@@ -1328,8 +1328,8 @@ export function setup(manifest, deps) {
         if (sliceWrapper) toolsGroup.appendChild(sliceWrapper);
     }
 
-    // Flight log dropdown — inserted late via onFlightPathLoaded since
-    // flightPathManager is null at setup() time (loaded after layout init)
+    // Flight log dropdown — inserted at setup() if data is already loaded,
+    // or via onFlightPathLoaded() if flight paths load after layout init
     if (flightPathManager && flightPathManager.hasData) {
         buildFlightDropdown(flightPathManager, toolsGroup);
     }
@@ -2071,6 +2071,211 @@ function buildFlightDropdown(fpm, container) {
     const div1 = document.createElement('div');
     div1.className = 'editorial-flight-divider';
     fpDropdown.appendChild(div1);
+
+    // --- Playback controls section ---
+    const playSection = document.createElement('div');
+    playSection.className = 'editorial-flight-playback';
+
+    // Transport row: play/pause, stop, time
+    const transport = document.createElement('div');
+    transport.className = 'editorial-flight-transport';
+
+    const playBtn = document.createElement('button');
+    playBtn.className = 'editorial-flight-transport-btn play';
+    playBtn.title = 'Play';
+    playBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+
+    const stopBtn = document.createElement('button');
+    stopBtn.className = 'editorial-flight-transport-btn';
+    stopBtn.title = 'Stop';
+    stopBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>';
+
+    const timeDisplay = document.createElement('span');
+    timeDisplay.className = 'editorial-flight-time';
+    timeDisplay.textContent = '0:00 / 0:00';
+
+    transport.appendChild(playBtn);
+    transport.appendChild(stopBtn);
+    transport.appendChild(timeDisplay);
+    playSection.appendChild(transport);
+
+    // Timeline scrubber
+    const timeline = document.createElement('input');
+    timeline.type = 'range';
+    timeline.min = '0';
+    timeline.max = '1000';
+    timeline.value = '0';
+    timeline.className = 'editorial-flight-timeline';
+    playSection.appendChild(timeline);
+
+    // Speed selector
+    const speedRow = document.createElement('div');
+    speedRow.className = 'editorial-flight-section';
+    speedRow.style.paddingTop = '2px';
+
+    const speedLabel = document.createElement('span');
+    speedLabel.className = 'editorial-flight-section-label';
+    speedLabel.textContent = 'Speed';
+    speedRow.appendChild(speedLabel);
+
+    const speedSeg = document.createElement('div');
+    speedSeg.className = 'editorial-flight-seg';
+
+    const speeds = [
+        { value: 0.5, label: '½×' },
+        { value: 1, label: '1×' },
+        { value: 2, label: '2×' },
+        { value: 4, label: '4×' },
+    ];
+    const speedBtns = [];
+    speeds.forEach(({ value, label }) => {
+        const btn = document.createElement('button');
+        btn.className = 'editorial-flight-seg-btn';
+        btn.textContent = label;
+        btn.dataset.speed = String(value);
+        if (value === 1) btn.classList.add('active');
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fpm.setPlaybackSpeed(value);
+            speedBtns.forEach(b => b.classList.toggle('active', b.dataset.speed === String(value)));
+        });
+        speedBtns.push(btn);
+        speedSeg.appendChild(btn);
+    });
+    speedRow.appendChild(speedSeg);
+    playSection.appendChild(speedRow);
+
+    // Camera mode selector
+    const camRow = document.createElement('div');
+    camRow.className = 'editorial-flight-section';
+    camRow.style.paddingTop = '2px';
+
+    const camLabel = document.createElement('span');
+    camLabel.className = 'editorial-flight-section-label';
+    camLabel.textContent = 'Camera';
+    camRow.appendChild(camLabel);
+
+    const camSeg = document.createElement('div');
+    camSeg.className = 'editorial-flight-seg';
+
+    const camModes = [
+        { key: 'orbit', label: 'Orbit' },
+        { key: 'chase', label: 'Chase' },
+        { key: 'fpv', label: 'FPV' },
+    ];
+    const camBtns = [];
+    camModes.forEach(({ key, label }) => {
+        const btn = document.createElement('button');
+        btn.className = 'editorial-flight-seg-btn';
+        btn.textContent = label;
+        btn.dataset.cam = key;
+        if (fpm.cameraMode === key) btn.classList.add('active');
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fpm.setCameraMode(key);
+        });
+        camBtns.push(btn);
+        camSeg.appendChild(btn);
+    });
+    camRow.appendChild(camSeg);
+    playSection.appendChild(camRow);
+
+    // PiP toggle
+    const pipRow = document.createElement('div');
+    pipRow.className = 'editorial-flight-section';
+    pipRow.style.paddingTop = '0';
+    pipRow.style.paddingBottom = '8px';
+
+    const pipLabel = document.createElement('span');
+    pipLabel.className = 'editorial-flight-section-label';
+    pipLabel.textContent = 'PiP';
+    pipRow.appendChild(pipLabel);
+
+    const pipToggle = document.createElement('button');
+    pipToggle.className = 'editorial-flight-seg-btn editorial-flight-pip-toggle';
+    pipToggle.textContent = fpm.pipEnabled ? 'On' : 'Off';
+    if (fpm.pipEnabled) pipToggle.classList.add('active');
+    pipToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const next = !fpm.pipEnabled;
+        fpm.setPipEnabled(next);
+        pipToggle.textContent = next ? 'On' : 'Off';
+        pipToggle.classList.toggle('active', next);
+    });
+    pipRow.appendChild(pipToggle);
+    playSection.appendChild(pipRow);
+
+    fpDropdown.appendChild(playSection);
+
+    // --- Wire playback events ---
+    function formatTime(ms) {
+        const s = Math.floor(ms / 1000);
+        const m = Math.floor(s / 60);
+        return `${m}:${String(s % 60).padStart(2, '0')}`;
+    }
+
+    let playing = false;
+    playBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (playing) {
+            fpm.pausePlayback();
+            playing = false;
+            playBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+            playBtn.title = 'Play';
+            playBtn.classList.remove('active');
+        } else {
+            fpm.startPlayback();
+            playing = true;
+            playBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>';
+            playBtn.title = 'Pause';
+            playBtn.classList.add('active');
+        }
+    });
+
+    stopBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fpm.stopPlayback();
+        playing = false;
+        playBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+        playBtn.title = 'Play';
+        playBtn.classList.remove('active');
+        timeline.value = '0';
+        timeDisplay.textContent = '0:00 / 0:00';
+    });
+
+    let scrubbing = false;
+    timeline.addEventListener('mousedown', () => { scrubbing = true; });
+    timeline.addEventListener('touchstart', () => { scrubbing = true; });
+    timeline.addEventListener('input', (e) => {
+        e.stopPropagation();
+        fpm.seekTo(parseInt(timeline.value, 10) / 1000);
+    });
+    timeline.addEventListener('mouseup', () => { scrubbing = false; });
+    timeline.addEventListener('touchend', () => { scrubbing = false; });
+
+    fpm.onPlaybackUpdate((currentMs, totalMs) => {
+        if (!scrubbing) {
+            timeline.value = String(Math.round((currentMs / totalMs) * 1000));
+        }
+        timeDisplay.textContent = `${formatTime(currentMs)} / ${formatTime(totalMs)}`;
+    });
+
+    fpm.onPlaybackEnd(() => {
+        playing = false;
+        playBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+        playBtn.title = 'Play';
+        playBtn.classList.remove('active');
+        timeline.value = '0';
+    });
+
+    fpm.onCameraModeChange((mode) => {
+        camBtns.forEach(b => b.classList.toggle('active', b.dataset.cam === mode));
+    });
+
+    // --- Divider before visualization controls ---
+    const div2 = document.createElement('div');
+    div2.className = 'editorial-flight-divider';
+    fpDropdown.appendChild(div2);
 
     // --- Color mode selector ---
     const colorSection = document.createElement('div');

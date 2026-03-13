@@ -16,6 +16,10 @@ ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSIO
 # libstdc++ is required by the Node binary and better-sqlite3 native addon.
 # nodejs is NOT installed via apk — the build-stage binary is copied below for ABI compatibility.
 RUN apk add --no-cache xz gettext python3 unzip libstdc++ ffmpeg && \
+    apk add --no-cache --upgrade \
+        --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main \
+        --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community \
+        libva libva-utils intel-media-driver && \
     tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && \
     tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz && \
     rm /tmp/s6-overlay-*.tar.xz
@@ -70,6 +74,12 @@ ENV CHUNKED_UPLOAD="false"
 ENV DEFAULT_KIOSK_THEME="editorial"
 ENV APP_TITLE="Vitrine3D"
 ENV DJI_API_KEY=""
+ENV VIDEO_CODEC=""
+ENV VAAPI_DEVICE=""
+# Headless VA-API: suppress X11 connection attempts and set runtime dir
+ENV LIBVA_DRIVER_NAME=iHD
+ENV LIBVA_DRIVERS_PATH=/usr/lib/dri
+ENV XDG_RUNTIME_DIR=/tmp
 
 VOLUME ["/data"]
 

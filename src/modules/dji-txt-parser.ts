@@ -38,13 +38,18 @@ export async function parseDjiTxt(buffer: ArrayBuffer): Promise<FlightPoint[]> {
     let keychains;
 
     if (parser.version >= 13) {
+        const reqBody = parser.keychainsRequest();
+        const jsonBody = JSON.stringify(reqBody);
+
+        // Server-side proxy — the only viable path from a browser.
+        // DJI's API does not send CORS headers, so direct browser calls always fail.
+        // The proxy must be reachable without auth (bypass CF Access for /api/dji-keychains).
         try {
-            log.info(`Log version ${parser.version} — fetching decryption keychains via proxy...`);
-            const reqBody = parser.keychainsRequest();
+            log.info(`Log version ${parser.version} — fetching decryption keychains via server proxy...`);
             const resp = await fetch('/api/dji-keychains', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(reqBody),
+                body: jsonBody,
             });
             if (!resp.ok) {
                 const err = await resp.json().catch(() => ({ error: resp.statusText }));
@@ -52,11 +57,11 @@ export async function parseDjiTxt(buffer: ArrayBuffer): Promise<FlightPoint[]> {
             }
             const result = await resp.json();
             keychains = (result as any).data;
-        } catch (err: any) {
+        } catch (proxyErr: any) {
             throw new Error(
-                `Failed to fetch DJI decryption keychains: ${err?.message || err}. ` +
-                'Check that DJI_API_KEY is set correctly (Docker env var or admin settings), ' +
-                'or export the log as CSV from airdata.com'
+                `DJI v${parser.version} log requires decryption keychains but the server proxy failed: ${proxyErr?.message || proxyErr}. ` +
+                'Ensure /api/dji-keychains is accessible (bypass CF Access for this path), ' +
+                'DJI_API_KEY is set, or export the log as CSV from airdata.com'
             );
         }
     }

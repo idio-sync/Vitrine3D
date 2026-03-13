@@ -28,6 +28,7 @@ import {
 } from './file-handlers.js';
 import { loadCADFromBlobUrl } from './cad-loader.js';
 import { centerModelOnGrid } from './alignment.js';
+import { enterReducedQualityMode, exitReducedQualityMode, yieldToRenderer } from './background-loader.js';
 import { updatePronomRegistry, applyCameraConstraints } from './metadata-manager.js';
 import * as postProcessing from './post-processing.js';
 import type { ArchivePipelineDeps } from '@/types.js';
@@ -841,6 +842,12 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
             t => t !== primaryType && state.assetStates[t] === ASSET_STATE.UNLOADED
         );
         if (remainingTypes.length > 0) {
+            const throttleTargets = {
+                renderer: deps.sceneRefs.renderer,
+                sparkRenderer: deps.sparkRenderer ?? null,
+                onResize: deps.onResize,
+            };
+            enterReducedQualityMode(throttleTargets);
             setTimeout(async () => {
                 const typesToLoad = remainingTypes.filter(type =>
                     (type === 'splat' && contentInfo.hasSplat) ||
@@ -850,7 +857,8 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
                     (type === 'cad' && contentInfo.hasCAD) ||
                     (type === 'flightpath' && contentInfo.hasFlightPath)
                 );
-                await Promise.all(typesToLoad.map(async (type) => {
+                for (const type of typesToLoad) {
+                    await yieldToRenderer();
                     log.info(`Background loading: ${type}`);
                     const loaded = await ensureAssetLoaded(type, deps);
                     if (!loaded && state.assetStates[type] === ASSET_STATE.ERROR) {
@@ -866,7 +874,7 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
                     if (type === 'flightpath' && loaded && deps.renderFlightPaths) {
                         await deps.renderFlightPaths();
                     }
-                }));
+                }
                 // Release raw ZIP data after all assets are extracted,
                 // but keep it if archive has source files (needed for re-export)
                 // or proxies (needed for on-demand quality switching).
@@ -878,6 +886,7 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
                 } else {
                     log.info(`All archive assets loaded, raw data retained (source files: ${archiveLoader.hasSourceFiles()}, proxies: ${hasProxies})`);
                 }
+                exitReducedQualityMode(throttleTargets);
             }, 100);
         } else {
             const hasProxiesElse = hasAnyProxy(contentInfoFinal);
@@ -1132,6 +1141,12 @@ export async function switchQualityTier(newTier: string, deps: ArchivePipelineDe
 
     const contentInfo = archiveLoader.getContentInfo();
     const fileHandlerDeps = deps.createFileHandlerDeps();
+    const switchThrottleTargets = {
+        renderer: deps.sceneRefs.renderer,
+        sparkRenderer: deps.sparkRenderer ?? null,
+        onResize: deps.onResize,
+    };
+    enterReducedQualityMode(switchThrottleTargets);
 
     try {
         if (contentInfo.hasSceneProxy) {
@@ -1149,6 +1164,8 @@ export async function switchQualityTier(newTier: string, deps: ArchivePipelineDe
                 archiveLoader.evictFileCache(oldSplatEntry.file_name);
             }
         }
+        // Yield between splat and mesh swap so the renderer gets a frame
+        await yieldToRenderer();
         if (contentInfo.hasMeshProxy) {
             const oldMeshEntry = newTier === 'hd'
                 ? archiveLoader.getMeshProxyEntry()
@@ -1185,6 +1202,7 @@ export async function switchQualityTier(newTier: string, deps: ArchivePipelineDe
         log.error('Error switching quality tier:', e);
         notify.error(`Failed to switch quality: ${e.message}`);
     } finally {
+        exitReducedQualityMode(switchThrottleTargets);
         document.querySelectorAll('.quality-toggle-btn').forEach((btn: Element) => {
             btn.classList.remove('loading');
         });

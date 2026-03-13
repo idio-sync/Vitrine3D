@@ -59,9 +59,11 @@ const DB_PATH = process.env.DB_PATH || '/data/vitrine.db';
 // --- Settings defaults registry ---
 // Resolution: SQLite row → env var → hardcoded default
 const SETTINGS_DEFAULTS = {
-    'video.crf':              { default: '18',      type: 'number', label: 'Video CRF',              group: 'Video Transcode',  description: 'H.264 quality (0=lossless, 51=worst)', min: 0, max: 51 },
+    'video.crf':              { default: '18',      type: 'number', label: 'Quality',                 group: 'Video Transcode',  description: 'Encoding quality — maps to CRF (software) or ICQ (hardware). Lower = better.', min: 0, max: 51 },
     'video.preset':           { default: 'fast',    type: 'select', label: 'Encoding Preset',         group: 'Video Transcode',  description: 'FFmpeg speed/quality tradeoff', options: ['ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'] },
-    'recording.bitrate':      { default: '5000000', type: 'number', label: 'Recording Bitrate (bps)', group: 'Video Recording',  description: 'WebM capture bitrate' },
+    'video.codec':            { default: 'auto',              type: 'select', label: 'Video Codec',            group: 'Video Transcode',  description: 'auto = AV1 if GPU available, else H.264 software', options: ['auto','av1','hevc','h264-hw','h264'] },
+    'video.vaapi_device':     { default: '/dev/dri/renderD128', type: 'string', label: 'VAAPI Device Path',    group: 'Video Transcode',  description: 'Render node for hardware encoding' },
+    'recording.bitrate':      { default: '16000000', type: 'number', label: 'Recording Bitrate (bps)', group: 'Video Recording',  description: 'WebM capture bitrate' },
     'recording.framerate':    { default: '30',      type: 'number', label: 'Recording FPS',           group: 'Video Recording',  description: 'Capture frame rate', min: 15, max: 60 },
     'recording.maxDuration':  { default: '60',      type: 'number', label: 'Max Recording Duration (s)', group: 'Video Recording', description: 'Maximum recording length', min: 10, max: 300 },
     'gif.fps':                { default: '15',      type: 'number', label: 'GIF FPS',                 group: 'GIF Generation',   description: 'GIF animation frame rate', min: 5, max: 30 },
@@ -84,7 +86,47 @@ const SETTINGS_ENV_MAP = {
     'gif.width':        'GIF_WIDTH',
     'thumbnail.size':   'THUMBNAIL_SIZE',
     'flight.djiApiKey': 'DJI_API_KEY',
+    'video.codec':        'VIDEO_CODEC',
+    'video.vaapi_device': 'VAAPI_DEVICE',
 };
+
+// --- GPU capability probe ---
+// Runs vainfo at startup to detect VAAPI encoders.
+// Result stored in gpuCapabilities for use by transcodeMedia().
+const gpuCapabilities = { vaapi: false, encoders: ['libx264'], device: null };
+
+function probeGpu() {
+    try {
+        const output = execFileSync('vainfo', [], {
+            encoding: 'utf8',
+            timeout: 5000,
+            env: { ...process.env, LIBVA_DRIVER_NAME: 'iHD' },
+        });
+
+        // Parse device name from "vainfo: Driver version:" line
+        const driverMatch = output.match(/Driver version:\s*(.+)/i);
+        const device = driverMatch ? driverMatch[1].trim() : 'Unknown VAAPI device';
+
+        // Parse supported encoder profiles
+        const encoders = [];
+        if (/VAProfileH264/.test(output) && /VAEntrypointEncSlice/.test(output)) encoders.push('h264_vaapi');
+        if (/VAProfileHEVC/.test(output) && /VAEntrypointEncSlice/.test(output)) encoders.push('hevc_vaapi');
+        if (/VAProfileAV1/.test(output) && /VAEntrypointEncSlice/.test(output)) encoders.push('av1_vaapi');
+
+        if (encoders.length > 0) {
+            gpuCapabilities.vaapi = true;
+            gpuCapabilities.encoders = [...encoders, 'libx264']; // always include software fallback
+            gpuCapabilities.device = device;
+            console.log('[gpu] VAAPI available — device:', device, 'encoders:', encoders.join(', '));
+        } else {
+            console.log('[gpu] VAAPI device found but no supported encoders');
+        }
+    } catch (err) {
+        console.log('[gpu] No VAAPI available (vainfo failed) — using software encoding');
+    }
+}
+
+probeGpu();
 
 // In-memory cache: { key: { value, expiry } }
 const _settingsCache = {};
@@ -2727,6 +2769,72 @@ function finishTranscode(mediaId, mp4Path, gifPath, thumbPath, mediaDir, rawPath
 }
 
 /**
+ * Resolve FFmpeg encoder + args based on video.codec setting and GPU capabilities.
+ * Returns { encoder, args, isHardware } or throws if requested hardware is unavailable.
+ */
+function resolveEncoder() {
+    const codec = getSetting('video.codec') || 'auto';
+    const quality = getSetting('video.crf') || '18';
+    const preset = getSetting('video.preset') || 'fast';
+    const vaDevice = getSetting('video.vaapi_device') || '/dev/dri/renderD128';
+
+    const hwEncoderMap = {
+        'av1':     'av1_vaapi',
+        'hevc':    'hevc_vaapi',
+        'h264-hw': 'h264_vaapi',
+    };
+
+    // Auto mode: pick best available
+    if (codec === 'auto') {
+        if (gpuCapabilities.vaapi && gpuCapabilities.encoders.includes('av1_vaapi')) {
+            return {
+                encoder: 'av1_vaapi',
+                isHardware: true,
+                preInputArgs: ['-vaapi_device', vaDevice],
+                vf: 'format=nv12,pad=ceil(iw/2)*2:ceil(ih/2)*2,hwupload',
+                codecArgs: ['-c:v', 'av1_vaapi', '-global_quality', quality],
+            };
+        }
+        // Fallback: software H.264
+        return {
+            encoder: 'libx264',
+            isHardware: false,
+            preInputArgs: [],
+            vf: 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
+            codecArgs: ['-c:v', 'libx264', '-preset', preset, '-crf', quality, '-movflags', '+faststart'],
+        };
+    }
+
+    // Software H.264 — always available
+    if (codec === 'h264') {
+        return {
+            encoder: 'libx264',
+            isHardware: false,
+            preInputArgs: [],
+            vf: 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
+            codecArgs: ['-c:v', 'libx264', '-preset', preset, '-crf', quality, '-movflags', '+faststart'],
+        };
+    }
+
+    // Explicit hardware codec
+    const hwEncoder = hwEncoderMap[codec];
+    if (!hwEncoder) {
+        throw new Error('Unknown video.codec setting: ' + codec);
+    }
+    if (!gpuCapabilities.vaapi || !gpuCapabilities.encoders.includes(hwEncoder)) {
+        throw new Error('Hardware encoder ' + hwEncoder + ' requested but not available. GPU detected: ' + gpuCapabilities.vaapi);
+    }
+
+    return {
+        encoder: hwEncoder,
+        isHardware: true,
+        preInputArgs: ['-vaapi_device', vaDevice],
+        vf: 'format=nv12,pad=ceil(iw/2)*2:ceil(ih/2)*2,hwupload',
+        codecArgs: ['-c:v', hwEncoder, '-global_quality', quality],
+    };
+}
+
+/**
  * Run ffmpeg transcode pipeline for a media record (non-blocking, callback-based).
  * Steps: MP4 conversion → thumbnail → GIF palette → GIF encode → DB update.
  */
@@ -2751,15 +2859,24 @@ function transcodeMedia(mediaId) {
     if (trimStart > 0) { trimArgs.push('-ss', String(trimStart)); }
     if (trimEnd > trimStart && trimEnd < Infinity) { trimArgs.push('-to', String(trimEnd)); }
 
-    // Step 1: WebM → MP4
+    // Step 1: WebM → MP4 (codec-aware)
+    let enc;
+    try {
+        enc = resolveEncoder();
+    } catch (encErr) {
+        console.error('[media] Encoder selection failed:', encErr.message);
+        db.prepare("UPDATE media SET status = 'error', error_msg = ? WHERE id = ?").run(encErr.message, mediaId);
+        return;
+    }
+
+    console.log('[media] Transcoding', mediaId, 'with', enc.encoder, enc.isHardware ? '(hardware)' : '(software)');
+
     const mp4Args = [
+        ...enc.preInputArgs,
         ...trimArgs,
         '-i', rawPath,
-        '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
-        '-c:v', 'libx264',
-        '-preset', getSetting('video.preset'),
-        '-crf', getSetting('video.crf'),
-        '-movflags', '+faststart',
+        '-vf', enc.vf,
+        ...enc.codecArgs,
         '-an',
         '-y', mp4Path
     ];
@@ -3099,6 +3216,10 @@ const server = http.createServer((req, res) => {
         }
         if (pathname === '/api/storage' && req.method === 'GET') {
             return handleStorage(req, res);
+        }
+        // GET /api/gpu — return GPU capabilities (no auth required, read-only info)
+        if (req.method === 'GET' && pathname === '/api/gpu') {
+            return sendJson(res, 200, gpuCapabilities);
         }
         if (pathname === '/api/settings' && req.method === 'GET') {
             return handleGetSettings(req, res);

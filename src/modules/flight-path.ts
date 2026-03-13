@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { Logger } from './utilities.js';
 import { FLIGHT_LOG } from './constants.js';
-import { parseDjiCsv, parseKml, parseSrt, detectFormat } from './flight-parsers.js';
+import { parseDjiCsv, parseKml, parseSrt, parseGpx, detectFormat } from './flight-parsers.js';
 import { parseDjiTxt } from './dji-txt-parser.js';
 import type { FlightPoint, FlightPathData, FlightCameraMode } from '@/types.js';
 
@@ -225,6 +225,9 @@ export class FlightPathManager {
                 break;
             case 'srt':
                 points = parseSrt(text);
+                break;
+            case 'gpx':
+                points = parseGpx(text);
                 break;
             default:
                 throw new Error(`Unsupported format: ${format}`);
@@ -859,29 +862,33 @@ export class FlightPathManager {
 
     private startTransitionToPlaybackTarget(mode: FlightCameraMode): void {
         if (!this._playbackMarker) return;
-        const pos = this._playbackMarker.position.clone();
+        // Use world-space position to account for group transform (alignment)
+        const worldPos = this._playbackMarker.getWorldPosition(new THREE.Vector3());
+        const groupQuat = this.group.getWorldQuaternion(new THREE.Quaternion());
         let toPos: THREE.Vector3;
         let toQuat: THREE.Quaternion;
 
+        const pathData = this._playbackPathId ? this.paths.find(p => p.id === this._playbackPathId) : null;
+        const points = pathData ? this.getTrimmedPoints(pathData) : [];
+
         if (mode === 'fpv') {
-            toPos = pos;
-            const pathData = this._playbackPathId ? this.paths.find(p => p.id === this._playbackPathId) : null;
-            const points = pathData ? this.getTrimmedPoints(pathData) : [];
+            toPos = worldPos;
             toQuat = points.length > 0 ? this.computeFpvOrientation(points, this._playbackTime) : new THREE.Quaternion();
+            toQuat.premultiply(groupQuat);
         } else {
-            // Chase: behind and above
-            const pathData = this._playbackPathId ? this.paths.find(p => p.id === this._playbackPathId) : null;
-            const points = pathData ? this.getTrimmedPoints(pathData) : [];
+            // Chase: behind and above, offset transformed by group rotation
             const heading = points.length > 0 ? this.getPlaybackHeading(points, this._playbackTime) : 0;
             const camDist = 0.5;
             const camHeight = 0.3;
-            toPos = new THREE.Vector3(
-                pos.x - Math.sin(heading) * camDist,
-                pos.y + camHeight,
-                pos.z - Math.cos(heading) * camDist
+            const localOffset = new THREE.Vector3(
+                -Math.sin(heading) * camDist,
+                camHeight,
+                -Math.cos(heading) * camDist
             );
+            localOffset.applyQuaternion(groupQuat);
+            toPos = worldPos.clone().add(localOffset);
             toQuat = new THREE.Quaternion();
-            const lookMat = new THREE.Matrix4().lookAt(toPos, pos, new THREE.Vector3(0, 1, 0));
+            const lookMat = new THREE.Matrix4().lookAt(toPos, worldPos, new THREE.Vector3(0, 1, 0));
             toQuat.setFromRotationMatrix(lookMat);
         }
 
@@ -920,13 +927,16 @@ export class FlightPathManager {
     private updatePipCamera(): void {
         if (!this._pipEnabled || !this._pipCamera || !this._playbackMarker) return;
 
-        const pos = this._playbackMarker.position;
-        this._pipCamera.position.copy(pos);
+        // Use world-space position to account for group transform (alignment)
+        const worldPos = this._playbackMarker.getWorldPosition(new THREE.Vector3());
+        this._pipCamera.position.copy(worldPos);
 
         const pathData = this._playbackPathId ? this.paths.find(p => p.id === this._playbackPathId) : null;
         const points = pathData ? this.getTrimmedPoints(pathData) : [];
         if (points.length > 0) {
+            const groupQuat = this.group.getWorldQuaternion(new THREE.Quaternion());
             const targetQuat = this.computeFpvOrientation(points, this._playbackTime);
+            targetQuat.premultiply(groupQuat);
             this._pipCamera.quaternion.copy(targetQuat);
         }
     }
@@ -1116,26 +1126,34 @@ export class FlightPathManager {
             );
         }
 
+        // Get world-space position of marker (accounts for group transform from alignment)
+        const worldPos = this._playbackMarker.getWorldPosition(new THREE.Vector3());
+        const groupQuat = this.group.getWorldQuaternion(new THREE.Quaternion());
+
         // Follow camera
         if (this._cameraMode === 'chase' && this.camera instanceof THREE.PerspectiveCamera && !this._transitioning) {
-            const pos = this._playbackMarker.position;
-            // Position camera slightly behind and above
+            // Position camera slightly behind and above in world space
             const heading = this.getPlaybackHeading(points, t);
             const camDist = 0.5;
             const camHeight = 0.3;
-            const camX = pos.x - Math.sin(heading) * camDist;
-            const camZ = pos.z - Math.cos(heading) * camDist;
-            this.camera.position.set(camX, pos.y + camHeight, camZ);
-            this.camera.lookAt(pos);
+            // Compute local offset, then transform by group rotation
+            const localOffset = new THREE.Vector3(
+                -Math.sin(heading) * camDist,
+                camHeight,
+                -Math.cos(heading) * camDist
+            );
+            localOffset.applyQuaternion(groupQuat);
+            this.camera.position.copy(worldPos).add(localOffset);
+            this.camera.lookAt(worldPos);
         }
 
         // FPV camera
         if (this._cameraMode === 'fpv' && this.camera instanceof THREE.PerspectiveCamera && !this._transitioning) {
-            const pos = this._playbackMarker.position;
-            this.camera.position.copy(pos);
+            this.camera.position.copy(worldPos);
 
-            // Compute target orientation
+            // Compute target orientation in local space, then transform to world
             this._fpvQuaternion.copy(this.computeFpvOrientation(points, t));
+            this._fpvQuaternion.premultiply(groupQuat);
 
             // Smooth the base orientation (low-pass filter: small alpha = heavy smoothing)
             this._smoothedQuaternion.slerp(this._fpvQuaternion, FlightPathManager.SLERP_ALPHA);
@@ -1178,16 +1196,22 @@ export class FlightPathManager {
 
         if (hasGimbal) {
             // Gimbal-locked: use gimbal yaw + pitch
+            // DJI gimbal yaw is compass bearing (0=N, 90=E). Three.js Euler Y=0 looks
+            // down -Z (south in our local coords where Z+=north). Add PI to convert.
+            // DJI gimbal pitch is negative-down (-90=nadir). Three.js 'YXZ' X rotation
+            // is positive-down. Negate to convert.
             const euler = new THREE.Euler(
-                (point.gimbalPitch! * Math.PI) / 180, // pitch (X)
-                (point.gimbalYaw! * Math.PI) / 180,   // yaw (Y)
-                0,                                       // roll (Z) — assumed 0
+                (-point.gimbalPitch! * Math.PI) / 180,          // pitch (X) — negated
+                (point.gimbalYaw! * Math.PI) / 180 + Math.PI,   // yaw (Y) — +PI offset
+                0,                                                  // roll (Z) — assumed 0
                 'YXZ'
             );
             return new THREE.Quaternion().setFromEuler(euler);
         }
 
         // Heading-forward fallback
+        // Heading uses compass bearing or atan2(dx,dz) — same convention as gimbal yaw,
+        // so also needs +PI offset to convert to Three.js forward direction.
         let heading: number;
         if (points.length < 50) {
             // Sparse path (typical KML waypoints): use Catmull-Rom interpolated direction
@@ -1196,7 +1220,7 @@ export class FlightPathManager {
             heading = this.getPlaybackHeading(points, timeMs);
         }
         const pitchRad = (-15 * Math.PI) / 180; // -15° downward pitch
-        const euler = new THREE.Euler(pitchRad, heading, 0, 'YXZ');
+        const euler = new THREE.Euler(pitchRad, heading + Math.PI, 0, 'YXZ');
         return new THREE.Quaternion().setFromEuler(euler);
     }
 
@@ -1378,6 +1402,12 @@ export class FlightPathManager {
     /** Check if any flight paths are loaded. */
     get hasData(): boolean {
         return this.paths.length > 0;
+    }
+
+    /** Get the parsed FlightPathData for a given path ID (or the first path if no ID). */
+    getPathData(id?: string): FlightPathData | null {
+        if (!id) return this.paths[0] ?? null;
+        return this.paths.find(p => p.id === id) ?? null;
     }
 
     /** Serialize paths for manifest export. Returns array of manifest entry data. */

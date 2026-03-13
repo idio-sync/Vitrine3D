@@ -423,6 +423,8 @@ export interface ArchivePipelineDeps {
     sourceFiles: {
         updateSourceFilesUI: () => void;
     };
+    sparkRenderer?: any;
+    onResize?: () => void;
     measurementSystem?: any;
     renderFlightPaths?: () => Promise<void>;
     colmap?: {
