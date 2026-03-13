@@ -1382,6 +1382,9 @@ export class FlightPathManager {
             const mat = entry.line.material as THREE.Material;
             mat.opacity = opacity;
             mat.transparent = opacity < 1;
+            // Keep depthWrite enabled even when transparent so splats can
+            // occlude the line via their painter's-algorithm compositing.
+            mat.depthWrite = true;
             mat.needsUpdate = true;
         }
     }
