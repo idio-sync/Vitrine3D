@@ -724,6 +724,24 @@ export class AnnotationSystem {
             if (a.camera_quaternion) {
                 obj.camera_quaternion = { ...a.camera_quaternion };
             }
+            // Detail model fields
+            if (a.detail_asset_key) obj.detail_asset_key = a.detail_asset_key;
+            if (a.detail_button_label) obj.detail_button_label = a.detail_button_label;
+            if (a.detail_thumbnail) obj.detail_thumbnail = a.detail_thumbnail;
+            if (a.detail_annotations && a.detail_annotations.length > 0) {
+                obj.detail_annotations = a.detail_annotations.map(da => ({
+                    id: da.id,
+                    title: da.title,
+                    body: da.body,
+                    position: { ...da.position },
+                    camera_target: { ...da.camera_target },
+                    camera_position: { ...da.camera_position },
+                    ...(da.camera_quaternion ? { camera_quaternion: { ...da.camera_quaternion } } : {})
+                }));
+            }
+            if (a.detail_view_settings) {
+                obj.detail_view_settings = { ...a.detail_view_settings };
+            }
             return obj;
         });
     }
