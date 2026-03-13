@@ -260,7 +260,7 @@ export class DetailViewer {
 
         if (this.renderer) {
             this.renderer.dispose();
-            this.renderer.forceContextLoss();
+            // Do NOT call forceContextLoss — the canvas is reused on next open()
             this.renderer = null;
         }
 
