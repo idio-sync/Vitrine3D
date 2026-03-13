@@ -1482,6 +1482,39 @@ export class ArchiveCreator {
         return entryKey;
     }
 
+    addDetailModel(blob: Blob, fileName: string, options: AddAssetOptions = {}): string {
+        const index = this._countEntriesOfType('detail_');
+        const entryKey = `detail_${index}`;
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
+        const archivePath = `assets/detail_${index}.${ext}`;
+
+        this.files.set(archivePath, { blob, originalName: fileName });
+
+        this.manifest.data_entries[entryKey] = {
+            file_name: archivePath,
+            created_by: options.created_by || "vitrine3d",
+            _created_by_version: options.created_by_version || "",
+            _source_notes: options.source_notes || "",
+            role: "detail"
+        };
+
+        return entryKey;
+    }
+
+    removeDetailModel(entryKey: string): boolean {
+        const entry = this.manifest.data_entries[entryKey];
+        if (!entry) return false;
+
+        this.files.delete(entry.file_name);
+        delete this.manifest.data_entries[entryKey];
+
+        // Remove associated thumbnail if present
+        const thumbPath = `images/${entryKey}_thumb.png`;
+        this.files.delete(thumbPath);
+
+        return true;
+    }
+
     addEnvironment(blob: Blob, fileName: string): string {
         const entryKey = 'environment_0';
         const ext = fileName.split('.').pop()?.toLowerCase() || 'hdr';
@@ -1921,8 +1954,29 @@ export class ArchiveCreator {
         return JSON.parse(this.generateManifest());
     }
 
+    private _cleanOrphanedDetailModels(): void {
+        const referencedKeys = new Set<string>();
+        for (const anno of this.manifest.annotations) {
+            if (anno.detail_asset_key) {
+                referencedKeys.add(anno.detail_asset_key);
+            }
+        }
+
+        const detailKeys = Object.keys(this.manifest.data_entries)
+            .filter(k => k.startsWith('detail_'));
+
+        for (const key of detailKeys) {
+            if (!referencedKeys.has(key)) {
+                log.info(`Removing orphaned detail model: ${key}`);
+                this.removeDetailModel(key);
+            }
+        }
+    }
+
     async createArchive(options: CreateArchiveOptions = {}, onProgress: ((percent: number, stage: string) => void) | null = null): Promise<Blob> {
         log.debug('✓ createArchive called with options:', options);
+        // Clean up detail models not referenced by any annotation
+        this._cleanOrphanedDetailModels();
         const {
             format: _format = 'a3d',
             includeHashes = true,

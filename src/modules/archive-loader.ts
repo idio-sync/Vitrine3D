@@ -22,10 +22,11 @@ const SUPPORTED_FORMATS: Record<string, string[]> = {
     drawing: ['.dxf'],
     pointcloud: ['.e57'],
     cad: ['.step', '.stp', '.iges', '.igs'],
+    detail: ['.glb'],
     thumbnail: ['.png', '.jpg', '.jpeg', '.webp']
 };
 
-type FormatType = 'splat' | 'mesh' | 'drawing' | 'pointcloud' | 'cad' | 'thumbnail';
+type FormatType = 'splat' | 'mesh' | 'drawing' | 'pointcloud' | 'cad' | 'detail' | 'thumbnail';
 
 // =============================================================================
 // TYPE DEFINITIONS
