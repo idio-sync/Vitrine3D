@@ -112,7 +112,7 @@ function computeGpsDistanceM(points: FlightPoint[]): number {
 }
 
 interface PathMeshes {
-    line: THREE.Mesh;
+    line: THREE.InstancedMesh;
     markers: THREE.InstancedMesh;
     renderPoints: FlightPoint[];
     endpointGroup: THREE.Group;
@@ -316,7 +316,7 @@ export class FlightPathManager {
     }
 
     /** Build colored line + instanced markers based on current color mode. */
-    private buildColoredPath(renderPoints: FlightPoint[]): { line: THREE.Mesh; markers: THREE.InstancedMesh } {
+    private buildColoredPath(renderPoints: FlightPoint[]): { line: THREE.InstancedMesh; markers: THREE.InstancedMesh } {
         // Compute value range for the active color mode
         const values = renderPoints.map((p, i) => this.getColorValue(p, renderPoints, i));
         let minVal = Infinity, maxVal = -Infinity;
@@ -328,32 +328,45 @@ export class FlightPathManager {
 
         const ramp = this.getColorRamp();
 
-        // Tube mesh with per-vertex colors (real 3D geometry for proper depth occlusion by splats)
-        const curvePoints = renderPoints.map(p => new THREE.Vector3(p.x, p.y, p.z));
-        const curve = new THREE.CatmullRomCurve3(curvePoints, false, 'centripetal');
-        const radialSegments = 4;
-        const tubeGeom = new THREE.TubeGeometry(curve, renderPoints.length - 1, FLIGHT_LOG.MARKER_RADIUS * 0.6, radialSegments, false);
-
-        // Map per-vertex colors: each ring of (radialSegments + 1) verts shares one path point's color
-        const vertCount = tubeGeom.attributes.position.count;
-        const tubeColors = new Float32Array(vertCount * 3);
-        const ringSize = radialSegments + 1;
-        for (let i = 0; i < vertCount; i++) {
-            const segIndex = Math.min(Math.floor(i / ringSize), renderPoints.length - 1);
-            const t = (values[segIndex] - minVal) / range;
-            const [r, g, b] = rampColor(ramp, t);
-            tubeColors[i * 3] = r;
-            tubeColors[i * 3 + 1] = g;
-            tubeColors[i * 3 + 2] = b;
-        }
-        tubeGeom.setAttribute('color', new THREE.BufferAttribute(tubeColors, 3));
-
-        const lineMat = new THREE.MeshBasicMaterial({
-            vertexColors: true,
+        // InstancedMesh of cylinders connecting consecutive points — same object type
+        // as markers so splat depth occlusion works identically.
+        const segCount = renderPoints.length - 1;
+        const cylGeom = new THREE.CylinderGeometry(
+            FLIGHT_LOG.MARKER_RADIUS * 0.5, FLIGHT_LOG.MARKER_RADIUS * 0.5, 1, 6, 1
+        );
+        const segMat = new THREE.MeshBasicMaterial({
             depthTest: true,
             depthWrite: true,
         });
-        const line = new THREE.Mesh(tubeGeom, lineMat);
+        const line = new THREE.InstancedMesh(cylGeom, segMat, Math.max(segCount, 1));
+        const segDummy = new THREE.Object3D();
+        const segColor = new THREE.Color();
+        const midpoint = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        const up = new THREE.Vector3(0, 1, 0);
+        const quat = new THREE.Quaternion();
+        for (let i = 0; i < segCount; i++) {
+            const a = renderPoints[i];
+            const b = renderPoints[i + 1];
+            midpoint.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+            direction.set(b.x - a.x, b.y - a.y, b.z - a.z);
+            const len = direction.length();
+            direction.normalize();
+            // Quaternion to rotate cylinder (Y-axis aligned) to match segment direction
+            quat.setFromUnitVectors(up, direction);
+            segDummy.position.copy(midpoint);
+            segDummy.quaternion.copy(quat);
+            segDummy.scale.set(1, len, 1);
+            segDummy.updateMatrix();
+            line.setMatrixAt(i, segDummy.matrix);
+            // Color from midpoint of segment
+            const t = ((values[i] + values[i + 1]) / 2 - minVal) / range;
+            const [r, g, b2] = rampColor(ramp, t);
+            segColor.setRGB(r, g, b2);
+            line.setColorAt(i, segColor);
+        }
+        line.instanceMatrix.needsUpdate = true;
+        if (line.instanceColor) line.instanceColor.needsUpdate = true;
 
         // Instanced markers with per-instance colors
         const sphereGeom = new THREE.SphereGeometry(FLIGHT_LOG.MARKER_RADIUS, 8, 6);
@@ -1366,7 +1379,7 @@ export class FlightPathManager {
     /** Update the line opacity for all flight paths. */
     setLineOpacity(opacity: number): void {
         for (const [, entry] of this.meshes) {
-            const mat = entry.line.material as THREE.MeshBasicMaterial;
+            const mat = entry.line.material as THREE.Material;
             mat.opacity = opacity;
             mat.transparent = opacity < 1;
             mat.needsUpdate = true;
