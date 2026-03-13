@@ -17,6 +17,8 @@ export interface DetailViewerDeps {
     theme: string | null;
     isEditor: boolean;
     imageAssets: Map<string, string>;
+    /** Parent scene background color as hex string (e.g. '#1a1a2e') */
+    parentBackgroundColor?: string;
     onDetailAnnotationsChanged?: (key: string, annotations: Annotation[]) => void;
     storeThumbnail?: (key: string, blob: Blob) => void;
 }
@@ -125,7 +127,7 @@ export class DetailViewer {
             antialias: true,
             alpha: false
         });
-        const bgColor = settings.background_color || '#1a1a2e';
+        const bgColor = settings.background_color || this.deps.parentBackgroundColor || '#1a1a2e';
         this.renderer.setClearColor(new THREE.Color(bgColor));
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -136,13 +138,6 @@ export class DetailViewer {
         const preset = settings.environment_preset || 'neutral';
         const intensity = settings.ambient_intensity ?? 1.0;
         LIGHTING_PRESETS[preset].setup(this.scene, intensity);
-
-        // Optional grid
-        if (settings.show_grid) {
-            const grid = new THREE.GridHelper(10, 20, 0x444444, 0x333333);
-            grid.name = 'detail-grid';
-            this.scene.add(grid);
-        }
 
         // Create camera
         this.camera = new THREE.PerspectiveCamera(50, 1, 0.01, 1000);
@@ -325,11 +320,11 @@ export class DetailViewer {
         const zoomCursorCheck = document.getElementById('detail-zoom-cursor') as HTMLInputElement;
 
         if (envSelect) envSelect.value = settings.environment_preset || 'neutral';
-        if (bgInput) bgInput.value = settings.background_color || '#1a1a2e';
+        if (bgInput) bgInput.value = settings.background_color || this.deps.parentBackgroundColor || '#1a1a2e';
         if (descInput) descInput.value = settings.description || '';
         if (scaleInput) scaleInput.value = settings.scale_reference || '';
         if (autoRotateCheck) autoRotateCheck.checked = settings.auto_rotate || false;
-        if (gridCheck) gridCheck.checked = settings.show_grid || false;
+        if (gridCheck) gridCheck.checked = false;
         if (zoomCursorCheck) zoomCursorCheck.checked = settings.zoom_to_cursor || false;
 
         // Live-preview handlers
@@ -366,9 +361,7 @@ export class DetailViewer {
         });
 
         gridCheck?.addEventListener('change', () => {
-            const s = this._ensureSettings();
-            s.show_grid = gridCheck.checked;
-            // Toggle grid visibility
+            // Grid is a local-only editor aid — not saved to archive
             if (this.scene) {
                 const existing = this.scene.getObjectByName('detail-grid');
                 if (gridCheck.checked && !existing) {

@@ -276,7 +276,6 @@ export interface DetailViewSettings {
     background_color?: string;
     environment_preset?: 'studio' | 'outdoor' | 'neutral' | 'warm';
     ambient_intensity?: number;
-    show_grid?: boolean;
     description?: string;
     scale_reference?: string;
     annotations_visible_on_open?: boolean;

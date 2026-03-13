@@ -4126,6 +4126,9 @@ function createDetailViewerDeps(): DetailViewerDeps {
         theme: null,
         isEditor: true,
         imageAssets: state.imageAssets,
+        parentBackgroundColor: scene?.background instanceof THREE.Color
+            ? '#' + scene.background.getHexString()
+            : undefined,
         onDetailAnnotationsChanged: (key: string, annotations: any[]) => {
             const parentAnno = annotationSystem?.getAnnotations().find((a: any) => a.detail_asset_key === key);
             if (parentAnno) {
