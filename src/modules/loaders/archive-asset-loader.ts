@@ -10,14 +10,13 @@ import * as THREE from 'three';
 import { SplatMesh } from '@sparkjsdev/spark';
 import { ArchiveLoader } from '../archive-loader.js';
 import { ASSET_STATE } from '../constants.js';
-import { Logger, computeMeshFaceCount, computeTextureInfo, disposeObject } from '../utilities.js';
+import { Logger, computeMeshFaceCount, disposeObject } from '../utilities.js';
 import type { AppState, QualityTier } from '@/types.js';
 
 // Imports from sibling loader modules
 import { createSplatMesh, getSplatFileType, loadSplatFromBlobUrl } from './splat-loader.js';
 import { loadGLTF, loadOBJFromUrl, loadSTLFromUrl, loadDRC, loadModelFromBlobUrl } from './mesh-loader.js';
 import { loadPointcloudFromBlobUrl } from './pointcloud-loader.js';
-import { loadDrawingFromBlobUrl } from './drawing-loader.js';
 import { yieldToRenderer } from '../background-loader.js';
 
 const log = Logger.getLogger('archive-asset-loader');
@@ -250,6 +249,21 @@ export async function processArchivePhase1(archiveLoader: ArchiveLoader, archive
     state.archiveLoaded = true;
 
     const contentInfo = archiveLoader.getContentInfo();
+
+    // Index detail model entries (lazy — not extracted until user clicks inspect)
+    const detailIndex = new Map<string, { filename: string }>();
+    if (manifest.data_entries) {
+        for (const [key, entry] of Object.entries(manifest.data_entries)) {
+            if (key.startsWith('detail_') && (entry as any).role === 'detail') {
+                detailIndex.set(key, { filename: (entry as any).file_name });
+            }
+        }
+    }
+    state.detailAssetIndex = detailIndex;
+    state.loadedDetailBlobs = new Map();
+    if (detailIndex.size > 0) {
+        log.info(`Phase 1 — indexed ${detailIndex.size} detail model(s)`);
+    }
 
     // Extract thumbnail (small file, fast)
     let thumbnailUrl: string | null = null;

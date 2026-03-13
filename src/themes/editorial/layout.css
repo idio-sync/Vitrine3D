@@ -1731,6 +1731,48 @@ body.kiosk-mode.kiosk-editorial .annotation-hero-zoom {
     background: rgba(var(--kiosk-surface-rgb), 0.65);
 }
 
+/* Detail inspect button — editorial accent style */
+
+body.kiosk-mode.kiosk-editorial .annotation-detail-inspect {
+    border-top-color: rgba(var(--kiosk-text-dim-rgb), 0.15);
+    padding: 8px 14px 10px;
+    margin-top: 0;
+}
+
+body.kiosk-mode.kiosk-editorial .detail-inspect-btn {
+    background: none;
+    border: none;
+    border-radius: 0;
+    color: var(--kiosk-accent);
+    font-family: var(--kiosk-font-body);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 6px 0;
+    position: relative;
+    text-align: left;
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+body.kiosk-mode.kiosk-editorial .detail-inspect-btn::after {
+    content: ' \203A';
+    margin-left: 4px;
+}
+
+body.kiosk-mode.kiosk-editorial .detail-inspect-btn:hover {
+    background: none;
+    border: none;
+    color: var(--kiosk-text-primary);
+}
+
+body.kiosk-mode.kiosk-editorial .detail-thumbnail {
+    border: none;
+    border-radius: 2px;
+    max-height: 80px;
+}
+
 /* Connecting line — yellow, dashed, wider gap from endpoints */
 
 body.kiosk-mode.kiosk-editorial #annotation-line-overlay line {
