@@ -2053,7 +2053,7 @@ function initFilePicker(container, deps) {
         <div class="editorial-loading-bottom">
             <div class="editorial-picker-progress-shell"></div>
         </div>
-        <input type="file" id="kiosk-picker-input" accept=".ddim,.a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">
+        <input type="file" id="kiosk-picker-input" accept=".ddim,.a3z,.a3d,.zip,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">
     `;
 }
 

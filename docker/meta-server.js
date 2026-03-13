@@ -970,13 +970,13 @@ function sanitizeFilename(name) {
     clean = clean.replace(/[^a-zA-Z0-9_.\-() ]/g, '_');
     // Collapse multiple underscores/spaces
     clean = clean.replace(/_{2,}/g, '_').replace(/ {2,}/g, ' ').trim();
-    // Must end with .a3d or .a3z
-    if (!/\.(a3d|a3z)$/i.test(clean)) {
-        clean += '.a3d';
+    // Must end with a supported archive extension
+    if (!/\.(ddim|a3d|a3z|zip)$/i.test(clean)) {
+        clean += '.ddim';
     }
     // Reject empty, dot-only, or suspicious names
-    if (!clean || /^\./.test(clean) || clean === '.a3d' || clean === '.a3z') {
-        return 'archive_' + Date.now() + '.a3d';
+    if (!clean || /^\./.test(clean) || /^\.(ddim|a3d|a3z|zip)$/i.test(clean)) {
+        return 'archive_' + Date.now() + '.ddim';
     }
     // Limit length
     if (clean.length > 200) {
@@ -1275,11 +1275,11 @@ function handleDeleteOrphan(req, res, filename) {
     if (!requireAuth(req, res)) return;
     if (!checkCsrf(req, res)) return;
 
-    // Validate filename — no path separators, must end with .a3d or .a3z
+    // Validate filename — no path separators, must end with a supported archive extension
     if (filename.includes('/') || filename.includes('\\')) {
         return sendJson(res, 400, { error: 'Invalid filename' });
     }
-    if (!filename.endsWith('.a3d') && !filename.endsWith('.a3z')) {
+    if (!/\.(ddim|a3d|a3z|zip)$/i.test(filename)) {
         return sendJson(res, 400, { error: 'Invalid file type' });
     }
 

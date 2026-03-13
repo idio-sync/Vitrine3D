@@ -875,7 +875,7 @@ function initFilePicker(container) {
         '        <p class="kiosk-picker-prompt">or drag and drop here</p>' +
         '    </div>' +
         '</div>' +
-        '<input type="file" id="kiosk-picker-input" accept=".ddim,.a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">';
+        '<input type="file" id="kiosk-picker-input" accept=".ddim,.a3z,.a3d,.zip,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">';
 }
 
 // ---- Layout module hooks ----

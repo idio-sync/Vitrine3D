@@ -77,11 +77,11 @@ const FILE_FILTERS: Record<string, TauriDialogFilter> = {
     model:      { name: '3D Models', extensions: ['glb', 'gltf', 'obj', 'mtl', 'png', 'jpg', 'jpeg', 'tga', 'bmp', 'webp'] },
     stl:        { name: 'STL Models', extensions: ['stl'] },
     pointcloud: { name: 'Point Clouds', extensions: ['e57'] },
-    archive:    { name: '3D Archives', extensions: ['a3d', 'a3z'] },
+    archive:    { name: '3D Archives', extensions: ['ddim', 'a3d', 'a3z', 'zip'] },
     image:      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] },
     hdr:        { name: 'HDR Images', extensions: ['hdr'] },
     json:       { name: 'JSON Files', extensions: ['json'] },
-    all:        { name: 'All Supported', extensions: ['a3d', 'a3z', 'glb', 'gltf', 'obj', 'stl', 'ply', 'splat', 'ksplat', 'spz', 'sog', 'e57'] },
+    all:        { name: 'All Supported', extensions: ['ddim', 'a3d', 'a3z', 'zip', 'glb', 'gltf', 'obj', 'stl', 'ply', 'splat', 'ksplat', 'spz', 'sog', 'e57'] },
 };
 
 // ============================================================

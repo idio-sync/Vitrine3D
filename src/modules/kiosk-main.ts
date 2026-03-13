@@ -749,13 +749,13 @@ function createFilePicker(): HTMLElement {
                 <button id="kiosk-picker-btn" type="button">Select File</button>
                 <p class="kiosk-picker-hint">or drag and drop it here</p>
                 <p class="kiosk-picker-formats">
-                    Archives: .ddim<br>
+                    Archives: .ddim, .zip<br>
                     Models: .glb, .gltf, .obj, .stl<br>
                     Splats: .ply, .splat, .ksplat, .spz, .sog<br>
                     Point Clouds: .e57
                 </p>
             </div>
-            <input type="file" id="kiosk-picker-input" accept=".ddim,.a3z,.a3d,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57,*/*" multiple style="display:none">
+            <input type="file" id="kiosk-picker-input" accept=".ddim,.a3z,.a3d,.zip,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57,*/*" multiple style="display:none">
         </div>
     `;
 

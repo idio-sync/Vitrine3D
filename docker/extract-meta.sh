@@ -244,10 +244,10 @@ if [ -n "$SINGLE_FILE" ]; then
     fi
 else
     # Batch mode: scan directory recursively
-    echo "[extract-meta] Scanning $ARCHIVES_DIR for .a3d/.a3z/.ddim files..."
+    echo "[extract-meta] Scanning $ARCHIVES_DIR for .a3d/.a3z/.ddim/.zip files..."
 
     count=0
-    find "$ARCHIVES_DIR" -type f \( -name "*.a3d" -o -name "*.a3z" -o -name "*.ddim" \) | while read -r archive; do
+    find "$ARCHIVES_DIR" -type f \( -name "*.a3d" -o -name "*.a3z" -o -name "*.ddim" -o -name "*.zip" \) | while read -r archive; do
         process_archive "$archive"
         count=$((count + 1))
     done
