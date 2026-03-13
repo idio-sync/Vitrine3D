@@ -1610,6 +1610,7 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         }
 
         // Load flight paths from archive
+        log.info('[DIAG] Flight path check:', { hasFlightPath: contentInfo.hasFlightPath, hasGroup: !!sceneManager.flightPathGroup });
         if (contentInfo.hasFlightPath && sceneManager.flightPathGroup) {
             const fpEntries = archiveLoader.getFlightPathEntries();
             if (fpEntries.length > 0) {
@@ -1678,6 +1679,7 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                     }
 
                     // Notify layout module so it can add flight log UI to its ribbon
+                    log.info('[DIAG] Calling onFlightPathLoaded, hasData:', flightPathManager.hasData, 'layoutModule:', !!getLayoutModule());
                     getLayoutModule()?.onFlightPathLoaded?.(flightPathManager);
                 }
             }
