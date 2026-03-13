@@ -1664,6 +1664,10 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 );
                 const fpTooltip = document.getElementById('flight-tooltip');
                 if (fpTooltip) flightPathManager.setupTooltip(fpTooltip);
+                flightPathManager.setupFreeLook();
+                flightPathManager.onCameraModeChange((mode) => {
+                    controls.enabled = mode === 'orbit';
+                });
 
                 for (const { key, entry } of fpEntries) {
                     const fileData = await archiveLoader.extractFile(entry.file_name);
@@ -5414,15 +5418,30 @@ function hideAnnotationLine(): void {
 
 let _kioskAnimFrameId: number = 0;
 let _kioskRenderPaused = false;
+let _lastFrameTime = 0;
 
 function animate(): void {
     if (_kioskRenderPaused) return;
     _kioskAnimFrameId = requestAnimationFrame(animate);
 
     try {
+        // Delta time for playback animation
+        const now = performance.now();
+        const dt = _lastFrameTime ? Math.min((now - _lastFrameTime) / 1000, 0.1) : 0;
+        _lastFrameTime = now;
+
+        // Update flight path playback BEFORE camera controls
+        // so FPV/chase camera writes are not overwritten by OrbitControls
+        const flightControllingCamera = flightPathManager
+            && (flightPathManager.isPlaying || flightPathManager.isTransitioning)
+            && flightPathManager.cameraMode !== 'orbit';
+        if (flightPathManager && (flightPathManager.isPlaying || flightPathManager.isTransitioning)) {
+            flightPathManager.updatePlayback(dt);
+        }
+
         if (state.flyModeActive) {
             flyControls.update();
-        } else if (!annotationSystem?.isAnimating && !walkthroughAnimating) {
+        } else if (!flightControllingCamera && !annotationSystem?.isAnimating && !walkthroughAnimating) {
             controls.update();
         }
 
