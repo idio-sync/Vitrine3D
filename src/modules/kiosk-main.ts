@@ -1610,7 +1610,6 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
         }
 
         // Load flight paths from archive
-        log.info('[DIAG] Flight path check:', { hasFlightPath: contentInfo.hasFlightPath, hasGroup: !!sceneManager.flightPathGroup });
         if (contentInfo.hasFlightPath && sceneManager.flightPathGroup) {
             const fpEntries = archiveLoader.getFlightPathEntries();
             if (fpEntries.length > 0) {
@@ -1627,9 +1626,28 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 for (const { key, entry } of fpEntries) {
                     const fileData = await archiveLoader.extractFile(entry.file_name);
                     if (!fileData) continue;
-                    const text = await fileData.blob.text();
+                    const fileName = entry.original_name || entry.file_name;
+                    const ext = fileName.split('.').pop()?.toLowerCase() || '';
                     try {
-                        flightPathManager.importFromText(text, entry.original_name || entry.file_name);
+                        let data;
+                        if (ext === 'txt') {
+                            // DJI .txt binary flight logs need importBinary, not importFromText
+                            const buffer = await fileData.blob.arrayBuffer();
+                            data = await flightPathManager.importBinary(buffer, fileName, 'dji-txt');
+                        } else {
+                            const text = await fileData.blob.text();
+                            data = flightPathManager.importFromText(text, fileName);
+                        }
+                        // Restore trim from manifest metadata
+                        const meta = (entry as any)._flight_meta as Record<string, unknown> | undefined;
+                        if (data && meta) {
+                            if (meta.trim_start !== undefined || meta.trim_end !== undefined) {
+                                flightPathManager.setTrim(data.id,
+                                    (meta.trim_start as number) ?? 0,
+                                    (meta.trim_end as number) ?? (data.points.length - 1)
+                                );
+                            }
+                        }
                     } catch (err) {
                         log.warn(`Failed to load flight path ${key}:`, err);
                     }
@@ -1679,7 +1697,6 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                     }
 
                     // Notify layout module so it can add flight log UI to its ribbon
-                    log.info('[DIAG] Calling onFlightPathLoaded, hasData:', flightPathManager.hasData, 'layoutModule:', !!getLayoutModule());
                     getLayoutModule()?.onFlightPathLoaded?.(flightPathManager);
                 }
             }

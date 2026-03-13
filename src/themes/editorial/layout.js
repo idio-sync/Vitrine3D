@@ -1330,9 +1330,7 @@ export function setup(manifest, deps) {
 
     // Flight log dropdown — inserted at setup() if data is already loaded,
     // or via onFlightPathLoaded() if flight paths load after layout init
-    log.info('[DIAG] flight dropdown check:', { fpm: !!flightPathManager, hasData: flightPathManager?.hasData });
     if (flightPathManager && flightPathManager.hasData) {
-        log.info('[DIAG] Building flight dropdown from setup()');
         buildFlightDropdown(flightPathManager, toolsGroup);
     }
 
@@ -2212,11 +2210,9 @@ function buildFlightDropdown(fpm, container) {
 // ---- Late-bind hook: flight path loaded after layout setup ----
 
 function onFlightPathLoaded(fpm) {
-    console.log('[DIAG] onFlightPathLoaded called:', { fpm: !!fpm, hasData: fpm?.hasData });
     if (!fpm || !fpm.hasData) return;
     // Find the tools group in the already-rendered ribbon
     const toolsGroup = document.querySelector('.editorial-ribbon-tools');
-    console.log('[DIAG] onFlightPathLoaded toolsGroup:', !!toolsGroup);
     if (!toolsGroup) return;
     buildFlightDropdown(fpm, toolsGroup);
 }
