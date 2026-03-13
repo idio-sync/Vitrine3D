@@ -30,6 +30,7 @@ import { WalkthroughEngine } from './walkthrough-engine.js';
 import type { WalkthroughPlaybackState } from './walkthrough-engine.js';
 import type { Walkthrough, WalkthroughStop } from '../types.js';
 import { resolveQualityTier, hasAnyProxy, getLodBudget, runGpuBenchmark } from './quality-tier.js';
+import { enterReducedQualityMode, exitReducedQualityMode, yieldToRenderer } from './background-loader.js';
 import { Logger, notify, parseMarkdown, resolveAssetRefs, fetchWithProgress, downloadBlob, errMsg, escapeHtml, formatBytes } from './utilities.js';
 import {
     showLoading, hideLoading, updateProgress,
@@ -2103,6 +2104,11 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
 
         // === Phase 3: Background-load remaining assets ===
 
+        // Reduce rendering quality during background loading so GPU uploads
+        // don't compete with requestAnimationFrame for main-thread time.
+        const throttleTargets = { renderer, sparkRenderer, onResize: onWindowResize };
+        enterReducedQualityMode(throttleTargets);
+
         // Progressive mesh upgrade: load HD in background, atomically swap SD→HD
         if (shouldProgressiveLoad && state.archiveLoader) {
             showBgLoadingIndicator();
@@ -2151,6 +2157,7 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                                       (type === 'pointcloud' && contentInfo.hasPointcloud);
                 if (typeAvailable) {
                     log.info(`Background loading: ${type}`);
+                    await yieldToRenderer();
                     await ensureAssetLoaded(type as AssetType);
                     // Update settings visibility after background load
                     showRelevantSettings(state.splatLoaded, state.modelLoaded, state.pointcloudLoaded);
@@ -2192,6 +2199,7 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
             }
             // Release raw ZIP data: all assets extracted, re-extraction uses _fileCache
             state.archiveLoader?.releaseRawData();
+            exitReducedQualityMode(throttleTargets);
             log.info('Background load complete, raw archive data released');
         }, 100);
 
@@ -2287,6 +2295,8 @@ async function switchQualityTier(newTier: string): Promise<void> {
 
     const contentInfo = archiveLoader.getContentInfo();
     const deps = createArchiveDeps();
+    const switchThrottleTargets = { renderer, sparkRenderer, onResize: onWindowResize };
+    enterReducedQualityMode(switchThrottleTargets);
 
     try {
         // Switch splat if proxy exists
@@ -2306,6 +2316,8 @@ async function switchQualityTier(newTier: string): Promise<void> {
                 archiveLoader.evictFileCache(oldSplatEntry.file_name);
             }
         }
+        // Yield between splat and mesh swap so the renderer gets a frame
+        await yieldToRenderer();
         // Switch mesh if proxy exists
         if (contentInfo.hasMeshProxy) {
             // Identify the entry being replaced so we can free its memory after swap

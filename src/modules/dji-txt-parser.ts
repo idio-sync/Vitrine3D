@@ -38,13 +38,17 @@ export async function parseDjiTxt(buffer: ArrayBuffer): Promise<FlightPoint[]> {
     let keychains;
 
     if (parser.version >= 13) {
+        const reqBody = parser.keychainsRequest();
+        const jsonBody = JSON.stringify(reqBody);
+
+        // Try server-side proxy first (avoids exposing API key, works behind CF Access)
+        let proxyOk = false;
         try {
             log.info(`Log version ${parser.version} — fetching decryption keychains via proxy...`);
-            const reqBody = parser.keychainsRequest();
             const resp = await fetch('/api/dji-keychains', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(reqBody),
+                body: jsonBody,
             });
             if (!resp.ok) {
                 const err = await resp.json().catch(() => ({ error: resp.statusText }));
@@ -52,12 +56,44 @@ export async function parseDjiTxt(buffer: ArrayBuffer): Promise<FlightPoint[]> {
             }
             const result = await resp.json();
             keychains = (result as any).data;
-        } catch (err: any) {
-            throw new Error(
-                `Failed to fetch DJI decryption keychains: ${err?.message || err}. ` +
-                'Check that DJI_API_KEY is set correctly (Docker env var or admin settings), ' +
-                'or export the log as CSV from airdata.com'
-            );
+            proxyOk = true;
+        } catch (proxyErr: any) {
+            log.warn('Server proxy failed, trying direct DJI API fallback:', proxyErr?.message);
+        }
+
+        // Fallback: call DJI API directly with the key from APP_CONFIG
+        // (key is already in config.js — no additional exposure)
+        if (!proxyOk) {
+            const apiKey = (window as any).APP_CONFIG?.djiApiKey || '';
+            if (!apiKey) {
+                throw new Error(
+                    'DJI decryption keychains unavailable: server proxy unreachable and no API key configured. ' +
+                    'Set DJI_API_KEY env var or export the log as CSV from airdata.com'
+                );
+            }
+            try {
+                log.info('Fetching keychains directly from DJI API...');
+                const resp = await fetch('https://dev.dji.com/openapi/v1/flight-records/keychains', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Api-Key': apiKey,
+                    },
+                    body: jsonBody,
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({ error: resp.statusText }));
+                    throw new Error((err as any).error || `HTTP ${resp.status}`);
+                }
+                const result = await resp.json();
+                keychains = (result as any).data;
+            } catch (directErr: any) {
+                throw new Error(
+                    `Failed to fetch DJI decryption keychains: ${directErr?.message || directErr}. ` +
+                    'Check that DJI_API_KEY is set correctly (Docker env var or admin settings), ' +
+                    'or export the log as CSV from airdata.com'
+                );
+            }
         }
     }
 
