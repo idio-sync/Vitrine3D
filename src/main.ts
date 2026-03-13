@@ -2867,6 +2867,24 @@ function onAnnotationPlaced(position: any, cameraState: any) {
 // Called when an annotation is selected
 function onAnnotationSelected(annotation: any) {
     onAnnotationSelectedHandler(annotation, createAnnotationControllerDeps());
+
+    // Reflect existing detail model in the UI
+    const filenameSpan = document.getElementById('detail-model-filename');
+    const removeBtn = document.getElementById('btn-remove-detail');
+    const customizeDiv = document.getElementById('detail-model-customize');
+    const labelInput = document.getElementById('detail-button-label') as HTMLInputElement | null;
+    if (annotation.detail_asset_key) {
+        const entry = state.detailAssetIndex.get(annotation.detail_asset_key);
+        if (filenameSpan) filenameSpan.textContent = entry?.filename?.split('/').pop() ?? annotation.detail_asset_key;
+        if (removeBtn) removeBtn.style.display = '';
+        if (customizeDiv) customizeDiv.style.display = '';
+        if (labelInput) labelInput.value = annotation.detail_button_label || '';
+    } else {
+        if (filenameSpan) filenameSpan.textContent = '';
+        if (removeBtn) removeBtn.style.display = 'none';
+        if (customizeDiv) customizeDiv.style.display = 'none';
+        if (labelInput) labelInput.value = '';
+    }
 }
 
 // Called when placement mode changes
