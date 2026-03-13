@@ -3630,10 +3630,20 @@ function animate() {
     requestAnimationFrame(animate);
 
     try {
-        // Update active camera controls
+        // Update flight path playback BEFORE camera controls and render
+        // so FPV/chase camera writes are not overwritten by OrbitControls
+        const dt = Math.min(_clock.getDelta(), 0.1);
+        const flightControllingCamera = flightPathManager
+            && (flightPathManager.isPlaying || flightPathManager.isTransitioning)
+            && flightPathManager.cameraMode !== 'orbit';
+        if (flightPathManager && (flightPathManager.isPlaying || flightPathManager.isTransitioning)) {
+            flightPathManager.updatePlayback(dt);
+        }
+
+        // Update active camera controls — skip OrbitControls when flight path owns the camera
         if (flyControls && flyControls.enabled) {
             flyControls.update();
-        } else if (!annotationSystem?.isAnimating && !isPreviewAnimating()) {
+        } else if (!flightControllingCamera && !annotationSystem?.isAnimating && !isPreviewAnimating()) {
             controls.update();
             // Only sync right controls when in split view (avoids unnecessary math per frame)
             if (state.displayMode === 'split') {
@@ -3650,14 +3660,6 @@ function animate() {
 
         // Update cross-section plane (syncs THREE.Plane with gizmo anchor each frame)
         if (crossSection) crossSection.updatePlane();
-
-        // Update flight path playback
-        // Always get delta (keeps clock ticking even when not playing)
-        // Clamp to 100ms to avoid huge first-frame jump (Clock starts on construction)
-        const dt = Math.min(_clock.getDelta(), 0.1);
-        if (flightPathManager && (flightPathManager.isPlaying || flightPathManager.isTransitioning)) {
-            flightPathManager.updatePlayback(dt);
-        }
 
         // Check if camera moved since last frame (skip marker DOM updates when idle)
         const camMoved = _markersDirty
