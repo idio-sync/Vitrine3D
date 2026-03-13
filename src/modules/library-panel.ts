@@ -915,18 +915,6 @@ async function handleRegenerate(archive: Archive): Promise<void> {
     }
 }
 
-async function handleCopyUrl(archive: Archive): Promise<void> {
-    const fullUrl = archive.uuid
-        ? location.origin + '/view/' + archive.uuid + '?theme=editorial'
-        : location.origin + archive.viewerUrl;
-    try {
-        await navigator.clipboard.writeText(fullUrl);
-        notify.success('URL copied');
-    } catch {
-        notify.error('Copy failed');
-    }
-}
-
 // ── Upload ──
 
 async function processUploadQueue(): Promise<void> {

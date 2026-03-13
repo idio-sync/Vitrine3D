@@ -82,6 +82,7 @@ export class DetailViewer {
     private resizeHandler: (() => void) | null = null;
     private escapeHandler: ((e: KeyboardEvent) => void) | null = null;
     private loadedObjects: THREE.Object3D[] = [];
+    private heightClampCleanup: (() => void) | null = null;
 
     constructor(deps: DetailViewerDeps) {
         this.deps = deps;
@@ -146,11 +147,6 @@ export class DetailViewer {
         this.controls = new OrbitControls(this.camera, this.canvas);
         this.controls.enableDamping = true;
         this.controls.dampingFactor = settings.damping_factor ?? 0.08;
-        if (settings.min_distance !== undefined) this.controls.minDistance = settings.min_distance;
-        if (settings.max_distance !== undefined) this.controls.maxDistance = settings.max_distance;
-        if (settings.min_polar_angle !== undefined) this.controls.minPolarAngle = settings.min_polar_angle;
-        if (settings.max_polar_angle !== undefined) this.controls.maxPolarAngle = settings.max_polar_angle;
-        if (settings.enable_pan === false) this.controls.enablePan = false;
         if (settings.auto_rotate) {
             this.controls.autoRotate = true;
             this.controls.autoRotateSpeed = settings.auto_rotate_speed ?? 2;
@@ -192,14 +188,21 @@ export class DetailViewer {
         }
 
         // Set up detail annotations
-        if (annotation.detail_annotations && annotation.detail_annotations.length > 0) {
+        // In editor mode, always create the AnnotationSystem so placement works even with no existing annotations
+        const shouldCreateAnnotationSystem =
+            this.deps.isEditor ||
+            (annotation.detail_annotations && annotation.detail_annotations.length > 0);
+
+        if (shouldCreateAnnotationSystem) {
             const markerContainer = this.overlay.querySelector('#detail-annotation-markers') as HTMLDivElement;
             if (markerContainer) {
                 this.annotationSystem = new AnnotationSystem(
                     this.scene, this.camera, this.renderer, this.controls,
                     { markerContainer }
                 );
-                this.annotationSystem.setAnnotations(annotation.detail_annotations);
+                if (annotation.detail_annotations && annotation.detail_annotations.length > 0) {
+                    this.annotationSystem.setAnnotations(annotation.detail_annotations);
+                }
 
                 if (settings.annotations_visible_on_open === false) {
                     this.annotationSystem.setMarkersVisible(false);
@@ -212,6 +215,9 @@ export class DetailViewer {
         if (backBtn) {
             backBtn.onclick = () => this.close();
         }
+
+        // Apply saved camera constraints (after camera is positioned)
+        this._applyCameraConstraints(settings);
 
         // Start render loop
         this.isOpen = true;
@@ -254,6 +260,10 @@ export class DetailViewer {
         this.loadedObjects = [];
 
         if (this.controls) {
+            if (this.heightClampCleanup) {
+                this.controls.removeEventListener('change', this.heightClampCleanup);
+                this.heightClampCleanup = null;
+            }
             this.controls.dispose();
             this.controls = null;
         }
@@ -379,6 +389,13 @@ export class DetailViewer {
             s.zoom_to_cursor = zoomCursorCheck.checked;
         });
 
+        const annotationsVisibleCheck = document.getElementById('detail-annotations-visible') as HTMLInputElement;
+        if (annotationsVisibleCheck) annotationsVisibleCheck.checked = settings.annotations_visible_on_open !== false;
+        annotationsVisibleCheck?.addEventListener('change', () => {
+            const s = this._ensureSettings();
+            s.annotations_visible_on_open = annotationsVisibleCheck.checked;
+        });
+
         // Set current view as initial camera position
         document.getElementById('btn-detail-set-camera')?.addEventListener('click', () => {
             if (!this.camera || !this.controls || !this.currentAnnotation) return;
@@ -413,6 +430,217 @@ export class DetailViewer {
                 log.info('Captured detail thumbnail');
             });
         });
+
+        // Camera constraint checkboxes (matches main editor pattern)
+        const lockOrbitCheck = document.getElementById('detail-lock-orbit') as HTMLInputElement;
+        const lockDistCheck = document.getElementById('detail-lock-distance') as HTMLInputElement;
+        const lockDistValue = document.getElementById('detail-lock-distance-value') as HTMLInputElement;
+        const lockAboveCheck = document.getElementById('detail-lock-above-ground') as HTMLInputElement;
+        const lockMaxHeightCheck = document.getElementById('detail-lock-max-height') as HTMLInputElement;
+        const maxHeightControls = document.getElementById('detail-max-height-controls');
+        const maxHeightInput = document.getElementById('detail-max-height-value') as HTMLInputElement;
+        const setMaxHeightBtn = document.getElementById('btn-detail-set-max-height-current');
+
+        // Populate from saved settings
+        if (lockOrbitCheck) lockOrbitCheck.checked = settings.lock_orbit || false;
+        if (lockDistCheck) lockDistCheck.checked = settings.lock_distance !== undefined && settings.lock_distance !== null;
+        if (lockDistValue && settings.lock_distance != null) lockDistValue.value = String(settings.lock_distance);
+        if (lockAboveCheck) lockAboveCheck.checked = settings.lock_above_ground || false;
+        if (lockMaxHeightCheck) {
+            const hasMaxHeight = settings.max_camera_height !== undefined && settings.max_camera_height !== null;
+            lockMaxHeightCheck.checked = hasMaxHeight;
+            if (maxHeightControls) maxHeightControls.style.display = hasMaxHeight ? '' : 'none';
+            if (maxHeightInput && hasMaxHeight) maxHeightInput.value = String(settings.max_camera_height);
+        }
+
+        const applyConstraints = () => {
+            const s = this._ensureSettings();
+
+            s.lock_orbit = lockOrbitCheck?.checked || false;
+
+            if (lockDistCheck?.checked) {
+                let dist = lockDistValue?.value ? parseFloat(lockDistValue.value) : null;
+                if (dist === null || isNaN(dist)) {
+                    // Capture current distance
+                    dist = this.camera!.position.distanceTo(this.controls!.target);
+                    dist = parseFloat(dist.toFixed(4));
+                    if (lockDistValue) lockDistValue.value = String(dist);
+                }
+                s.lock_distance = dist;
+            } else {
+                s.lock_distance = null;
+            }
+
+            s.lock_above_ground = lockAboveCheck?.checked || false;
+
+            if (lockMaxHeightCheck?.checked) {
+                const val = maxHeightInput?.value ? parseFloat(maxHeightInput.value) : null;
+                s.max_camera_height = (val !== null && !isNaN(val)) ? val : null;
+            } else {
+                s.max_camera_height = null;
+            }
+
+            this._applyCameraConstraints(s);
+        };
+
+        lockOrbitCheck?.addEventListener('change', applyConstraints);
+
+        lockDistCheck?.addEventListener('change', () => {
+            if (lockDistCheck.checked && this.camera && this.controls) {
+                // Capture current distance when checking the box
+                const dist = parseFloat(this.camera.position.distanceTo(this.controls.target).toFixed(4));
+                if (lockDistValue) lockDistValue.value = String(dist);
+            }
+            applyConstraints();
+        });
+
+        lockAboveCheck?.addEventListener('change', applyConstraints);
+
+        lockMaxHeightCheck?.addEventListener('change', () => {
+            if (maxHeightControls) maxHeightControls.style.display = lockMaxHeightCheck.checked ? '' : 'none';
+            if (lockMaxHeightCheck.checked && !maxHeightInput?.value && this.camera) {
+                // Default to current camera Y
+                if (maxHeightInput) maxHeightInput.value = this.camera.position.y.toFixed(1);
+            }
+            applyConstraints();
+        });
+
+        maxHeightInput?.addEventListener('change', applyConstraints);
+
+        setMaxHeightBtn?.addEventListener('click', () => {
+            if (this.camera && maxHeightInput) {
+                maxHeightInput.value = this.camera.position.y.toFixed(1);
+                applyConstraints();
+            }
+        });
+
+        // Annotation placement UI
+        this._setupAnnotationPlacement();
+    }
+
+    private _setupAnnotationPlacement(): void {
+        const placeBtn = document.getElementById('btn-detail-place-annotation');
+        const createPanel = document.getElementById('detail-annotation-create-panel');
+        const annoFields = document.getElementById('detail-anno-fields');
+        const titleInput = document.getElementById('detail-anno-title') as HTMLInputElement;
+        const bodyInput = document.getElementById('detail-anno-body') as HTMLTextAreaElement;
+        const saveBtn = document.getElementById('btn-detail-anno-save');
+        const cancelBtn = document.getElementById('btn-detail-anno-cancel');
+        const instruction = createPanel?.querySelector('.detail-anno-instruction');
+
+        if (!placeBtn || !createPanel || !this.annotationSystem) return;
+
+        // Show the placement button now that we know annotation system exists
+        placeBtn.classList.remove('hidden');
+
+        const exitPlacement = () => {
+            this.annotationSystem?.disablePlacementMode();
+            placeBtn.classList.remove('active');
+            createPanel.classList.add('hidden');
+            if (annoFields) annoFields.classList.add('hidden');
+            if (instruction) (instruction as HTMLElement).style.display = '';
+            if (titleInput) titleInput.value = '';
+            if (bodyInput) bodyInput.value = '';
+        };
+
+        // When a position is picked (pendingPosition set), show the fields
+        this.annotationSystem.onAnnotationCreated = (_position, _cameraState) => {
+            if (instruction) (instruction as HTMLElement).style.display = 'none';
+            if (annoFields) annoFields.classList.remove('hidden');
+            if (titleInput) titleInput.focus();
+        };
+
+        placeBtn.addEventListener('click', () => {
+            if (!this.annotationSystem) return;
+            if (this.annotationSystem.placementMode) {
+                exitPlacement();
+            } else {
+                this.annotationSystem.enablePlacementMode();
+                placeBtn.classList.add('active');
+                createPanel.classList.remove('hidden');
+                if (annoFields) annoFields.classList.add('hidden');
+                if (instruction) (instruction as HTMLElement).style.display = '';
+            }
+        });
+
+        saveBtn?.addEventListener('click', () => {
+            if (!this.annotationSystem) return;
+            const id = `detail_anno_${Date.now()}`;
+            const title = titleInput?.value.trim() || 'Untitled';
+            const body = bodyInput?.value.trim() || '';
+            this.annotationSystem.confirmAnnotation(id, title, body);
+            exitPlacement();
+            log.info('Detail annotation saved:', title);
+        });
+
+        cancelBtn?.addEventListener('click', () => {
+            this.annotationSystem?.cancelAnnotation();
+            exitPlacement();
+        });
+    }
+
+    private _applyCameraConstraints(settings: DetailViewSettings): void {
+        if (!this.controls || !this.camera) return;
+
+        // Clean up previous height clamp listener
+        if (this.heightClampCleanup) {
+            this.controls.removeEventListener('change', this.heightClampCleanup);
+            this.heightClampCleanup = null;
+        }
+
+        // Lock orbit point (disable panning)
+        this.controls.enablePan = !settings.lock_orbit;
+
+        // Lock camera distance
+        if (settings.lock_distance !== undefined && settings.lock_distance !== null) {
+            this.controls.minDistance = settings.lock_distance;
+            this.controls.maxDistance = settings.lock_distance;
+        } else {
+            this.controls.minDistance = 0.01;
+            this.controls.maxDistance = settings.max_camera_distance ?? 1000;
+        }
+
+        // Keep camera above ground
+        this.controls.maxPolarAngle = settings.lock_above_ground ? Math.PI / 2 : Math.PI;
+
+        // Max camera height — dynamically constrain minPolarAngle
+        if (settings.max_camera_height !== undefined && settings.max_camera_height !== null) {
+            const maxY = settings.max_camera_height;
+            const camera = this.camera;
+            const controls = this.controls;
+            const updateHeightConstraint = () => {
+                const distance = camera.position.distanceTo(controls.target);
+                const targetY = controls.target.y;
+                if (distance === 0 || maxY >= targetY + distance) {
+                    controls.minPolarAngle = 0;
+                } else {
+                    const ratio = Math.min(1, Math.max(-1, (maxY - targetY) / distance));
+                    controls.minPolarAngle = Math.acos(ratio);
+                }
+            };
+            this.controls.addEventListener('change', updateHeightConstraint);
+            updateHeightConstraint();
+            this.heightClampCleanup = updateHeightConstraint;
+        } else {
+            this.controls.minPolarAngle = 0;
+        }
+
+        // Legacy backward compat: if new fields aren't set but old ones are, apply them
+        if (settings.lock_orbit === undefined && settings.enable_pan === false) {
+            this.controls.enablePan = false;
+        }
+        if (settings.lock_distance === undefined && settings.min_distance !== undefined) {
+            this.controls.minDistance = settings.min_distance;
+        }
+        if (settings.lock_distance === undefined && settings.max_distance !== undefined) {
+            this.controls.maxDistance = settings.max_distance;
+        }
+        if (settings.max_camera_height === undefined && settings.min_polar_angle !== undefined) {
+            this.controls.minPolarAngle = settings.min_polar_angle;
+        }
+        if (!settings.lock_above_ground && settings.max_polar_angle !== undefined) {
+            this.controls.maxPolarAngle = settings.max_polar_angle;
+        }
     }
 
     private _ensureSettings(): DetailViewSettings {

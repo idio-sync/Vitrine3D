@@ -261,11 +261,13 @@ export interface Annotation {
 
 /** View settings for the detail model inspection overlay. */
 export interface DetailViewSettings {
-    min_distance?: number;
-    max_distance?: number;
-    min_polar_angle?: number;
-    max_polar_angle?: number;
-    enable_pan?: boolean;
+    // Camera constraints (matches main editor model)
+    lock_orbit?: boolean;
+    lock_distance?: number | null;       // null = unlocked, number = pinned distance
+    lock_above_ground?: boolean;
+    max_camera_height?: number | null;   // null = no limit
+    max_camera_distance?: number | null; // null = default
+    // General
     auto_rotate?: boolean;
     auto_rotate_speed?: number;
     damping_factor?: number;
@@ -278,6 +280,12 @@ export interface DetailViewSettings {
     description?: string;
     scale_reference?: string;
     annotations_visible_on_open?: boolean;
+    // Legacy fields (read for backward compat, not written)
+    min_distance?: number;
+    max_distance?: number;
+    min_polar_angle?: number;
+    max_polar_angle?: number;
+    enable_pan?: boolean;
 }
 
 // ===== Walkthrough =====

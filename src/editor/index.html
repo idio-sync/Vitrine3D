@@ -3204,9 +3204,23 @@
             <button id="btn-detail-back" class="detail-back-btn">&#8592; Back</button>
             <span class="detail-viewer-title"></span>
             <span class="detail-viewer-scale"></span>
+            <button id="btn-detail-place-annotation" class="detail-place-anno-btn" title="Place annotation on model">+ Annotation</button>
         </div>
         <canvas id="detail-viewer-canvas"></canvas>
         <div id="detail-annotation-markers"></div>
+        <div id="detail-annotation-create-panel" class="hidden">
+            <p class="detail-anno-instruction">Click on the model to place an annotation</p>
+            <div id="detail-anno-fields" class="hidden">
+                <label for="detail-anno-title">Title</label>
+                <input type="text" id="detail-anno-title" placeholder="Annotation title" autocomplete="off">
+                <label for="detail-anno-body">Description</label>
+                <textarea id="detail-anno-body" placeholder="Optional description" rows="3"></textarea>
+                <div class="detail-anno-actions">
+                    <button type="button" id="btn-detail-anno-save" class="action-btn primary">Save</button>
+                    <button type="button" id="btn-detail-anno-cancel" class="action-btn secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
         <div id="detail-annotation-popup" class="hidden">
             <div class="annotation-info-header">
                 <span class="annotation-info-number"></span>
@@ -3237,6 +3251,41 @@
             </div>
             <div class="toggle-row">
                 <label><input type="checkbox" id="detail-zoom-cursor"> Zoom to Cursor</label>
+            </div>
+            <div class="toggle-row">
+                <label><input type="checkbox" id="detail-annotations-visible" checked> Annotations Visible on Open</label>
+            </div>
+            <h4 style="margin-top:10px;">Camera Constraints</h4>
+            <div class="cb-row">
+                <input type="checkbox" id="detail-lock-orbit">
+                <label for="detail-lock-orbit">Lock Orbit Point</label>
+            </div>
+            <span class="prop-hint">Prevent panning — the orbit center stays fixed.</span>
+
+            <div class="cb-row mt6">
+                <input type="checkbox" id="detail-lock-distance">
+                <label for="detail-lock-distance">Lock Camera Distance</label>
+            </div>
+            <span class="prop-hint">Freeze zoom at the current distance from the orbit point.</span>
+            <input type="hidden" id="detail-lock-distance-value">
+
+            <div class="cb-row mt6">
+                <input type="checkbox" id="detail-lock-above-ground">
+                <label for="detail-lock-above-ground">Keep Camera Above Ground</label>
+            </div>
+            <span class="prop-hint">Prevent the camera from orbiting below the ground plane.</span>
+
+            <div class="cb-row mt6">
+                <input type="checkbox" id="detail-lock-max-height">
+                <label for="detail-lock-max-height">Limit Camera Height</label>
+            </div>
+            <span class="prop-hint">Cap the camera's vertical position at a maximum height.</span>
+            <div id="detail-max-height-controls" style="display: none; margin-top: 4px; padding-left: 24px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label for="detail-max-height-value" style="white-space: nowrap; font-size: 12px;">Max Y:</label>
+                    <input type="number" id="detail-max-height-value" step="0.1" style="width: 80px; font-size: 12px;" placeholder="0.0">
+                    <button id="btn-detail-set-max-height-current" class="prop-btn" style="font-size: 10px; padding: 2px 8px; white-space: nowrap;">Set to current</button>
+                </div>
             </div>
             <button type="button" id="btn-detail-set-camera" class="action-btn secondary">Set Current View as Initial</button>
             <button type="button" id="btn-detail-capture-thumb" class="action-btn secondary">Capture Thumbnail</button>

@@ -5928,6 +5928,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 #detail-view-settings-panel select,
 #detail-view-settings-panel input[type="text"],
+#detail-view-settings-panel input[type="number"],
 #detail-view-settings-panel input[type="color"] {
     width: 100%;
     margin-top: 3px;
@@ -5954,4 +5955,81 @@ input[type="range"]::-webkit-slider-thumb:hover {
     font-size: 11px;
     color: var(--text-secondary);
     margin-top: 0;
+}
+
+/* Detail viewer: place-annotation button in header */
+.detail-place-anno-btn {
+    margin-left: auto;
+    padding: 4px 10px;
+    font-size: 11px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.detail-place-anno-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+.detail-place-anno-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+.detail-place-anno-btn.hidden { display: none; }
+
+/* Detail viewer: annotation creation panel */
+#detail-annotation-create-panel {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    z-index: 3;
+    pointer-events: all;
+}
+#detail-annotation-create-panel.hidden { display: none; }
+.detail-anno-instruction {
+    margin: 0 0 4px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+#detail-anno-fields label {
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 8px;
+}
+#detail-anno-fields input[type="text"],
+#detail-anno-fields textarea {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 3px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    padding: 4px 6px;
+    font-size: 11px;
+    font-family: inherit;
+    resize: vertical;
+}
+#detail-anno-fields input[type="text"]:focus,
+#detail-anno-fields textarea:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+.detail-anno-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    justify-content: flex-end;
 }
