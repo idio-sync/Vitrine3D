@@ -86,6 +86,44 @@ const SETTINGS_ENV_MAP = {
     'flight.djiApiKey': 'DJI_API_KEY',
 };
 
+// --- GPU capability probe ---
+// Runs vainfo at startup to detect VAAPI encoders.
+// Result stored in gpuCapabilities for use by transcodeMedia().
+const gpuCapabilities = { vaapi: false, encoders: ['libx264'], device: null };
+
+function probeGpu() {
+    try {
+        const output = execFileSync('vainfo', [], {
+            encoding: 'utf8',
+            timeout: 5000,
+            env: { ...process.env, LIBVA_DRIVER_NAME: 'iHD' },
+        });
+
+        // Parse device name from "vainfo: Driver version:" line
+        const driverMatch = output.match(/Driver version:\s*(.+)/i);
+        const device = driverMatch ? driverMatch[1].trim() : 'Unknown VAAPI device';
+
+        // Parse supported encoder profiles
+        const encoders = [];
+        if (/VAProfileH264/.test(output) && /VAEntrypointEncSlice/.test(output)) encoders.push('h264_vaapi');
+        if (/VAProfileHEVC/.test(output) && /VAEntrypointEncSlice/.test(output)) encoders.push('hevc_vaapi');
+        if (/VAProfileAV1/.test(output) && /VAEntrypointEncSlice/.test(output)) encoders.push('av1_vaapi');
+
+        if (encoders.length > 0) {
+            gpuCapabilities.vaapi = true;
+            gpuCapabilities.encoders = [...encoders, 'libx264']; // always include software fallback
+            gpuCapabilities.device = device;
+            console.log('[gpu] VAAPI available — device:', device, 'encoders:', encoders.join(', '));
+        } else {
+            console.log('[gpu] VAAPI device found but no supported encoders');
+        }
+    } catch (err) {
+        console.log('[gpu] No VAAPI available (vainfo failed) — using software encoding');
+    }
+}
+
+probeGpu();
+
 // In-memory cache: { key: { value, expiry } }
 const _settingsCache = {};
 const SETTINGS_CACHE_TTL = 5000; // 5 seconds
@@ -3099,6 +3137,10 @@ const server = http.createServer((req, res) => {
         }
         if (pathname === '/api/storage' && req.method === 'GET') {
             return handleStorage(req, res);
+        }
+        // GET /api/gpu — return GPU capabilities (no auth required, read-only info)
+        if (req.method === 'GET' && pathname === '/api/gpu') {
+            return sendJson(res, 200, gpuCapabilities);
         }
         if (pathname === '/api/settings' && req.method === 'GET') {
             return handleGetSettings(req, res);
