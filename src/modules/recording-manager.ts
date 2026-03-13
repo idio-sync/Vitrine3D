@@ -116,7 +116,7 @@ export function startRecording(
     _chunks = [];
     _recorder = new MediaRecorder(_compositeStream, {
         mimeType,
-        videoBitsPerSecond: (window as any).APP_CONFIG?.recordingBitrate || 5_000_000,
+        videoBitsPerSecond: (window as any).APP_CONFIG?.recordingBitrate || 16_000_000,
     });
 
     _recorder.ondataavailable = (e) => {
