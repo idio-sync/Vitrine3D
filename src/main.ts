@@ -1771,7 +1771,7 @@ async function init() {
             }
 
             if (!blob) {
-                notify('Could not load detail model', 'error');
+                notify.error('Could not load detail model');
                 return;
             }
 
@@ -1780,6 +1780,59 @@ async function init() {
 
             const viewer = new DetailViewer(createDetailViewerDeps());
             await viewer.open(anno, blob);
+        });
+    }
+
+    // Detail model import controls
+    const detailFileInput = document.getElementById('detail-model-file') as HTMLInputElement;
+    const attachBtn = document.getElementById('btn-attach-detail');
+    const filenameSpan = document.getElementById('detail-model-filename');
+    const removeBtn = document.getElementById('btn-remove-detail');
+    const customizeDiv = document.getElementById('detail-model-customize');
+
+    if (attachBtn && detailFileInput) {
+        attachBtn.addEventListener('click', () => detailFileInput.click());
+        detailFileInput.addEventListener('change', (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+
+            const archiveCreator = sceneRefs.archiveCreator;
+            if (archiveCreator) {
+                const key = archiveCreator.addDetailModel(file, file.name);
+                if (annotationSystem?.selectedAnnotation) {
+                    annotationSystem.selectedAnnotation.detail_asset_key = key;
+                }
+                if (filenameSpan) filenameSpan.textContent = file.name;
+                if (removeBtn) removeBtn.style.display = '';
+                if (customizeDiv) customizeDiv.style.display = '';
+            }
+        });
+    }
+
+    if (removeBtn) {
+        removeBtn.addEventListener('click', () => {
+            const anno = annotationSystem?.selectedAnnotation;
+            if (anno?.detail_asset_key) {
+                sceneRefs.archiveCreator?.removeDetailModel(anno.detail_asset_key);
+                anno.detail_asset_key = undefined;
+                anno.detail_button_label = undefined;
+                anno.detail_thumbnail = undefined;
+                anno.detail_annotations = undefined;
+                anno.detail_view_settings = undefined;
+            }
+            if (filenameSpan) filenameSpan.textContent = '';
+            if (removeBtn) removeBtn.style.display = 'none';
+            if (customizeDiv) customizeDiv.style.display = 'none';
+        });
+    }
+
+    const labelInput = document.getElementById('detail-button-label') as HTMLInputElement;
+    if (labelInput) {
+        labelInput.addEventListener('change', () => {
+            const anno = annotationSystem?.selectedAnnotation;
+            if (anno) {
+                anno.detail_button_label = labelInput.value || undefined;
+            }
         });
     }
 

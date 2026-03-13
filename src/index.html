@@ -575,6 +575,24 @@
     <!-- Flight path telemetry tooltip -->
     <div id="flight-tooltip" style="display:none; position:fixed; pointer-events:none; background:rgba(0,0,0,0.85); color:#fff; padding:6px 10px; border-radius:4px; font-size:11px; line-height:1.5; z-index:10000; font-family:monospace;"></div>
 
+    <!-- Detail viewer overlay -->
+    <div id="detail-viewer-overlay" class="hidden">
+        <div class="detail-viewer-header">
+            <button id="btn-detail-back" class="detail-back-btn">&#8592; Back</button>
+            <span class="detail-viewer-title"></span>
+            <span class="detail-viewer-scale"></span>
+        </div>
+        <canvas id="detail-viewer-canvas"></canvas>
+        <div id="detail-annotation-markers"></div>
+        <div id="detail-annotation-popup" class="hidden">
+            <div class="annotation-info-header">
+                <span class="annotation-info-number"></span>
+                <h4 class="annotation-info-title"></h4>
+            </div>
+            <div class="annotation-info-body"></div>
+        </div>
+    </div>
+
     <script src="pre-module.js"></script>
     <script type="module" src="kiosk-web.ts"></script>
 </body>

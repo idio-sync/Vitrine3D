@@ -3092,6 +3092,20 @@
         <input type="text" id="anno-title" placeholder="Feature name">
         <label for="anno-body">Description <button type="button" class="insert-image-btn" id="btn-anno-insert-image" title="Insert Image"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></button></label>
         <textarea id="anno-body" placeholder="Describe this point of interest..."></textarea>
+        <div class="detail-model-section">
+            <label>Detail Model</label>
+            <div id="detail-model-attach" class="detail-attach-area">
+                <input type="file" id="detail-model-file" accept=".glb" style="display:none">
+                <button type="button" id="btn-attach-detail" class="action-btn secondary">Choose Detail Model (.glb)</button>
+                <span id="detail-model-filename" class="detail-filename"></span>
+                <button type="button" id="btn-remove-detail" class="action-btn danger" style="display:none">Remove</button>
+            </div>
+            <div id="detail-model-customize" style="display:none">
+                <label for="detail-button-label">Button Label</label>
+                <input type="text" id="detail-button-label" placeholder="Inspect Detail">
+                <button type="button" id="btn-preview-detail" class="action-btn secondary">Preview in Detail Viewer</button>
+            </div>
+        </div>
         <div class="btn-group">
             <button id="btn-anno-cancel" class="action-btn secondary">Cancel</button>
             <button id="btn-anno-save" class="action-btn">Save</button>
@@ -3172,6 +3186,51 @@
 
     <!-- Flight path telemetry tooltip -->
     <div id="flight-tooltip" style="display:none; position:fixed; pointer-events:none; background:rgba(0,0,0,0.85); color:#fff; padding:6px 10px; border-radius:4px; font-size:11px; line-height:1.5; z-index:10000; font-family:monospace;"></div>
+
+    <!-- Detail viewer overlay -->
+    <div id="detail-viewer-overlay" class="hidden">
+        <div class="detail-viewer-header">
+            <button id="btn-detail-back" class="detail-back-btn">&#8592; Back</button>
+            <span class="detail-viewer-title"></span>
+            <span class="detail-viewer-scale"></span>
+        </div>
+        <canvas id="detail-viewer-canvas"></canvas>
+        <div id="detail-annotation-markers"></div>
+        <div id="detail-annotation-popup" class="hidden">
+            <div class="annotation-info-header">
+                <span class="annotation-info-number"></span>
+                <h4 class="annotation-info-title"></h4>
+            </div>
+            <div class="annotation-info-body"></div>
+        </div>
+        <div id="detail-view-settings-panel" class="hidden">
+            <h4>View Settings</h4>
+            <label for="detail-env-preset">Lighting</label>
+            <select id="detail-env-preset">
+                <option value="neutral">Neutral</option>
+                <option value="studio">Studio</option>
+                <option value="outdoor">Outdoor</option>
+                <option value="warm">Warm</option>
+            </select>
+            <label for="detail-bg-color">Background</label>
+            <input type="color" id="detail-bg-color" value="#1a1a2e">
+            <label for="detail-description">Description</label>
+            <input type="text" id="detail-description" placeholder="e.g. Corinthian capital, west facade">
+            <label for="detail-scale-ref">Scale Reference</label>
+            <input type="text" id="detail-scale-ref" placeholder="e.g. ~30cm wide">
+            <div class="toggle-row">
+                <label><input type="checkbox" id="detail-auto-rotate"> Auto-Rotate</label>
+            </div>
+            <div class="toggle-row">
+                <label><input type="checkbox" id="detail-show-grid"> Show Grid</label>
+            </div>
+            <div class="toggle-row">
+                <label><input type="checkbox" id="detail-zoom-cursor"> Zoom to Cursor</label>
+            </div>
+            <button type="button" id="btn-detail-set-camera" class="action-btn secondary">Set Current View as Initial</button>
+            <button type="button" id="btn-detail-capture-thumb" class="action-btn secondary">Capture Thumbnail</button>
+        </div>
+    </div>
 
     <script src="../pre-module.js"></script>
     <script type="module" src="../main.ts"></script>
