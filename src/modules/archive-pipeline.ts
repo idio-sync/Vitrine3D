@@ -599,6 +599,13 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
         // Reset asset states for new archive
         state.assetStates = { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED, cad: ASSET_STATE.UNLOADED, flightpath: ASSET_STATE.UNLOADED };
 
+        // Restore object profile from manifest
+        const objectProfile = manifest?._meta?.quality?.objectProfile;
+        if (objectProfile && typeof objectProfile === 'string') {
+            deps.state.objectProfile = objectProfile;
+            deps.onProfileLoaded?.(objectProfile);
+        }
+
         // Prefill metadata panel from loaded archive
         deps.metadata.prefillMetadataFromArchive(manifest);
 

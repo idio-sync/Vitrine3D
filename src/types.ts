@@ -460,6 +460,7 @@ export interface ArchivePipelineDeps {
     sparkRenderer?: any;
     onResize?: () => void;
     measurementSystem?: any;
+    onProfileLoaded?: (profile: string) => void;
     renderFlightPaths?: () => Promise<void>;
     colmap?: {
         loadFromBuffers: (cameras: ArrayBuffer, images: ArrayBuffer) => void;

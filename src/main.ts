@@ -701,6 +701,14 @@ function createArchivePipelineDeps(): ArchivePipelineDeps {
         sparkRenderer,
         onResize: onWindowResize,
         measurementSystem,
+        onProfileLoaded: (profile: string) => {
+            state.objectProfile = profile;
+            const select = document.getElementById('object-profile-select') as HTMLSelectElement | null;
+            if (select && profile in OBJECT_PROFILES) {
+                select.value = profile;
+                select.dispatchEvent(new Event('change'));
+            }
+        },
         renderFlightPaths: async () => {
             if (!flightPathManager) return;
             const fpStore = getStore();
