@@ -81,7 +81,10 @@ export class AnnotationSystem {
     _onDragMove: (event: MouseEvent) => void;
     _onDragEnd: (event: MouseEvent) => void;
 
-    constructor(scene: Scene, camera: Camera, renderer: WebGLRenderer, controls: OrbitControls) {
+    constructor(
+        scene: Scene, camera: Camera, renderer: WebGLRenderer, controls: OrbitControls,
+        options?: { markerContainer?: HTMLDivElement }
+    ) {
         this.scene = scene;
         this.camera = camera;
         this.renderer = renderer;
@@ -128,13 +131,17 @@ export class AnnotationSystem {
         this._onDragMove = this._onDragMoveHandler.bind(this);
         this._onDragEnd = this._onDragEndHandler.bind(this);
 
-        this._createMarkerContainer();
+        this._createMarkerContainer(options?.markerContainer);
     }
 
     /**
      * Create the DOM container for 2D annotation markers
      */
-    _createMarkerContainer(): void {
+    _createMarkerContainer(override?: HTMLDivElement): void {
+        if (override) {
+            this.markerContainer = override;
+            return;
+        }
         this.markerContainer = document.getElementById('annotation-markers') as HTMLDivElement | null;
         if (!this.markerContainer) {
             this.markerContainer = document.createElement('div');
