@@ -15,12 +15,51 @@ import { getStore } from './asset-store.js';
 import { captureWalkthroughForArchive } from './walkthrough-controller.js';
 import { getAuthCredentials, getCsrfToken, fetchCsrfToken, refreshLibrary } from './library-panel.js';
 import type { ExportDeps } from '@/types.js';
-import { transcodeSpz } from '@sparkjsdev/spark';
+import type { TranscodeResponse, TranscodeError } from './workers/transcode-spz.worker.js';
 
 const log = Logger.getLogger('export-controller');
 
+/**
+ * Run transcodeSpz in a Web Worker to avoid blocking the main thread.
+ * Transfers the input buffer to the worker and receives the SPZ bytes back.
+ */
+function transcodeSpzInWorker(fileBytes: Uint8Array, fileType: string): Promise<Uint8Array> {
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(
+            new URL('./workers/transcode-spz.worker.ts', import.meta.url),
+            { type: 'module' },
+        );
+        worker.onmessage = (e: MessageEvent<TranscodeResponse | TranscodeError>) => {
+            worker.terminate();
+            if (e.data.success === true) {
+                resolve((e.data as TranscodeResponse).spzBytes);
+            } else {
+                reject(new Error((e.data as TranscodeError).error));
+            }
+        };
+        worker.onerror = (e) => {
+            worker.terminate();
+            reject(new Error(`Worker error: ${e.message}`));
+        };
+        // Transfer the buffer to avoid a copy
+        worker.postMessage({ fileBytes, fileType }, { transfer: [fileBytes.buffer] });
+    });
+}
+
 const CHUNK_SIZE = 50 * 1024 * 1024; // 50 MB — safely under Cloudflare's 100 MB request limit
-const CHUNK_CONCURRENCY = 1;          // sequential — concurrent uploads cause HTTP/2 protocol errors behind Cloudflare
+const CHUNK_CONCURRENCY = 1;          // sequential — concurrent uploads cause HTTP/2 potential errors behind Cloudflare
+
+type Vec3 = [number, number, number];
+const ZERO3: Vec3 = [0, 0, 0];
+function pos(obj: { position: { x: number; y: number; z: number } } | null | undefined): Vec3 {
+    return obj ? [obj.position.x, obj.position.y, obj.position.z] : ZERO3;
+}
+function rot(obj: { rotation: { x: number; y: number; z: number } } | null | undefined): Vec3 {
+    return obj ? [obj.rotation.x, obj.rotation.y, obj.rotation.z] : ZERO3;
+}
+function scl(obj: { scale: { x: number } } | null | undefined): number {
+    return obj ? obj.scale.x : 1;
+}
 
 /**
  * Show the export panel and sync asset checkboxes.
@@ -148,7 +187,7 @@ function showComplianceDialog(result: SIPValidationResult): Promise<boolean> {
 
 interface PreparedArchive {
     filename: string;
-    format: string;
+    format: 'ddim' | 'zip';
     includeHashes: boolean;
 }
 
@@ -195,7 +234,7 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
 
     // Get export options
     const formatRadio = document.querySelector('input[name="export-format"]:checked') as HTMLInputElement | null;
-    const format = formatRadio?.value || 'ddim';
+    const format = (formatRadio?.value === 'zip' ? 'zip' : 'ddim') as 'ddim' | 'zip';
     // Preview image and integrity hashes are always included
     const includePreview = true;
     const includeHashes = true;
@@ -285,9 +324,9 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     }
     if (includeSplat && assets.splatBlob && state.splatLoaded) {
         const fileName = document.getElementById('splat-filename')?.textContent || 'scene.ply';
-        const position = splatMesh ? [splatMesh.position.x, splatMesh.position.y, splatMesh.position.z] : [0, 0, 0];
-        const rotation = splatMesh ? [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z] : [0, 0, 0];
-        const scale: [number, number, number] = splatMesh ? [splatMesh.scale.x, splatMesh.scale.y, splatMesh.scale.z] : [1, 1, 1];
+        const position = pos(splatMesh);
+        const rotation = rot(splatMesh);
+        const scale = scl(splatMesh);
 
         // Export-time LOD: transcode to LOD-ordered SPZ if enabled and format supports it
         const splatExt = fileName.split('.').pop()?.toLowerCase() || '';
@@ -301,15 +340,9 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
                 deps.ui.showLoading('Generating splat LOD...', true);
 
                 const fileBytes = new Uint8Array(await assets.splatBlob.arrayBuffer());
-                const { fileBytes: spzBytes } = await transcodeSpz({
-                    inputs: [{ fileBytes, fileType: splatExt }],
-                });
+                const spzBytes = await transcodeSpzInWorker(fileBytes, splatExt);
 
-                if (!spzBytes || spzBytes.length === 0) {
-                    throw new Error('transcodeSpz returned empty output');
-                }
-
-                splatBlobToArchive = new Blob([spzBytes], { type: 'application/octet-stream' });
+                splatBlobToArchive = new Blob([spzBytes as BlobPart], { type: 'application/octet-stream' });
                 // Change extension to .spz for the archive
                 archiveFileName = fileName.replace(/\.[^.]+$/, '.spz');
                 log.info(`Splat LOD generated: ${fileBytes.length} -> ${spzBytes.length} bytes (${archiveFileName})`);
@@ -351,9 +384,9 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     }
     if (includeModel && assets.meshBlob && state.modelLoaded) {
         const fileName = state._meshFileName || document.getElementById('model-filename')?.textContent || 'mesh.glb';
-        const position = modelGroup ? [modelGroup.position.x, modelGroup.position.y, modelGroup.position.z] : [0, 0, 0];
-        const rotation = modelGroup ? [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z] : [0, 0, 0];
-        const scale: [number, number, number] = modelGroup ? [modelGroup.scale.x, modelGroup.scale.y, modelGroup.scale.z] : [1, 1, 1];
+        const position = pos(modelGroup);
+        const rotation = rot(modelGroup);
+        const scale = scl(modelGroup);
 
         let meshBlob = assets.meshBlob;
         const dracoHdEl = document.getElementById('export-draco-hd') as HTMLInputElement | null;
@@ -392,9 +425,9 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     // Add display proxy mesh if available
     if (includeModel && assets.proxyMeshBlob) {
         const proxyFileName = document.getElementById('proxy-mesh-filename')?.textContent || 'mesh_proxy.glb';
-        const position = modelGroup ? [modelGroup.position.x, modelGroup.position.y, modelGroup.position.z] : [0, 0, 0];
-        const rotation = modelGroup ? [modelGroup.rotation.x, modelGroup.rotation.y, modelGroup.rotation.z] : [0, 0, 0];
-        const scale: [number, number, number] = modelGroup ? [modelGroup.scale.x, modelGroup.scale.y, modelGroup.scale.z] : [1, 1, 1];
+        const position = pos(modelGroup);
+        const rotation = rot(modelGroup);
+        const scale = scl(modelGroup);
 
         log.info(' Adding mesh proxy:', { proxyFileName });
         archiveCreator.addMeshProxy(assets.proxyMeshBlob, proxyFileName, {
@@ -425,9 +458,9 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     // Add display proxy splat if available
     if (assets.proxySplatBlob) {
         const proxySplatFileName = document.getElementById('proxy-splat-filename')?.textContent || 'scene_proxy.spz';
-        const splatPosition = splatMesh ? [splatMesh.position.x, splatMesh.position.y, splatMesh.position.z] : [0, 0, 0];
-        const splatRotation = splatMesh ? [splatMesh.rotation.x, splatMesh.rotation.y, splatMesh.rotation.z] : [0, 0, 0];
-        const splatScale: [number, number, number] = splatMesh ? [splatMesh.scale.x, splatMesh.scale.y, splatMesh.scale.z] : [1, 1, 1];
+        const splatPosition = pos(splatMesh);
+        const splatRotation = rot(splatMesh);
+        const splatScale = scl(splatMesh);
 
         log.info(' Adding splat proxy:', { proxySplatFileName });
         archiveCreator.addSceneProxy(assets.proxySplatBlob, proxySplatFileName, {
@@ -440,9 +473,9 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     log.info(' Checking pointcloud:', { pointcloudBlob: !!assets.pointcloudBlob, pointcloudLoaded: state.pointcloudLoaded });
     if (includePointcloud && assets.pointcloudBlob && state.pointcloudLoaded) {
         const fileName = document.getElementById('pointcloud-filename')?.textContent || 'pointcloud.e57';
-        const position = pointcloudGroup ? [pointcloudGroup.position.x, pointcloudGroup.position.y, pointcloudGroup.position.z] : [0, 0, 0];
-        const rotation = pointcloudGroup ? [pointcloudGroup.rotation.x, pointcloudGroup.rotation.y, pointcloudGroup.rotation.z] : [0, 0, 0];
-        const scale: [number, number, number] = pointcloudGroup ? [pointcloudGroup.scale.x, pointcloudGroup.scale.y, pointcloudGroup.scale.z] : [1, 1, 1];
+        const position = pos(pointcloudGroup);
+        const rotation = rot(pointcloudGroup);
+        const scale = scl(pointcloudGroup);
 
         log.info(' Adding pointcloud:', { fileName, position, rotation, scale });
         archiveCreator.addPointcloud(assets.pointcloudBlob, fileName, {
@@ -457,9 +490,9 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     // Add CAD if loaded
     if (assets.cadBlob && state.cadLoaded) {
         const cadFileName = getStore().cadFileName || document.getElementById('cad-filename')?.textContent || 'model.step';
-        const position = cadGroup ? [cadGroup.position.x, cadGroup.position.y, cadGroup.position.z] : [0, 0, 0];
-        const rotation = cadGroup ? [cadGroup.rotation.x, cadGroup.rotation.y, cadGroup.rotation.z] : [0, 0, 0];
-        const scale: [number, number, number] = cadGroup ? [cadGroup.scale.x, cadGroup.scale.y, cadGroup.scale.z] : [1, 1, 1];
+        const position = pos(cadGroup);
+        const rotation = rot(cadGroup);
+        const scale = scl(cadGroup);
 
         log.info(' Adding CAD:', { cadFileName, position, rotation, scale });
         archiveCreator.addCAD(assets.cadBlob, cadFileName, { position, rotation, scale });
@@ -470,9 +503,9 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         log.info(` Adding ${assets.flightPathBlobs.length} flight path(s)`);
         for (let i = 0; i < assets.flightPathBlobs.length; i++) {
             const fp = assets.flightPathBlobs[i];
-            const position = flightPathGroup ? [flightPathGroup.position.x, flightPathGroup.position.y, flightPathGroup.position.z] : [0, 0, 0];
-            const rotation = flightPathGroup ? [flightPathGroup.rotation.x, flightPathGroup.rotation.y, flightPathGroup.rotation.z] : [0, 0, 0];
-            const scale = flightPathGroup ? flightPathGroup.scale.x : 1;
+            const position = pos(flightPathGroup);
+            const rotation = rot(flightPathGroup);
+            const scale = scl(flightPathGroup);
             const flightMeta: Record<string, unknown> = {};
             if (fp.trimStart !== undefined) flightMeta.trim_start = fp.trimStart;
             if (fp.trimEnd !== undefined) flightMeta.trim_end = fp.trimEnd;
@@ -486,9 +519,9 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     if (state.colmapLoaded && assets.colmapBlobs.length > 0 && includeColmap) {
         log.info(` Adding ${assets.colmapBlobs.length} colmap SfM dataset(s)`);
         for (const { camerasBlob, imagesBlob, points3DBuffer } of assets.colmapBlobs) {
-            const position = colmapGroup ? [colmapGroup.position.x, colmapGroup.position.y, colmapGroup.position.z] : [0, 0, 0];
-            const rotation = colmapGroup ? [colmapGroup.rotation.x, colmapGroup.rotation.y, colmapGroup.rotation.z] : [0, 0, 0];
-            const scale = colmapGroup ? colmapGroup.scale.x : 1;
+            const position = pos(colmapGroup);
+            const rotation = rot(colmapGroup);
+            const scale = scl(colmapGroup);
             const points3DBlob = points3DBuffer ? new Blob([points3DBuffer]) : undefined;
             archiveCreator.addColmap(camerasBlob, imagesBlob, { position, rotation, scale, points3DBlob });
         }
@@ -568,6 +601,27 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
                 }
             } catch (e: any) {
                 log.warn('Failed to re-extract source file:', entry.file_name, e.message);
+            }
+        }
+    }
+
+    // Re-add detail models (from loaded archive OR newly-attached blobs)
+    if (state.detailAssetIndex && state.detailAssetIndex.size > 0) {
+        for (const [key, { filename }] of state.detailAssetIndex) {
+            try {
+                let blob: Blob | null = null;
+                const cachedUrl = state.loadedDetailBlobs?.get(key);
+                if (cachedUrl) {
+                    blob = await fetch(cachedUrl).then(r => r.blob());
+                } else if (state.archiveLoader) {
+                    const data = await state.archiveLoader.extractFile(filename);
+                    if (data) blob = data.blob;
+                }
+                if (blob) {
+                    archiveCreator.addDetailModel(blob, filename.split('/').pop() || filename, { key });
+                }
+            } catch (e: any) {
+                log.warn('Failed to re-add detail model:', filename, e.message);
             }
         }
     }

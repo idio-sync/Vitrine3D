@@ -98,6 +98,8 @@ interface KioskState {
     meshBackgroundColor: string | null;
     splatBackgroundColor: string | null;
     archiveSourceUrl?: string | null;
+    detailAssetIndex: Map<string, { filename: string }>;
+    loadedDetailBlobs: Map<string, string>;
 }
 
 interface AppConfig {
@@ -237,7 +239,9 @@ const state: KioskState = {
     qualityTier: QUALITY_TIER.AUTO,
     qualityResolved: QUALITY_TIER.HD,
     meshBackgroundColor: null,
-    splatBackgroundColor: null
+    splatBackgroundColor: null,
+    detailAssetIndex: new Map(),
+    loadedDetailBlobs: new Map(),
 };
 
 /** Tracks in-flight asset load promises so concurrent callers await the same operation. */
@@ -398,6 +402,43 @@ async function _doInit(): Promise<void> {
             currentPopupAnnotationId = showAnnotationPopup(annotation, state.imageAssets);
         }
     };
+
+    // Detail inspect button click (event delegation on popup)
+    const detailPopupEl = document.getElementById('annotation-info-popup');
+    if (detailPopupEl) {
+        detailPopupEl.addEventListener('click', async (e) => {
+            const btn = (e.target as HTMLElement).closest('.detail-inspect-btn') as HTMLElement;
+            if (!btn) return;
+            const key = btn.dataset.detailKey;
+            if (!key) return;
+
+            const entry = state.detailAssetIndex.get(key);
+            if (!entry || !state.archiveLoader) return;
+
+            showLoading('Loading detail model…');
+            const result = await state.archiveLoader.extractFile(entry.filename);
+            hideLoading();
+            if (!result) return;
+
+            const { DetailViewer } = await import('./detail-viewer.js');
+            const anno = annotationSystem?.getAnnotations().find((a: any) => a.detail_asset_key === key);
+            if (!anno) return;
+
+            const viewer = new DetailViewer({
+                extractDetailAsset: async (k: string) => {
+                    const e2 = state.detailAssetIndex.get(k);
+                    if (!e2 || !state.archiveLoader) return null;
+                    const r = await state.archiveLoader.extractFile(e2.filename);
+                    return r ? r.blob : null;
+                },
+                parentRenderLoop: { pause: pauseRender, resume: resumeRender },
+                theme: state.theme || null,
+                isEditor: false,
+                imageAssets: state.imageAssets
+            });
+            await viewer.open(anno, result.blob);
+        });
+    }
 
     // Create measurement system
     measurementSystem = new MeasurementSystem(scene, camera, renderer, controls);
@@ -1623,6 +1664,10 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 );
                 const fpTooltip = document.getElementById('flight-tooltip');
                 if (fpTooltip) flightPathManager.setupTooltip(fpTooltip);
+                flightPathManager.setupFreeLook();
+                flightPathManager.onCameraModeChange((mode) => {
+                    controls.enabled = mode === 'orbit';
+                });
 
                 for (const { key, entry } of fpEntries) {
                     const fileData = await archiveLoader.extractFile(entry.file_name);
@@ -2587,6 +2632,7 @@ async function loadSingleFile(file: File): Promise<void> {
     if (ARCHIVE_EXTS.includes(ext)) {
         state.archiveSourceUrl = null;
         await handleArchiveFile(file);
+        getLayoutModule()?.onAssetLoaded?.();
     } else if (MESH_EXTS.includes(ext)) {
         await loadModelFromFile([file] as any, createModelDeps());
         getLayoutModule()?.onAssetLoaded?.();
@@ -2603,6 +2649,7 @@ async function loadSingleFile(file: File): Promise<void> {
     } else if (FLIGHT_EXTS.includes(ext)) {
         if (flightPathManager) await flightPathManager.importFromFile(file);
         else notify.warning('Flight path viewer not available.');
+        getLayoutModule()?.onAssetLoaded?.();
     } else {
         notify.warning(`Unsupported file type: .${ext || '(none)'}`);
     }
@@ -5371,13 +5418,32 @@ function hideAnnotationLine(): void {
 // ANIMATION LOOP
 // =============================================================================
 
+let _kioskAnimFrameId: number = 0;
+let _kioskRenderPaused = false;
+let _lastFrameTime = 0;
+
 function animate(): void {
-    requestAnimationFrame(animate);
+    if (_kioskRenderPaused) return;
+    _kioskAnimFrameId = requestAnimationFrame(animate);
 
     try {
+        // Delta time for playback animation
+        const now = performance.now();
+        const dt = _lastFrameTime ? Math.min((now - _lastFrameTime) / 1000, 0.1) : 0;
+        _lastFrameTime = now;
+
+        // Update flight path playback BEFORE camera controls
+        // so FPV/chase camera writes are not overwritten by OrbitControls
+        const flightControllingCamera = flightPathManager
+            && (flightPathManager.isPlaying || flightPathManager.isTransitioning)
+            && flightPathManager.cameraMode !== 'orbit';
+        if (flightPathManager && (flightPathManager.isPlaying || flightPathManager.isTransitioning)) {
+            flightPathManager.updatePlayback(dt);
+        }
+
         if (state.flyModeActive) {
             flyControls.update();
-        } else if (!annotationSystem?.isAnimating && !walkthroughAnimating) {
+        } else if (!flightControllingCamera && !annotationSystem?.isAnimating && !walkthroughAnimating) {
             controls.update();
         }
 
@@ -5429,4 +5495,18 @@ function animate(): void {
     } catch (e) {
         log.warn('Frame error:', e);
     }
+}
+
+function pauseRender(): void {
+    _kioskRenderPaused = true;
+    if (_kioskAnimFrameId) {
+        cancelAnimationFrame(_kioskAnimFrameId);
+        _kioskAnimFrameId = 0;
+    }
+}
+
+function resumeRender(): void {
+    if (!_kioskRenderPaused) return;
+    _kioskRenderPaused = false;
+    animate();
 }

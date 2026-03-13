@@ -287,10 +287,8 @@ export function activateTool(toolName: string): void {
     if (annotationMarkers) annotationMarkers.style.display = isLibrary ? 'none' : '';
     const annotationLines = document.getElementById('annotation-line-overlay');
     if (annotationLines) annotationLines.style.display = isLibrary ? 'none' : '';
-    const displayPill = document.getElementById('vp-display-pill');
-    if (displayPill) displayPill.style.display = isLibrary ? 'none' : '';
-    const overlayPill = document.getElementById('vp-overlay-pill');
-    if (overlayPill) overlayPill.style.display = isLibrary ? 'none' : '';
+    const displayRow = document.getElementById('vp-display-pill')?.parentElement;
+    if (displayRow) displayRow.style.display = isLibrary ? 'none' : '';
 
     log.debug(`Tool activated: ${toolName}`);
 }

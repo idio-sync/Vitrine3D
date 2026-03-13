@@ -8,15 +8,12 @@
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { MeshoptSimplifier, MeshoptDecoder, type Flags } from 'meshoptimizer';
+import { MeshoptSimplifier, type Flags } from 'meshoptimizer';
 import { Logger } from './utilities.js';
 import { DECIMATION_PRESETS, DEFAULT_DECIMATION_PRESET } from './constants.js';
 import type { DecimationOptions, DecimationResult } from '@/types.js';
 import type { DecimationPreset } from './constants.js';
-import { WebIO } from '@gltf-transform/core';
-import { EXTMeshoptCompression, KHRDracoMeshCompression } from '@gltf-transform/extensions';
-import { draco } from '@gltf-transform/functions';
-import draco3d from 'draco3dgltf';
+import type { DracoResponse, DracoError } from './workers/draco-compress.worker.js';
 
 const log = Logger.getLogger('mesh-decimator');
 
@@ -31,35 +28,38 @@ async function ensureWasm(): Promise<void> {
     log.info('meshoptimizer WASM ready');
 }
 
-// ===== Draco Compression (gltf-transform) =====
+// ===== Draco Compression (Web Worker) =====
 
-let _dracoIO: WebIO | null = null;
-
-async function fetchWasm(url: string): Promise<ArrayBuffer> {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
-    return res.arrayBuffer();
+/**
+ * Run Draco compression in a Web Worker to avoid blocking the main thread.
+ * Transfers the GLB buffer to the worker and receives compressed bytes back.
+ */
+function dracoCompressInWorker(glbBytes: Uint8Array): Promise<{ compressedBytes: Uint8Array; skipped: boolean }> {
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(
+            new URL('./workers/draco-compress.worker.ts', import.meta.url),
+            { type: 'module' },
+        );
+        worker.onmessage = (e: MessageEvent<DracoResponse | DracoError>) => {
+            worker.terminate();
+            if (e.data.success === true) {
+                const resp = e.data as DracoResponse;
+                resolve({ compressedBytes: resp.compressedBytes, skipped: resp.skipped });
+            } else {
+                reject(new Error((e.data as DracoError).error));
+            }
+        };
+        worker.onerror = (e) => {
+            worker.terminate();
+            reject(new Error(`Draco worker error: ${e.message}`));
+        };
+        worker.postMessage({ glbBytes }, { transfer: [glbBytes.buffer] });
+    });
 }
 
-async function ensureDracoIO(): Promise<WebIO> {
-    if (_dracoIO) return _dracoIO;
-    // Fetch WASM binaries explicitly and pass as wasmBinary to bypass
-    // Emscripten's Node.js-oriented file loading (which breaks in Vite).
-    const [encoderWasm, decoderWasm] = await Promise.all([
-        fetchWasm('/draco/draco_encoder.wasm'),
-        fetchWasm('/draco/draco_decoder_gltf.wasm'),
-    ]);
-    await MeshoptDecoder.ready;
-    const io = new WebIO()
-        .registerExtensions([KHRDracoMeshCompression, EXTMeshoptCompression])
-        .registerDependencies({
-            'draco3d.encoder': await draco3d.createEncoderModule({ wasmBinary: encoderWasm }),
-            'draco3d.decoder': await draco3d.createDecoderModule({ wasmBinary: decoderWasm }),
-            'meshopt.decoder': MeshoptDecoder,
-        });
-    _dracoIO = io;
-    log.info('gltf-transform Draco IO ready');
-    return io;
+/** Yield to the browser event loop so paint/input events can be processed. */
+function yieldToMain(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 // ===== Resolve Options =====
@@ -352,6 +352,9 @@ export async function decimateScene(
 
         onProgress?.(`Decimating mesh ${i + 1}/${clonedMeshes.length}`, (i / clonedMeshes.length) * 80);
 
+        // Yield between meshes so the browser can process paint/input events
+        if (i > 0) await yieldToMain();
+
         const newGeo = await decimateGeometry(geo, options);
         const newFaces = newGeo.index ? newGeo.index.count / 3 : newGeo.attributes.position.count / 3;
         totalNewFaces += newFaces;
@@ -385,28 +388,19 @@ export async function exportAsGLB(group: THREE.Group, dracoCompress = true): Pro
         return new Blob([buffer], { type: 'model/gltf-binary' });
     }
 
-    const io = await ensureDracoIO();
-    const doc = await io.readBinary(new Uint8Array(buffer));
-    await doc.transform(draco({ method: 'edgebreaker' }));
-    const compressed = await io.writeBinary(doc);
+    const glbBytes = new Uint8Array(buffer);
+    const { compressedBytes, skipped } = await dracoCompressInWorker(glbBytes);
 
-    log.info(`Draco compression: ${(buffer.byteLength / 1024).toFixed(0)} KB → ${(compressed.byteLength / 1024).toFixed(0)} KB`);
+    if (!skipped) {
+        log.info(`Draco compression: ${(buffer.byteLength / 1024).toFixed(0)} KB → ${(compressedBytes.byteLength / 1024).toFixed(0)} KB`);
+    }
 
-    return new Blob([compressed], { type: 'model/gltf-binary' });
+    return new Blob([compressedBytes.buffer as ArrayBuffer], { type: 'model/gltf-binary' });
 }
 
 // ===== HD Mesh Draco Compression =====
 
-/**
- * Cheaply check if a GLB blob is already Draco-compressed by reading only
- * the JSON chunk and checking extensionsUsed. No gltf-transform involved.
- *
- * GLB binary layout:
- *   bytes  0-11: file header (magic, version, total-length)
- *   bytes 12-15: JSON chunk length
- *   bytes 16-19: JSON chunk type (0x4E4F534A = "JSON")
- *   bytes 20+  : JSON chunk data
- */
+/** Read a Blob into an ArrayBuffer (works in jsdom and all browsers). */
 function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -416,36 +410,23 @@ function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
     });
 }
 
-async function isAlreadyCompressed(blob: Blob): Promise<boolean> {
-    // Read only the 20-byte file+chunk header to get JSON chunk length, then
-    // slice only the JSON chunk data — avoids buffering large HD mesh blobs.
-    const headerBuf = await blobToArrayBuffer(blob.slice(0, 20));
-    const view = new DataView(headerBuf);
-    const jsonLength = view.getUint32(12, true);
-    const jsonBuf = await blobToArrayBuffer(blob.slice(20, 20 + jsonLength));
-    const json = JSON.parse(new TextDecoder().decode(new Uint8Array(jsonBuf)).replace(/\0+$/, ''));
-    const used: string[] = json.extensionsUsed ?? [];
-    return used.includes('KHR_draco_mesh_compression') || used.includes('EXT_meshopt_compression');
-}
-
 /**
- * Draco-compress a GLB blob using gltf-transform.
+ * Draco-compress a GLB blob in a Web Worker.
  * Pure blob-to-blob pipeline — no Three.js round-trip.
  * Preserves all textures, PBR materials, animations, and morph targets exactly.
  * Returns the original blob unchanged if already compressed (Draco or meshopt).
  */
 export async function dracoCompressGLB(blob: Blob): Promise<Blob> {
-    if (await isAlreadyCompressed(blob)) {
+    const glbBytes = new Uint8Array(await blobToArrayBuffer(blob));
+    const { compressedBytes, skipped } = await dracoCompressInWorker(glbBytes);
+
+    if (skipped) {
         log.info('HD mesh already compressed (Draco or meshopt), skipping');
-        return blob;
+    } else {
+        log.info(`HD Draco: ${(glbBytes.byteLength / 1024).toFixed(0)} KB → ${(compressedBytes.byteLength / 1024).toFixed(0)} KB`);
     }
-    const io = await ensureDracoIO();
-    const buffer = new Uint8Array(await blobToArrayBuffer(blob));
-    const doc = await io.readBinary(buffer);
-    await doc.transform(draco({ method: 'edgebreaker' }));
-    const compressed = await io.writeBinary(doc);
-    log.info(`HD Draco: ${(buffer.byteLength / 1024).toFixed(0)} KB → ${(compressed.byteLength / 1024).toFixed(0)} KB`);
-    return new Blob([compressed], { type: 'model/gltf-binary' });
+
+    return new Blob([compressedBytes.buffer as ArrayBuffer], { type: 'model/gltf-binary' });
 }
 
 // ===== High-Level Pipeline =====

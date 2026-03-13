@@ -5689,3 +5689,162 @@ input[type="range"]::-webkit-slider-thumb:hover {
     color: var(--text-secondary, #aaa);
     font-size: 10px;
 }
+
+/* ========================================================================
+   Detail Viewer Overlay
+   ======================================================================== */
+#detail-viewer-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 10000;
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+#detail-viewer-overlay.hidden { display: none !important; }
+#detail-viewer-overlay.detail-viewer-visible { opacity: 1; }
+#detail-viewer-overlay.detail-viewer-entering { display: flex; }
+
+.detail-viewer-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    background: rgba(0,0,0,0.4);
+    z-index: 1;
+    flex-shrink: 0;
+}
+.detail-back-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    min-width: 44px;
+    min-height: 44px;
+}
+.detail-back-btn:hover { background: rgba(255,255,255,0.2); }
+.detail-viewer-title {
+    color: #fff;
+    font-size: 16px;
+    flex: 1;
+}
+.detail-viewer-scale {
+    color: rgba(255,255,255,0.6);
+    font-size: 13px;
+    font-style: italic;
+}
+
+#detail-viewer-canvas {
+    flex: 1;
+    width: 100%;
+    display: block;
+}
+
+/* Detail inspect button in annotation popup */
+.annotation-detail-inspect {
+    display: none;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+.detail-thumbnail {
+    width: 100%;
+    max-height: 120px;
+    object-fit: cover;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+.detail-inspect-btn {
+    width: 100%;
+    padding: 10px 16px;
+    background: #4a90d9;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+.detail-inspect-btn:hover { background: #5aa0e9; }
+
+/* Marker badge for annotations with detail models */
+.annotation-marker.has-detail::after {
+    content: '\1F50D';
+    position: absolute;
+    bottom: -4px;
+    right: -6px;
+    font-size: 10px;
+    line-height: 1;
+}
+
+/* Detail viewer error display */
+.detail-viewer-error {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.9);
+    color: #ff6b6b;
+    padding: 24px 32px;
+    border-radius: 8px;
+    text-align: center;
+}
+.detail-viewer-error button {
+    margin-top: 12px;
+    padding: 8px 20px;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* Editor: detail model attach section */
+.detail-model-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+.detail-filename {
+    font-size: 12px;
+    color: rgba(255,255,255,0.6);
+    margin-left: 8px;
+}
+
+/* Editor: view settings panel */
+#detail-view-settings-panel {
+    position: absolute;
+    right: 16px;
+    top: 60px;
+    width: 240px;
+    background: rgba(0,0,0,0.85);
+    border-radius: 8px;
+    padding: 16px;
+    color: #fff;
+    z-index: 2;
+}
+#detail-view-settings-panel.hidden { display: none; }
+#detail-view-settings-panel h4 { margin: 0 0 12px; }
+#detail-view-settings-panel label {
+    display: block;
+    font-size: 12px;
+    margin-top: 8px;
+    color: rgba(255,255,255,0.7);
+}
+#detail-view-settings-panel select,
+#detail-view-settings-panel input[type="text"],
+#detail-view-settings-panel input[type="color"] {
+    width: 100%;
+    margin-top: 4px;
+}
+.toggle-row { margin-top: 6px; }
+.toggle-row label {
+    display: inline;
+    font-size: 13px;
+    color: #fff;
+}

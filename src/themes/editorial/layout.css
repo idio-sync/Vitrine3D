@@ -2489,11 +2489,11 @@ body.kiosk-mode.kiosk-editorial .editorial-flight-wrapper {
 body.kiosk-mode.kiosk-editorial .editorial-flight-dropdown {
     display: none;
     position: absolute;
-    bottom: calc(100% + 8px);
+    bottom: calc(100% + 6px);
     right: -12px;
-    background: rgba(var(--kiosk-surface-rgb), 0.92);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    background: rgba(var(--kiosk-surface-rgb), 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border: 1px solid var(--kiosk-border-subtle);
     border-radius: 4px;
     padding: 0;
@@ -2505,7 +2505,12 @@ body.kiosk-mode.kiosk-editorial .editorial-flight-dropdown {
 
 body.kiosk-mode.kiosk-editorial .editorial-flight-dropdown.open {
     display: flex;
-    animation: editorialDropdownIn 0.15s ease-out;
+    animation: editorialFlightDropdownIn 0.15s ease-out;
+}
+
+@keyframes editorialFlightDropdownIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 /* Stats grid — two-column key/value layout */
@@ -2771,6 +2776,32 @@ body.kiosk-mode.kiosk-editorial .editorial-flight-action-sep {
 body.kiosk-mode.kiosk-editorial .editorial-flight-btn.active {
     color: var(--kiosk-accent);
     opacity: 1;
+}
+
+/* --- Flight Log Info Section (inside info sidebar) --- */
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-info-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 20px;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-info-label {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.58rem;
+    font-weight: 500;
+    color: var(--kiosk-text-muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+body.kiosk-mode.kiosk-editorial .editorial-flight-info-value {
+    font-family: var(--kiosk-font-body);
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--kiosk-text-primary);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
 }
 
 /* =================================================================
@@ -4076,4 +4107,35 @@ body.kiosk-mode.kiosk-editorial .editorial-wt-stop-title {
     letter-spacing: 0.04em;
     margin-top: 6px;
     transition: opacity 0.4s ease;
+}
+
+/* Detail viewer — Editorial sidebar layout */
+body.kiosk-mode[data-theme="editorial"] #detail-viewer-overlay {
+    display: grid;
+    grid-template-columns: 38.2% 1fr;
+    grid-template-rows: auto 1fr;
+}
+
+body.kiosk-mode[data-theme="editorial"] #detail-viewer-overlay.detail-viewer-entering {
+    display: grid;
+}
+
+body.kiosk-mode[data-theme="editorial"] .detail-viewer-header {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 20px;
+    background: var(--editorial-sidebar-bg, #1a1a2e);
+}
+
+body.kiosk-mode[data-theme="editorial"] #detail-viewer-canvas {
+    grid-column: 2;
+    grid-row: 1 / -1;
+}
+
+body.kiosk-mode[data-theme="editorial"] #detail-annotation-markers {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    pointer-events: auto;
 }

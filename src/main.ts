@@ -4,6 +4,8 @@ import { SplatMesh, createSparkRenderer } from './modules/spark-compat.js';
 import { ArchiveLoader } from './modules/archive-loader.js';
 // hasAnyProxy moved to archive-pipeline.ts (Phase 2.2)
 import { AnnotationSystem } from './modules/annotation-system.js';
+import { DetailViewer } from './modules/detail-viewer.js';
+import type { DetailViewerDeps } from './modules/detail-viewer.js';
 import { CrossSectionTool } from './modules/cross-section.js';
 import { MeasurementSystem } from './modules/measurement-system.js';
 import { FlightPathManager } from './modules/flight-path.js';
@@ -333,6 +335,9 @@ const state: AppState = {
     },
     environmentBlob: null,
     renderingPreset: null,
+    // Detail model inspection
+    detailAssetIndex: new Map(),
+    loadedDetailBlobs: new Map(),
 };
 
 // Scene manager instance (handles scene, camera, renderer, controls, lighting)
@@ -1740,6 +1745,239 @@ async function init() {
     annotationSystem.onPlacementModeChanged = onPlacementModeChanged;
     log.info(' Annotation system initialized:', !!annotationSystem);
 
+    // Detail inspect button click (event delegation on popup)
+    const detailPopup = document.getElementById('annotation-info-popup');
+    if (detailPopup) {
+        detailPopup.addEventListener('click', async (e) => {
+            const btn = (e.target as HTMLElement).closest('.detail-inspect-btn') as HTMLElement;
+            if (!btn) return;
+            const key = btn.dataset.detailKey;
+            if (!key) return;
+
+            // Get or extract the blob
+            let blob: Blob | null = null;
+            const cached = state.loadedDetailBlobs.get(key);
+            if (cached) {
+                blob = await fetch(cached).then(r => r.blob());
+            } else {
+                const entry = state.detailAssetIndex.get(key);
+                if (entry && state.archiveLoader) {
+                    const result = await state.archiveLoader.extractFile(entry.filename);
+                    if (result) {
+                        blob = result.blob;
+                        state.loadedDetailBlobs.set(key, result.url);
+                    }
+                }
+            }
+
+            if (!blob) {
+                notify.error('Could not load detail model');
+                return;
+            }
+
+            const anno = annotationSystem?.getAnnotations().find((a: any) => a.detail_asset_key === key);
+            if (!anno) return;
+
+            const viewer = new DetailViewer(createDetailViewerDeps());
+            await viewer.open(anno, blob);
+        });
+    }
+
+    // Detail model import controls
+    const detailFileInput = document.getElementById('detail-model-file') as HTMLInputElement;
+    const attachBtn = document.getElementById('btn-attach-detail');
+    const filenameSpan = document.getElementById('detail-model-filename');
+    const removeBtn = document.getElementById('btn-remove-detail');
+    const customizeDiv = document.getElementById('detail-model-customize');
+
+    if (attachBtn && detailFileInput) {
+        attachBtn.addEventListener('click', () => detailFileInput.click());
+        detailFileInput.addEventListener('change', (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+
+            const archiveCreator = sceneRefs.archiveCreator;
+            if (archiveCreator) {
+                const key = archiveCreator.addDetailModel(file, file.name);
+                if (annotationSystem?.selectedAnnotation) {
+                    annotationSystem.selectedAnnotation.detail_asset_key = key;
+                } else {
+                    // During annotation creation, selectedAnnotation is null —
+                    // store key to apply after confirmAnnotation()
+                    _pendingDetailKey = key;
+                }
+                // Persist blob URL so it survives archiveCreator.reset() during export
+                const ext = file.name.split('.').pop()?.toLowerCase() || 'glb';
+                state.detailAssetIndex.set(key, { filename: `assets/${key}.${ext}` });
+                state.loadedDetailBlobs.set(key, URL.createObjectURL(file));
+                if (filenameSpan) filenameSpan.textContent = file.name;
+                if (removeBtn) removeBtn.style.display = '';
+                if (customizeDiv) customizeDiv.style.display = '';
+            }
+        });
+    }
+
+    if (removeBtn) {
+        removeBtn.addEventListener('click', () => {
+            const anno = annotationSystem?.selectedAnnotation;
+            const keyToRemove = anno?.detail_asset_key || _pendingDetailKey;
+            if (keyToRemove) {
+                const oldUrl = state.loadedDetailBlobs.get(keyToRemove);
+                if (oldUrl) URL.revokeObjectURL(oldUrl);
+                state.loadedDetailBlobs.delete(keyToRemove);
+                state.detailAssetIndex.delete(keyToRemove);
+                sceneRefs.archiveCreator?.removeDetailModel(keyToRemove);
+                if (anno) {
+                    anno.detail_asset_key = undefined;
+                    anno.detail_button_label = undefined;
+                    anno.detail_thumbnail = undefined;
+                    anno.detail_annotations = undefined;
+                    anno.detail_view_settings = undefined;
+                }
+                _pendingDetailKey = null;
+            }
+            if (filenameSpan) filenameSpan.textContent = '';
+            if (removeBtn) removeBtn.style.display = 'none';
+            if (customizeDiv) customizeDiv.style.display = 'none';
+        });
+    }
+
+    const labelInput = document.getElementById('detail-button-label') as HTMLInputElement;
+    if (labelInput) {
+        labelInput.addEventListener('change', () => {
+            const anno = annotationSystem?.selectedAnnotation;
+            if (anno) {
+                anno.detail_button_label = labelInput.value || undefined;
+            }
+        });
+    }
+
+    // Preview detail model in the detail viewer (creation popup)
+    const previewBtn = document.getElementById('btn-preview-detail');
+    if (previewBtn) {
+        previewBtn.addEventListener('click', async () => {
+            const anno = annotationSystem?.selectedAnnotation;
+            const key = anno?.detail_asset_key || _pendingDetailKey;
+            if (!key) return;
+
+            let blob: Blob | null = null;
+            const cachedUrl = state.loadedDetailBlobs.get(key);
+            if (cachedUrl) {
+                blob = await fetch(cachedUrl).then(r => r.blob());
+            } else {
+                const entry = state.detailAssetIndex.get(key);
+                if (entry && state.archiveLoader) {
+                    const result = await state.archiveLoader.extractFile(entry.filename);
+                    if (result) {
+                        blob = result.blob;
+                        state.loadedDetailBlobs.set(key, result.url);
+                    }
+                }
+            }
+
+            if (!blob) {
+                notify.error('Could not load detail model');
+                return;
+            }
+
+            const viewer = new DetailViewer(createDetailViewerDeps());
+            await viewer.open(anno, blob);
+        });
+    }
+
+    // Sidebar detail model controls (for editing existing annotations)
+    const sidebarDetailFile = document.getElementById('sidebar-detail-file') as HTMLInputElement;
+    const sidebarAttachBtn = document.getElementById('btn-sidebar-attach-detail');
+    const sidebarFilenameSpan = document.getElementById('sidebar-detail-filename');
+    const sidebarRemoveBtn = document.getElementById('btn-sidebar-remove-detail');
+    const sidebarCustomizeDiv = document.getElementById('sidebar-detail-customize');
+    const sidebarLabelInput = document.getElementById('sidebar-detail-label') as HTMLInputElement;
+    const sidebarPreviewBtn = document.getElementById('btn-sidebar-preview-detail');
+
+    if (sidebarAttachBtn && sidebarDetailFile) {
+        sidebarAttachBtn.addEventListener('click', () => sidebarDetailFile.click());
+        sidebarDetailFile.addEventListener('change', (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+            const archiveCreator = sceneRefs.archiveCreator;
+            if (archiveCreator && annotationSystem?.selectedAnnotation) {
+                const anno = annotationSystem.selectedAnnotation;
+                // Remove old detail if replacing
+                if (anno.detail_asset_key) {
+                    const oldUrl = state.loadedDetailBlobs.get(anno.detail_asset_key);
+                    if (oldUrl) URL.revokeObjectURL(oldUrl);
+                    state.loadedDetailBlobs.delete(anno.detail_asset_key);
+                    state.detailAssetIndex.delete(anno.detail_asset_key);
+                    archiveCreator.removeDetailModel(anno.detail_asset_key);
+                }
+                const key = archiveCreator.addDetailModel(file, file.name);
+                anno.detail_asset_key = key;
+                const ext = file.name.split('.').pop()?.toLowerCase() || 'glb';
+                state.detailAssetIndex.set(key, { filename: `assets/${key}.${ext}` });
+                state.loadedDetailBlobs.set(key, URL.createObjectURL(file));
+                if (sidebarFilenameSpan) sidebarFilenameSpan.textContent = file.name;
+                if (sidebarRemoveBtn) sidebarRemoveBtn.style.display = '';
+                if (sidebarCustomizeDiv) sidebarCustomizeDiv.style.display = '';
+            }
+        });
+    }
+
+    if (sidebarRemoveBtn) {
+        sidebarRemoveBtn.addEventListener('click', () => {
+            const anno = annotationSystem?.selectedAnnotation;
+            if (anno?.detail_asset_key) {
+                const oldUrl = state.loadedDetailBlobs.get(anno.detail_asset_key);
+                if (oldUrl) URL.revokeObjectURL(oldUrl);
+                state.loadedDetailBlobs.delete(anno.detail_asset_key);
+                state.detailAssetIndex.delete(anno.detail_asset_key);
+                sceneRefs.archiveCreator?.removeDetailModel(anno.detail_asset_key);
+                anno.detail_asset_key = undefined;
+                anno.detail_button_label = undefined;
+                anno.detail_thumbnail = undefined;
+                anno.detail_annotations = undefined;
+                anno.detail_view_settings = undefined;
+            }
+            if (sidebarFilenameSpan) sidebarFilenameSpan.textContent = '';
+            if (sidebarRemoveBtn) sidebarRemoveBtn.style.display = 'none';
+            if (sidebarCustomizeDiv) sidebarCustomizeDiv.style.display = 'none';
+        });
+    }
+
+    if (sidebarLabelInput) {
+        sidebarLabelInput.addEventListener('change', () => {
+            const anno = annotationSystem?.selectedAnnotation;
+            if (anno) anno.detail_button_label = sidebarLabelInput.value || undefined;
+        });
+    }
+
+    if (sidebarPreviewBtn) {
+        sidebarPreviewBtn.addEventListener('click', async () => {
+            const anno = annotationSystem?.selectedAnnotation;
+            const key = anno?.detail_asset_key;
+            if (!key) return;
+            let blob: Blob | null = null;
+            const cachedUrl = state.loadedDetailBlobs.get(key);
+            if (cachedUrl) {
+                blob = await fetch(cachedUrl).then(r => r.blob());
+            } else {
+                const entry = state.detailAssetIndex.get(key);
+                if (entry && state.archiveLoader) {
+                    const result = await state.archiveLoader.extractFile(entry.filename);
+                    if (result) {
+                        blob = result.blob;
+                        state.loadedDetailBlobs.set(key, result.url);
+                    }
+                }
+            }
+            if (!blob) {
+                notify.error('Could not load detail model');
+                return;
+            }
+            const viewer = new DetailViewer(createDetailViewerDeps());
+            await viewer.open(anno, blob);
+        });
+    }
+
     // Initialize walkthrough controller
     initWalkthroughController({
         camera,
@@ -2771,6 +3009,26 @@ function onAnnotationPlaced(position: any, cameraState: any) {
 // Called when an annotation is selected
 function onAnnotationSelected(annotation: any) {
     onAnnotationSelectedHandler(annotation, createAnnotationControllerDeps());
+
+    // Reflect existing detail model in both sidebar and creation popup UI
+    const detailUIs = [
+        { filename: document.getElementById('detail-model-filename'), remove: document.getElementById('btn-remove-detail'), customize: document.getElementById('detail-model-customize'), label: document.getElementById('detail-button-label') as HTMLInputElement | null },
+        { filename: document.getElementById('sidebar-detail-filename'), remove: document.getElementById('btn-sidebar-remove-detail'), customize: document.getElementById('sidebar-detail-customize'), label: document.getElementById('sidebar-detail-label') as HTMLInputElement | null },
+    ];
+    for (const ui of detailUIs) {
+        if (annotation.detail_asset_key) {
+            const entry = state.detailAssetIndex.get(annotation.detail_asset_key);
+            if (ui.filename) ui.filename.textContent = entry?.filename?.split('/').pop() ?? annotation.detail_asset_key;
+            if (ui.remove) (ui.remove as HTMLElement).style.display = '';
+            if (ui.customize) (ui.customize as HTMLElement).style.display = '';
+            if (ui.label) ui.label.value = annotation.detail_button_label || '';
+        } else {
+            if (ui.filename) ui.filename.textContent = '';
+            if (ui.remove) (ui.remove as HTMLElement).style.display = 'none';
+            if (ui.customize) (ui.customize as HTMLElement).style.display = 'none';
+            if (ui.label) ui.label.value = '';
+        }
+    }
 }
 
 // Called when placement mode changes
@@ -2786,11 +3044,24 @@ function toggleAnnotationMode() {
 // Save the pending annotation
 function saveAnnotation() {
     saveAnnotationHandler(createAnnotationControllerDeps());
+
+    // Apply pending detail model key to the newly-created annotation
+    if (_pendingDetailKey) {
+        const annotations = annotationSystem?.toJSON() || [];
+        const newest = annotations[annotations.length - 1];
+        if (newest) {
+            newest.detail_asset_key = _pendingDetailKey;
+            const labelInput = document.getElementById('detail-button-label') as HTMLInputElement | null;
+            if (labelInput?.value) newest.detail_button_label = labelInput.value;
+        }
+        _pendingDetailKey = null;
+    }
 }
 
 // Cancel annotation placement
 function cancelAnnotation() {
     cancelAnnotationHandler(createAnnotationControllerDeps());
+    _pendingDetailKey = null;
 }
 
 // Update camera for selected annotation
@@ -3643,8 +3914,13 @@ const _prevCamQuat = new THREE.Quaternion();
 let _markersDirty = true; // Start dirty so first frame always updates
 const _clock = new THREE.Clock();
 
+let _animFrameId: number = 0;
+let _renderPaused = false;
+let _pendingDetailKey: string | null = null;
+
 function animate() {
-    requestAnimationFrame(animate);
+    if (_renderPaused) return;
+    _animFrameId = requestAnimationFrame(animate);
 
     try {
         // Update flight path playback BEFORE camera controls and render
@@ -3741,6 +4017,48 @@ function animate() {
             log.error(' Suppressing further animation errors...');
         }
     }
+}
+
+function pauseRenderLoop(): void {
+    _renderPaused = true;
+    if (_animFrameId) {
+        cancelAnimationFrame(_animFrameId);
+        _animFrameId = 0;
+    }
+}
+
+function resumeRenderLoop(): void {
+    if (!_renderPaused) return;
+    _renderPaused = false;
+    animate();
+}
+
+function createDetailViewerDeps(): DetailViewerDeps {
+    return {
+        extractDetailAsset: async (key: string) => {
+            if (!state.archiveLoader) return null;
+            const entry = state.detailAssetIndex.get(key);
+            if (!entry) return null;
+            const result = await state.archiveLoader.extractFile(entry.filename);
+            return result ? result.blob : null;
+        },
+        parentRenderLoop: { pause: pauseRenderLoop, resume: resumeRenderLoop },
+        theme: null,
+        isEditor: true,
+        imageAssets: state.imageAssets,
+        onDetailAnnotationsChanged: (key: string, annotations: any[]) => {
+            const parentAnno = annotationSystem?.getAnnotations().find((a: any) => a.detail_asset_key === key);
+            if (parentAnno) {
+                parentAnno.detail_annotations = annotations;
+            }
+        },
+        storeThumbnail: (key: string, blob: Blob) => {
+            const archiveCreator = sceneRefs.archiveCreator;
+            if (archiveCreator) {
+                archiveCreator.addImage(blob, `images/${key}_thumb.png`);
+            }
+        }
+    };
 }
 
 // Initialize when DOM is ready

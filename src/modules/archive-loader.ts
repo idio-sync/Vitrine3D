@@ -22,10 +22,11 @@ const SUPPORTED_FORMATS: Record<string, string[]> = {
     drawing: ['.dxf'],
     pointcloud: ['.e57'],
     cad: ['.step', '.stp', '.iges', '.igs'],
+    detail: ['.glb'],
     thumbnail: ['.png', '.jpg', '.jpeg', '.webp']
 };
 
-type FormatType = 'splat' | 'mesh' | 'drawing' | 'pointcloud' | 'cad' | 'thumbnail';
+type FormatType = 'splat' | 'mesh' | 'drawing' | 'pointcloud' | 'cad' | 'detail' | 'thumbnail';
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -849,6 +850,14 @@ export class ArchiveLoader {
         this._blobUrlMap.set(safeFilename, url);
 
         return { blob, url, name: safeFilename };
+    }
+
+    async extractDetailAsset(key: string, manifest: any): Promise<Blob | null> {
+        const entry = manifest?.data_entries?.[key];
+        if (!entry || !entry.file_name) return null;
+
+        const result = await this.extractFile(entry.file_name);
+        return result ? result.blob : null;
     }
 
     /**

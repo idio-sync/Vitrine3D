@@ -1,7 +1,7 @@
 /**
  * Flight Path Manager — Import, render, and interact with drone flight paths.
  *
- * Renders flight paths as THREE.Line + THREE.InstancedMesh markers.
+ * Renders flight paths as THREE.Mesh (TubeGeometry) + THREE.InstancedMesh markers.
  * Supports hover telemetry tooltips via raycasting.
  * Color modes: speed, altitude, climb rate.
  * Takeoff/landing markers, direction indicators, playback animation.
@@ -112,7 +112,7 @@ function computeGpsDistanceM(points: FlightPoint[]): number {
 }
 
 interface PathMeshes {
-    line: THREE.Line;
+    line: THREE.InstancedMesh;
     markers: THREE.InstancedMesh;
     renderPoints: FlightPoint[];
     endpointGroup: THREE.Group;
@@ -316,7 +316,7 @@ export class FlightPathManager {
     }
 
     /** Build colored line + instanced markers based on current color mode. */
-    private buildColoredPath(renderPoints: FlightPoint[]): { line: THREE.Line; markers: THREE.InstancedMesh } {
+    private buildColoredPath(renderPoints: FlightPoint[]): { line: THREE.InstancedMesh; markers: THREE.InstancedMesh } {
         // Compute value range for the active color mode
         const values = renderPoints.map((p, i) => this.getColorValue(p, renderPoints, i));
         let minVal = Infinity, maxVal = -Infinity;
@@ -328,43 +328,53 @@ export class FlightPathManager {
 
         const ramp = this.getColorRamp();
 
-        // Line with per-vertex colors
-        const positions = new Float32Array(renderPoints.length * 3);
-        const colors = new Float32Array(renderPoints.length * 3);
-        for (let i = 0; i < renderPoints.length; i++) {
-            positions[i * 3] = renderPoints[i].x;
-            positions[i * 3 + 1] = renderPoints[i].y;
-            positions[i * 3 + 2] = renderPoints[i].z;
-
-            const t = (values[i] - minVal) / range;
-            const [r, g, b] = rampColor(ramp, t);
-            colors[i * 3] = r;
-            colors[i * 3 + 1] = g;
-            colors[i * 3 + 2] = b;
-        }
-        const lineGeom = new THREE.BufferGeometry();
-        lineGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        lineGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        const lineMat = new THREE.LineBasicMaterial({
-            vertexColors: true,
+        // InstancedMesh of cylinders connecting consecutive points — same object type
+        // as markers so splat depth occlusion works identically.
+        const segCount = renderPoints.length - 1;
+        const cylGeom = new THREE.CylinderGeometry(
+            FLIGHT_LOG.MARKER_RADIUS * 0.5, FLIGHT_LOG.MARKER_RADIUS * 0.5, 1, 6, 1
+        );
+        const segMat = new THREE.MeshBasicMaterial({
             depthTest: true,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.85,
+            depthWrite: true,
         });
-        const line = new THREE.Line(lineGeom, lineMat);
-        line.renderOrder = 998;
+        const line = new THREE.InstancedMesh(cylGeom, segMat, Math.max(segCount, 1));
+        const segDummy = new THREE.Object3D();
+        const segColor = new THREE.Color();
+        const midpoint = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        const up = new THREE.Vector3(0, 1, 0);
+        const quat = new THREE.Quaternion();
+        for (let i = 0; i < segCount; i++) {
+            const a = renderPoints[i];
+            const b = renderPoints[i + 1];
+            midpoint.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+            direction.set(b.x - a.x, b.y - a.y, b.z - a.z);
+            const len = direction.length();
+            direction.normalize();
+            // Quaternion to rotate cylinder (Y-axis aligned) to match segment direction
+            quat.setFromUnitVectors(up, direction);
+            segDummy.position.copy(midpoint);
+            segDummy.quaternion.copy(quat);
+            segDummy.scale.set(1, len, 1);
+            segDummy.updateMatrix();
+            line.setMatrixAt(i, segDummy.matrix);
+            // Color from midpoint of segment
+            const t = ((values[i] + values[i + 1]) / 2 - minVal) / range;
+            const [r, g, b2] = rampColor(ramp, t);
+            segColor.setRGB(r, g, b2);
+            line.setColorAt(i, segColor);
+        }
+        line.instanceMatrix.needsUpdate = true;
+        if (line.instanceColor) line.instanceColor.needsUpdate = true;
 
         // Instanced markers with per-instance colors
         const sphereGeom = new THREE.SphereGeometry(FLIGHT_LOG.MARKER_RADIUS, 8, 6);
         const markerMat = new THREE.MeshBasicMaterial({
             depthTest: true,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.7,
+            depthWrite: true,
         });
         const markers = new THREE.InstancedMesh(sphereGeom, markerMat, renderPoints.length);
-        markers.renderOrder = 999;
         const dummy = new THREE.Object3D();
         const color = new THREE.Color();
         for (let i = 0; i < renderPoints.length; i++) {
@@ -421,20 +431,18 @@ export class FlightPathManager {
         const geom = new THREE.SphereGeometry(radius, 12, 8);
 
         // Takeoff — green
-        const takeoffMat = new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.9, depthWrite: false });
+        const takeoffMat = new THREE.MeshBasicMaterial({ color: 0x22c55e, depthWrite: true });
         const takeoff = new THREE.Mesh(geom, takeoffMat);
         const p0 = renderPoints[0];
         takeoff.position.set(p0.x, p0.y, p0.z);
-        takeoff.renderOrder = 1000;
         takeoff.name = 'takeoff';
         group.add(takeoff);
 
         // Landing — red
-        const landingMat = new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.9, depthWrite: false });
+        const landingMat = new THREE.MeshBasicMaterial({ color: 0xef4444, depthWrite: true });
         const landing = new THREE.Mesh(geom, landingMat);
         const pN = renderPoints[renderPoints.length - 1];
         landing.position.set(pN.x, pN.y, pN.z);
-        landing.renderOrder = 1000;
         landing.name = 'landing';
         group.add(landing);
 
@@ -454,10 +462,8 @@ export class FlightPathManager {
 
         const coneMat = new THREE.MeshBasicMaterial({
             color: 0xffffff,
-            transparent: true,
-            opacity: 0.6,
             depthTest: true,
-            depthWrite: false,
+            depthWrite: true,
         });
 
         for (let i = interval; i < renderPoints.length - 1; i += interval) {
@@ -1373,9 +1379,12 @@ export class FlightPathManager {
     /** Update the line opacity for all flight paths. */
     setLineOpacity(opacity: number): void {
         for (const [, entry] of this.meshes) {
-            const mat = entry.line.material as THREE.LineBasicMaterial;
+            const mat = entry.line.material as THREE.Material;
             mat.opacity = opacity;
             mat.transparent = opacity < 1;
+            // Keep depthWrite enabled even when transparent so splats can
+            // occlude the line via their painter's-algorithm compositing.
+            mat.depthWrite = true;
             mat.needsUpdate = true;
         }
     }

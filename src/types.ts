@@ -119,6 +119,8 @@ export interface AppState {
         originalFaces: number;
         resultFaces: number;
     } | null;
+    // Internal: original mesh filename preserved across GLB conversions (set by mesh-loader)
+    _meshFileName?: string;
     // Detected asset format extensions (set during file load)
     meshFormat: string | null;
     pointcloudFormat: string | null;
@@ -131,6 +133,9 @@ export interface AppState {
     // Environment / rendering preset state
     environmentBlob: Blob | null;          // raw HDR file for archive bundling
     renderingPreset: string | null;        // current preset name or 'custom'
+    // Detail model inspection (runtime-only, not serialized)
+    detailAssetIndex: Map<string, { filename: string }>;
+    loadedDetailBlobs: Map<string, string>;
 }
 
 // ===== Scene References =====
@@ -246,6 +251,34 @@ export interface Annotation {
     category?: 'surface_defect' | 'gap' | 'missing_data' | 'scan_artifact' | 'dimensional_variance' | 'other';
     status?: 'pass' | 'fail' | 'review';
     qa_notes?: string;
+    // Detail model inspection link
+    detail_asset_key?: string;
+    detail_button_label?: string;
+    detail_thumbnail?: string;
+    detail_annotations?: Annotation[];
+    detail_view_settings?: DetailViewSettings;
+}
+
+/** View settings for the detail model inspection overlay. */
+export interface DetailViewSettings {
+    min_distance?: number;
+    max_distance?: number;
+    min_polar_angle?: number;
+    max_polar_angle?: number;
+    enable_pan?: boolean;
+    auto_rotate?: boolean;
+    auto_rotate_speed?: number;
+    damping_factor?: number;
+    zoom_to_cursor?: boolean;
+    initial_camera_position?: { x: number; y: number; z: number };
+    initial_camera_target?: { x: number; y: number; z: number };
+    background_color?: string;
+    environment_preset?: 'studio' | 'outdoor' | 'neutral' | 'warm';
+    ambient_intensity?: number;
+    show_grid?: boolean;
+    description?: string;
+    scale_reference?: string;
+    annotations_visible_on_open?: boolean;
 }
 
 // ===== Walkthrough =====

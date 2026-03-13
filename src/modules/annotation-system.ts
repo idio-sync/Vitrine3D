@@ -81,7 +81,10 @@ export class AnnotationSystem {
     _onDragMove: (event: MouseEvent) => void;
     _onDragEnd: (event: MouseEvent) => void;
 
-    constructor(scene: Scene, camera: Camera, renderer: WebGLRenderer, controls: OrbitControls) {
+    constructor(
+        scene: Scene, camera: Camera, renderer: WebGLRenderer, controls: OrbitControls,
+        options?: { markerContainer?: HTMLDivElement }
+    ) {
         this.scene = scene;
         this.camera = camera;
         this.renderer = renderer;
@@ -128,13 +131,17 @@ export class AnnotationSystem {
         this._onDragMove = this._onDragMoveHandler.bind(this);
         this._onDragEnd = this._onDragEndHandler.bind(this);
 
-        this._createMarkerContainer();
+        this._createMarkerContainer(options?.markerContainer);
     }
 
     /**
      * Create the DOM container for 2D annotation markers
      */
-    _createMarkerContainer(): void {
+    _createMarkerContainer(override?: HTMLDivElement): void {
+        if (override) {
+            this.markerContainer = override;
+            return;
+        }
         this.markerContainer = document.getElementById('annotation-markers') as HTMLDivElement | null;
         if (!this.markerContainer) {
             this.markerContainer = document.createElement('div');
@@ -340,6 +347,10 @@ export class AnnotationSystem {
         });
 
         this.markerContainer?.appendChild(markerEl);
+
+        if (annotation.detail_asset_key) {
+            markerEl.classList.add('has-detail');
+        }
 
         const markerObj: MarkerObject = {
             element: markerEl,
@@ -723,6 +734,24 @@ export class AnnotationSystem {
             };
             if (a.camera_quaternion) {
                 obj.camera_quaternion = { ...a.camera_quaternion };
+            }
+            // Detail model fields
+            if (a.detail_asset_key) obj.detail_asset_key = a.detail_asset_key;
+            if (a.detail_button_label) obj.detail_button_label = a.detail_button_label;
+            if (a.detail_thumbnail) obj.detail_thumbnail = a.detail_thumbnail;
+            if (a.detail_annotations && a.detail_annotations.length > 0) {
+                obj.detail_annotations = a.detail_annotations.map(da => ({
+                    id: da.id,
+                    title: da.title,
+                    body: da.body,
+                    position: { ...da.position },
+                    camera_target: { ...da.camera_target },
+                    camera_position: { ...da.camera_position },
+                    ...(da.camera_quaternion ? { camera_quaternion: { ...da.camera_quaternion } } : {})
+                }));
+            }
+            if (a.detail_view_settings) {
+                obj.detail_view_settings = { ...a.detail_view_settings };
             }
             return obj;
         });
