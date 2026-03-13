@@ -436,6 +436,7 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
             face_count: state.proxyMeshFaceCount || undefined,
             decimation: state.proxyMeshSettings ? {
                 preset: state.proxyMeshSettings.preset,
+                objectProfile: state.objectProfile || undefined,
                 targetRatio: state.proxyMeshSettings.targetRatio,
                 errorThreshold: state.proxyMeshSettings.errorThreshold,
                 textureMaxRes: state.proxyMeshSettings.textureMaxRes,
@@ -644,7 +645,8 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         pointcloud_file_size: (includePointcloud && assets.pointcloudBlob) ? assets.pointcloudBlob.size : 0,
         texture_count: (includeModel && state.modelLoaded && state.meshTextureInfo) ? state.meshTextureInfo.count : 0,
         texture_max_resolution: (includeModel && state.modelLoaded && state.meshTextureInfo) ? state.meshTextureInfo.maxResolution : 0,
-        texture_maps: (includeModel && state.modelLoaded && state.meshTextureInfo) ? state.meshTextureInfo.maps : []
+        texture_maps: (includeModel && state.modelLoaded && state.meshTextureInfo) ? state.meshTextureInfo.maps : [],
+        objectProfile: state.objectProfile || undefined
     });
 
     // Add preview/thumbnail
