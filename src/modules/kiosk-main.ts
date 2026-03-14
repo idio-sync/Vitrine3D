@@ -632,7 +632,7 @@ async function _doInit(): Promise<void> {
                     if (type === 'splat' && splatMesh) splatMesh.visible = !splatMesh.visible;
                     else if (type === 'mesh' && modelGroup) modelGroup.visible = !modelGroup.visible;
                     else if (type === 'pointcloud' && pointcloudGroup) pointcloudGroup.visible = !pointcloudGroup.visible;
-                    else if (type === 'flightpath' && flightPathManager) flightPathManager.setVisible(!splatMesh?.visible);
+                    else if (type === 'flightpath' && flightPathManager) flightPathManager.setVisible(!flightPathManager.isVisible);
                 },
                 getSplatBudget: () => sparkRenderer ? sparkRenderer.lodSplatCount : 0,
                 setSplatBudget: (n: number) => { if (sparkRenderer) sparkRenderer.lodSplatCount = n; },

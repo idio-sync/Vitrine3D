@@ -241,12 +241,20 @@ function validateSetting(key, value) {
     if (def.type === 'select') {
         if (!def.options.includes(value)) return key + ': must be one of ' + def.options.join(', ');
     }
+    if (def.type === 'string') {
+        if (typeof value !== 'string' || value.length > 512) return key + ': must be a string (max 512 chars)';
+        // VAAPI device path must match /dev/dri/renderDN pattern
+        if (key === 'video.vaapi_device' && !/^\/dev\/dri\/renderD\d+$/.test(value)) {
+            return key + ': must match /dev/dri/renderD<number>';
+        }
+    }
     return null;
 }
 
 // --- Settings API handlers ---
 
 function handleGetSettings(req, res) {
+    if (!requireAuth(req, res)) return;
     sendJson(res, 200, getAllSettings());
 }
 
@@ -3254,6 +3262,11 @@ const server = http.createServer((req, res) => {
     // Archive stream endpoint (XOR scrambled)
     if (pathname.startsWith('/api/archive-stream/')) {
         const streamHash = pathname.slice('/api/archive-stream/'.length);
+        if (!/^[a-f0-9]{16}$/.test(streamHash)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Invalid archive hash' }));
+            return;
+        }
         return handleArchiveStream(req, res, streamHash);
     }
 

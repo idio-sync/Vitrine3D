@@ -785,8 +785,14 @@ export class DetailViewer {
         if (!this.overlay) return;
         const errorDiv = document.createElement('div');
         errorDiv.className = 'detail-viewer-error';
-        errorDiv.innerHTML = `<p>${message}</p><button class="detail-error-close">Close</button>`;
-        errorDiv.querySelector('.detail-error-close')?.addEventListener('click', () => errorDiv.remove());
+        const p = document.createElement('p');
+        p.textContent = message;
+        const btn = document.createElement('button');
+        btn.className = 'detail-error-close';
+        btn.textContent = 'Close';
+        btn.addEventListener('click', () => errorDiv.remove());
+        errorDiv.appendChild(p);
+        errorDiv.appendChild(btn);
         this.overlay.appendChild(errorDiv);
     }
 

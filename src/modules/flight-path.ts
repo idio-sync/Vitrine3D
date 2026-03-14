@@ -1371,6 +1371,11 @@ export class FlightPathManager {
         return this.paths.flatMap(p => p.points);
     }
 
+    /** Whether flight paths are currently visible. */
+    get isVisible(): boolean {
+        return this.group.visible;
+    }
+
     /** Toggle visibility of all flight paths. */
     setVisible(visible: boolean): void {
         this.group.visible = visible;
