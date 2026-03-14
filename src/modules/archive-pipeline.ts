@@ -183,7 +183,7 @@ async function loadModelFromBlobUrl(blobUrl: string, fileName: string, deps: Arc
 /**
  * Update archive metadata UI panel.
  */
-function updateArchiveMetadataUI(manifest: any, archiveLoader: any): void {
+function updateArchiveMetadataUI(manifest: any, archiveLoader: ArchiveLoader): void {
     const section = document.getElementById('archive-metadata-section');
     if (!section) return;
 
@@ -602,7 +602,7 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
 /**
  * Process loaded archive — phased lazy loading.
  */
-export async function processArchive(archiveLoader: any, archiveName: string, deps: ArchivePipelineDeps): Promise<void> {
+export async function processArchive(archiveLoader: ArchiveLoader, archiveName: string, deps: ArchivePipelineDeps): Promise<void> {
     const { state } = deps;
     const assets = getStore();
 
@@ -617,6 +617,9 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
         state.archiveManifest = manifest;
         state.archiveFileName = archiveName;
         state.archiveLoaded = true;
+        // Clear stale state from previous archive load
+        state.environmentBlob = null;
+        state.comparisonAfterEntry = null;
         // Reset asset states for new archive
         state.assetStates = { splat: ASSET_STATE.UNLOADED, mesh: ASSET_STATE.UNLOADED, pointcloud: ASSET_STATE.UNLOADED, cad: ASSET_STATE.UNLOADED, flightpath: ASSET_STATE.UNLOADED };
 

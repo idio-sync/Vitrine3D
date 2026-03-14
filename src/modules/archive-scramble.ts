@@ -1,10 +1,14 @@
 /**
  * Archive Scramble Module
  *
- * Handles XOR-based scrambling and descrambling of .ddim archives.
+ * Handles XOR-based obfuscation and de-obfuscation of .ddim archives.
+ * NOT cryptographically secure — XOR with a repeating key is trivially
+ * reversible by anyone who reads this source. The goal is to prevent
+ * casual inspection / accidental misuse, not to resist determined attack.
+ *
  * Supports two protection modes:
- *  - 'protected-vdim': on-disk format with embedded encrypted key (.vdim header)
- *  - 'scrambled-transit': transit format descrambled with HMAC-derived key
+ *  - 'protected-vdim': on-disk format with embedded obfuscated key (.vdim header)
+ *  - 'scrambled-transit': transit format de-obfuscated with HMAC-derived key
  *
  * The APP_SECRET build-time env var gates transit mode. Without it, only
  * plain ZIP archives and .vdim on-disk archives can be loaded.
@@ -115,7 +119,7 @@ export function isTransitEnabled(): boolean {
 
 /**
  * Parse a 48-byte .vdim header and return the embedded key.
- * The stored key material is XOR-protected with a derived header key.
+ * The stored key material is XOR-obfuscated with a derived header key.
  *
  * @param header - First VDIM_HEADER_SIZE bytes of the archive
  */
@@ -135,7 +139,7 @@ export async function parseVdimHeader(header: Uint8Array): Promise<{ version: nu
         throw new Error('Invalid protected archive header');
     }
 
-    // Extract encrypted key material from bytes 8–39
+    // Extract obfuscated key material from bytes 8–39
     const encryptedKey = header.slice(VDIM_KEY_OFFSET, VDIM_KEY_OFFSET + keyLen);
 
     // Un-XOR with the derived header key to recover the original key

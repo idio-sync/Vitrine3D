@@ -620,8 +620,10 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
                 let blob: Blob | null = null;
                 const cachedUrl = state.loadedDetailBlobs?.get(key);
                 if (cachedUrl) {
-                    blob = await fetch(cachedUrl).then(r => r.blob());
-                } else if (state.archiveLoader) {
+                    // Blob URL may have been revoked — fall through to archive extraction
+                    try { blob = await fetch(cachedUrl).then(r => r.blob()); } catch { /* revoked */ }
+                }
+                if (!blob && state.archiveLoader) {
                     const data = await state.archiveLoader.extractFile(filename);
                     if (data) blob = data.blob;
                 }

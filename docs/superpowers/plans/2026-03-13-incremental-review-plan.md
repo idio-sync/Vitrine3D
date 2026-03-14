@@ -132,7 +132,7 @@ All findings were cross-checked against current code. Corrections from verificat
 
 ---
 
-## Phase 8 — Archive Pipeline Hardening (MEDIUM)
+## ~~Phase 8 — Archive Pipeline Hardening (MEDIUM)~~ DONE
 
 **Scope:** 4 issues across 3 files
 **Estimated effort:** Small
@@ -140,10 +140,10 @@ All findings were cross-checked against current code. Corrections from verificat
 
 | # | Issue | File | Fix |
 |---|-------|------|-----|
-| M-ARC2 | `environmentBlob` not cleared between loads | `archive-pipeline.ts` | Add `deps.state.environmentBlob = null` + `comparisonAfterEntry = null` at top of `processArchive()` |
-| M-ARC4 | `archiveLoader: any` hides bugs | `archive-pipeline.ts` | Type as `ArchiveLoader` — would have caught H30 at compile time |
-| M-ARC3 | Detail re-export from revoked blob URL | `export-controller.ts` | Store `Blob` reference in `loadedDetailBlobs` instead of URL string |
-| M-ARC1 | "Encrypted" comments overstate security | `archive-scramble.ts` | Change comments to "obfuscated" with security model note |
+| ~~M-ARC2~~ | ~~`environmentBlob` not cleared between loads~~ | `archive-pipeline.ts` | ~~FIXED — `state.environmentBlob = null` + `state.comparisonAfterEntry = null` at top of `processArchive()`~~ |
+| ~~M-ARC4~~ | ~~`archiveLoader: any` hides bugs~~ | `archive-pipeline.ts` | ~~FIXED — typed as `ArchiveLoader` (also `updateArchiveMetadataUI`)~~ |
+| ~~M-ARC3~~ | ~~Detail re-export from revoked blob URL~~ | `export-controller.ts` | ~~FIXED — try/catch around blob URL fetch with fallback to archive extraction~~ |
+| ~~M-ARC1~~ | ~~"Encrypted" comments overstate security~~ | `archive-scramble.ts` | ~~FIXED — changed to "obfuscated" with security model note in module header~~ |
 
 ---
 

@@ -419,7 +419,7 @@ Phase F (flip strict: true)      — do after Phase E
 |----------|-------|---------------|-------|---------|-------------|
 | **CRITICAL** | 3 | 0 | 2 | 1 | Security (XSS), Logic (VR toggle) |
 | **HIGH** | 22 | 4 | 15 | 3 | Memory leaks, runtime bugs, missing cleanup |
-| **MEDIUM** | 40 | 29 | 10 | 1 | Duplication, magic numbers, type safety, performance |
+| **MEDIUM** | 40 | 25 | 14 | 1 | Duplication, magic numbers, type safety, performance |
 | **LOW** | 22 | 20 | 2 | 0 | Style, naming, minor robustness |
 
 **Removed after verification:** C10 (archive-stream is intentionally public for `/view/{hash}` sharing), H40 (clearColor is frame-transient — main loop resets it), H41 (deps factories capture current value at call time — correct pattern), H42 (callback-before-transition is the intended design — transition continues in render loop). M-VR3 needs manual testing (fade callback exists but visual effect unclear).
@@ -430,6 +430,7 @@ Phase F (flip strict: true)      — do after Phase E
 **Fixed in Phase 5** (Editorial Theme Leaks): H36, H37, H38, H39.
 **Fixed in Phase 6** (Server Robustness): M-SRV1, M-SRV2, M-SRV3, L20.
 **Fixed in Phase 7** (Per-Frame Allocations): M-VR1, M-VR2, M-FP1, M-FP2, M-FP3, M-FP4, M-FP5.
+**Fixed in Phase 8** (Archive Pipeline Hardening): M-ARC1, M-ARC2, M-ARC3, M-ARC4.
 
 **Fix plan:** `docs/superpowers/plans/2026-03-13-incremental-review-plan.md` — 12 phases ordered by severity and dependency.
 
@@ -525,10 +526,10 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 
 | # | Issue | File | Impact |
 |---|-------|------|--------|
-| M-ARC1 | XOR key obfuscation labeled "encrypted" in comments — overstates security guarantee | `archive-scramble.ts:138,200-201` | Misleading for anyone auditing the security model |
-| M-ARC2 | `environmentBlob` never cleared between archive loads — stale HDR persists | `archive-pipeline.ts` + `asset-store.ts` | Loading archive without HDR retains previous archive's environment |
-| M-ARC3 | Detail model re-export fetches from blob URL which may have been revoked | `export-controller.ts:616-617` | If archive loader has been disposed, detail model is silently lost |
-| M-ARC4 | `archiveLoader` parameter typed as `any` in `processArchive` — prevents catching compile-time bugs like the `getManifest()` issue (H30) | `archive-pipeline.ts:605` | Direct cause of H30 surviving to runtime |
+| ~~M-ARC1~~ | ~~XOR key obfuscation labeled "encrypted" in comments — overstates security guarantee~~ | `archive-scramble.ts` | **FIXED** — changed to "obfuscated" with security model note in module header |
+| ~~M-ARC2~~ | ~~`environmentBlob` never cleared between archive loads — stale HDR persists~~ | `archive-pipeline.ts` | **FIXED** — added `state.environmentBlob = null` + `state.comparisonAfterEntry = null` at top of `processArchive()` |
+| ~~M-ARC3~~ | ~~Detail model re-export fetches from blob URL which may have been revoked~~ | `export-controller.ts` | **FIXED** — added try/catch around blob URL fetch with fallback to archive extraction |
+| ~~M-ARC4~~ | ~~`archiveLoader` parameter typed as `any` in `processArchive`~~ | `archive-pipeline.ts` | **FIXED** — typed as `ArchiveLoader` (also `updateArchiveMetadataUI`) |
 
 ### Editor/Kiosk Duplication (4)
 
@@ -727,6 +728,6 @@ The VDIM archive "protection" uses XOR with a 32-byte repeating key. The key is 
 
 ### Long-term
 
-25. **M-ARC1** — Document XOR scramble security model accurately
+25. ~~**M-ARC1** — Document XOR scramble security model accurately~~
 26. **M-TH1** — Flight path support in exhibit/gallery themes
 27. **M-CSS1–3** — Defense-in-depth innerHTML improvements
