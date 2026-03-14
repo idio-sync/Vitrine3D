@@ -42,7 +42,7 @@ All findings were cross-checked against current code. Corrections from verificat
 
 ---
 
-## Phase 2 — Runtime Bugs (HIGH)
+## ~~Phase 2 — Runtime Bugs (HIGH)~~ — DONE
 
 **Scope:** 5 issues across 4 files
 **Estimated effort:** Small-medium — 1-10 line fixes each
@@ -50,15 +50,15 @@ All findings were cross-checked against current code. Corrections from verificat
 
 | # | Issue | File | Fix |
 |---|-------|------|-----|
-| H29 | Environment blob wraps ExtractedFile object | `archive-pipeline.ts:832` | Change `new Blob([envData])` → `envData.blob` and `deps.state.environmentBlob = envBlob` → `deps.state.environmentBlob = envData.blob` |
-| H30 | `archiveLoader.getManifest()` doesn't exist | `archive-pipeline.ts:463` | Change to `archiveLoader.manifest` |
-| H31 | Comparisons lost on re-export | `export-controller.ts` | Add `archiveCreator.setComparisons(state.archiveManifest?.comparisons)` in `prepareArchive()` |
-| H32 | `state.metadata?.title` doesn't exist on AppState | `main.ts:3381` | Change to `state.archiveManifest?.title \|\| 'Untitled'` |
-| H33 | `theme` missing from KioskState | `kiosk-main.ts` | Add `theme: string \| null` to KioskState; assign `state.theme = config.theme \|\| null` in init |
+| ~~H29~~ | ~~Environment blob wraps ExtractedFile object~~ | `archive-pipeline.ts` | **FIXED** — use `envData.blob` directly |
+| ~~H30~~ | ~~`archiveLoader.getManifest()` doesn't exist~~ | `archive-pipeline.ts` | **FIXED** — changed to `archiveLoader.manifest` |
+| ~~H31~~ | ~~Comparisons lost on re-export~~ | `export-controller.ts` | **FIXED** — added `setComparisons()` call in `prepareArchive()` |
+| ~~H32~~ | ~~`state.metadata?.title` doesn't exist on AppState~~ | `main.ts` | **FIXED** — changed to `state.archiveManifest?.project?.title` |
+| ~~H33~~ | ~~`theme` missing from KioskState~~ | `kiosk-main.ts` | **FIXED** — added field + assigned from `config.theme` |
 
 ---
 
-## Phase 3 — Double Extension + Missing File Types
+## ~~Phase 3 — Double Extension + Missing File Types~~ — DONE
 
 **Scope:** 2 issues across 2 files
 **Estimated effort:** Tiny — 1 line each
@@ -66,8 +66,8 @@ All findings were cross-checked against current code. Corrections from verificat
 
 | # | Issue | File | Fix |
 |---|-------|------|-----|
-| H43 | `.vdim` not in double-extension regex | `export-controller.ts:710` | Add `vdim` to regex: `/\.(ddim\|a3d\|a3z\|zip\|vdim)$/i` |
-| L12 | Missing `.zip`/`.vdim` in kiosk FILE_CATEGORIES | `kiosk-main.ts:257` | Add `'.zip'`, `'.vdim'` to archive array |
+| ~~H43~~ | ~~`.vdim` not in double-extension regex~~ | `export-controller.ts` | **FIXED** — added `vdim` to regex |
+| ~~L12~~ | ~~Missing `.zip`/`.vdim` in kiosk FILE_CATEGORIES~~ | `kiosk-main.ts` | **FIXED** — added to archive array |
 
 ---
 

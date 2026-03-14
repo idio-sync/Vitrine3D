@@ -460,7 +460,7 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
             const comparisons = archiveLoader.getComparisons();
             if (comparisons.length > 0) {
                 const afterKey = comparisons[0].after.asset_key;
-                const manifest = archiveLoader.getManifest();
+                const manifest = archiveLoader.manifest;
                 const afterEntry = manifest?.data_entries?.[afterKey];
                 if (afterEntry) {
                     state.comparisonAfterEntry = { key: afterKey, filename: afterEntry.file_name };
@@ -829,9 +829,8 @@ export async function processArchive(archiveLoader: any, archiveName: string, de
             try {
                 const envData = await archiveLoader.extractFile(envEntry.entry.file_name);
                 if (envData) {
-                    const envBlob = new Blob([envData], { type: 'application/octet-stream' });
-                    deps.state.environmentBlob = envBlob; // store for re-export round-trip
-                    const blobUrl = URL.createObjectURL(envBlob);
+                    deps.state.environmentBlob = envData.blob; // store for re-export round-trip
+                    const blobUrl = URL.createObjectURL(envData.blob);
                     try {
                         await deps.sceneManager.loadHDREnvironment(blobUrl);
                         if (manifest.viewer_settings?.environment_as_background) {

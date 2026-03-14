@@ -307,6 +307,12 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         archiveCreator.setVersionHistory(metadata.versionHistory);
     }
 
+    // Preserve comparisons from loaded archive
+    if (state.archiveManifest?.comparisons) {
+        log.info(' Setting comparisons');
+        archiveCreator.setComparisons(state.archiveManifest.comparisons);
+    }
+
     // Read which assets the user wants to include
     const includeSplat = (document.getElementById('archive-include-splat') as HTMLInputElement)?.checked;
     const includeModel = (document.getElementById('archive-include-model') as HTMLInputElement)?.checked;
@@ -707,7 +713,7 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     // Strip any existing archive extension from the ID to prevent double extensions
     // (e.g., "project.ddim" → "project" so the final name is "project.ddim" not "project.ddim.ddim")
     const rawFilename = metadata.project.id || 'archive';
-    const archiveExts = /\.(ddim|a3d|a3z|zip)$/i;
+    const archiveExts = /\.(ddim|a3d|a3z|zip|vdim)$/i;
     const filename = rawFilename.replace(archiveExts, '');
 
     return {

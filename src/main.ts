@@ -3378,7 +3378,7 @@ function handleStartRecording(): void {
         const container = document.getElementById('rec-trim-container');
         if (!container) return;
 
-        const archiveTitle = state.metadata?.title || 'Untitled';
+        const archiveTitle = (state.archiveManifest as any)?.project?.title || 'Untitled';
         const defaultTitle = `${archiveTitle} - ${mode} - ${new Date().toLocaleDateString()}`;
 
         const trimResult = await showTrimUI(container, result.blob, defaultTitle);

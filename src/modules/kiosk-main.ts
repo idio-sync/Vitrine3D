@@ -100,6 +100,7 @@ interface KioskState {
     archiveSourceUrl?: string | null;
     detailAssetIndex: Map<string, { filename: string }>;
     loadedDetailBlobs: Map<string, string>;
+    theme: string | null;
 }
 
 interface AppConfig {
@@ -244,6 +245,7 @@ const state: KioskState = {
     splatBackgroundColor: null,
     detailAssetIndex: new Map(),
     loadedDetailBlobs: new Map(),
+    theme: null,
 };
 
 /** Tracks in-flight asset load promises so concurrent callers await the same operation. */
@@ -254,7 +256,7 @@ const assetLoadingPromises = new Map<string, Promise<boolean>>();
 // =============================================================================
 
 const FILE_CATEGORIES = {
-    archive:    ['.ddim', '.a3d', '.a3z'],
+    archive:    ['.ddim', '.a3d', '.a3z', '.zip', '.vdim'],
     mesh:       ['.glb', '.gltf', '.obj', '.stl'],
     splat:      ['.ply', '.splat', '.ksplat', '.spz', '.sog'],
     pointcloud: ['.e57']
@@ -506,6 +508,7 @@ async function _doInit(): Promise<void> {
     // kiosk mode regardless of URL params.
     config.kiosk = true;
     if (!config.theme) config.theme = 'editorial';
+    state.theme = config.theme;
     const themeMeta = await loadTheme(config.theme, { layoutOverride: config.layout || undefined });
 
     // ?layout= overrides theme's @layout; theme overrides default 'sidebar'

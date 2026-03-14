@@ -418,13 +418,14 @@ Phase F (flip strict: true)      — do after Phase E
 | Severity | Total | Verified Open | Fixed | Removed | Source Areas |
 |----------|-------|---------------|-------|---------|-------------|
 | **CRITICAL** | 3 | 0 | 2 | 1 | Security (XSS), Logic (VR toggle) |
-| **HIGH** | 22 | 16 | 3 | 3 | Memory leaks, runtime bugs, missing cleanup |
+| **HIGH** | 22 | 10 | 9 | 3 | Memory leaks, runtime bugs, missing cleanup |
 | **MEDIUM** | 40 | 39 | 0 | 1 | Duplication, magic numbers, type safety, performance |
-| **LOW** | 22 | 22 | 0 | 0 | Style, naming, minor robustness |
+| **LOW** | 22 | 21 | 1 | 0 | Style, naming, minor robustness |
 
 **Removed after verification:** C10 (archive-stream is intentionally public for `/view/{hash}` sharing), H40 (clearColor is frame-transient — main loop resets it), H41 (deps factories capture current value at call time — correct pattern), H42 (callback-before-transition is the intended design — transition continues in render loop). M-VR3 needs manual testing (fade callback exists but visual effect unclear).
 
 **Fixed in `ccd5dc0`** (Phase 1 — Security & Auth): C11, C12, H26, H27, H28.
+**Fixed in Phase 2+3** (Runtime Bugs + Extensions): H29, H30, H31, H32, H33, H43, L12.
 
 **Fix plan:** `docs/superpowers/plans/2026-03-13-incremental-review-plan.md` — 12 phases ordered by severity and dependency.
 
@@ -456,15 +457,15 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 | ~~H27~~ | ~~`GET /api/settings` unauthenticated~~ | `meta-server.js` | **FIXED in `ccd5dc0`** — added `requireAuth()` check |
 | ~~H28~~ | ~~Stream hash not validated~~ | `meta-server.js` | **FIXED in `ccd5dc0`** — added `/^[a-f0-9]{16}$/` regex check |
 
-### Runtime Bugs (5)
+### Runtime Bugs (5) — ALL FIXED
 
-| # | Issue | File | Impact |
+| # | Issue | File | Status |
 |---|-------|------|--------|
-| H29 | Environment blob wrapping bug — `new Blob([envData])` wraps the ExtractedFile object instead of its `.blob` property | `archive-pipeline.ts:832` | HDR environment loads produce `[object Object]` as content — silently corrupt environment maps |
-| H30 | `archiveLoader.getManifest()` does not exist — will throw `TypeError` at runtime | `archive-pipeline.ts:463` | `ArchiveLoader` has `.manifest` property, not `.getManifest()` method. Throws when loading archives with comparisons |
-| H31 | Comparisons not re-exported — `setComparisons()` never called during `prepareArchive()` | `export-controller.ts` | Comparison pairs from loaded archives are silently lost on re-export |
-| H32 | `state.metadata` referenced but missing from `AppState` — always `undefined` | `main.ts:3381` | Recording titles never reflect actual archive title, always fall back to `'Untitled'` |
-| H33 | `state.theme` missing from `KioskState` interface — always `undefined` | `kiosk-main.ts:445,482,3305` | ComparisonViewer and DetailViewer always receive `null` theme |
+| ~~H29~~ | ~~Environment blob wrapping bug~~ | `archive-pipeline.ts` | **FIXED** — use `envData.blob` directly instead of `new Blob([envData])` |
+| ~~H30~~ | ~~`archiveLoader.getManifest()` does not exist~~ | `archive-pipeline.ts` | **FIXED** — changed to `archiveLoader.manifest` |
+| ~~H31~~ | ~~Comparisons not re-exported~~ | `export-controller.ts` | **FIXED** — added `setComparisons()` call in `prepareArchive()` |
+| ~~H32~~ | ~~`state.metadata` referenced but missing from AppState~~ | `main.ts` | **FIXED** — changed to `state.archiveManifest?.project?.title` |
+| ~~H33~~ | ~~`state.theme` missing from KioskState~~ | `kiosk-main.ts` | **FIXED** — added `theme: string | null` to interface, assigned from `config.theme` |
 
 ### Memory Leaks (6)
 
@@ -492,9 +493,9 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 
 ### Double Extension (1)
 
-| # | Issue | File | Impact |
+| # | Issue | File | Status |
 |---|-------|------|--------|
-| H43 | `.vdim` not in double-extension strip regex — re-exporting `.vdim` produces `file.vdim.vdim` | `export-controller.ts:710` | Previous double-extension fix (H12) didn't include the new format |
+| ~~H43~~ | ~~`.vdim` not in double-extension strip regex~~ | `export-controller.ts` | **FIXED** — added `vdim` to regex |
 
 ---
 
@@ -619,7 +620,7 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 
 | # | Issue | File |
 |---|-------|------|
-| L12 | Missing `.zip` and `.vdim` in kiosk `FILE_CATEGORIES.archive` | `kiosk-main.ts:257` |
+| ~~L12~~ | ~~Missing `.zip` and `.vdim` in kiosk `FILE_CATEGORIES.archive`~~ | `kiosk-main.ts` — **FIXED** |
 | L13 | Inconsistent render loop pause/resume naming: editor `pauseRenderLoop` vs kiosk `pauseRender` | `main.ts:4268` vs `kiosk-main.ts:5690` |
 | L14 | Magic number `0.382` (golden ratio) and `720` (sidebar max) inline in kiosk | `kiosk-main.ts:714` |
 
@@ -693,14 +694,15 @@ The VDIM archive "protection" uses XOR with a 32-byte repeating key. The key is 
 4. ~~**C11** — Fix innerHTML XSS in detail-viewer `_showError()`~~
 5. ~~**C12** — Fix VR flight path toggle visibility source~~
 
-### Next (runtime bugs)
+### ~~Next (runtime bugs + extensions)~~ — DONE (Phase 2+3)
 
-7. **H29** — Fix environment blob wrapping (`envData.blob` not `new Blob([envData])`)
-8. **H30** — Fix `archiveLoader.getManifest()` → `.manifest`
-9. **H31** — Add `setComparisons()` call in `prepareArchive()`
-10. **H32** — Fix `state.metadata` reference in recording title
-11. **H33** — Add `theme` to `KioskState` interface
-12. **H43** — Add `.vdim` to double-extension strip regex
+7. ~~**H29** — Fix environment blob wrapping (`envData.blob` not `new Blob([envData])`)~~
+8. ~~**H30** — Fix `archiveLoader.getManifest()` → `.manifest`~~
+9. ~~**H31** — Add `setComparisons()` call in `prepareArchive()`~~
+10. ~~**H32** — Fix `state.metadata` reference in recording title~~
+11. ~~**H33** — Add `theme` to `KioskState` interface~~
+12. ~~**H43** — Add `.vdim` to double-extension strip regex~~
+13. ~~**L12** — Add `.zip`/`.vdim` to kiosk `FILE_CATEGORIES`~~
 
 ### Soon (memory leaks)
 
