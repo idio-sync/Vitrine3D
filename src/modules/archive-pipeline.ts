@@ -31,6 +31,7 @@ import { centerModelOnGrid } from './alignment.js';
 import { enterReducedQualityMode, exitReducedQualityMode, yieldToRenderer } from './background-loader.js';
 import { updatePronomRegistry, applyCameraConstraints } from './metadata-manager.js';
 import * as postProcessing from './post-processing.js';
+import { isTransitEnabled } from './archive-scramble.js';
 import type { ArchivePipelineDeps } from '@/types.js';
 import { normalizeScale } from '@/types.js';
 
@@ -291,6 +292,14 @@ export async function loadArchiveFromUrl(url: string, deps: ArchivePipelineDeps)
 
         const archiveLoader = new ArchiveLoader();
         const fileName = url.split('/').pop() || 'archive.ddim';
+
+        // Derive transit key if scrambling is enabled
+        if (isTransitEnabled()) {
+            const hashMatch = url.match(/\/api\/archive-stream\/([a-f0-9]+)/);
+            if (hashMatch) {
+                await archiveLoader.setTransitHash(hashMatch[1]);
+            }
+        }
 
         // Try Range-based streaming first — only downloads the ZIP central
         // directory (~64KB). Each subsequent extractFile() call fetches just

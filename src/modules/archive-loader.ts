@@ -8,12 +8,22 @@
 
 import { inflateSync } from 'fflate';
 import { Logger } from './utilities.js';
+import {
+    detectArchiveFormat,
+    descrambleChunk,
+    descrambleVdim,
+    descrambleArchive,
+    deriveTransitKey,
+    isTransitEnabled,
+    VDIM_HEADER_SIZE,
+    type ArchiveFormat,
+} from './archive-scramble.js';
 
 // Create logger for this module
 const log = Logger.getLogger('ArchiveLoader');
 
 // Supported archive extensions
-const _ARCHIVE_EXTENSIONS = ['ddim', 'a3d', 'a3z', 'zip'];
+const _ARCHIVE_EXTENSIONS = ['ddim', 'a3d', 'a3z', 'zip', 'vdim'];
 
 // Supported file formats within archives
 const SUPPORTED_FORMATS: Record<string, string[]> = {
@@ -231,6 +241,9 @@ export class ArchiveLoader {
     private _ipcCloseFn: (() => Promise<void>) | null = null;
     private _fileSize: number = 0;
     private _fileCache: Map<string, Uint8Array> = new Map();
+    private _scrambleKey: Uint8Array | null = null;
+    private _archiveFormat: ArchiveFormat = 'plain';
+    private _vdimOffset: number = 0;
     private _blobUrlMap: Map<string, string> = new Map(); // sanitized filename → blob URL
     private _fileIndex: FileIndexEntry[] = [];
     private _centralDir: Map<string, CentralDirEntry> | null = null;
@@ -264,17 +277,39 @@ export class ArchiveLoader {
     }
 
     /**
+     * Set the archive hash for transit key derivation.
+     * Must be called before loadRemoteIndex() if transit scrambling is enabled.
+     */
+    async setTransitHash(archiveHash: string): Promise<void> {
+        if (!isTransitEnabled()) return;
+        this._scrambleKey = await deriveTransitKey(archiveHash);
+        log.info('Transit descramble key derived for hash:', archiveHash);
+    }
+
+    /**
      * Load archive from a File object.
      * Only reads the ZIP central directory (~64KB) — does not read the full file.
      */
     async loadFromFile(file: File): Promise<void> {
-        // Validate ZIP magic bytes by reading first 4 bytes
-        const header = new Uint8Array(await file.slice(0, 4).arrayBuffer());
-        if (header[0] !== 0x50 || header[1] !== 0x4B) {
+        const header = new Uint8Array(await file.slice(0, VDIM_HEADER_SIZE).arrayBuffer());
+        const format = detectArchiveFormat(header, isTransitEnabled());
+
+        if (format === 'protected-vdim') {
+            // Full-buffer load for .vdim files — must read entirely to descramble
+            const fullBuffer = new Uint8Array(await file.arrayBuffer());
+            const plainBytes = await descrambleVdim(fullBuffer);
+            this._rawData = plainBytes;
+            this._file = null;
+            this._fileCache = new Map();
+            await this._parseCentralDirectory();
+            return;
+        }
+
+        if (format !== 'plain') {
             throw new Error('Invalid archive: Not a valid ZIP file');
         }
 
-        // Store File reference — the full file is never read into memory
+        // Existing plain ZIP path
         this._file = file;
         this._rawData = null;
         this._fileCache = new Map();
@@ -352,6 +387,11 @@ export class ArchiveLoader {
         this._rawData = null;
         this._fileCache = new Map();
 
+        // If transit key was pre-derived via setTransitHash(), mark format
+        if (this._scrambleKey && isTransitEnabled()) {
+            this._archiveFormat = 'scrambled-transit';
+        }
+
         await this._parseCentralDirectory();
         return size;
     }
@@ -386,14 +426,21 @@ export class ArchiveLoader {
      * Only scans the central directory — no files are decompressed.
      */
     async loadFromArrayBuffer(arrayBuffer: ArrayBuffer): Promise<void> {
-        // Validate ZIP magic bytes
-        const header = new Uint8Array(arrayBuffer, 0, 4);
-        if (header[0] !== 0x50 || header[1] !== 0x4B) {
+        const bytes = new Uint8Array(arrayBuffer);
+        const format = detectArchiveFormat(bytes, isTransitEnabled());
+
+        let plainBytes: Uint8Array;
+        if (format === 'protected-vdim') {
+            plainBytes = await descrambleVdim(bytes);
+        } else if (format === 'scrambled-transit' && this._scrambleKey) {
+            plainBytes = descrambleArchive(bytes, this._scrambleKey);
+        } else if (format === 'plain') {
+            plainBytes = bytes;
+        } else {
             throw new Error('Invalid archive: Not a valid ZIP file');
         }
 
-        // Store raw data for on-demand extraction (used when loaded via URL)
-        this._rawData = new Uint8Array(arrayBuffer);
+        this._rawData = plainBytes;
         this._file = null;
         this._fileCache = new Map();
         await this._parseCentralDirectory();
@@ -402,6 +449,11 @@ export class ArchiveLoader {
     // =========================================================================
     // INTERNAL ZIP PARSING
     // =========================================================================
+
+    private _descrambleIfNeeded(data: Uint8Array, offset: number): Uint8Array {
+        if (!this._scrambleKey || this._archiveFormat === 'plain') return data;
+        return descrambleChunk(data, offset - this._vdimOffset, this._scrambleKey);
+    }
 
     /**
      * Read bytes from the archive source (File or raw buffer).
@@ -427,8 +479,8 @@ export class ArchiveLoader {
                 headers: { 'Range': `bytes=${offset}-${end}` }
             });
             if (resp.status === 206) {
-                // Range supported — return just the requested bytes
-                return new Uint8Array(await resp.arrayBuffer());
+                const rangeData = new Uint8Array(await resp.arrayBuffer());
+                return this._descrambleIfNeeded(rangeData, offset);
             }
             if (resp.ok) {
                 // Server ignored Range header and returned the full file (status 200).
@@ -438,6 +490,10 @@ export class ArchiveLoader {
                 // will appear to stall. This is a server configuration limitation.
                 log.warn('Range requests not supported by server (got 200 instead of 206); downloading full archive without progress tracking. Consider enabling Accept-Ranges on the server.');
                 this._rawData = new Uint8Array(await resp.arrayBuffer());
+                if (this._scrambleKey && this._archiveFormat !== 'plain') {
+                    this._rawData = descrambleArchive(this._rawData, this._scrambleKey);
+                    this._archiveFormat = 'plain';
+                }
                 this._url = null;
                 return this._rawData.subarray(offset, offset + length);
             }
