@@ -2106,7 +2106,7 @@ export class ArchiveCreator {
         log.debug('✓ Archive blob created, size:', blob.size);
 
         let finalBlob = blob;
-        let ext = format === 'zip' ? 'zip' : format === 'vdim' ? 'vdim' : 'ddim';
+        const ext = format === 'zip' ? 'zip' : format === 'vdim' ? 'vdim' : 'ddim';
 
         if (format === 'vdim') {
             log.debug('✓ Scrambling archive for .vdim export...');
