@@ -1,0 +1,13 @@
+{
+  "planPath": "docs/plans/2026-03-07-gpu-benchmark.md",
+  "tasks": [
+    {"id": 1, "subject": "Task 1: Add benchmark thresholds to constants", "status": "pending"},
+    {"id": 2, "subject": "Task 2: Add runGpuBenchmark and getBenchmarkScore to quality-tier.ts", "status": "pending", "blockedBy": [1]},
+    {"id": 3, "subject": "Task 3: Update detectDeviceTier to use benchmark score (7-point scale)", "status": "pending", "blockedBy": [2]},
+    {"id": 4, "subject": "Task 4: Write unit tests for benchmark scoring", "status": "pending", "blockedBy": [2]},
+    {"id": 5, "subject": "Task 5: Update existing detectDeviceTier tests for 7-point scale", "status": "pending", "blockedBy": [3]},
+    {"id": 6, "subject": "Task 6: Integrate benchmark call into kiosk-main.ts", "status": "pending", "blockedBy": [3]},
+    {"id": 7, "subject": "Task 7: Run full test suite and verify", "status": "pending", "blockedBy": [4, 5, 6]}
+  ],
+  "lastUpdated": "2026-03-07T00:00:00Z"
+}

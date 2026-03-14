@@ -1,0 +1,13 @@
+{
+  "planPath": "docs/plans/2026-03-07-progressive-mesh-loading.md",
+  "tasks": [
+    {"id": 1, "subject": "Task 1: Add background loading indicator HTML + CSS", "status": "pending"},
+    {"id": 2, "subject": "Task 2: Create swapMeshInPlace helpers in file-handlers.ts", "status": "pending"},
+    {"id": 3, "subject": "Task 3: Refactor loadArchiveFullResMesh to use in-place swap", "status": "pending", "blockedBy": [2]},
+    {"id": 4, "subject": "Task 4: Add show/hide helpers for background indicator", "status": "pending", "blockedBy": [1]},
+    {"id": 5, "subject": "Task 5: Modify handleArchiveFile for SD-first + background HD swap", "status": "pending", "blockedBy": [3, 4]},
+    {"id": 6, "subject": "Task 6: Verify shouldProgressiveLoad is false for SD devices", "status": "pending", "blockedBy": [5]},
+    {"id": 7, "subject": "Task 7: End-to-end manual testing", "status": "pending", "blockedBy": [6]}
+  ],
+  "lastUpdated": "2026-03-07T00:00:00Z"
+}
