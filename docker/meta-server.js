@@ -1863,7 +1863,9 @@ function handleDownloadVersion(req, res, hash, versionId) {
         'Content-Disposition': 'attachment; filename="' + downloadName + '"',
         'Content-Length': stat.size,
     });
-    fs.createReadStream(fullPath).pipe(res);
+    const stream = fs.createReadStream(fullPath);
+    stream.on('error', (err) => { console.error('[backup-download] Read error:', err.message); if (!res.headersSent) res.writeHead(500); res.end(); });
+    stream.pipe(res);
 }
 
 /**
@@ -2507,53 +2509,68 @@ function handleArchiveStream(req, res, hash) {
     }
 
     const filePath = path.join(ARCHIVES_DIR, row.filename);
-    if (!fs.existsSync(filePath)) {
+
+    // Open file descriptor once to avoid TOCTOU race between stat and read
+    let fd;
+    try {
+        fd = fs.openSync(filePath, 'r');
+    } catch {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Archive file not found');
         return;
     }
 
-    const stat = fs.statSync(filePath);
-    const fileSize = stat.size;
-    const key = deriveArchiveKey(hash);
+    try {
+        const stat = fs.fstatSync(fd);
+        const fileSize = stat.size;
+        const key = deriveArchiveKey(hash);
 
-    const rangeHeader = req.headers.range;
-    if (rangeHeader) {
-        const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-        if (!match) {
-            res.writeHead(416, { 'Content-Type': 'text/plain' });
-            res.end('Invalid Range header');
-            return;
-        }
-        const start = parseInt(match[1], 10);
-        const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
+        const rangeHeader = req.headers.range;
+        if (rangeHeader) {
+            const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+            if (!match) {
+                fs.closeSync(fd);
+                res.writeHead(416, { 'Content-Type': 'text/plain' });
+                res.end('Invalid Range header');
+                return;
+            }
+            const start = parseInt(match[1], 10);
+            const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
 
-        if (start >= fileSize || end >= fileSize || start > end) {
-            res.writeHead(416, {
-                'Content-Range': `bytes */${fileSize}`,
-                'Content-Type': 'text/plain'
+            if (start >= fileSize || end >= fileSize || start > end) {
+                fs.closeSync(fd);
+                res.writeHead(416, {
+                    'Content-Range': `bytes */${fileSize}`,
+                    'Content-Type': 'text/plain'
+                });
+                res.end('Range not satisfiable');
+                return;
+            }
+
+            const chunkSize = end - start + 1;
+            res.writeHead(206, {
+                'Content-Type': 'application/octet-stream',
+                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                'Content-Length': chunkSize,
+                'Accept-Ranges': 'bytes',
             });
-            res.end('Range not satisfiable');
-            return;
+            const stream = fs.createReadStream(null, { fd, start, end, autoClose: true });
+            stream.on('error', (err) => { console.error('[archive-stream] Read error:', err.message); if (!res.headersSent) res.writeHead(500); res.end(); });
+            stream.pipe(createXorTransform(key, start)).pipe(res);
+        } else {
+            res.writeHead(200, {
+                'Content-Type': 'application/octet-stream',
+                'Content-Length': fileSize,
+                'Accept-Ranges': 'bytes',
+            });
+            const stream = fs.createReadStream(null, { fd, start: 0, autoClose: true });
+            stream.on('error', (err) => { console.error('[archive-stream] Read error:', err.message); if (!res.headersSent) res.writeHead(500); res.end(); });
+            stream.pipe(createXorTransform(key, 0)).pipe(res);
         }
-
-        const chunkSize = end - start + 1;
-        res.writeHead(206, {
-            'Content-Type': 'application/octet-stream',
-            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-            'Content-Length': chunkSize,
-            'Accept-Ranges': 'bytes',
-        });
-        const stream = fs.createReadStream(filePath, { start, end });
-        stream.pipe(createXorTransform(key, start)).pipe(res);
-    } else {
-        res.writeHead(200, {
-            'Content-Type': 'application/octet-stream',
-            'Content-Length': fileSize,
-            'Accept-Ranges': 'bytes',
-        });
-        const stream = fs.createReadStream(filePath);
-        stream.pipe(createXorTransform(key, 0)).pipe(res);
+    } catch (err) {
+        fs.closeSync(fd);
+        console.error('[archive-stream] Unexpected error:', err.message);
+        if (!res.headersSent) { res.writeHead(500, { 'Content-Type': 'text/plain' }); res.end('Internal server error'); }
     }
 }
 
@@ -3337,8 +3354,9 @@ const server = http.createServer((req, res) => {
         if (pathname === '/api/storage' && req.method === 'GET') {
             return handleStorage(req, res);
         }
-        // GET /api/gpu — return GPU capabilities (no auth required, read-only info)
+        // GET /api/gpu — return GPU capabilities
         if (req.method === 'GET' && pathname === '/api/gpu') {
+            if (!requireAuth(req, res)) return;
             return sendJson(res, 200, gpuCapabilities);
         }
         if (pathname === '/api/settings' && req.method === 'GET') {

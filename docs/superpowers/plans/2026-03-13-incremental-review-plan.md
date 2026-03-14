@@ -99,18 +99,18 @@ All findings were cross-checked against current code. Corrections from verificat
 
 ---
 
-## Phase 6 — Server Robustness (MEDIUM)
+## ~~Phase 6 — Server Robustness (MEDIUM)~~ DONE
 
-**Scope:** 4 issues in 1 file
+**Scope:** 4 issues in 2 files
 **Estimated effort:** Small — error handlers and input validation
 **Impact:** Prevents server crashes and information leakage
 
 | # | Issue | File | Fix |
 |---|-------|------|-----|
-| M-SRV1 | `/api/gpu` no auth | `meta-server.js` | Add `requireAuth()` check |
-| M-SRV2 | TOCTOU race in archive streaming | `meta-server.js` | Use `fs.openSync()` once, pass `fd` to both stat and stream |
-| M-SRV3 | Read stream error unhandled | `meta-server.js` | Add `.on('error', ...)` to both createReadStream calls |
-| L20 | nginx.conf missing `.vdim` | `docker/nginx.conf` | Add `vdim` to archive location regex |
+| ~~M-SRV1~~ | ~~`/api/gpu` no auth~~ | `meta-server.js` | ~~FIXED — Added `requireAuth()` check~~ |
+| ~~M-SRV2~~ | ~~TOCTOU race in archive streaming~~ | `meta-server.js` | ~~FIXED — `fs.openSync()` once, `fstatSync(fd)`, pass fd to `createReadStream`~~ |
+| ~~M-SRV3~~ | ~~Read stream error unhandled~~ | `meta-server.js` | ~~FIXED — `.on('error', ...)` on archive stream + backup download stream~~ |
+| ~~L20~~ | ~~nginx.conf missing `.vdim`~~ | `docker/nginx.conf` | ~~FIXED — Added `vdim` to regex and types block~~ |
 
 ---
 

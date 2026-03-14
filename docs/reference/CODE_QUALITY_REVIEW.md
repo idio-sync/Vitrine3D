@@ -419,8 +419,8 @@ Phase F (flip strict: true)      — do after Phase E
 |----------|-------|---------------|-------|---------|-------------|
 | **CRITICAL** | 3 | 0 | 2 | 1 | Security (XSS), Logic (VR toggle) |
 | **HIGH** | 22 | 4 | 15 | 3 | Memory leaks, runtime bugs, missing cleanup |
-| **MEDIUM** | 40 | 39 | 0 | 1 | Duplication, magic numbers, type safety, performance |
-| **LOW** | 22 | 21 | 1 | 0 | Style, naming, minor robustness |
+| **MEDIUM** | 40 | 36 | 3 | 1 | Duplication, magic numbers, type safety, performance |
+| **LOW** | 22 | 20 | 2 | 0 | Style, naming, minor robustness |
 
 **Removed after verification:** C10 (archive-stream is intentionally public for `/view/{hash}` sharing), H40 (clearColor is frame-transient — main loop resets it), H41 (deps factories capture current value at call time — correct pattern), H42 (callback-before-transition is the intended design — transition continues in render loop). M-VR3 needs manual testing (fade callback exists but visual effect unclear).
 
@@ -428,6 +428,7 @@ Phase F (flip strict: true)      — do after Phase E
 **Fixed in Phase 2+3** (Runtime Bugs + Extensions): H29, H30, H31, H32, H33, H43, L12.
 **Fixed in Phase 4** (Viewer Memory Leaks): H34, H35.
 **Fixed in Phase 5** (Editorial Theme Leaks): H36, H37, H38, H39.
+**Fixed in Phase 6** (Server Robustness): M-SRV1, M-SRV2, M-SRV3, L20.
 
 **Fix plan:** `docs/superpowers/plans/2026-03-13-incremental-review-plan.md` — 12 phases ordered by severity and dependency.
 
@@ -562,9 +563,9 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 
 | # | Issue | File | Impact |
 |---|-------|------|--------|
-| M-SRV1 | `/api/gpu` endpoint exposes hardware info without authentication | `meta-server.js:3327-3330` | GPU driver version and encoder list useful for fingerprinting |
-| M-SRV2 | TOCTOU race between `existsSync` and `createReadStream` in archive streaming | `meta-server.js:2502-2547` | File deleted between stat and read causes unhandled stream error |
-| M-SRV3 | File read stream `error` event not handled — can crash Node process | `meta-server.js:2539-2548` | Unhandled stream error takes down entire meta-server |
+| ~~M-SRV1~~ | ~~`/api/gpu` endpoint exposes hardware info without authentication~~ | `meta-server.js` | **FIXED** — added `requireAuth()` check |
+| ~~M-SRV2~~ | ~~TOCTOU race between `existsSync` and `createReadStream` in archive streaming~~ | `meta-server.js` | **FIXED** — open fd once with `fs.openSync()`, use `fs.fstatSync(fd)` and pass fd to `createReadStream` |
+| ~~M-SRV3~~ | ~~File read stream `error` event not handled — can crash Node process~~ | `meta-server.js` | **FIXED** — added `.on('error', ...)` to all `createReadStream` calls (archive stream + backup download) |
 
 ### Other (4)
 
@@ -640,7 +641,7 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 | # | Issue | File |
 |---|-------|------|
 | L19 | `vainfo` HEVC/AV1 detection tests profiles and entrypoints independently — may false-positive | `meta-server.js:113-115` |
-| L20 | nginx.conf missing `.vdim` in archive content-type block | `docker/nginx.conf:38` |
+| ~~L20~~ | ~~nginx.conf missing `.vdim` in archive content-type block~~ | `docker/nginx.conf` | **FIXED** — added `vdim` to regex and types block |
 
 ### Worker (1)
 
