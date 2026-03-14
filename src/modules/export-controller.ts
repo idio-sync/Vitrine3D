@@ -187,7 +187,7 @@ function showComplianceDialog(result: SIPValidationResult): Promise<boolean> {
 
 interface PreparedArchive {
     filename: string;
-    format: 'ddim' | 'zip';
+    format: 'ddim' | 'zip' | 'vdim';
     includeHashes: boolean;
 }
 
@@ -234,7 +234,8 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
 
     // Get export options
     const formatRadio = document.querySelector('input[name="export-format"]:checked') as HTMLInputElement | null;
-    const format = (formatRadio?.value === 'zip' ? 'zip' : 'ddim') as 'ddim' | 'zip';
+    const formatValue = formatRadio?.value;
+    const format: 'ddim' | 'zip' | 'vdim' = formatValue === 'zip' ? 'zip' : formatValue === 'vdim' ? 'vdim' : 'ddim';
     // Preview image and integrity hashes are always included
     const includePreview = true;
     const includeHashes = true;

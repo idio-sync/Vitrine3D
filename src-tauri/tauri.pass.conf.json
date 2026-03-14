@@ -19,6 +19,18 @@
     "devUrl": "http://localhost:8080/?kiosk=true&theme=industrial"
   },
   "bundle": {
+    "fileAssociations": [
+      {
+        "ext": ["ddim"],
+        "mimeType": "application/octet-stream",
+        "description": "PASS Viewer Scene Archive"
+      },
+      {
+        "ext": ["vdim"],
+        "mimeType": "application/octet-stream",
+        "description": "PASS Viewer Protected Archive"
+      }
+    ],
     "windows": {
       "nsis": {
         "installerHooks": "./windows/hooks.pass.nsh"

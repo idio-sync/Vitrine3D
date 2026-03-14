@@ -6,6 +6,7 @@ import { Zip, ZipPassThrough, strToU8 } from 'fflate';
 import { Logger } from './utilities.js';
 import type { Annotation, PostProcessingEffectConfig } from '@/types.js';
 import type { ManifestCompliance } from './sip-validator.js';
+import { scrambleArchive } from './archive-scramble.js';
 
 // Create logger for this module
 const log = Logger.getLogger('archive-creator');
@@ -463,7 +464,7 @@ export interface MetadataSummary {
 }
 
 export interface CreateArchiveOptions {
-    format?: 'ddim' | 'zip';
+    format?: 'ddim' | 'zip' | 'vdim';
     includeHashes?: boolean;
 }
 
@@ -2099,10 +2100,23 @@ export class ArchiveCreator {
         } = options;
 
         log.debug('✓ Creating archive blob...');
-        const blob = await this.createArchive({ format, ...createOptions }, onProgress);
+        // For .vdim, create as .ddim internally first, then scramble
+        const createFormat = format === 'vdim' ? 'ddim' : format;
+        const blob = await this.createArchive({ format: createFormat, ...createOptions }, onProgress);
         log.debug('✓ Archive blob created, size:', blob.size);
 
-        const downloadName = `${filename}.${format}`;
+        let finalBlob = blob;
+        let ext = format === 'zip' ? 'zip' : format === 'vdim' ? 'vdim' : 'ddim';
+
+        if (format === 'vdim') {
+            log.debug('✓ Scrambling archive for .vdim export...');
+            const plainBytes = new Uint8Array(await blob.arrayBuffer());
+            const scrambledBytes = await scrambleArchive(plainBytes);
+            finalBlob = new Blob([scrambledBytes as BlobPart], { type: 'application/octet-stream' });
+            log.debug('✓ Archive scrambled, size:', finalBlob.size);
+        }
+
+        const downloadName = `${filename}.${ext}`;
 
         // Try Tauri native save dialog first
         if ((window as any).__TAURI__) {
@@ -2112,10 +2126,10 @@ export class ArchiveCreator {
                 const path = await save({
                     title: 'Save Archive',
                     defaultPath: downloadName,
-                    filters: [{ name: 'Direct Dimensions Archive', extensions: [format] }],
+                    filters: [{ name: format === 'vdim' ? 'Protected Archive' : 'Direct Dimensions Archive', extensions: [ext] }],
                 });
                 if (path) {
-                    const buffer = new Uint8Array(await blob.arrayBuffer());
+                    const buffer = new Uint8Array(await finalBlob.arrayBuffer());
                     await writeFile(path, buffer);
                     log.info('Archive saved via native dialog:', path);
                     return;
@@ -2126,7 +2140,7 @@ export class ArchiveCreator {
         }
 
         // Browser fallback: anchor-click download
-        const url = URL.createObjectURL(blob);
+        const url = URL.createObjectURL(finalBlob);
         log.debug('✓ Blob URL created:', url);
 
         const a = document.createElement('a');

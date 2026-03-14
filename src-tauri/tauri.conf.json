@@ -58,6 +58,11 @@
         "ext": ["ddim"],
         "mimeType": "application/octet-stream",
         "description": "Vitrine3D Scene Archive"
+      },
+      {
+        "ext": ["vdim"],
+        "mimeType": "application/octet-stream",
+        "description": "Vitrine3D Protected Archive"
       }
     ],
     "windows": {
