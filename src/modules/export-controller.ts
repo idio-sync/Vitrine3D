@@ -667,7 +667,7 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
             } else {
                 log.info(' Auto-capturing preview screenshot');
                 renderer.render(scene, camera);
-                previewBlob = await captureScreenshot(renderer.domElement, { width: 512, height: 512 });
+                previewBlob = await captureScreenshot(renderer.domElement, { width: 1024, height: 1024 });
             }
             if (previewBlob) {
                 log.info(' Preview captured, adding thumbnail');

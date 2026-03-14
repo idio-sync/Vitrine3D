@@ -173,7 +173,7 @@ export async function captureManualPreview(deps: ScreenshotDeps): Promise<void> 
         } else {
             renderer.render(scene, camera);
         }
-        const blob = await captureScreenshot(renderer.domElement, { width: 512, height: 512 });
+        const blob = await captureScreenshot(renderer.domElement, { width: 1024, height: 1024 });
         if (blob) {
             state.manualPreviewBlob = blob;
             hideViewfinder();
