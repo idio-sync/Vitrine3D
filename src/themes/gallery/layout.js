@@ -1056,6 +1056,7 @@ window.__KIOSK_LAYOUTS__['gallery'] = {
     onWalkthroughStart: onWalkthroughStart,
     onWalkthroughStopChange: onWalkthroughStopChange,
     onWalkthroughEnd: onWalkthroughEnd,
+    onFlightPathLoaded: function () { /* stub — gallery does not render flight UI */ },
     hasOwnInfoPanel: true,
     hasOwnQualityToggle: true
 };

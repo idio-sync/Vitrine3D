@@ -1228,7 +1228,7 @@ export class FlightPathManager {
         } else {
             heading = this.getPlaybackHeading(points, timeMs);
         }
-        const pitchRad = (-15 * Math.PI) / 180; // -15° downward pitch
+        const pitchRad = (FLIGHT_LOG.FPV_DEFAULT_PITCH_DEG * Math.PI) / 180;
         const euler = new THREE.Euler(pitchRad, heading + Math.PI, 0, 'YXZ');
         return new THREE.Quaternion().setFromEuler(euler);
     }

@@ -165,7 +165,7 @@ All findings were cross-checked against current code. Corrections from verificat
 
 ---
 
-## Phase 10 — CSS & Theme Defense-in-Depth (MEDIUM + LOW)
+## ~~Phase 10 — CSS & Theme Defense-in-Depth (MEDIUM + LOW)~~ DONE
 
 **Scope:** 8 issues across 3 files
 **Estimated effort:** Medium
@@ -173,14 +173,14 @@ All findings were cross-checked against current code. Corrections from verificat
 
 | # | Issue | File | Fix |
 |---|-------|------|-----|
-| M-CSS3 | `createCollapsible` innerHTML with title | `editorial/layout.js` | Use `createElement` + `textContent` |
-| M-CSS2 | `parseMarkdown` innerHTML at 4 sites | `editorial/layout.js` | Add comment documenting pre-escaping, or use trusted types |
-| M-TH2 | z-index scale undocumented | `editorial/layout.css` | Add z-index scale comment block at top |
-| M-TH1 | Exhibit/Gallery missing flight hooks | `exhibit/layout.js`, `gallery/layout.js` | Add stub `onFlightPathLoaded` functions |
-| L15 | Duplicate flight stats rendering | `editorial/layout.js` | Extract `buildFlightStatsGrid()` helper |
-| L16 | Golden ratio `38.2%` repeated 6x | `editorial/layout.css` | Define `--editorial-detail-split: 38.2%` CSS variable |
-| L4 | VR teleport constants not in constants.ts | `vr-session.ts` + `constants.ts` | Move to `VR` constants object |
-| L2 | FPV pitch magic number | `flight-path.ts` | Add `FPV_DEFAULT_PITCH_DEG` to `FLIGHT_LOG` constants |
+| ~~M-CSS3~~ | ~~`createCollapsible` innerHTML with title~~ | `editorial/layout.js` | ~~FIXED — `createElement` + `textContent`~~ |
+| ~~M-CSS2~~ | ~~`parseMarkdown` innerHTML at 4 sites~~ | `editorial/layout.js` | ~~FIXED — added safety comments documenting `escapeHtml()` pre-escaping~~ |
+| ~~M-TH2~~ | ~~z-index scale undocumented~~ | `editorial/layout.css` | ~~FIXED — added z-index scale comment block~~ |
+| ~~M-TH1~~ | ~~Exhibit/Gallery missing flight hooks~~ | `exhibit/layout.js`, `gallery/layout.js` | ~~FIXED — added stub `onFlightPathLoaded` functions~~ |
+| ~~L15~~ | ~~Duplicate flight stats rendering~~ | `editorial/layout.js` | ~~FIXED — extracted `buildFlightStatsGrid()` helper~~ |
+| ~~L16~~ | ~~Golden ratio `38.2%` repeated 6x~~ | `editorial/layout.css` | ~~FIXED — `--editorial-detail-split` CSS variable~~ |
+| ~~L4~~ | ~~VR teleport constants not in constants.ts~~ | `vr-session.ts` + `constants.ts` | ~~FIXED — moved to `VR` constants object~~ |
+| ~~L2~~ | ~~FPV pitch magic number~~ | `flight-path.ts` | ~~FIXED — `FLIGHT_LOG.FPV_DEFAULT_PITCH_DEG`~~ |
 
 ---
 

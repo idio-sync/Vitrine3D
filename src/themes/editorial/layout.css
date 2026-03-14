@@ -2,6 +2,17 @@
    Editorial Layout — Full-bleed, presentation-focused kiosk layout.
    All rules scoped under body.kiosk-mode.kiosk-editorial.
    Part of the 'editorial' theme package.
+
+   Z-INDEX SCALE (editorial scope only — all under kiosk-mode.kiosk-editorial):
+     0-1    Background layers (image strip, loading placeholders)
+     2-5    Content overlays (detail separator, frozen label)
+    10      Annotation markers
+    50      Mobile pill, bottom bar
+    80-86   Detail viewer overlay, frozen click target
+    90      Info panel overlay, title block
+   100      Spine accent, ribbon bar
+   200      Modals, dropdowns, tooltips, quality panel
+   210-250  Mobile overrides (info, walkthrough, nav)
    ============================================================================= */
 
 /* Base typography and chrome-hiding inherited from kiosk.css shared rules. */
@@ -4288,9 +4299,13 @@ body.kiosk-mode.kiosk-editorial .editorial-wt-stop-title {
    Info panel pushes both: frozen preview compresses to 15%, detail adjusts.
    ──────────────────────────────────────────────────────────────────────── */
 
+body.kiosk-mode.kiosk-editorial {
+    --editorial-detail-split: 38.2%;
+}
+
 /* Detail overlay: positioned within editorial frame, not full-viewport */
 body.kiosk-mode.kiosk-editorial #detail-viewer-overlay {
-    left: 38.2%;
+    left: var(--editorial-detail-split);
     bottom: 32px;
     z-index: 80;
     border-left: 2px solid rgba(var(--kiosk-accent-rgb), 0.35);
@@ -4348,8 +4363,8 @@ body.kiosk-mode.kiosk-editorial #detail-viewer-overlay::after {
 /* ── Frozen preview — main canvas dims when detail is active ── */
 
 body.kiosk-mode.kiosk-editorial.detail-active #viewer-canvas {
-    flex: 0 0 38.2%;
-    max-width: 38.2%;
+    flex: 0 0 var(--editorial-detail-split);
+    max-width: var(--editorial-detail-split);
     filter: brightness(0.5) saturate(0.3);
     transition: flex-basis 0.55s cubic-bezier(0.33, 1, 0.68, 1),
                 max-width 0.55s cubic-bezier(0.33, 1, 0.68, 1),
@@ -4361,7 +4376,7 @@ body.kiosk-mode.kiosk-editorial .editorial-frozen-click-target {
     position: fixed;
     top: 0;
     left: 0;
-    width: 38.2%;
+    width: var(--editorial-detail-split);
     bottom: 32px;
     z-index: 85;
     cursor: pointer;
@@ -4482,7 +4497,7 @@ body.kiosk-mode.kiosk-editorial .editorial-detail-back:hover {
 
 body.kiosk-mode.kiosk-editorial.detail-active:has(.editorial-info-overlay.open) #detail-viewer-overlay {
     left: 15%;
-    right: min(38.2%, 720px);
+    right: min(var(--editorial-detail-split), 720px);
 }
 
 body.kiosk-mode.kiosk-editorial.detail-active:has(.editorial-info-overlay.open) #viewer-canvas {

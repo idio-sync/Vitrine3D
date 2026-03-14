@@ -313,9 +313,9 @@ export function updateVR(): void {
 // Teleport Locomotion
 // =============================================================================
 
-const TELEPORT_ARC_SEGMENTS = 30;
-const TELEPORT_GRAVITY = 9.8;
-const TELEPORT_VELOCITY = 6.0;
+const TELEPORT_ARC_SEGMENTS = VR.TELEPORT_ARC_SEGMENTS;
+const TELEPORT_GRAVITY = VR.TELEPORT_GRAVITY;
+const TELEPORT_VELOCITY = VR.TELEPORT_VELOCITY;
 
 function initTeleport(): void {
     if (!deps) return;

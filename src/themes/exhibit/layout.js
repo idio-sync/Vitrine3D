@@ -1194,6 +1194,7 @@ window.__KIOSK_LAYOUTS__['exhibit'] = {
     onWalkthroughStart: onWalkthroughStart,
     onWalkthroughStopChange: onWalkthroughStopChange,
     onWalkthroughEnd: onWalkthroughEnd,
+    onFlightPathLoaded: function () { /* stub — exhibit does not render flight UI */ },
     hasOwnInfoPanel: true,
     hasOwnQualityToggle: true
 };

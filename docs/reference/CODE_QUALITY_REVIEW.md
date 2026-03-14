@@ -419,10 +419,10 @@ Phase F (flip strict: true)      — do after Phase E
 |----------|-------|---------------|-------|---------|-------------|
 | **CRITICAL** | 3 | 0 | 2 | 1 | Security (XSS), Logic (VR toggle) |
 | **HIGH** | 22 | 4 | 15 | 3 | Memory leaks, runtime bugs, missing cleanup |
-| **MEDIUM** | 40 | 24 | 15 | 1 | Duplication, magic numbers, type safety, performance |
-| **LOW** | 22 | 15 | 7 | 0 | Style, naming, minor robustness |
+| **MEDIUM** | 40 | 20 | 19 | 1 | Duplication, magic numbers, type safety, performance |
+| **LOW** | 22 | 11 | 11 | 0 | Style, naming, minor robustness |
 
-**Removed after verification:** C10 (archive-stream is intentionally public for `/view/{hash}` sharing), H40 (clearColor is frame-transient — main loop resets it), H41 (deps factories capture current value at call time — correct pattern), H42 (callback-before-transition is the intended design — transition continues in render loop). M-VR3 needs manual testing (fade callback exists but visual effect unclear).
+**Removed after verification:** C10 (archive-stream is intentionally public for `/view/{hash}` sharing), H40 (clearColor is frame-transient — main loop resets it), H41 (deps factories capture current value at call time — correct pattern), H42 (callback-before-transition is the intended design — transition continues in render loop). M-VR3 needs re manual testing (fade callback exists but visual effect unclear).
 
 **Fixed in `ccd5dc0`** (Phase 1 — Security & Auth): C11, C12, H26, H27, H28.
 **Fixed in Phase 2+3** (Runtime Bugs + Extensions): H29, H30, H31, H32, H33, H43, L12.
@@ -432,6 +432,7 @@ Phase F (flip strict: true)      — do after Phase E
 **Fixed in Phase 7** (Per-Frame Allocations): M-VR1, M-VR2, M-FP1, M-FP2, M-FP3, M-FP4, M-FP5.
 **Fixed in Phase 8** (Archive Pipeline Hardening): M-ARC1, M-ARC2, M-ARC3, M-ARC4.
 **Fixed in Phase 9** (Debug Cleanup + Quick Wins): M-ICP1, L6, L7, L8, L18, L21. L22 skipped (module-scope requirement).
+**Fixed in Phase 10** (CSS & Theme Defense-in-Depth): M-CSS3, M-CSS2, M-TH2, M-TH1, L15, L16, L4, L2.
 
 **Fix plan:** `docs/superpowers/plans/2026-03-13-incremental-review-plan.md` — 12 phases ordered by severity and dependency.
 
@@ -552,8 +553,8 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 
 | # | Issue | File | Impact |
 |---|-------|------|--------|
-| M-TH1 | Exhibit and Gallery themes missing `onFlightPathLoaded` hook — no flight UI in those themes | `exhibit/layout.js`, `gallery/layout.js` | Flight paths have no UI when using exhibit or gallery themes |
-| M-TH2 | z-index stacking uses 36 values (0-250) with no documented scale | `editorial/layout.css` | Correct stacking by coincidence, not design |
+| ~~M-TH1~~ | ~~Exhibit and Gallery themes missing `onFlightPathLoaded` hook~~ | `exhibit/layout.js`, `gallery/layout.js` | **FIXED** — added stub functions |
+| ~~M-TH2~~ | ~~z-index stacking uses 36 values (0-250) with no documented scale~~ | `editorial/layout.css` | **FIXED** — added z-index scale comment block |
 
 ### Type Safety (2)
 
@@ -584,8 +585,8 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 | # | Issue | File | Impact |
 |---|-------|------|--------|
 | M-CSS1 | `!important` used 23 times in editorial layout.css | `editorial/layout.css` | Most for mobile overrides — acceptable but creates specificity ceiling |
-| M-CSS2 | `parseMarkdown` output injected via innerHTML at 4 sites — defense-in-depth concern | `editorial/layout.js:304,418,433,528` | `parseMarkdown` escapes first, but regex bypass could inject HTML |
-| M-CSS3 | `createCollapsible` uses innerHTML with `title` param — currently hardcoded but not enforced | `editorial/layout.js:151` | Future caller with manifest-derived data creates XSS vector |
+| ~~M-CSS2~~ | ~~`parseMarkdown` output injected via innerHTML at 4 sites — defense-in-depth concern~~ | `editorial/layout.js` | **FIXED** — added safety comments documenting `escapeHtml()` pre-escaping |
+| ~~M-CSS3~~ | ~~`createCollapsible` uses innerHTML with `title` param~~ | `editorial/layout.js` | **FIXED** — replaced with `createElement` + `textContent` |
 
 ---
 
@@ -596,14 +597,14 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 | # | Issue | File |
 |---|-------|------|
 | L1 | `_onPointerUp` handler does not check for FPV mode (inconsistent with down/move guards) | `flight-path.ts:1287-1289` |
-| L2 | FPV default pitch angle `-15` degrees is a magic number | `flight-path.ts:1228` |
+| ~~L2~~ | ~~FPV default pitch angle `-15` degrees is a magic number~~ | `flight-path.ts` | **FIXED** — `FLIGHT_LOG.FPV_DEFAULT_PITCH_DEG` |
 | L3 | Unused `_scene` constructor parameter | `flight-path.ts:186` |
 
 ### VR (2)
 
 | # | Issue | File |
 |---|-------|------|
-| L4 | VR teleport physics constants (`ARC_SEGMENTS`, `GRAVITY`, `VELOCITY`) not in `constants.ts` VR object | `vr-session.ts:309-311` |
+| ~~L4~~ | ~~VR teleport physics constants (`ARC_SEGMENTS`, `GRAVITY`, `VELOCITY`) not in `constants.ts` VR object~~ | `vr-session.ts` | **FIXED** — moved to `VR` constants |
 | L5 | VR auto-enter overlay uses `innerHTML` with hardcoded content — safe but inconsistent with project security patterns | `vr-session.ts:221-222` |
 
 ### Archive/Export (3)
@@ -634,8 +635,8 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 
 | # | Issue | File |
 |---|-------|------|
-| L15 | Duplicate flight log stats rendering code (~30 lines) in setup vs onFlightPathLoaded | `editorial/layout.js:1800-1829` vs `2370-2400` |
-| L16 | Magic number `38.2%` (golden ratio) repeated 6 times without CSS variable | `editorial/layout.css` |
+| ~~L15~~ | ~~Duplicate flight log stats rendering code (~30 lines) in setup vs onFlightPathLoaded~~ | `editorial/layout.js` | **FIXED** — extracted `buildFlightStatsGrid()` helper |
+| ~~L16~~ | ~~Magic number `38.2%` (golden ratio) repeated 6 times without CSS variable~~ | `editorial/layout.css` | **FIXED** — `--editorial-detail-split` CSS variable |
 | L17 | Mobile breakpoint changed from 768px to 699px — may affect tablet portrait mode | `kiosk.css` |
 | ~~L18~~ | ~~`var` declarations inside `for` loop in `createStaticMap` — should be `let`~~ | `editorial/layout.js` | **FIXED** — changed to `let` |
 
@@ -730,5 +731,5 @@ The VDIM archive "protection" uses XOR with a 32-byte repeating key. The key is 
 ### Long-term
 
 25. ~~**M-ARC1** — Document XOR scramble security model accurately~~
-26. **M-TH1** — Flight path support in exhibit/gallery themes
-27. **M-CSS1–3** — Defense-in-depth innerHTML improvements
+26. ~~**M-TH1** — Flight path support in exhibit/gallery themes~~
+27. ~~**M-CSS2/3** — Defense-in-depth innerHTML improvements~~

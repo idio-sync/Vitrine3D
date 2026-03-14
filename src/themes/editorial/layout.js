@@ -148,7 +148,14 @@ function createCollapsible(title, openByDefault) {
     section.className = 'editorial-collapsible' + (openByDefault ? ' open' : '');
     const header = document.createElement('div');
     header.className = 'editorial-collapsible-header';
-    header.innerHTML = `<span class="editorial-collapsible-title">${title}</span><span class="editorial-collapsible-chevron">&#9654;</span>`;
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'editorial-collapsible-title';
+    titleSpan.textContent = title;
+    const chevron = document.createElement('span');
+    chevron.className = 'editorial-collapsible-chevron';
+    chevron.textContent = '\u25B6'; // ▶
+    header.appendChild(titleSpan);
+    header.appendChild(chevron);
     header.addEventListener('click', () => section.classList.toggle('open'));
     section.appendChild(header);
     const content = document.createElement('div');
@@ -301,6 +308,7 @@ function createInfoOverlay(manifest, deps) {
     if (desc) {
         const descEl = document.createElement('div');
         descEl.className = 'editorial-info-description';
+        // Safety: parseMarkdown calls escapeHtml() before applying formatting — HTML-safe
         descEl.innerHTML = parseMarkdown(resolveAssetRefs(desc, imageAssets));
         // Remove first image if it's already shown in the image strip
         if (stripSrc) {
@@ -415,6 +423,7 @@ function createInfoOverlay(manifest, deps) {
             proseLabeled.appendChild(subLabel);
             const proseBlock = document.createElement('div');
             proseBlock.className = 'editorial-prose-block';
+            // Safety: parseMarkdown calls escapeHtml() before applying formatting — HTML-safe
             proseBlock.innerHTML = parseMarkdown(ar.context.description);
             proseLabeled.appendChild(proseBlock);
             content.appendChild(proseLabeled);
@@ -430,6 +439,7 @@ function createInfoOverlay(manifest, deps) {
             proseLabeled.appendChild(subLabel);
             const proseBlock = document.createElement('div');
             proseBlock.className = 'editorial-prose-block';
+            // Safety: parseMarkdown calls escapeHtml() before applying formatting — HTML-safe
             proseBlock.innerHTML = parseMarkdown(ar.provenance);
             proseLabeled.appendChild(proseBlock);
             content.appendChild(proseLabeled);
@@ -525,6 +535,7 @@ function createInfoOverlay(manifest, deps) {
             if (hasNotes) {
                 const proseBlock = document.createElement('div');
                 proseBlock.className = 'editorial-prose-block';
+                // Safety: parseMarkdown calls escapeHtml() before applying formatting — HTML-safe
                 proseBlock.innerHTML = parseMarkdown(prov.processing_notes);
                 content.appendChild(proseBlock);
             }
@@ -1822,26 +1833,7 @@ export function setup(manifest, deps) {
             const fStats = flightPathManager.getStats();
             if (fStats) {
                 const { section: fSection, content: fContent } = createCollapsible('Flight Log', false);
-                const fGrid = document.createElement('div');
-                fGrid.className = 'editorial-flight-info-stats';
-                [
-                    ['Duration', fStats.duration],
-                    ['Distance', fStats.distance],
-                    ['Max Alt', fStats.maxAlt],
-                    ['Max Speed', fStats.maxSpeed],
-                    ['Avg Speed', fStats.avgSpeed],
-                    ['Points', fStats.points],
-                ].forEach(([label, value]) => {
-                    const lbl = document.createElement('span');
-                    lbl.className = 'editorial-flight-info-label';
-                    lbl.textContent = label;
-                    const val = document.createElement('span');
-                    val.className = 'editorial-flight-info-value';
-                    val.textContent = value;
-                    fGrid.appendChild(lbl);
-                    fGrid.appendChild(val);
-                });
-                fContent.appendChild(fGrid);
+                fContent.appendChild(buildFlightStatsGrid(fStats));
                 flightPlaceholder.appendChild(fSection);
             }
         }
@@ -2103,6 +2095,31 @@ function initFilePicker(container, deps) {
         </div>
         <input type="file" id="kiosk-picker-input" accept=".ddim,.a3z,.a3d,.zip,.glb,.gltf,.obj,.stl,.ply,.splat,.ksplat,.spz,.sog,.e57" multiple style="display:none">
     `;
+}
+
+// ---- Flight stats grid builder (reusable from setup + onFlightPathLoaded) ----
+
+function buildFlightStatsGrid(stats) {
+    const grid = document.createElement('div');
+    grid.className = 'editorial-flight-info-stats';
+    [
+        ['Duration', stats.duration],
+        ['Distance', stats.distance],
+        ['Max Alt', stats.maxAlt],
+        ['Max Speed', stats.maxSpeed],
+        ['Avg Speed', stats.avgSpeed],
+        ['Points', stats.points],
+    ].forEach(([label, value]) => {
+        const lbl = document.createElement('span');
+        lbl.className = 'editorial-flight-info-label';
+        lbl.textContent = label;
+        const val = document.createElement('span');
+        val.className = 'editorial-flight-info-value';
+        val.textContent = value;
+        grid.appendChild(lbl);
+        grid.appendChild(val);
+    });
+    return grid;
 }
 
 // ---- Flight log dropdown builder (reusable from setup + onFlightPathLoaded) ----
@@ -2391,28 +2408,7 @@ function onFlightPathLoaded(fpm) {
         const stats = fpm.getStats();
         if (stats) {
             const { section, content } = createCollapsible('Flight Log', false);
-
-            const statsGrid = document.createElement('div');
-            statsGrid.className = 'editorial-flight-info-stats';
-            [
-                ['Duration', stats.duration],
-                ['Distance', stats.distance],
-                ['Max Alt', stats.maxAlt],
-                ['Max Speed', stats.maxSpeed],
-                ['Avg Speed', stats.avgSpeed],
-                ['Points', stats.points],
-            ].forEach(([label, value]) => {
-                const lbl = document.createElement('span');
-                lbl.className = 'editorial-flight-info-label';
-                lbl.textContent = label;
-                const val = document.createElement('span');
-                val.className = 'editorial-flight-info-value';
-                val.textContent = value;
-                statsGrid.appendChild(lbl);
-                statsGrid.appendChild(val);
-            });
-            content.appendChild(statsGrid);
-
+            content.appendChild(buildFlightStatsGrid(stats));
             placeholder.appendChild(section);
         }
     }

@@ -411,6 +411,12 @@ export const VR = {
     MAX_STD_DEV: Math.sqrt(5),
     /** XR framebuffer scale (0.5 = half native resolution, good perf/quality tradeoff) */
     FRAMEBUFFER_SCALE: 0.5,
+    /** Teleport arc visual segments */
+    TELEPORT_ARC_SEGMENTS: 30,
+    /** Teleport arc gravity (m/s²) */
+    TELEPORT_GRAVITY: 9.8,
+    /** Teleport arc initial velocity (m/s) */
+    TELEPORT_VELOCITY: 6.0,
     /** Maximum teleport distance in meters */
     TELEPORT_MAX_DISTANCE: 20,
     /** Fade-to-black duration per half in ms (total transition = 2x) */
@@ -439,4 +445,6 @@ export const FLIGHT_LOG = {
     CHASE_CAM_DISTANCE: 0.5,
     /** Chase camera height above the drone (scene units) */
     CHASE_CAM_HEIGHT: 0.3,
+    /** Default FPV pitch angle in degrees (negative = look down) */
+    FPV_DEFAULT_PITCH_DEG: -15,
 } as const;
