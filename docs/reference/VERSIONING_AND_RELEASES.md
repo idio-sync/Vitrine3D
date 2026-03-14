@@ -148,7 +148,8 @@ A version sync test (`src/modules/__tests__/version-sync.test.ts`) verifies all 
 
 | File | Purpose |
 |------|---------|
-| `release-please-config.json` | release-please settings, extra-files for version sync |
+| `release-please-config.json` | release-please settings for `main` (stable releases) |
+| `release-please-config-dev.json` | release-please settings for `dev` (alpha pre-releases) |
 | `.release-please-manifest.json` | Tracks current version (updated by release-please) |
 | `commitlint.config.js` | Commit message validation rules |
 | `.husky/commit-msg` | Git hook that runs commitlint |
