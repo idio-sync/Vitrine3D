@@ -446,6 +446,18 @@ export async function ensureAssetLoaded(assetType: string, deps: ArchivePipeline
             state.meshFormat = meshEntry.file_name.split('.').pop()?.toLowerCase() || 'glb';
             state.assetStates[assetType] = ASSET_STATE.LOADED;
             updatePronomRegistry(state);
+
+            // Store comparison "after" mesh info for lazy extraction (do not load into scene)
+            const comparisons = archiveLoader.getComparisons();
+            if (comparisons.length > 0) {
+                const afterKey = comparisons[0].after.asset_key;
+                const manifest = archiveLoader.getManifest();
+                const afterEntry = manifest?.data_entries?.[afterKey];
+                if (afterEntry) {
+                    state.comparisonAfterEntry = { key: afterKey, filename: afterEntry.file_name };
+                }
+            }
+
             return true;
 
         } else if (assetType === 'pointcloud') {

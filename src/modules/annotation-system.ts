@@ -753,6 +753,8 @@ export class AnnotationSystem {
             if (a.detail_view_settings) {
                 obj.detail_view_settings = { ...a.detail_view_settings };
             }
+            if (a.comparison_asset_key) obj.comparison_asset_key = a.comparison_asset_key;
+            if (a.comparison) obj.comparison = { ...a.comparison };
             return obj;
         });
     }

@@ -354,6 +354,7 @@ export interface Manifest {
     walkthrough?: import('../types.js').Walkthrough;
     version_history: VersionHistoryEntry[];
     integrity?: IntegrityData;
+    comparisons?: import('../types.js').ComparisonPair[];
     compliance?: ManifestCompliance;
     _meta: {
         quality?: QualityStats;
@@ -1704,6 +1705,18 @@ export class ArchiveCreator {
         return this.manifest.walkthrough ?? null;
     }
 
+    setComparisons(pairs: import('../types.js').ComparisonPair[]): void {
+        if (pairs && pairs.length > 0) {
+            this.manifest.comparisons = pairs;
+        } else {
+            this.manifest.comparisons = undefined;
+        }
+    }
+
+    getComparisons(): import('../types.js').ComparisonPair[] {
+        return this.manifest.comparisons || [];
+    }
+
     setVersionHistory(entries: VersionHistoryEntry[]): void {
         this.manifest.version_history = Array.isArray(entries) ? [...entries] : [];
     }
@@ -1959,6 +1972,9 @@ export class ArchiveCreator {
         for (const anno of this.manifest.annotations) {
             if (anno.detail_asset_key) {
                 referencedKeys.add(anno.detail_asset_key);
+            }
+            if (anno.comparison_asset_key) {
+                referencedKeys.add(anno.comparison_asset_key);
             }
         }
 

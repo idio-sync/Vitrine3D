@@ -909,6 +909,13 @@ export class ArchiveLoader {
     }
 
     /**
+     * Get comparisons from manifest
+     */
+    getComparisons(): import('../types.js').ComparisonPair[] {
+        return this.manifest?.comparisons || [];
+    }
+
+    /**
      * Get walkthrough from manifest
      */
     getWalkthrough(): import('../types.js').Walkthrough | null {
