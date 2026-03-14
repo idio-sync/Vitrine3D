@@ -365,6 +365,13 @@
             <!-- Kiosk extracts these buttons by ID into the floating toolbar -->
             <div class="props-pane" id="pane-annotate" style="display:none;">
                 <button id="btn-toggle-annotations" style="display:none;">Toggle Annotations</button>
+                <button id="btn-toggle-compare" class="viewer-btn" title="Compare Before/After" style="display:none;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="3" width="8" height="18" rx="1"/>
+                        <rect x="14" y="3" width="8" height="18" rx="1"/>
+                        <line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2"/>
+                    </svg>
+                </button>
                 <button id="btn-toggle-flightpath" class="viewer-btn" title="Toggle Flight Path" style="display:none;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 17l4-4 4 4 4-8 6 6"/>
@@ -592,6 +599,38 @@
             </div>
             <div class="annotation-info-body"></div>
         </div>
+    </div>
+
+    <!-- Comparison viewer overlay -->
+    <div id="comparison-viewer-overlay" class="hidden">
+        <div class="comparison-header">
+            <button id="btn-comparison-back" class="detail-back-btn">&#8592; Back</button>
+            <span id="comparison-title" class="comparison-title"></span>
+            <div class="comparison-mode-switcher">
+                <button class="comparison-mode-btn" data-mode="side-by-side" title="Side by Side">&#9776;</button>
+                <button class="comparison-mode-btn" data-mode="slider" title="Slider">&#10072;</button>
+                <button class="comparison-mode-btn" data-mode="toggle" title="Toggle">&#8644;</button>
+            </div>
+        </div>
+        <div class="comparison-canvas-container">
+            <canvas id="comparison-viewer-canvas"></canvas>
+            <div id="comparison-slider-divider" class="comparison-slider-divider" style="display:none;">
+                <div class="comparison-slider-handle"></div>
+            </div>
+            <div id="comparison-alignment-warning" class="comparison-alignment-warning" style="display:none;">Models may not be aligned</div>
+            <div id="comparison-labels" class="comparison-labels">
+                <span id="comparison-label-before" class="comparison-label left"></span>
+                <span id="comparison-label-after" class="comparison-label right"></span>
+            </div>
+        </div>
+        <div class="comparison-toolbar">
+            <button id="btn-comparison-sync" class="comparison-toolbar-btn" title="Sync Cameras">&#128279; Sync</button>
+            <div id="comparison-crossfade-container" style="display:none;">
+                <input type="range" id="comparison-crossfade" min="0" max="100" value="0" class="comparison-crossfade-slider">
+                <button id="btn-comparison-toggle" class="comparison-toolbar-btn">Toggle</button>
+            </div>
+        </div>
+        <div id="comparison-metadata" class="comparison-metadata"></div>
     </div>
 
     <script src="pre-module.js"></script>

@@ -1701,6 +1701,35 @@
                                     <button type="button" id="btn-sidebar-preview-detail" class="prop-btn small">Preview in Detail Viewer</button>
                                 </div>
                             </div>
+                            <div id="sidebar-comparison-section" style="display:none;">
+                                <label>Comparison Model</label>
+                                <div class="detail-attach-area">
+                                    <input type="file" id="sidebar-comparison-file" accept=".glb" style="display:none">
+                                    <button type="button" id="btn-sidebar-attach-comparison" class="prop-btn small">Attach Comparison .glb</button>
+                                    <span id="sidebar-comparison-filename" class="detail-filename"></span>
+                                    <button type="button" id="btn-sidebar-remove-comparison" class="prop-btn danger small" style="display:none">Remove</button>
+                                </div>
+                                <div id="sidebar-comparison-customize" style="display:none">
+                                    <label for="sidebar-comparison-before-label">Before Label</label>
+                                    <input type="text" id="sidebar-comparison-before-label" class="prop-input" placeholder="Before">
+                                    <label for="sidebar-comparison-before-date">Before Date</label>
+                                    <input type="date" id="sidebar-comparison-before-date" class="prop-input">
+                                    <label for="sidebar-comparison-after-label">After Label</label>
+                                    <input type="text" id="sidebar-comparison-after-label" class="prop-input" placeholder="After">
+                                    <label for="sidebar-comparison-after-date">After Date</label>
+                                    <input type="date" id="sidebar-comparison-after-date" class="prop-input">
+                                    <label for="sidebar-comparison-default-mode">Default Mode</label>
+                                    <select id="sidebar-comparison-default-mode" class="prop-input">
+                                        <option value="side-by-side">Side by Side</option>
+                                        <option value="slider">Slider</option>
+                                        <option value="toggle">Toggle</option>
+                                    </select>
+                                    <div class="comparison-actions">
+                                        <button type="button" id="btn-sidebar-align-comparison" class="prop-btn small">Align</button>
+                                        <button type="button" id="btn-sidebar-preview-comparison" class="prop-btn small">Preview Compare</button>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="button-row" style="display:flex; gap:6px; margin-top:8px;">
                                 <button class="prop-btn small" id="btn-sidebar-update-anno-camera" title="Update camera position for this annotation">Update Camera</button>
                                 <button class="prop-btn danger small" id="btn-sidebar-delete-anno" title="Delete this annotation">Delete</button>
@@ -3290,6 +3319,38 @@
             <button type="button" id="btn-detail-set-camera" class="action-btn secondary">Set Current View as Initial</button>
             <button type="button" id="btn-detail-capture-thumb" class="action-btn secondary">Capture Thumbnail</button>
         </div>
+    </div>
+
+    <!-- Comparison viewer overlay -->
+    <div id="comparison-viewer-overlay" class="hidden">
+        <div class="comparison-header">
+            <button id="btn-comparison-back" class="detail-back-btn">&#8592; Back</button>
+            <span id="comparison-title" class="comparison-title"></span>
+            <div class="comparison-mode-switcher">
+                <button class="comparison-mode-btn" data-mode="side-by-side" title="Side by Side">&#9776;</button>
+                <button class="comparison-mode-btn" data-mode="slider" title="Slider">&#10072;</button>
+                <button class="comparison-mode-btn" data-mode="toggle" title="Toggle">&#8644;</button>
+            </div>
+        </div>
+        <div class="comparison-canvas-container">
+            <canvas id="comparison-viewer-canvas"></canvas>
+            <div id="comparison-slider-divider" class="comparison-slider-divider" style="display:none;">
+                <div class="comparison-slider-handle"></div>
+            </div>
+            <div id="comparison-alignment-warning" class="comparison-alignment-warning" style="display:none;">Models may not be aligned</div>
+            <div id="comparison-labels" class="comparison-labels">
+                <span id="comparison-label-before" class="comparison-label left"></span>
+                <span id="comparison-label-after" class="comparison-label right"></span>
+            </div>
+        </div>
+        <div class="comparison-toolbar">
+            <button id="btn-comparison-sync" class="comparison-toolbar-btn" title="Sync Cameras">&#128279; Sync</button>
+            <div id="comparison-crossfade-container" style="display:none;">
+                <input type="range" id="comparison-crossfade" min="0" max="100" value="0" class="comparison-crossfade-slider">
+                <button id="btn-comparison-toggle" class="comparison-toolbar-btn">Toggle</button>
+            </div>
+        </div>
+        <div id="comparison-metadata" class="comparison-metadata"></div>
     </div>
 
     <script src="../pre-module.js"></script>
