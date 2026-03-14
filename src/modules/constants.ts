@@ -147,8 +147,8 @@ export const SPARK_DEFAULTS = {
     CONE_FOV: 1.0,
     /** Cone foveation — HD: gentle deprioritization outside view cone */
     CONE_FOVEATE_HD: 0.3,
-    /** Cone foveation — SD: stronger deprioritization to focus budget on center */
-    CONE_FOVEATE_SD: 0.5,
+    /** Cone foveation — SD: moderate deprioritization outside cone (0.5 was too aggressive for 16:9) */
+    CONE_FOVEATE_SD: 0.35,
     /** maxStdDev for SD tier — ~35% fewer pixels per large splat (perceptually similar) */
     MAX_STD_DEV_SD: Math.sqrt(5),
     /** maxStdDev for HD tier — Spark default, full quality */
