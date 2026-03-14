@@ -74,6 +74,17 @@ jobs:
             echo "tag=v$(jq -r .version src-tauri/tauri.conf.json)" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Determine prerelease status
+        id: prerelease
+        shell: bash
+        run: |
+          TAG="${{ steps.release_tag.outputs.tag }}"
+          if [[ "$TAG" == *"-alpha"* ]] || [[ "$TAG" == *"-beta"* ]] || [[ "$TAG" == *"-rc"* ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -84,7 +95,7 @@ jobs:
           releaseName: '${{ matrix.release_name }} ${{ steps.release_tag.outputs.tag }}'
           releaseBody: 'Desktop release for Windows, Linux, and macOS.'
           releaseDraft: true
-          prerelease: false
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
           args: ${{ matrix.config_args }}
 
   build-android:

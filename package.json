@@ -24,7 +24,8 @@
     "format:check": "prettier --check \"src/**/*.{js,ts,css,html}\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "postinstall": "node -e \"const {mkdirSync,copyFileSync}=require('fs'),d='public/draco';mkdirSync(d,{recursive:true});const s1='node_modules/three/examples/jsm/libs/draco/gltf';['draco_decoder.js','draco_decoder.wasm','draco_wasm_wrapper.js'].forEach(f=>copyFileSync(s1+'/'+f,d+'/'+f));const s2='node_modules/draco3dgltf';['draco_encoder.wasm','draco_decoder_gltf.wasm'].forEach(f=>copyFileSync(s2+'/'+f,d+'/'+f));console.log('Draco files copied to public/draco/');\""
+    "postinstall": "node -e \"const {mkdirSync,copyFileSync}=require('fs'),d='public/draco';mkdirSync(d,{recursive:true});const s1='node_modules/three/examples/jsm/libs/draco/gltf';['draco_decoder.js','draco_decoder.wasm','draco_wasm_wrapper.js'].forEach(f=>copyFileSync(s1+'/'+f,d+'/'+f));const s2='node_modules/draco3dgltf';['draco_encoder.wasm','draco_decoder_gltf.wasm'].forEach(f=>copyFileSync(s2+'/'+f,d+'/'+f));console.log('Draco files copied to public/draco/');\"",
+    "prepare": "husky"
   },
   "keywords": [
     "gaussian-splatting",
@@ -36,12 +37,15 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@commitlint/cli": "^20.4.4",
+    "@commitlint/config-conventional": "^20.4.4",
     "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2.10.0",
     "@types/node": "^25.3.5",
     "@types/three": "^0.183.1",
     "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
     "jsdom": "^26.1.0",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
