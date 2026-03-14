@@ -480,6 +480,130 @@ flowchart TD
 
 ---
 
+## 6. Quality Tier & Proxy System
+
+How the viewer decides between SD (proxy) and HD (full-resolution) assets based on device capability scoring and GPU benchmarking.
+
+```mermaid
+flowchart TD
+    Start([resolveQualityTier called]) --> TierInput{Requested tier?}
+    TierInput -->|SD| ReturnSD([Return SD])
+    TierInput -->|HD| ReturnHD([Return HD])
+    TierInput -->|AUTO| DetectDevice[detectDeviceTier]
+
+    DetectDevice --> IOSCheck{"iOS / iPadOS?<br/>(UA regex + platform<br/>+ maxTouchPoints > 1)"}
+    IOSCheck -->|Yes| ForceSDiOS(["Return SD<br/>Safari ~1.5 GB process memory limit"])
+    IOSCheck -->|No| AndroidCheck{Android?}
+    AndroidCheck -->|Yes| ForceSDAndroid(["Return SD<br/>WebView memory ceiling"])
+    AndroidCheck -->|No| StaticScore
+
+    subgraph StaticScore["Static Heuristics — 5 points max"]
+        direction TB
+        H1{"navigator.deviceMemory<br/>≥ 4 GB?"}
+        H1 -->|Yes / undefined| S1["+1 point"]
+        H1 -->|No| S1skip["+0"]
+
+        H2{"navigator.hardwareConcurrency<br/>≥ 4 cores?"}
+        H2 -->|Yes / undefined| S2["+1 point"]
+        H2 -->|No| S2skip["+0"]
+
+        H3{"screen.width<br/>≥ 768 px?"}
+        H3 -->|Yes| S3["+1 point"]
+        H3 -->|No| S3skip["+0"]
+
+        H4{"gl.MAX_TEXTURE_SIZE<br/>≥ 8192?"}
+        H4 -->|Yes / no GL| S4["+1 point"]
+        H4 -->|No| S4skip["+0"]
+
+        H5{"UA contains Mobile /<br/>Android / iPhone?"}
+        H5 -->|No| S5["+1 point"]
+        H5 -->|Yes| S5skip["+0"]
+    end
+
+    StaticScore --> AddBenchmark["Add GPU benchmark score<br/>getBenchmarkScore()"]
+
+    subgraph BenchmarkScore["GPU Benchmark — 0 to 2 points"]
+        direction TB
+        BenchCached{"_benchmarkFps<br/>cached?"}
+        BenchCached -->|null| B0["0 points<br/>(benchmark hasn't run)"]
+        BenchCached -->|cached| BenchThresh{"Benchmark FPS?"}
+        BenchThresh -->|"≥ 1000 FPS"| B2["+2 points<br/>discrete GPU"]
+        BenchThresh -->|"≥ 500 FPS"| B1["+1 point<br/>mid-range"]
+        BenchThresh -->|"< 500 FPS"| B0b["+0 points<br/>integrated / weak"]
+    end
+
+    AddBenchmark --> BenchmarkScore
+    BenchmarkScore --> HardGate{"Benchmark ran &<br/>FPS < 500?"}
+    HardGate -->|Yes| ForceSDGPU(["Return SD<br/>GPU below minimum"])
+    HardGate -->|No| FinalScore{"Total score<br/>(0–7)?"}
+    FinalScore -->|"≥ 4"| TierHD([Return HD])
+    FinalScore -->|"< 4"| TierSD([Return SD])
+
+    style Start fill:#2d5a27,stroke:#4a9,color:#fff
+    style ReturnSD fill:#5c3a1a,stroke:#c96,color:#fff
+    style ReturnHD fill:#1a3a5c,stroke:#68b,color:#fff
+    style ForceSDiOS fill:#5c3a1a,stroke:#c96,color:#fff
+    style ForceSDAndroid fill:#5c3a1a,stroke:#c96,color:#fff
+    style ForceSDGPU fill:#5c3a1a,stroke:#c96,color:#fff
+    style TierSD fill:#5c3a1a,stroke:#c96,color:#fff
+    style TierHD fill:#1a3a5c,stroke:#68b,color:#fff
+```
+
+### GPU Benchmark Detail (`runGpuBenchmark`)
+
+```mermaid
+flowchart LR
+    Call([runGpuBenchmark]) --> Cached{"_benchmarkFps<br/>cached?"}
+    Cached -->|Yes| ReturnCached([Return cached FPS])
+    Cached -->|No| Setup["Create offscreen render target<br/>at viewport resolution<br/>5 icospheres @ detail 6<br/>~410K triangles"]
+
+    Setup --> Warmup["2 warm-up frames<br/>+ gl.finish()"]
+    Warmup --> Loop["Tight render loop<br/>~500ms duration"]
+    Loop --> Sync["gl.readPixels(0,0,1,1)<br/>Hard GPU sync per frame<br/>(Intel HD 530 workaround)"]
+    Sync --> More{500ms elapsed?}
+    More -->|No| Loop
+    More -->|Yes| Calc["FPS = frameCount / elapsed"]
+    Calc --> Cleanup["Dispose geometry, material,<br/>render target"]
+    Cleanup --> Cache["Cache in _benchmarkFps"]
+    Cache --> Return([Return FPS])
+
+    style Call fill:#2d5a27,stroke:#4a9,color:#fff
+    style Return fill:#1a3a5c,stroke:#68b,color:#fff
+    style ReturnCached fill:#1a3a5c,stroke:#68b,color:#fff
+```
+
+### Proxy Swapping Flow
+
+How resolved quality tier drives asset loading decisions during archive playback:
+
+```mermaid
+flowchart TD
+    ArchiveLoaded([Archive loaded<br/>with proxy assets]) --> QualityResolved{Resolved tier?}
+
+    QualityResolved -->|SD| CheckProxy{"Archive has<br/>proxy asset?"}
+    CheckProxy -->|Yes| LoadProxy["Load proxy<br/>scene_proxy / mesh_proxy<br/>Lower poly count"]
+    CheckProxy -->|No| LoadFull["Load full-res<br/>(no proxy available)"]
+
+    QualityResolved -->|HD| LoadFull
+
+    LoadProxy --> ProxyVisible[Proxy displayed in viewport]
+    LoadFull --> FullVisible[Full-res displayed in viewport]
+
+    ProxyVisible --> UserUpgrade{"User clicks<br/>'Load Full Res'?"}
+    UserUpgrade -->|Yes| ExtractFull["Extract full-res from archive<br/>(HTTP Range or cached ZIP)"]
+    ExtractFull --> Swap["swapMeshChildren<br/>In-place geometry swap<br/>No empty frame"]
+    Swap --> DisposeProxy[Dispose old proxy resources]
+    DisposeProxy --> FullVisible
+
+    FullVisible --> LODBudget["Apply LOD splat budget<br/>SD: 1M splats<br/>HD: 5M splats<br/>(overridable via env vars)"]
+
+    style ArchiveLoaded fill:#2d5a27,stroke:#4a9,color:#fff
+    style FullVisible fill:#1a3a5c,stroke:#68b,color:#fff
+    style ProxyVisible fill:#5c3a1a,stroke:#c96,color:#fff
+```
+
+---
+
 ## Typical Configurations
 
 ### Splat Only
