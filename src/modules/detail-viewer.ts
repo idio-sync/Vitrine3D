@@ -216,6 +216,7 @@ export class DetailViewer {
         } catch (err) {
             log.error('Failed to load detail model:', err);
             this._showError('Failed to load detail model');
+            this.deps.parentRenderLoop.resume();
             return;
         }
 
@@ -790,7 +791,7 @@ export class DetailViewer {
         const btn = document.createElement('button');
         btn.className = 'detail-error-close';
         btn.textContent = 'Close';
-        btn.addEventListener('click', () => errorDiv.remove());
+        btn.addEventListener('click', () => { errorDiv.remove(); this.close(); });
         errorDiv.appendChild(p);
         errorDiv.appendChild(btn);
         this.overlay.appendChild(errorDiv);

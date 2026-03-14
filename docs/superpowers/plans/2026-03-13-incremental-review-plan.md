@@ -71,7 +71,7 @@ All findings were cross-checked against current code. Corrections from verificat
 
 ---
 
-## Phase 4 — Memory Leaks: Viewer Modules (HIGH)
+## ~~Phase 4 — Memory Leaks: Viewer Modules (HIGH)~~ — DONE
 
 **Scope:** 2 issues across 2 files
 **Estimated effort:** Medium — requires AbortController or listener tracking pattern
@@ -79,8 +79,8 @@ All findings were cross-checked against current code. Corrections from verificat
 
 | # | Issue | File | Fix |
 |---|-------|------|-----|
-| H34 | ComparisonViewer DOM listeners not removed on close | `comparison-viewer.ts` | Add `AbortController` in `_wireEvents()`, abort signal in `close()` |
-| H35 | DetailViewer error path doesn't call close() | `detail-viewer.ts` | Call `this.close()` in catch block after `_showError()` |
+| ~~H34~~ | ~~ComparisonViewer DOM listeners not removed on close~~ | `comparison-viewer.ts` | **FIXED** — added `AbortController` with signal on all listeners; `abort()` in `close()` |
+| ~~H35~~ | ~~DetailViewer error path doesn't call close()~~ | `detail-viewer.ts` | **FIXED** — resume parent loop on error; error close button triggers `this.close()` |
 
 ---
 

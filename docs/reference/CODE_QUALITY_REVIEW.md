@@ -418,7 +418,7 @@ Phase F (flip strict: true)      — do after Phase E
 | Severity | Total | Verified Open | Fixed | Removed | Source Areas |
 |----------|-------|---------------|-------|---------|-------------|
 | **CRITICAL** | 3 | 0 | 2 | 1 | Security (XSS), Logic (VR toggle) |
-| **HIGH** | 22 | 10 | 9 | 3 | Memory leaks, runtime bugs, missing cleanup |
+| **HIGH** | 22 | 8 | 11 | 3 | Memory leaks, runtime bugs, missing cleanup |
 | **MEDIUM** | 40 | 39 | 0 | 1 | Duplication, magic numbers, type safety, performance |
 | **LOW** | 22 | 21 | 1 | 0 | Style, naming, minor robustness |
 
@@ -426,6 +426,7 @@ Phase F (flip strict: true)      — do after Phase E
 
 **Fixed in `ccd5dc0`** (Phase 1 — Security & Auth): C11, C12, H26, H27, H28.
 **Fixed in Phase 2+3** (Runtime Bugs + Extensions): H29, H30, H31, H32, H33, H43, L12.
+**Fixed in Phase 4** (Viewer Memory Leaks): H34, H35.
 
 **Fix plan:** `docs/superpowers/plans/2026-03-13-incremental-review-plan.md` — 12 phases ordered by severity and dependency.
 
@@ -471,8 +472,8 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 
 | # | Issue | File | Impact |
 |---|-------|------|--------|
-| H34 | ComparisonViewer DOM listeners never removed on `close()` — only keydown removed | `comparison-viewer.ts:525-596` | After open/close cycles, stale closures reference disposed Three.js objects |
-| H35 | DetailViewer `open()` returns early on load error without calling `close()` — leaves paused render loop, visible overlay, leaked renderer | `detail-viewer.ts:216-219` | Renderer, event listeners, and overlay remain active; parent render loop stays paused |
+| ~~H34~~ | ~~ComparisonViewer DOM listeners never removed on `close()`~~ | `comparison-viewer.ts` | **FIXED** — added `AbortController` with signal on all listeners; `abort()` called in `close()` |
+| ~~H35~~ | ~~DetailViewer `open()` returns early on load error without cleanup~~ | `detail-viewer.ts` | **FIXED** — resume parent render loop on error; error close button calls `this.close()` |
 | H36 | 9 `document.addEventListener` calls in editorial `setup()` never removed on `cleanup()` | `editorial/layout.js:128,1137,1328,1465,1493,1513,1778,1965,2353` | Each archive reload adds 9 document-level listeners that accumulate in long-running kiosk sessions |
 | H37 | `editorial-frozen-label` DOM element missing from cleanup class list — accumulates on archive reload | `editorial/layout.js:715-722` | Element appended to `fixedRoot` but not in `EDITORIAL_ROOT_CLASSES` array |
 | H38 | Detail blob URLs not cleaned up in kiosk `cleanupCurrentScene()` | `kiosk-main.ts:2763-2811` | `state.loadedDetailBlobs` URLs never revoked when navigating between archives |
@@ -704,10 +705,10 @@ The VDIM archive "protection" uses XOR with a 32-byte repeating key. The key is 
 12. ~~**H43** — Add `.vdim` to double-extension strip regex~~
 13. ~~**L12** — Add `.zip`/`.vdim` to kiosk `FILE_CATEGORIES`~~
 
-### Soon (memory leaks)
+### Soon (memory leaks) — Phase 4 DONE, Phase 5 remaining
 
-13. **H34** — ComparisonViewer listener cleanup on close
-14. **H35** — DetailViewer cleanup on load error
+13. ~~**H34** — ComparisonViewer listener cleanup on close~~
+14. ~~**H35** — DetailViewer cleanup on load error~~
 15. **H36** — Editorial document listener cleanup
 16. **H37** — Add `editorial-frozen-label` to cleanup list
 17. **H38** — Revoke detail blob URLs in kiosk cleanup

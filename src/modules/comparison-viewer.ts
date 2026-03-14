@@ -56,6 +56,7 @@ export class ComparisonViewer {
 
     private _eventsWired = false;
     private _keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+    private _eventAbort: AbortController | null = null;
 
     constructor(deps: ComparisonViewerDeps) {
         this.deps = deps;
@@ -91,10 +92,11 @@ export class ComparisonViewer {
     }
 
     close(): void {
-        if (this._keydownHandler) {
-            document.removeEventListener('keydown', this._keydownHandler);
-            this._keydownHandler = null;
+        if (this._eventAbort) {
+            this._eventAbort.abort();
+            this._eventAbort = null;
         }
+        this._keydownHandler = null;
 
         this._stopAnimationLoop();
         this._disposeAll();
@@ -526,9 +528,12 @@ export class ComparisonViewer {
         if (this._eventsWired) return;
         this._eventsWired = true;
 
+        this._eventAbort = new AbortController();
+        const { signal } = this._eventAbort;
+
         // Back button
         const backBtn = document.getElementById('btn-comparison-back');
-        if (backBtn) backBtn.addEventListener('click', () => this.close());
+        if (backBtn) backBtn.addEventListener('click', () => this.close(), { signal });
 
         // Mode buttons
         const modeBtns = document.querySelectorAll('.comparison-mode-btn');
@@ -536,27 +541,27 @@ export class ComparisonViewer {
             btn.addEventListener('click', () => {
                 const mode = (btn as HTMLElement).dataset.mode as ComparisonMode;
                 if (mode) this.setMode(mode);
-            });
+            }, { signal });
         });
 
         // Sync button
         const syncBtn = document.getElementById('btn-comparison-sync');
-        if (syncBtn) syncBtn.addEventListener('click', () => this.toggleSync());
+        if (syncBtn) syncBtn.addEventListener('click', () => this.toggleSync(), { signal });
 
         // Toggle/instant button
         const toggleBtn = document.getElementById('btn-comparison-toggle');
-        if (toggleBtn) toggleBtn.addEventListener('click', () => this.toggleInstant());
+        if (toggleBtn) toggleBtn.addEventListener('click', () => this.toggleInstant(), { signal });
 
         // Crossfade slider
         const crossfadeInput = document.getElementById('comparison-crossfade') as HTMLInputElement | null;
         if (crossfadeInput) {
             crossfadeInput.addEventListener('input', () => {
                 this.setCrossfade(parseFloat(crossfadeInput.value) / 100);
-            });
+            }, { signal });
         }
 
         // Slider drag
-        this._wireSliderDrag();
+        this._wireSliderDrag(signal);
 
         // Keydown
         this._handleKeydown = (e: KeyboardEvent) => {
@@ -582,7 +587,7 @@ export class ComparisonViewer {
                     break;
             }
         };
-        document.addEventListener('keydown', this._handleKeydown);
+        document.addEventListener('keydown', this._handleKeydown, { signal });
         this._keydownHandler = this._handleKeydown;
 
         // Canvas pointer — detect left/right half for activeLeader
@@ -592,13 +597,13 @@ export class ComparisonViewer {
                 const rect = this.canvas!.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 this.activeLeader = x < rect.width / 2 ? 'A' : 'B';
-            });
+            }, { signal });
         }
     }
 
     private _handleKeydown: (e: KeyboardEvent) => void = () => {};
 
-    private _wireSliderDrag(): void {
+    private _wireSliderDrag(signal: AbortSignal): void {
         const divider = document.getElementById('comparison-slider-divider');
         if (!divider || !this.canvas) return;
 
@@ -608,22 +613,22 @@ export class ComparisonViewer {
             dragging = true;
             divider.setPointerCapture(e.pointerId);
             e.preventDefault();
-        });
+        }, { signal });
 
         divider.addEventListener('pointermove', (e: PointerEvent) => {
             if (!dragging || !this.canvas) return;
             const rect = this.canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             this.setSliderPosition(x / rect.width);
-        });
+        }, { signal });
 
         divider.addEventListener('pointerup', () => {
             dragging = false;
-        });
+        }, { signal });
 
         divider.addEventListener('pointercancel', () => {
             dragging = false;
-        });
+        }, { signal });
     }
 
     // ===== Private: UI Updates =====
