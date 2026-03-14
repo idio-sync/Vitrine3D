@@ -100,6 +100,9 @@ export default defineConfig({
         'import.meta.env.VITE_APP_LIBRARY_URL': JSON.stringify(
             process.env.SITE_URL || 'https://jakemarino.fyi'
         ),
+        'import.meta.env.VITE_ARCHIVE_SECRET': JSON.stringify(
+            process.env.ARCHIVE_SECRET || ''
+        ),
     },
 
     build: {
