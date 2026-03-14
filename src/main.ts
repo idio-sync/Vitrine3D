@@ -986,7 +986,7 @@ function createEventWiringDeps(): EventWiringDeps {
                 }
             },
             alignFromCameraData: async () => {
-                console.log('[ICP-DEBUG] alignFromCameraData called, hasPoints3D:', colmapManager?.hasPoints3D, 'splatMesh:', !!splatMesh);
+                log.debug('[ICP] alignFromCameraData called, hasPoints3D:', colmapManager?.hasPoints3D, 'splatMesh:', !!splatMesh);
                 if (!colmapManager?.hasPoints3D || !splatMesh) {
                     notify.error('Load splat + camera data first');
                     return;
@@ -1046,7 +1046,7 @@ function createEventWiringDeps(): EventWiringDeps {
                             preTransformedPts[i * 3 + 1] = v.y;
                             preTransformedPts[i * 3 + 2] = v.z;
                         }
-                        console.log('[ICP-DEBUG] Pre-transformed points3D by colmapGroup matrix');
+                        log.debug('[ICP] Pre-transformed points3D by colmapGroup matrix');
                     }
 
                     const icpResult = runICP(preTransformedPts, points3DCount, splatSample.points, splatSample.count,

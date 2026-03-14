@@ -52,7 +52,8 @@ function isAlreadyCompressed(glbBytes: Uint8Array): boolean {
     const jsonEnd = 20 + jsonLength;
     if (glbBytes.byteLength < jsonEnd) return false;
     const jsonStr = new TextDecoder().decode(glbBytes.subarray(20, jsonEnd)).replace(/\0+$/, '');
-    const json = JSON.parse(jsonStr);
+    let json;
+    try { json = JSON.parse(jsonStr); } catch { return false; }
     const used: string[] = json.extensionsUsed ?? [];
     return used.includes('KHR_draco_mesh_compression') || used.includes('EXT_meshopt_compression');
 }

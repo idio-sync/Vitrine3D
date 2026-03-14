@@ -1995,7 +1995,6 @@ export class ArchiveCreator {
         // Clean up detail models not referenced by any annotation
         this._cleanOrphanedDetailModels();
         const {
-            format: _format = 'a3d',
             includeHashes = true,
         } = options;
 

@@ -147,7 +147,7 @@ All findings were cross-checked against current code. Corrections from verificat
 
 ---
 
-## Phase 9 — Debug Cleanup + Quick Wins (MEDIUM + LOW)
+## ~~Phase 9 — Debug Cleanup + Quick Wins (MEDIUM + LOW)~~ DONE
 
 **Scope:** 7 issues across 4 files
 **Estimated effort:** Tiny — mechanical find-and-fix
@@ -155,13 +155,13 @@ All findings were cross-checked against current code. Corrections from verificat
 
 | # | Issue | File | Fix |
 |---|-------|------|-----|
-| M-ICP1 | 20 lines of `[ICP-DEBUG]` console.log | `main.ts` | Remove or change to `log.debug()` |
-| L18 | `var` in `createStaticMap` for loop | `editorial/layout.js` | Change to `let` |
-| L21 | Worker JSON.parse without try/catch | `draco-compress.worker.ts` | Wrap in try/catch, return false |
-| L6 | Orphaned `_ARCHIVE_EXTENSIONS` | `archive-loader.ts` | Remove or export |
-| L7 | Unused `_format` parameter | `archive-creator.ts` | Remove from options interface |
-| L8 | Magic 2GB size warning number | `export-controller.ts` | Extract to `MAX_SOURCE_FILE_SIZE` constant |
-| L22 | `_pendingDetailKey` declaration far from use | `main.ts` | Move declaration near line 1860 |
+| ~~M-ICP1~~ | ~~20 lines of `[ICP-DEBUG]` console.log~~ | `main.ts` | ~~FIXED — changed to `log.debug('[ICP]')`~~ |
+| ~~L18~~ | ~~`var` in `createStaticMap` for loop~~ | `editorial/layout.js` | ~~FIXED — changed to `let`~~ |
+| ~~L21~~ | ~~Worker JSON.parse without try/catch~~ | `draco-compress.worker.ts` | ~~FIXED — wrapped in try/catch, return false~~ |
+| ~~L6~~ | ~~Orphaned `_ARCHIVE_EXTENSIONS`~~ | `archive-loader.ts` | ~~FIXED — removed~~ |
+| ~~L7~~ | ~~Unused `_format` parameter~~ | `archive-creator.ts` | ~~FIXED — removed~~ |
+| ~~L8~~ | ~~Magic 2GB size warning number~~ | `export-controller.ts` | ~~FIXED — extracted `MAX_SOURCE_FILE_SIZE` constant~~ |
+| L22 | `_pendingDetailKey` declaration far from use | `main.ts` | **SKIPPED** — must remain module-scope (used by multiple functions) |
 
 ---
 

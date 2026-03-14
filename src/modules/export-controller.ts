@@ -19,6 +19,9 @@ import type { TranscodeResponse, TranscodeError } from './workers/transcode-spz.
 
 const log = Logger.getLogger('export-controller');
 
+/** Maximum total source file size before showing a browser warning (2 GB). */
+const MAX_SOURCE_FILE_SIZE = 2 * 1024 * 1024 * 1024;
+
 /**
  * Run transcodeSpz in a Web Worker to avoid blocking the main thread.
  * Transfers the input buffer to the worker and receives the SPZ bytes back.
@@ -587,7 +590,7 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
     const sourceFilesWithBlobs = assets.sourceFiles.filter((sf: any) => sf.file && !sf.fromArchive);
     if (sourceFilesWithBlobs.length > 0) {
         const totalSourceSize = sourceFilesWithBlobs.reduce((sum: number, sf: any) => sum + sf.size, 0);
-        if (totalSourceSize > 2 * 1024 * 1024 * 1024) {
+        if (totalSourceSize > MAX_SOURCE_FILE_SIZE) {
             notify.warning(`Source files total ${formatFileSize(totalSourceSize)}. Very large archives may fail in the browser. Consider adding files to the ZIP after export using external tools.`);
         }
         log.info(` Adding ${sourceFilesWithBlobs.length} source files (${formatFileSize(totalSourceSize)})`);

@@ -22,9 +22,6 @@ import {
 // Create logger for this module
 const log = Logger.getLogger('ArchiveLoader');
 
-// Supported archive extensions
-const _ARCHIVE_EXTENSIONS = ['ddim', 'a3d', 'a3z', 'zip', 'vdim'];
-
 // Supported file formats within archives
 const SUPPORTED_FORMATS: Record<string, string[]> = {
     splat: ['.ply', '.spz', '.ksplat', '.sog', '.splat'],

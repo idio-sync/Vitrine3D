@@ -419,8 +419,8 @@ Phase F (flip strict: true)      — do after Phase E
 |----------|-------|---------------|-------|---------|-------------|
 | **CRITICAL** | 3 | 0 | 2 | 1 | Security (XSS), Logic (VR toggle) |
 | **HIGH** | 22 | 4 | 15 | 3 | Memory leaks, runtime bugs, missing cleanup |
-| **MEDIUM** | 40 | 25 | 14 | 1 | Duplication, magic numbers, type safety, performance |
-| **LOW** | 22 | 20 | 2 | 0 | Style, naming, minor robustness |
+| **MEDIUM** | 40 | 24 | 15 | 1 | Duplication, magic numbers, type safety, performance |
+| **LOW** | 22 | 15 | 7 | 0 | Style, naming, minor robustness |
 
 **Removed after verification:** C10 (archive-stream is intentionally public for `/view/{hash}` sharing), H40 (clearColor is frame-transient — main loop resets it), H41 (deps factories capture current value at call time — correct pattern), H42 (callback-before-transition is the intended design — transition continues in render loop). M-VR3 needs manual testing (fade callback exists but visual effect unclear).
 
@@ -431,6 +431,7 @@ Phase F (flip strict: true)      — do after Phase E
 **Fixed in Phase 6** (Server Robustness): M-SRV1, M-SRV2, M-SRV3, L20.
 **Fixed in Phase 7** (Per-Frame Allocations): M-VR1, M-VR2, M-FP1, M-FP2, M-FP3, M-FP4, M-FP5.
 **Fixed in Phase 8** (Archive Pipeline Hardening): M-ARC1, M-ARC2, M-ARC3, M-ARC4.
+**Fixed in Phase 9** (Debug Cleanup + Quick Wins): M-ICP1, L6, L7, L8, L18, L21. L22 skipped (module-scope requirement).
 
 **Fix plan:** `docs/superpowers/plans/2026-03-13-incremental-review-plan.md` — 12 phases ordered by severity and dependency.
 
@@ -576,7 +577,7 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 | ~~M-VR2~~ | ~~Wrist menu material disposed before extracting `.map` texture for disposal~~ | `vr-session.ts` | **FIXED** — extract and dispose `.map` before calling `material.dispose()` |
 | M-VR3 | VR teleport fade — callback mechanism exists but visual effect unclear | `vr-session.ts:507-528` | **NEEDS MANUAL TESTING** — fade callback is wired but may not render a visible fade-to-black quad |
 | M-BG1 | `background-loader.ts` module singleton breaks if multiple viewers exist | `background-loader.ts:46-50` | Second `enterReducedQualityMode` silently ignored |
-| M-ICP1 | ~20 lines of `console.log('[ICP-DEBUG]')` left in production code | `main.ts:989,1008-1027,1049,1060-1064` | Clutters browser console, exposes internals |
+| ~~M-ICP1~~ | ~~\~20 lines of `console.log('[ICP-DEBUG]')` left in production code~~ | `main.ts` | **FIXED** — changed to `log.debug('[ICP]')` |
 
 ### CSS (3)
 
@@ -609,9 +610,9 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 
 | # | Issue | File |
 |---|-------|------|
-| L6 | Orphaned `_ARCHIVE_EXTENSIONS` variable with underscore prefix | `archive-loader.ts:26` |
-| L7 | `_format` parameter in `createArchive` captured but unused | `archive-creator.ts:1998` |
-| L8 | Magic number `2 * 1024 * 1024 * 1024` for source file size warning | `export-controller.ts:584` |
+| ~~L6~~ | ~~Orphaned `_ARCHIVE_EXTENSIONS` variable with underscore prefix~~ | `archive-loader.ts` | **FIXED** — removed |
+| ~~L7~~ | ~~`_format` parameter in `createArchive` captured but unused~~ | `archive-creator.ts` | **FIXED** — removed |
+| ~~L8~~ | ~~Magic number `2 * 1024 * 1024 * 1024` for source file size warning~~ | `export-controller.ts` | **FIXED** — extracted `MAX_SOURCE_FILE_SIZE` constant |
 
 ### New Modules (3)
 
@@ -636,7 +637,7 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 | L15 | Duplicate flight log stats rendering code (~30 lines) in setup vs onFlightPathLoaded | `editorial/layout.js:1800-1829` vs `2370-2400` |
 | L16 | Magic number `38.2%` (golden ratio) repeated 6 times without CSS variable | `editorial/layout.css` |
 | L17 | Mobile breakpoint changed from 768px to 699px — may affect tablet portrait mode | `kiosk.css` |
-| L18 | `var` declarations inside `for` loop in `createStaticMap` — should be `let` | `editorial/layout.js:79-98` |
+| ~~L18~~ | ~~`var` declarations inside `for` loop in `createStaticMap` — should be `let`~~ | `editorial/layout.js` | **FIXED** — changed to `let` |
 
 ### Docker (2)
 
@@ -649,13 +650,13 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 
 | # | Issue | File |
 |---|-------|------|
-| L21 | `draco-compress.worker.ts` `JSON.parse` on GLB chunk without try/catch — confusing error message on corrupt GLB | `draco-compress.worker.ts:54-56` |
+| ~~L21~~ | ~~`draco-compress.worker.ts` `JSON.parse` on GLB chunk without try/catch — confusing error message on corrupt GLB~~ | `draco-compress.worker.ts` | **FIXED** — wrapped in try/catch, returns false |
 
 ### Editor Core (1)
 
 | # | Issue | File |
 |---|-------|------|
-| L22 | `_pendingDetailKey` declared at line 4157 but first used at line 1866 | `main.ts:4157,1866` |
+| L22 | `_pendingDetailKey` declared at line 4157 but first used at line 1866 | `main.ts:4157,1866` | **SKIPPED** — variable must remain module-scope (used by multiple functions) |
 
 ---
 

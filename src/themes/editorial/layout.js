@@ -45,29 +45,29 @@ function hasValue(val) {
  */
 function createStaticMap(lat, lng, container, zoom) {
     zoom = zoom || 15;
-    var TILE = 256;
-    var n = Math.pow(2, zoom);
+    let TILE = 256;
+    let n = Math.pow(2, zoom);
 
     // Web Mercator: lat/lng → continuous tile coordinates
-    var tileXf = (lng + 180) / 360 * n;
-    var latRad = lat * Math.PI / 180;
-    var tileYf = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n;
+    let tileXf = (lng + 180) / 360 * n;
+    let latRad = lat * Math.PI / 180;
+    let tileYf = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n;
     tileYf = Math.max(0, Math.min(n - 1, tileYf)); // clamp near poles
 
-    var cx = Math.floor(tileXf);
-    var cy = Math.floor(tileYf);
-    var offX = (tileXf - cx) * TILE;
-    var offY = (tileYf - cy) * TILE;
+    let cx = Math.floor(tileXf);
+    let cy = Math.floor(tileYf);
+    let offX = (tileXf - cx) * TILE;
+    let offY = (tileYf - cy) * TILE;
 
-    var COLS = 3, ROWS = 3;
-    var subs = ['a', 'b', 'c'];
-    var wrapper = document.createElement('div');
+    let COLS = 3, ROWS = 3;
+    let subs = ['a', 'b', 'c'];
+    let wrapper = document.createElement('div');
     wrapper.className = 'editorial-map-tiles';
 
-    var loaded = 0, failed = 0, total = COLS * ROWS;
+    let loaded = 0, failed = 0, total = COLS * ROWS;
 
     return new Promise(function (resolve) {
-        var timer = setTimeout(function () { if (loaded === 0) resolve(false); }, 4000);
+        let timer = setTimeout(function () { if (loaded === 0) resolve(false); }, 4000);
 
         function check() {
             if (loaded + failed === total) {
@@ -76,14 +76,14 @@ function createStaticMap(lat, lng, container, zoom) {
             }
         }
 
-        for (var row = 0; row < ROWS; row++) {
-            for (var col = 0; col < COLS; col++) {
-                var tx = cx - 1 + col;          // one tile left of center
-                var ty = cy - 1 + row;           // one tile above center
+        for (let row = 0; row < ROWS; row++) {
+            for (let col = 0; col < COLS; col++) {
+                let tx = cx - 1 + col;          // one tile left of center
+                let ty = cy - 1 + row;           // one tile above center
                 tx = ((tx % n) + n) % n;        // wrap at date line
                 if (ty < 0 || ty >= n) { total--; continue; }
 
-                var img = document.createElement('img');
+                let img = document.createElement('img');
                 img.className = 'editorial-map-tile';
                 img.alt = '';
                 img.draggable = false;
@@ -101,10 +101,10 @@ function createStaticMap(lat, lng, container, zoom) {
 
         // Position grid so the target coordinate is at container center
         requestAnimationFrame(function () {
-            var cw = container.clientWidth || 360;
-            var ch = container.clientHeight || 170;
-            var targetGX = 1 * TILE + offX;   // col 1 is the center tile
-            var targetGY = 1 * TILE + offY;   // row 1 is the center row
+            let cw = container.clientWidth || 360;
+            let ch = container.clientHeight || 170;
+            let targetGX = 1 * TILE + offX;   // col 1 is the center tile
+            let targetGY = 1 * TILE + offY;   // row 1 is the center row
             wrapper.style.transform =
                 'translate(' + (cw / 2 - targetGX) + 'px,' + (ch / 2 - targetGY) + 'px)';
         });
