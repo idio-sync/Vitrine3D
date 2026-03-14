@@ -25,7 +25,7 @@ All findings were cross-checked against current code. Corrections from verificat
 
 ---
 
-## Phase 1 — Security & Auth (CRITICAL + HIGH)
+## ~~Phase 1 — Security & Auth (CRITICAL + HIGH)~~ — DONE (`ccd5dc0`)
 
 **Scope:** 6 issues across 2 files
 **Estimated effort:** Small — all are 1-5 line fixes
@@ -34,11 +34,11 @@ All findings were cross-checked against current code. Corrections from verificat
 | # | Issue | File | Fix |
 |---|-------|------|-----|
 | ~~C10~~ | ~~Unauthenticated `/api/archive-stream`~~ | `meta-server.js` | **REMOVED** — endpoint is intentionally public for `/view/{hash}` sharing |
-| H26 | Unsanitized VAAPI device path | `meta-server.js` | Add pattern validation `/^\/dev\/dri\/renderD\d+$/` in `validateSetting()` |
-| H27 | `GET /api/settings` unauthenticated | `meta-server.js` | Add `if (!requireAuth(req, res)) return;` in `handleGetSettings` |
-| H28 | Stream hash not validated | `meta-server.js` | Add `/^[a-f0-9]{16}$/` regex check before `handleArchiveStream` call |
-| C11 | XSS in `_showError()` innerHTML | `detail-viewer.ts` | Replace innerHTML with `createElement` + `textContent` |
-| C12 | VR flight path toggle wrong source | `kiosk-main.ts` | Change `!splatMesh?.visible` → `!flightPathManager.isVisible` |
+| ~~H26~~ | ~~Unsanitized VAAPI device path~~ | `meta-server.js` | **FIXED** — added `/^\/dev\/dri\/renderD\d+$/` validation + 512-char string limit |
+| ~~H27~~ | ~~`GET /api/settings` unauthenticated~~ | `meta-server.js` | **FIXED** — added `requireAuth()` check |
+| ~~H28~~ | ~~Stream hash not validated~~ | `meta-server.js` | **FIXED** — added `/^[a-f0-9]{16}$/` regex check |
+| ~~C11~~ | ~~XSS in `_showError()` innerHTML~~ | `detail-viewer.ts` | **FIXED** — replaced with `createElement` + `textContent` |
+| ~~C12~~ | ~~VR flight path toggle wrong source~~ | `kiosk-main.ts` | **FIXED** — changed to `!flightPathManager.isVisible` |
 
 ---
 

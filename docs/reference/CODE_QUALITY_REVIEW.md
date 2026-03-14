@@ -415,14 +415,16 @@ Phase F (flip strict: true)      — do after Phase E
 
 ## 10. Incremental Status Summary
 
-| Severity | Total | Verified Open | Removed | Source Areas |
-|----------|-------|---------------|---------|-------------|
-| **CRITICAL** | 3 | 2 | 1 | Security (XSS), Logic (VR toggle) |
-| **HIGH** | 22 | 19 | 3 | Memory leaks, runtime bugs, missing cleanup |
-| **MEDIUM** | 40 | 39 | 1 | Duplication, magic numbers, type safety, performance |
-| **LOW** | 22 | 22 | 0 | Style, naming, minor robustness |
+| Severity | Total | Verified Open | Fixed | Removed | Source Areas |
+|----------|-------|---------------|-------|---------|-------------|
+| **CRITICAL** | 3 | 0 | 2 | 1 | Security (XSS), Logic (VR toggle) |
+| **HIGH** | 22 | 16 | 3 | 3 | Memory leaks, runtime bugs, missing cleanup |
+| **MEDIUM** | 40 | 39 | 0 | 1 | Duplication, magic numbers, type safety, performance |
+| **LOW** | 22 | 22 | 0 | 0 | Style, naming, minor robustness |
 
 **Removed after verification:** C10 (archive-stream is intentionally public for `/view/{hash}` sharing), H40 (clearColor is frame-transient — main loop resets it), H41 (deps factories capture current value at call time — correct pattern), H42 (callback-before-transition is the intended design — transition continues in render loop). M-VR3 needs manual testing (fade callback exists but visual effect unclear).
+
+**Fixed in `ccd5dc0`** (Phase 1 — Security & Auth): C11, C12, H26, H27, H28.
 
 **Fix plan:** `docs/superpowers/plans/2026-03-13-incremental-review-plan.md` — 12 phases ordered by severity and dependency.
 
@@ -434,23 +436,13 @@ Phase F (flip strict: true)      — do after Phase E
 
 The endpoint is designed to be public — it serves scrambled archive data to the public `/view/{hash}` page. Adding auth would break the public sharing workflow. The hash (`SHA-256(archiveUrl).slice(0, 16)`) acts as the access token. Input validation (H28) still applies.
 
-### C11 — XSS via `innerHTML` in `detail-viewer.ts:_showError()`
+### ~~C11~~ — XSS via `innerHTML` in `detail-viewer.ts:_showError()` — **FIXED in `ccd5dc0`**
 
-| Field | Value |
-|-------|-------|
-| File | `detail-viewer.ts:788` |
-| Impact | The `message` parameter is interpolated directly into `innerHTML`. Currently only called with hardcoded strings, but the method is a general-purpose helper — any future caller passing server-provided error text creates an XSS vector. |
+Replaced `innerHTML` with `createElement` + `textContent`.
 
-**Fix:** Use `createElement` + `textContent` instead of `innerHTML`.
+### ~~C12~~ — VR flight path toggle uses wrong visibility source in kiosk — **FIXED in `ccd5dc0`**
 
-### C12 — VR flight path toggle uses wrong visibility source in kiosk
-
-| Field | Value |
-|-------|-------|
-| File | `kiosk-main.ts:635` |
-| Impact | `flightPathManager.setVisible(!splatMesh?.visible)` toggles flight path to the inverse of the **splat's** visibility instead of its own. Incorrect behavior in VR immersive sessions. |
-
-**Fix:** Change to `flightPathManager.setVisible(!flightPathManager.isVisible)`.
+Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisible` getter to `FlightPathManager`.
 
 ---
 
@@ -458,11 +450,11 @@ The endpoint is designed to be public — it serves scrambled archive data to th
 
 ### Security & Auth (3)
 
-| # | Issue | File | Impact |
+| # | Issue | File | Status |
 |---|-------|------|--------|
-| H26 | VAAPI device path passed unsanitized to ffmpeg `execFile` — admin can probe arbitrary filesystem paths via error output | `meta-server.js:66,2894,2932` | `video.vaapi_device` setting has no validation; string types pass through `validateSetting()` unchecked |
-| H27 | `GET /api/settings` returns all settings (including DJI API key) without `requireAuth()` | `meta-server.js:249,3331` | `handleGetSettings` has no auth check unlike `handlePutSettings`. Settings include `flight.djiApiKey` |
-| H28 | No input validation on `streamHash` extracted from URL path | `meta-server.js:3255-3257` | Hash is extracted via `pathname.slice()` with no regex validation — should enforce `/^[a-f0-9]{16}$/` |
+| ~~H26~~ | ~~VAAPI device path passed unsanitized~~ | `meta-server.js` | **FIXED in `ccd5dc0`** — added `/^\/dev\/dri\/renderD\d+$/` validation + 512-char string limit |
+| ~~H27~~ | ~~`GET /api/settings` unauthenticated~~ | `meta-server.js` | **FIXED in `ccd5dc0`** — added `requireAuth()` check |
+| ~~H28~~ | ~~Stream hash not validated~~ | `meta-server.js` | **FIXED in `ccd5dc0`** — added `/^[a-f0-9]{16}$/` regex check |
 
 ### Runtime Bugs (5)
 
@@ -693,13 +685,13 @@ The VDIM archive "protection" uses XOR with a 32-byte repeating key. The key is 
 
 ## 16. Updated Recommended Priority
 
-### Immediate (security + data integrity)
+### ~~Immediate (security + data integrity)~~ — DONE (`ccd5dc0`)
 
-1. **H26** — Validate `video.vaapi_device` against `/dev/dri/renderD\d+` pattern
-2. **H27** — Add `requireAuth()` to `GET /api/settings`
-3. **H28** — Validate stream hash format
-4. **C11** — Fix innerHTML XSS in detail-viewer `_showError()`
-5. **C12** — Fix VR flight path toggle visibility source
+1. ~~**H26** — Validate `video.vaapi_device` against `/dev/dri/renderD\d+` pattern~~
+2. ~~**H27** — Add `requireAuth()` to `GET /api/settings`~~
+3. ~~**H28** — Validate stream hash format~~
+4. ~~**C11** — Fix innerHTML XSS in detail-viewer `_showError()`~~
+5. ~~**C12** — Fix VR flight path toggle visibility source~~
 
 ### Next (runtime bugs)
 
@@ -718,7 +710,6 @@ The VDIM archive "protection" uses XOR with a 32-byte repeating key. The key is 
 16. **H37** — Add `editorial-frozen-label` to cleanup list
 17. **H38** — Revoke detail blob URLs in kiosk cleanup
 18. **H39** — Flight dropdown callback cleanup
-19. **H40** — PiP clearColor save/restore
 
 ### Medium-term (architecture)
 
