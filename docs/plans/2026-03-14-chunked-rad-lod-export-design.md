@@ -310,6 +310,12 @@ Currently the editor doesn't benefit from chunked streaming (splats are loaded f
 5. **Kiosk loading** — Detect chunked_lod, construct proxy URLs, pass to SplatMesh
 6. **Testing** — Round-trip: export RAD archive → load in kiosk → verify streaming behavior
 
+## Related: LiDAR-Supervised Splats and RAD LOD Quality
+
+LiDAR-supervised training (see `2026-03-14-lidar-splat-quality-reference.md`) produces splats with cleaner geometry — fewer floaters, well-aligned surface splats, more compact models. This directly improves RAD streaming quality: the bhatt_lod algorithm builds better LOD hierarchies from clean geometry, because coarse LOD levels inherit the most visually important splats. Floaters from poorly-trained splats end up polluting coarse LOD levels, degrading the initial streaming impression.
+
+The full quality pipeline is: **SplatForge (LiDAR-supervised training → .ply) → Vitrine3D editor (assembly/metadata) → RAD chunked export (LOD delivery) → Kiosk streaming viewer**. Higher input quality at each stage compounds through the chain.
+
 ## Reference
 
 - Spark.js `build-lod` CLI: https://github.com/sparkjsdev/spark/tree/v2.0.0-preview/rust/build-lod
