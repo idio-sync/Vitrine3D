@@ -315,20 +315,20 @@ async function _doInit(): Promise<void> {
     // will be created in onRendererChanged when switching to WebGL for splat loading.
     if (sceneManager.rendererType === 'webgl') {
         const lodBudget = getLodBudget(state.qualityResolved);
-        const maxStdDev = state.qualityResolved === 'sd' ? SPARK_DEFAULTS.MAX_STD_DEV_SD : SPARK_DEFAULTS.MAX_STD_DEV_HD;
+        const isSD = state.qualityResolved === 'sd';
         sparkRenderer = createSparkRenderer({
             renderer: renderer,
             clipXY: SPARK_DEFAULTS.CLIP_XY,
             autoUpdate: true,
-            minAlpha: SPARK_DEFAULTS.MIN_ALPHA,
+            minAlpha: isSD ? SPARK_DEFAULTS.MIN_ALPHA_SD : SPARK_DEFAULTS.MIN_ALPHA_HD,
             lodSplatCount: lodBudget,
-            behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
+            behindFoveate: isSD ? SPARK_DEFAULTS.BEHIND_FOVEATE_SD : SPARK_DEFAULTS.BEHIND_FOVEATE_HD,
             coneFov: SPARK_DEFAULTS.CONE_FOV,
-            coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
-            maxStdDev,
+            coneFoveate: isSD ? SPARK_DEFAULTS.CONE_FOVEATE_SD : SPARK_DEFAULTS.CONE_FOVEATE_HD,
+            maxStdDev: isSD ? SPARK_DEFAULTS.MAX_STD_DEV_SD : SPARK_DEFAULTS.MAX_STD_DEV_HD,
         });
         scene.add(sparkRenderer);
-        log.info(`SparkRenderer created with clipXY=2.0, minAlpha=3/255, lodSplatCount=${lodBudget}, maxStdDev=${maxStdDev.toFixed(2)}`);
+        log.info(`SparkRenderer created (${isSD ? 'SD' : 'HD'}, lodSplatCount=${lodBudget})`);
     } else {
         log.info('SparkRenderer deferred — will be created after WebGL switch');
     }
@@ -358,20 +358,20 @@ async function _doInit(): Promise<void> {
             if (sparkRenderer.dispose) sparkRenderer.dispose();
         }
         const lodBudget = getLodBudget(state.qualityResolved);
-        const maxStdDev = state.qualityResolved === 'sd' ? SPARK_DEFAULTS.MAX_STD_DEV_SD : SPARK_DEFAULTS.MAX_STD_DEV_HD;
+        const isSD = state.qualityResolved === 'sd';
         sparkRenderer = createSparkRenderer({
             renderer: newRenderer,
             clipXY: SPARK_DEFAULTS.CLIP_XY,
             autoUpdate: true,
-            minAlpha: SPARK_DEFAULTS.MIN_ALPHA,
+            minAlpha: isSD ? SPARK_DEFAULTS.MIN_ALPHA_SD : SPARK_DEFAULTS.MIN_ALPHA_HD,
             lodSplatCount: lodBudget,
-            behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
+            behindFoveate: isSD ? SPARK_DEFAULTS.BEHIND_FOVEATE_SD : SPARK_DEFAULTS.BEHIND_FOVEATE_HD,
             coneFov: SPARK_DEFAULTS.CONE_FOV,
-            coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
-            maxStdDev,
+            coneFoveate: isSD ? SPARK_DEFAULTS.CONE_FOVEATE_SD : SPARK_DEFAULTS.CONE_FOVEATE_HD,
+            maxStdDev: isSD ? SPARK_DEFAULTS.MAX_STD_DEV_SD : SPARK_DEFAULTS.MAX_STD_DEV_HD,
         });
         scene.add(sparkRenderer);
-        log.info('Renderer changed to', sceneManager!.rendererType, `- SparkRenderer recreated (lodSplatCount=${lodBudget}, maxStdDev=${maxStdDev.toFixed(2)})`);
+        log.info('Renderer changed to', sceneManager!.rendererType, `- SparkRenderer recreated (${isSD ? 'SD' : 'HD'}, lodSplatCount=${lodBudget})`);
     };
 
     // Create annotation system
@@ -424,14 +424,52 @@ async function _doInit(): Promise<void> {
                 return;
             }
 
+            const anno = annotationSystem?.getAnnotations().find((a: any) => a.detail_asset_key === key);
+            if (!anno) return;
+
+            // If annotation has a comparison asset, open ComparisonViewer instead
+            if (anno.comparison_asset_key && state.archiveLoader) {
+                const compEntry = state.detailAssetIndex.get(anno.comparison_asset_key);
+                if (compEntry) {
+                    showLoading('Loading comparison models…');
+                    const [detailResult, compResult] = await Promise.all([
+                        state.archiveLoader.extractFile(entry.filename),
+                        state.archiveLoader.extractFile(compEntry.filename),
+                    ]);
+                    hideLoading();
+                    if (detailResult && compResult) {
+                        const { ComparisonViewer } = await import('./comparison-viewer.js');
+                        const comp = anno.comparison || {};
+                        const viewer = new ComparisonViewer({
+                            parentRenderLoop: { pause: pauseRender, resume: resumeRender },
+                            theme: state.theme || null,
+                            isEditor: false,
+                            parentBackgroundColor: scene?.background instanceof THREE.Color
+                                ? '#' + scene.background.getHexString()
+                                : undefined,
+                        });
+                        await viewer.open(
+                            {
+                                title: anno.title || 'Comparison',
+                                before: { label: comp.before_label, date: comp.before_date, description: comp.before_description },
+                                after: { label: comp.after_label, date: comp.after_date, description: comp.after_description },
+                                alignment: comp.alignment,
+                                default_mode: comp.default_mode,
+                            },
+                            detailResult.blob,
+                            compResult.blob,
+                        );
+                        return;
+                    }
+                }
+            }
+
             showLoading('Loading detail model…');
             const result = await state.archiveLoader.extractFile(entry.filename);
             hideLoading();
             if (!result) return;
 
             const { DetailViewer } = await import('./detail-viewer.js');
-            const anno = annotationSystem?.getAnnotations().find((a: any) => a.detail_asset_key === key);
-            if (!anno) return;
 
             const viewer = new DetailViewer({
                 extractDetailAsset: async (k: string) => {
@@ -1184,7 +1222,13 @@ function onDirectFileLoaded(fileName: string | null): void {
     // Resolve quality tier for direct file loads (archive flow resolves earlier)
     const glCtx = renderer ? renderer.getContext() : null;
     state.qualityResolved = resolveQualityTier(state.qualityTier, glCtx);
-    if (sparkRenderer && isSparkV2) sparkRenderer.lodSplatCount = getLodBudget(state.qualityResolved);
+    if (sparkRenderer && isSparkV2) {
+        const isSD = state.qualityResolved === 'sd';
+        sparkRenderer.lodSplatCount = getLodBudget(state.qualityResolved);
+        sparkRenderer.minAlpha = isSD ? SPARK_DEFAULTS.MIN_ALPHA_SD : SPARK_DEFAULTS.MIN_ALPHA_HD;
+        sparkRenderer.behindFoveate = isSD ? SPARK_DEFAULTS.BEHIND_FOVEATE_SD : SPARK_DEFAULTS.BEHIND_FOVEATE_HD;
+        sparkRenderer.coneFoveate = isSD ? SPARK_DEFAULTS.CONE_FOVEATE_SD : SPARK_DEFAULTS.CONE_FOVEATE_HD;
+    }
 
     // Fit camera to loaded content
     fitCameraToScene();
@@ -2361,11 +2405,15 @@ async function switchQualityTier(newTier: string): Promise<void> {
         btn.classList.add('loading');
     });
 
-    // Update SparkRenderer LOD budget and maxStdDev (works even without proxy assets; v2.0 only)
+    // Update SparkRenderer LOD budget, foveation, and quality params (v2.0 only)
     if (sparkRenderer && isSparkV2) {
+        const isSD = newTier === 'sd';
         sparkRenderer.lodSplatCount = getLodBudget(newTier);
-        sparkRenderer.maxStdDev = newTier === 'sd' ? SPARK_DEFAULTS.MAX_STD_DEV_SD : SPARK_DEFAULTS.MAX_STD_DEV_HD;
-        log.info(`SparkRenderer lodSplatCount updated to ${getLodBudget(newTier)}, maxStdDev=${sparkRenderer.maxStdDev.toFixed(2)}`);
+        sparkRenderer.maxStdDev = isSD ? SPARK_DEFAULTS.MAX_STD_DEV_SD : SPARK_DEFAULTS.MAX_STD_DEV_HD;
+        sparkRenderer.minAlpha = isSD ? SPARK_DEFAULTS.MIN_ALPHA_SD : SPARK_DEFAULTS.MIN_ALPHA_HD;
+        sparkRenderer.behindFoveate = isSD ? SPARK_DEFAULTS.BEHIND_FOVEATE_SD : SPARK_DEFAULTS.BEHIND_FOVEATE_HD;
+        sparkRenderer.coneFoveate = isSD ? SPARK_DEFAULTS.CONE_FOVEATE_SD : SPARK_DEFAULTS.CONE_FOVEATE_HD;
+        log.info(`SparkRenderer updated for ${isSD ? 'SD' : 'HD'} (lodSplatCount=${sparkRenderer.lodSplatCount})`);
     }
 
     // Adjust renderer resolution — universal quality control that takes effect even
@@ -3230,6 +3278,47 @@ function setupViewerUI(): void {
             annotationSystem.selectedAnnotation = null;
             hideAnnotationLine();
         }
+    });
+
+    // Scene-level compare button
+    addListener('btn-toggle-compare', 'click', async () => {
+        if (!state.archiveLoader) return;
+        const comparisons = state.archiveLoader.getComparisons();
+        if (comparisons.length === 0) return;
+        const pair = comparisons[0];
+        const manifest = state.archiveLoader.getManifest();
+        const beforeEntry = manifest?.data_entries?.[pair.before.asset_key];
+        const afterEntry = manifest?.data_entries?.[pair.after.asset_key];
+        if (!beforeEntry || !afterEntry) return;
+
+        showLoading('Loading comparison models…');
+        const [beforeResult, afterResult] = await Promise.all([
+            state.archiveLoader.extractFile(beforeEntry.file_name),
+            state.archiveLoader.extractFile(afterEntry.file_name),
+        ]);
+        hideLoading();
+        if (!beforeResult || !afterResult) return;
+
+        const { ComparisonViewer } = await import('./comparison-viewer.js');
+        const viewer = new ComparisonViewer({
+            parentRenderLoop: { pause: pauseRender, resume: resumeRender },
+            theme: state.theme || null,
+            isEditor: false,
+            parentBackgroundColor: scene?.background instanceof THREE.Color
+                ? '#' + scene.background.getHexString()
+                : undefined,
+        });
+        await viewer.open(
+            {
+                title: pair.id,
+                before: { label: pair.before.label, date: pair.before.date, description: pair.before.description },
+                after: { label: pair.after.label, date: pair.after.date, description: pair.after.description },
+                alignment: pair.alignment,
+                default_mode: pair.default_mode,
+            },
+            beforeResult.blob,
+            afterResult.blob,
+        );
     });
 
     // Cross-section toggle
@@ -5473,6 +5562,23 @@ function hideAnnotationLine(): void {
 let _kioskAnimFrameId: number = 0;
 let _kioskRenderPaused = false;
 let _lastFrameTime = 0;
+/** Idle render throttling — skip GPU render when camera is stationary */
+let _idleFrameCount = 0;
+const IDLE_THROTTLE_AFTER = 10;   // frames of no movement before throttling
+const IDLE_RENDER_INTERVAL = 4;   // render every Nth frame when idle (~15 FPS at 60 Hz)
+
+// Page Visibility API — fully pause render loop when tab is hidden (saves GPU/battery)
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        _kioskRenderPaused = true;
+        cancelAnimationFrame(_kioskAnimFrameId);
+    } else {
+        _kioskRenderPaused = false;
+        _lastFrameTime = 0; // reset dt to avoid large jump
+        _idleFrameCount = 0;
+        animate();
+    }
+});
 
 function animate(): void {
     if (_kioskRenderPaused) return;
@@ -5505,6 +5611,30 @@ function animate(): void {
         // Update VR systems if presenting
         if (renderer.xr?.isPresenting && vrModule) {
             vrModule.updateVR();
+        }
+
+        // Idle render throttling — detect if anything is actively animating
+        const isAnimating = state.flyModeActive
+            || walkthroughAnimating
+            || annotationSystem?.isAnimating
+            || (flightPathManager && (flightPathManager.isPlaying || flightPathManager.isTransitioning))
+            || controls.autoRotate
+            || renderer.xr?.isPresenting;
+        const cameraMoved = !camera.position.equals(_prevCamPos)
+            || !camera.quaternion.equals(_prevCamQuat);
+
+        if (cameraMoved || isAnimating) {
+            _idleFrameCount = 0;
+        } else {
+            _idleFrameCount++;
+        }
+
+        // Skip GPU render when idle — saves fill-rate and battery on mobile kiosks.
+        // Always render during the first IDLE_THROTTLE_AFTER frames after movement stops
+        // (controls.update() damping may still be settling), then render every Nth frame.
+        if (_idleFrameCount > IDLE_THROTTLE_AFTER
+            && _idleFrameCount % IDLE_RENDER_INTERVAL !== 0) {
+            return;
         }
 
         sceneManager.render(state.displayMode as any, splatMesh, modelGroup, pointcloudGroup, null);

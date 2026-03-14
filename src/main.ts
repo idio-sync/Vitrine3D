@@ -1654,11 +1654,11 @@ async function init() {
             renderer: renderer,
             clipXY: SPARK_DEFAULTS.CLIP_XY,
             autoUpdate: true,
-            minAlpha: SPARK_DEFAULTS.MIN_ALPHA,
+            minAlpha: SPARK_DEFAULTS.MIN_ALPHA_HD,
             lodSplatCount: getLodBudget(QUALITY_TIER.HD),
-            behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
+            behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE_HD,
             coneFov: SPARK_DEFAULTS.CONE_FOV,
-            coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
+            coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE_HD,
             maxStdDev: SPARK_DEFAULTS.MAX_STD_DEV_HD,
         });
         scene.add(sparkRenderer);
@@ -1699,11 +1699,11 @@ async function init() {
                 renderer: newRenderer,
                 clipXY: SPARK_DEFAULTS.CLIP_XY,
                 autoUpdate: true,
-                minAlpha: SPARK_DEFAULTS.MIN_ALPHA,
+                minAlpha: SPARK_DEFAULTS.MIN_ALPHA_HD,
                 lodSplatCount: getLodBudget(QUALITY_TIER.HD),
-                behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
+                behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE_HD,
                 coneFov: SPARK_DEFAULTS.CONE_FOV,
-                coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
+                coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE_HD,
                 maxStdDev: SPARK_DEFAULTS.MAX_STD_DEV_HD,
             });
             scene.add(sparkRenderer);
@@ -1793,6 +1793,48 @@ async function init() {
 
             const anno = annotationSystem?.getAnnotations().find((a: any) => a.detail_asset_key === key);
             if (!anno) return;
+
+            // If annotation has a comparison asset, open ComparisonViewer instead
+            if (anno.comparison_asset_key) {
+                let compBlob: Blob | null = null;
+                const compCached = state.loadedDetailBlobs.get(anno.comparison_asset_key);
+                if (compCached) {
+                    compBlob = await fetch(compCached).then(r => r.blob());
+                } else {
+                    const compEntry = state.detailAssetIndex.get(anno.comparison_asset_key);
+                    if (compEntry && state.archiveLoader) {
+                        const compResult = await state.archiveLoader.extractFile(compEntry.filename);
+                        if (compResult) {
+                            compBlob = compResult.blob;
+                            state.loadedDetailBlobs.set(anno.comparison_asset_key, compResult.url);
+                        }
+                    }
+                }
+                if (compBlob) {
+                    const { ComparisonViewer } = await import('./modules/comparison-viewer.js');
+                    const comp = anno.comparison || {};
+                    const viewer = new ComparisonViewer({
+                        parentRenderLoop: { pause: pauseRenderLoop, resume: resumeRenderLoop },
+                        theme: null,
+                        isEditor: true,
+                        parentBackgroundColor: scene?.background instanceof THREE.Color
+                            ? '#' + scene.background.getHexString()
+                            : undefined,
+                    });
+                    await viewer.open(
+                        {
+                            title: anno.title || 'Comparison',
+                            before: { label: comp.before_label, date: comp.before_date, description: comp.before_description },
+                            after: { label: comp.after_label, date: comp.after_date, description: comp.after_description },
+                            alignment: comp.alignment,
+                            default_mode: comp.default_mode,
+                        },
+                        blob,
+                        compBlob,
+                    );
+                    return;
+                }
+            }
 
             const viewer = new DetailViewer(createDetailViewerDeps());
             await viewer.open(anno, blob);
@@ -1998,6 +2040,122 @@ async function init() {
             await viewer.open(anno, blob);
         });
     }
+
+    // Sidebar comparison model controls
+    addListener('btn-sidebar-attach-comparison', 'click', () => {
+        const compFileInput = document.getElementById('sidebar-comparison-file') as HTMLInputElement | null;
+        if (compFileInput) compFileInput.click();
+    });
+
+    const sidebarCompFile = document.getElementById('sidebar-comparison-file') as HTMLInputElement;
+    if (sidebarCompFile) {
+        sidebarCompFile.addEventListener('change', (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+            const archiveCreator = sceneRefs.archiveCreator;
+            const anno = annotationSystem?.selectedAnnotation;
+            if (!archiveCreator || !anno) return;
+
+            // Remove old comparison if replacing
+            if (anno.comparison_asset_key) {
+                const oldUrl = state.loadedDetailBlobs.get(anno.comparison_asset_key);
+                if (oldUrl) URL.revokeObjectURL(oldUrl);
+                state.loadedDetailBlobs.delete(anno.comparison_asset_key);
+                state.detailAssetIndex.delete(anno.comparison_asset_key);
+                archiveCreator.removeDetailModel(anno.comparison_asset_key);
+            }
+
+            const key = archiveCreator.addDetailModel(file, file.name);
+            anno.comparison_asset_key = key;
+            const ext = file.name.split('.').pop()?.toLowerCase() || 'glb';
+            state.detailAssetIndex.set(key, { filename: `assets/${key}.${ext}` });
+            state.loadedDetailBlobs.set(key, URL.createObjectURL(file));
+
+            const compFilename = document.getElementById('sidebar-comparison-filename');
+            const compRemove = document.getElementById('btn-sidebar-remove-comparison');
+            const compCustomize = document.getElementById('sidebar-comparison-customize');
+            if (compFilename) compFilename.textContent = file.name;
+            if (compRemove) (compRemove as HTMLElement).style.display = '';
+            if (compCustomize) (compCustomize as HTMLElement).style.display = '';
+        });
+    }
+
+    addListener('btn-sidebar-remove-comparison', 'click', () => {
+        const anno = annotationSystem?.selectedAnnotation;
+        if (anno?.comparison_asset_key) {
+            const oldUrl = state.loadedDetailBlobs.get(anno.comparison_asset_key);
+            if (oldUrl) URL.revokeObjectURL(oldUrl);
+            state.loadedDetailBlobs.delete(anno.comparison_asset_key);
+            state.detailAssetIndex.delete(anno.comparison_asset_key);
+            sceneRefs.archiveCreator?.removeDetailModel(anno.comparison_asset_key);
+            anno.comparison_asset_key = undefined;
+            anno.comparison = undefined;
+        }
+        const compFilename = document.getElementById('sidebar-comparison-filename');
+        const compRemove = document.getElementById('btn-sidebar-remove-comparison');
+        const compCustomize = document.getElementById('sidebar-comparison-customize');
+        if (compFilename) compFilename.textContent = '';
+        if (compRemove) (compRemove as HTMLElement).style.display = 'none';
+        if (compCustomize) (compCustomize as HTMLElement).style.display = 'none';
+    });
+
+    addListener('btn-sidebar-preview-comparison', 'click', async () => {
+        const anno = annotationSystem?.selectedAnnotation;
+        if (!anno?.detail_asset_key || !anno.comparison_asset_key) return;
+
+        // Load detail blob (before)
+        let detailBlob: Blob | null = null;
+        const detailCached = state.loadedDetailBlobs.get(anno.detail_asset_key);
+        if (detailCached) {
+            detailBlob = await fetch(detailCached).then(r => r.blob());
+        } else {
+            const entry = state.detailAssetIndex.get(anno.detail_asset_key);
+            if (entry && state.archiveLoader) {
+                const result = await state.archiveLoader.extractFile(entry.filename);
+                if (result) { detailBlob = result.blob; state.loadedDetailBlobs.set(anno.detail_asset_key, result.url); }
+            }
+        }
+
+        // Load comparison blob (after)
+        let compBlob: Blob | null = null;
+        const compCached = state.loadedDetailBlobs.get(anno.comparison_asset_key);
+        if (compCached) {
+            compBlob = await fetch(compCached).then(r => r.blob());
+        } else {
+            const compEntry = state.detailAssetIndex.get(anno.comparison_asset_key);
+            if (compEntry && state.archiveLoader) {
+                const result = await state.archiveLoader.extractFile(compEntry.filename);
+                if (result) { compBlob = result.blob; state.loadedDetailBlobs.set(anno.comparison_asset_key, result.url); }
+            }
+        }
+
+        if (!detailBlob || !compBlob) {
+            notify.error('Could not load comparison models');
+            return;
+        }
+
+        const { ComparisonViewer } = await import('./modules/comparison-viewer.js');
+        const comp = anno.comparison || {};
+        const viewer = new ComparisonViewer({
+            parentRenderLoop: { pause: pauseRenderLoop, resume: resumeRenderLoop },
+            theme: null,
+            isEditor: true,
+            parentBackgroundColor: scene?.background instanceof THREE.Color
+                ? '#' + scene.background.getHexString()
+                : undefined,
+        });
+        await viewer.open(
+            {
+                title: anno.title || 'Comparison',
+                before: { label: comp.before_label, date: comp.before_date, description: comp.before_description },
+                after: { label: comp.after_label, date: comp.after_date, description: comp.after_description },
+                alignment: comp.alignment,
+                default_mode: comp.default_mode,
+            },
+            detailBlob,
+            compBlob,
+        );
+    });
 
     // Initialize walkthrough controller
     initWalkthroughController({
@@ -3083,6 +3241,30 @@ function onAnnotationSelected(annotation: any) {
             if (ui.remove) (ui.remove as HTMLElement).style.display = 'none';
             if (ui.customize) (ui.customize as HTMLElement).style.display = 'none';
             if (ui.label) ui.label.value = '';
+        }
+    }
+
+    // Show comparison section in sidebar when annotation has a detail model
+    const compSection = document.getElementById('sidebar-comparison-section');
+    if (compSection) {
+        if (annotation.detail_asset_key) {
+            compSection.style.display = '';
+            // If comparison already attached, show customize fields and filename
+            const compCustomize = document.getElementById('sidebar-comparison-customize');
+            const compFilename = document.getElementById('sidebar-comparison-filename');
+            const compRemove = document.getElementById('btn-sidebar-remove-comparison');
+            if (annotation.comparison_asset_key) {
+                const compEntry = state.detailAssetIndex.get(annotation.comparison_asset_key);
+                if (compFilename) compFilename.textContent = compEntry?.filename?.split('/').pop() ?? annotation.comparison_asset_key;
+                if (compRemove) (compRemove as HTMLElement).style.display = '';
+                if (compCustomize) (compCustomize as HTMLElement).style.display = '';
+            } else {
+                if (compFilename) compFilename.textContent = '';
+                if (compRemove) (compRemove as HTMLElement).style.display = 'none';
+                if (compCustomize) (compCustomize as HTMLElement).style.display = 'none';
+            }
+        } else {
+            compSection.style.display = 'none';
         }
     }
 }

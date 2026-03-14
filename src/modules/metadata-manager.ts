@@ -2754,7 +2754,9 @@ export function showAnnotationPopup(annotation: Annotation, imageAssets?: Map<st
     const inspectContainer = popup.querySelector('.annotation-detail-inspect');
     if (inspectContainer) {
         if (annotation.detail_asset_key) {
-            const label = annotation.detail_button_label || 'Inspect Detail';
+            const label = annotation.comparison_asset_key
+                ? (annotation.detail_button_label || 'Compare')
+                : (annotation.detail_button_label || 'Inspect Detail');
 
             let html = '';
             if (annotation.detail_thumbnail && imageAssets) {
