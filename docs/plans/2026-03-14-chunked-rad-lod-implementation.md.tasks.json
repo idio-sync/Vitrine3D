@@ -1,0 +1,17 @@
+{
+  "planPath": "docs/plans/2026-03-14-chunked-rad-lod-implementation.md",
+  "tasks": [
+    {"id": 0, "subject": "Task 0: Scaffold the WASM RAD Encoder Crate", "status": "pending"},
+    {"id": 1, "subject": "Task 1: Resolve WASM Compilation Issues", "status": "pending", "blockedBy": [0]},
+    {"id": 2, "subject": "Task 2: Verify WASM Encoder with Test Script", "status": "pending", "blockedBy": [1]},
+    {"id": 3, "subject": "Task 3: Update AppState Type", "status": "pending"},
+    {"id": 4, "subject": "Task 4: Update Editor HTML — Radio Button Group", "status": "pending", "blockedBy": [3]},
+    {"id": 5, "subject": "Task 5: Create RAD Transcode Web Worker", "status": "pending", "blockedBy": [2]},
+    {"id": 6, "subject": "Task 6: Add RAD Export Path to export-controller.ts", "status": "pending", "blockedBy": [3, 5]},
+    {"id": 7, "subject": "Task 7: Add addSceneChunked to archive-creator.ts", "status": "pending", "blockedBy": [6]},
+    {"id": 8, "subject": "Task 8: Meta-Server Asset Proxy Endpoint", "status": "pending"},
+    {"id": 9, "subject": "Task 9: Kiosk Viewer — Chunked RAD Loading Path", "status": "pending", "blockedBy": [7, 8]},
+    {"id": 10, "subject": "Task 10: End-to-End Integration Test", "status": "pending", "blockedBy": [4, 9]}
+  ],
+  "lastUpdated": "2026-03-14T00:00:00Z"
+}
