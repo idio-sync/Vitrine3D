@@ -143,6 +143,10 @@ export const SPARK_DEFAULTS = {
     CONE_FOV: 1.0,
     /** Deprioritize splats outside view cone → center-out LOD fill */
     CONE_FOVEATE: 0.3,
+    /** maxStdDev for SD tier — ~35% fewer pixels per large splat (perceptually similar) */
+    MAX_STD_DEV_SD: Math.sqrt(5),
+    /** maxStdDev for HD tier — Spark default, full quality */
+    MAX_STD_DEV_HD: Math.sqrt(8),
 } as const;
 
 // =============================================================================

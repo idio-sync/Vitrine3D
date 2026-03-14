@@ -30,6 +30,7 @@ interface SparkRendererOptions {
     minAlpha?: number;
     lodSplatCount?: number;   // v2 only — silently dropped for 0.1
     behindFoveate?: number;   // v2 only — silently dropped for 0.1
+    maxStdDev?: number;       // v2 only — silently dropped for 0.1
     [key: string]: any;
 }
 
@@ -43,7 +44,7 @@ export function createSparkRenderer(options: SparkRendererOptions): any {
         return new SparkRenderer(options);
     }
     // OldSparkRenderer doesn't support LOD or clipXY — strip them
-    const { lodSplatCount: _lod, behindFoveate: _bf, clipXY: _clip, ...rest } = options;
+    const { lodSplatCount: _lod, behindFoveate: _bf, clipXY: _clip, maxStdDev: _msd, ...rest } = options;
     return new OldSparkRenderer(rest);
 }
 

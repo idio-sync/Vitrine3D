@@ -75,8 +75,9 @@ export async function createSplatMesh(url: string, fileType?: string): Promise<a
         return new SplatMesh({ packedSplats });
     }
     // For other formats (.ply, .spz, .splat), Spark decodes internally.
-    // LOD is generated at archive export time via transcodeSpz(), not at load time.
-    return new SplatMesh({ url, ...(fileType && { fileType }) });
+    // lod: true enables on-demand LOD tree construction for non-SPZ formats,
+    // allowing lodSplatCount budget to take effect even without pre-built LOD.
+    return new SplatMesh({ url, lod: true, ...(fileType && { fileType }) });
 }
 
 // =============================================================================

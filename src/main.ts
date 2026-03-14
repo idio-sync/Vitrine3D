@@ -1659,6 +1659,7 @@ async function init() {
             behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
             coneFov: SPARK_DEFAULTS.CONE_FOV,
             coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
+            maxStdDev: SPARK_DEFAULTS.MAX_STD_DEV_HD,
         });
         scene.add(sparkRenderer);
         log.info(`SparkRenderer created with clipXY=2.0, minAlpha=3/255, lodSplatCount=${getLodBudget(QUALITY_TIER.HD)}`);
@@ -1703,6 +1704,7 @@ async function init() {
                 behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
                 coneFov: SPARK_DEFAULTS.CONE_FOV,
                 coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
+                maxStdDev: SPARK_DEFAULTS.MAX_STD_DEV_HD,
             });
             scene.add(sparkRenderer);
             log.info(`Renderer changed, SparkRenderer recreated for WebGL (lodSplatCount=${getLodBudget(QUALITY_TIER.HD)})`);

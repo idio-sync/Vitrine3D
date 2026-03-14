@@ -315,6 +315,7 @@ async function _doInit(): Promise<void> {
     // will be created in onRendererChanged when switching to WebGL for splat loading.
     if (sceneManager.rendererType === 'webgl') {
         const lodBudget = getLodBudget(state.qualityResolved);
+        const maxStdDev = state.qualityResolved === 'sd' ? SPARK_DEFAULTS.MAX_STD_DEV_SD : SPARK_DEFAULTS.MAX_STD_DEV_HD;
         sparkRenderer = createSparkRenderer({
             renderer: renderer,
             clipXY: SPARK_DEFAULTS.CLIP_XY,
@@ -324,9 +325,10 @@ async function _doInit(): Promise<void> {
             behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
             coneFov: SPARK_DEFAULTS.CONE_FOV,
             coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
+            maxStdDev,
         });
         scene.add(sparkRenderer);
-        log.info(`SparkRenderer created with clipXY=2.0, minAlpha=3/255, lodSplatCount=${lodBudget}`);
+        log.info(`SparkRenderer created with clipXY=2.0, minAlpha=3/255, lodSplatCount=${lodBudget}, maxStdDev=${maxStdDev.toFixed(2)}`);
     } else {
         log.info('SparkRenderer deferred — will be created after WebGL switch');
     }
@@ -356,6 +358,7 @@ async function _doInit(): Promise<void> {
             if (sparkRenderer.dispose) sparkRenderer.dispose();
         }
         const lodBudget = getLodBudget(state.qualityResolved);
+        const maxStdDev = state.qualityResolved === 'sd' ? SPARK_DEFAULTS.MAX_STD_DEV_SD : SPARK_DEFAULTS.MAX_STD_DEV_HD;
         sparkRenderer = createSparkRenderer({
             renderer: newRenderer,
             clipXY: SPARK_DEFAULTS.CLIP_XY,
@@ -365,9 +368,10 @@ async function _doInit(): Promise<void> {
             behindFoveate: SPARK_DEFAULTS.BEHIND_FOVEATE,
             coneFov: SPARK_DEFAULTS.CONE_FOV,
             coneFoveate: SPARK_DEFAULTS.CONE_FOVEATE,
+            maxStdDev,
         });
         scene.add(sparkRenderer);
-        log.info('Renderer changed to', sceneManager!.rendererType, `- SparkRenderer recreated (lodSplatCount=${lodBudget})`);
+        log.info('Renderer changed to', sceneManager!.rendererType, `- SparkRenderer recreated (lodSplatCount=${lodBudget}, maxStdDev=${maxStdDev.toFixed(2)})`);
     };
 
     // Create annotation system
@@ -2170,6 +2174,12 @@ async function handleArchiveFile(file: File, preloadedLoader?: ArchiveLoader): P
                 triggerMarkerGlowIntro();
             }
 
+            // Show compare button if archive has scene-level comparisons
+            if (state.archiveLoader && state.archiveLoader.getComparisons().length > 0) {
+                const compareBtn = document.getElementById('btn-toggle-compare');
+                if (compareBtn) compareBtn.style.display = '';
+            }
+
             // Populate sidebar content but start hidden — user opens via info button
             showMetadataSidebar('view', { state: state as any, annotationSystem, imageAssets: state.imageAssets });
             hideMetadataSidebar();
@@ -2351,17 +2361,21 @@ async function switchQualityTier(newTier: string): Promise<void> {
         btn.classList.add('loading');
     });
 
-    // Update SparkRenderer LOD budget (works even without proxy assets; v2.0 only)
+    // Update SparkRenderer LOD budget and maxStdDev (works even without proxy assets; v2.0 only)
     if (sparkRenderer && isSparkV2) {
         sparkRenderer.lodSplatCount = getLodBudget(newTier);
-        log.info(`SparkRenderer lodSplatCount updated to ${getLodBudget(newTier)}`);
+        sparkRenderer.maxStdDev = newTier === 'sd' ? SPARK_DEFAULTS.MAX_STD_DEV_SD : SPARK_DEFAULTS.MAX_STD_DEV_HD;
+        log.info(`SparkRenderer lodSplatCount updated to ${getLodBudget(newTier)}, maxStdDev=${sparkRenderer.maxStdDev.toFixed(2)}`);
     }
 
     // Adjust renderer resolution — universal quality control that takes effect even
     // when no proxy assets exist (makes SD/HD visible for models and low-proxy splats).
     // setPixelRatio alone doesn't resize the drawing buffer; onWindowResize applies it.
+    // Splat rendering is fill-rate bound: cap HD pixel ratio at 1.5 for splat-only scenes.
     if (renderer) {
-        const targetRatio = newTier === 'hd' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+        const isSplatOnly = state.splatLoaded && !state.modelLoaded && !state.pointcloudLoaded;
+        const hdCap = isSplatOnly ? 1.5 : 2;
+        const targetRatio = newTier === 'hd' ? Math.min(window.devicePixelRatio || 1, hdCap) : 1;
         renderer.setPixelRatio(targetRatio);
         onWindowResize();
     }

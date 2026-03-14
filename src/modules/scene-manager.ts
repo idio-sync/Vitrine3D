@@ -155,11 +155,13 @@ export class SceneManager {
         this.webgpuSupported = false;
         this._canvas = null;
         this._canvasRight = null;
-        // iOS/iPadOS: disable antialias — MSAA buffers double GPU memory and
-        // Spark.js splat rendering doesn't benefit from hardware AA.
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        // Mobile: disable antialias — MSAA multiplies bandwidth per fragment and
+        // Spark.js splat rendering doesn't benefit from hardware AA. Benchmarks show
+        // 2x FPS improvement on both iOS and Android with MSAA disabled.
+        // See docs/reference/SPLAT_PERFORMANCE_GUIDE.md § Antialiasing Recommendations.
+        const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
             || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        this._antialias = !isIOS;
+        this._antialias = !isMobile;
         this.onRendererChanged = null;
 
         // Lighting
