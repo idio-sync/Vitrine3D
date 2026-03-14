@@ -256,7 +256,57 @@ In the kiosk viewer, annotations with attached detail models show an **Inspect D
 
 Detail models are stored as `detail_N` entries (e.g., `detail_0`, `detail_1`) under `assets/` in the archive with role `"detail"`. Thumbnails are stored as `images/detail_N_thumb.png`. Sub-annotations and view settings are stored inline in the parent annotation's `detail_annotations` and `detail_view_settings` fields.
 
-## VR Mode
+## Comparison Viewer (Before/After)
+
+The comparison viewer lets you compare two versions of the same subject side by side — for example, before and after restoration. Comparisons work at both the scene level (two meshes in the archive) and the annotation level (two detail models attached to the same annotation).
+
+### Scene-level comparison (editor)
+
+1. Load two GLB meshes into the scene (`mesh_0` and `mesh_1`)
+2. The **Comparison** panel appears in the editor sidebar
+3. Set which mesh is "Before" and which is "After" using the dropdowns
+4. Fill in labels, dates, and descriptions for each side
+5. Choose a default viewing mode (Side by Side, Slider, or Toggle)
+6. Click **Preview Compare** to test the comparison viewer overlay
+
+### Annotation-level comparison (editor)
+
+1. Select an annotation that already has a detail model attached
+2. In the annotation sidebar, find the **Comparison Model** section (below the detail model section)
+3. Click **Attach Comparison .glb** and select a second GLB file
+4. Fill in Before/After labels and dates
+5. Click **Preview Compare** to test
+
+### Comparison viewer modes
+
+The comparison overlay offers three viewing modes, switchable via the header buttons:
+
+- **Side by Side** — two viewports showing before (left) and after (right) with synced cameras. Click either side to make it the camera leader. Toggle camera sync with the **Sync** button.
+- **Slider** — a draggable curtain divider splits the view. Drag the handle or use arrow keys (Left/Right) to move the divider. Home/End jump to the extremes.
+- **Toggle** — instant swap or crossfade between before and after. Press **Space** to toggle instantly, or use the crossfade slider for gradual blending.
+
+### Keyboard shortcuts (inside comparison viewer)
+
+| Key | Action |
+|-----|--------|
+| `Escape` | Close comparison viewer |
+| `Space` | Toggle between before/after (toggle mode) |
+| `Left/Right` | Move slider divider (slider mode) |
+| `Home/End` | Jump slider to start/end |
+
+### Comparison viewer in kiosk mode
+
+When an archive contains a scene-level comparison, a **Compare** button appears in the kiosk toolbar. Clicking it opens the comparison viewer overlay.
+
+For annotation-level comparisons, annotations with both a detail model and a comparison model show a **Compare** button (instead of "Inspect") in the annotation popup. Clicking it opens the comparison viewer with both detail models.
+
+### Archive format
+
+Scene-level comparisons are stored as a `comparisons` array in `manifest.json`, referencing existing mesh keys (e.g., `mesh_0` as before, `mesh_1` as after) with optional labels, dates, alignment, and default mode.
+
+Annotation-level comparisons add `comparison_asset_key` and `comparison` fields to the annotation object. The comparison model is stored as a separate `detail_N` entry in `assets/`.
+
+## VR Mode (Experimental)
 
 Vitrine3D supports WebXR virtual reality on compatible headsets (e.g., Meta Quest, HTC Vive, Valve Index). VR mode is available in both the editor and kiosk viewer.
 

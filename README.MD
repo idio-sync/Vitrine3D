@@ -25,6 +25,7 @@ The application is built as two separate bundles: a **kiosk viewer** (`/`) for c
 - **Cross-section** — arbitrary clipping plane with draggable 3D handle
 - **Annotations** — depth-aware 3D surface markers with image attachments
 - **Detail model inspection** — annotation-linked GLB overlays with sub-annotations and per-model view settings
+- **Before/after comparison** — temporal comparison viewer with side-by-side, slider, and toggle/crossfade modes for scene-level meshes and annotation detail models
 
 ### Rendering & Media
 - **Scene settings** — tone mapping, HDR environment maps, skybox, shadows, background images
