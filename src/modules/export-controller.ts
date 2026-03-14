@@ -668,11 +668,11 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
             } else {
                 log.info(' Auto-capturing preview screenshot');
                 renderer.render(scene, camera);
-                previewBlob = await captureScreenshot(renderer.domElement, { width: 1024, height: 1024 });
+                previewBlob = await captureScreenshot(renderer.domElement, { width: 2048, height: 2048 });
             }
             if (previewBlob) {
                 log.info(' Preview captured, adding thumbnail');
-                archiveCreator.addThumbnail(previewBlob, 'preview.jpg');
+                archiveCreator.addThumbnail(previewBlob, 'preview.webp');
             }
         } catch (e) {
             log.warn(' Failed to capture preview:', e);
@@ -688,7 +688,7 @@ async function prepareArchive(deps: ExportDeps): Promise<PreparedArchive | null>
         log.info(` Adding ${state.screenshots.length} screenshot(s) to archive`);
         for (const screenshot of state.screenshots) {
             try {
-                archiveCreator.addScreenshot(screenshot.blob, `screenshot_${screenshot.id}.jpg`);
+                archiveCreator.addScreenshot(screenshot.blob, `screenshot_${screenshot.id}.webp`);
             } catch (e) {
                 log.warn(' Failed to add screenshot:', e);
             }

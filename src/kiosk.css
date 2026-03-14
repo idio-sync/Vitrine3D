@@ -182,7 +182,7 @@ body.kiosk-mode {
     /* Named convenience aliases */
     --kiosk-text-primary: rgba(var(--kiosk-text-bright-rgb), 0.95);
     --kiosk-text-secondary: rgba(var(--kiosk-text-body-rgb), 0.9);
-    --kiosk-text-muted: rgba(var(--kiosk-text-dim-rgb), 0.7);
+    --kiosk-text-muted: rgba(var(--kiosk-text-dim-rgb), 0.85);
     --kiosk-text-faint: rgba(var(--kiosk-text-dim-rgb), 0.5);
 
     /* Borders */
@@ -1912,7 +1912,7 @@ body.kiosk-mode #metadata-sidebar.sheet-dragging {
     font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.2em;
-    color: rgba(var(--kiosk-text-dim-rgb, 150, 146, 140), 0.5);
+    color: rgba(var(--kiosk-text-dim-rgb, 150, 146, 140), 0.7);
     margin: 0;
     font-weight: 400;
     opacity: 0;

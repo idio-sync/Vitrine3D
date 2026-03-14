@@ -55,7 +55,7 @@ export async function downloadScreenshot(deps: ScreenshotDeps): Promise<void> {
             renderer.render(scene, camera);
         }
         const canvas = renderer.domElement;
-        const blob = await captureScreenshot(canvas, { width: canvas.width, height: canvas.height });
+        const blob = await captureScreenshot(canvas, { width: canvas.width, height: canvas.height, quality: 0.95 });
         if (!blob) {
             notify.error('Screenshot capture failed');
             return;
@@ -63,7 +63,7 @@ export async function downloadScreenshot(deps: ScreenshotDeps): Promise<void> {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `screenshot_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+        a.download = `screenshot_${new Date().toISOString().replace(/[:.]/g, '-')}.webp`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -173,7 +173,7 @@ export async function captureManualPreview(deps: ScreenshotDeps): Promise<void> 
         } else {
             renderer.render(scene, camera);
         }
-        const blob = await captureScreenshot(renderer.domElement, { width: 1024, height: 1024 });
+        const blob = await captureScreenshot(renderer.domElement, { width: 2048, height: 2048 });
         if (blob) {
             state.manualPreviewBlob = blob;
             hideViewfinder();

@@ -2206,7 +2206,7 @@ export async function captureScreenshot(canvas: HTMLCanvasElement, options: Capt
     const {
         width = 1024,
         height = 1024,
-        format = 'image/jpeg',
+        format = 'image/webp',
         quality = 0.9
     } = options;
 

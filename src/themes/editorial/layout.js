@@ -1685,8 +1685,12 @@ export function setup(manifest, deps) {
             clearTimeout(annoStripTimeout);
             annoStripTimeout = setTimeout(() => {
                 if (annoStrip) {
-                    annoStrip.classList.add('fade-out');
-                    setTimeout(() => { if (annoStrip) annoStrip.style.display = 'none'; annoStrip.classList.remove('fade-out'); }, 200);
+                    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+                        annoStrip.style.display = 'none';
+                    } else {
+                        annoStrip.classList.add('fade-out');
+                        setTimeout(() => { if (annoStrip) annoStrip.style.display = 'none'; annoStrip.classList.remove('fade-out'); }, 200);
+                    }
                 }
             }, 5000);
         };
@@ -1708,8 +1712,12 @@ export function setup(manifest, deps) {
                 navigateAnno(capsuleAnnoIndex);
             } else {
                 clearTimeout(annoStripTimeout);
-                annoStrip.classList.add('fade-out');
-                setTimeout(() => { annoStrip.style.display = 'none'; annoStrip.classList.remove('fade-out'); }, 200);
+                if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+                    annoStrip.style.display = 'none';
+                } else {
+                    annoStrip.classList.add('fade-out');
+                    setTimeout(() => { annoStrip.style.display = 'none'; annoStrip.classList.remove('fade-out'); }, 200);
+                }
             }
         });
 
@@ -1932,9 +1940,11 @@ export function setup(manifest, deps) {
     });
 
     // --- Image strip parallax on info panel scroll ---
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
     const panelContent = overlay.querySelector('.editorial-info-content');
     const stripImg = overlay.querySelector('.editorial-image-strip img');
-    if (panelContent && stripImg) {
+    if (panelContent && stripImg && !prefersReducedMotion) {
         panelContent.addEventListener('scroll', () => {
             const offset = Math.max(panelContent.scrollTop * -0.08, -20);
             stripImg.style.transform = `translateY(${offset}px)`;
@@ -1942,12 +1952,14 @@ export function setup(manifest, deps) {
     }
 
     // --- Staggered annotation marker entrance ---
-    setTimeout(() => {
-        const markers = document.querySelectorAll('.annotation-marker');
-        markers.forEach((marker, i) => {
-            marker.style.animation = `editorialMarkerFadeIn 0.4s ease-out ${0.15 + i * 0.12}s both`;
-        });
-    }, 50);
+    if (!prefersReducedMotion) {
+        setTimeout(() => {
+            const markers = document.querySelectorAll('.annotation-marker');
+            markers.forEach((marker, i) => {
+                marker.style.animation = `editorialMarkerFadeIn 0.4s ease-out ${0.15 + i * 0.12}s both`;
+            });
+        }, 50);
+    }
 
     // Close panel on ESC; 'm' toggle handled by exported onKeyboardShortcut()
     document.addEventListener('keydown', (e) => {
