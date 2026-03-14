@@ -193,5 +193,6 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [x] **Done** — Splat LOD transcode moved to Web Worker for non-blocking exports
 - [x] **Done** — Draco compression moved to Web Worker for non-blocking mesh optimization
 - [x] **Done** — `.zip` format accepted as archive input alongside `.ddim`
+- [x] **Done** — Archive obfuscation: XOR byte scrambling for transit (via `ARCHIVE_SECRET` + `/api/archive-stream/{hash}`) and on-disk `.vdim` protected format with 48-byte header and embedded key. Prevents casual download-and-open of archive files.
 
 </details>

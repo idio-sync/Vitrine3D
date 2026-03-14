@@ -33,8 +33,10 @@ The application is built as two separate bundles: a **kiosk viewer** (`/`) for c
 - **Video & GIF recording** — turntable, walkthrough, annotation tour, and free camera modes with server-side FFmpeg transcode
 - **Screenshot capture** — viewfinder-based capture with thumbnail gallery
 
-### Archive Format (.ddim)
+### Archive Format (.ddim / .vdim)
 - **ZIP-based container** — bundle assets, metadata, alignment, annotations, and screenshots (.zip also accepted)
+- **Protected archives (.vdim)** — XOR-scrambled format with embedded key, unopenable by standard ZIP tools
+- **Transit scrambling** — server-side XOR stream endpoint prevents casual download-and-open of archives served via clean URLs
 - **Preservation metadata** — 8-tab editor aligned with Dublin Core, PRONOM, and Smithsonian EDAN
 - **SIP compliance validation** — required/recommended field checking with compliance scoring
 - **SHA-256 integrity hashing** — streaming verification for large files
@@ -93,6 +95,7 @@ docker run -p 8080:80 \
 
 ### Archive Containers
 - `.ddim` — Direct Dimensions archive container with metadata (ZIP-based)
+- `.vdim` — Protected archive (XOR-scrambled `.ddim` with 48-byte header, auto-descrambled on load)
 - `.zip` — plain ZIP archives with the same internal structure are also accepted
 
 ### 3D Models (via Three.js)

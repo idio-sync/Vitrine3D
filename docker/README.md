@@ -78,6 +78,7 @@ Zero-dependency Node.js HTTP server (uses only `better-sqlite3` and `busboy` fro
 | Route | Description |
 |-------|-------------|
 | `GET /view/:hash` | Resolve hash to archive, serve viewer with injected config |
+| `GET /api/archive-stream/:hash` | XOR-scrambled archive stream with Range support (requires `ARCHIVE_SECRET`) |
 
 ### Video Transcode Routes
 | Route | Description |
@@ -139,6 +140,7 @@ See [DEPLOYMENT.md](../docs/DEPLOYMENT.md) for the full environment variable ref
 | `MAX_UPLOAD_SIZE` | `1024` | Max upload size in MB |
 | `DEFAULT_KIOSK_THEME` | `editorial` | Default theme for clean URL views |
 | `APP_TITLE` | `Vitrine3D` | Browser tab title |
+| `ARCHIVE_SECRET` | _(empty)_ | Shared secret for archive transit scrambling (see [DEPLOYMENT.md](../docs/DEPLOYMENT.md#archive-protection)) |
 
 ## Quick Start
 

@@ -81,8 +81,9 @@ The format comes in two variants:
 | `.ddim` | STORE (uncompressed) | `application/zip` | Current standard. Fast extraction, predictable size. Best when assets are already compressed (GLB, SPZ). |
 | `.a3d` | STORE (uncompressed) | `application/zip` | Legacy. Still accepted on import. |
 | `.a3z` | DEFLATE (compressed) | `application/zip` | Legacy (compressed variant). Still accepted on import. |
+| `.vdim` | STORE + XOR scramble | `application/octet-stream` | Protected variant. 48-byte header (magic `VD`, version, embedded 32-byte key) followed by XOR-scrambled ZIP bytes. Not openable by standard ZIP tools. |
 
-All variants are valid ZIP files. The extension signals the expected compression strategy but does not change the physical format. New archives SHOULD use `.ddim`.
+All `.ddim`, `.a3d`, and `.a3z` variants are valid ZIP files. The `.vdim` variant is a scrambled envelope around a `.ddim` archive — after descrambling and stripping the 48-byte header, the result is a standard ZIP file. The extension signals the expected format but does not change the manifest schema. New archives SHOULD use `.ddim` or `.vdim`.
 
 ---
 
@@ -92,7 +93,11 @@ All variants are valid ZIP files. The extension signals the expected compression
 
 Archives MUST be valid ZIP files as defined by [APPNOTE.TXT](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT) (ZIP Application Note).
 
-Readers MUST validate the ZIP magic bytes (`0x50 0x4B`) at offset 0 before processing.
+Readers MUST check the first two bytes before processing:
+- `0x50 0x4B` (`PK`) — standard ZIP archive (`.ddim`, `.a3d`, `.a3z`)
+- `0x56 0x44` (`VD`) — protected `.vdim` archive (descramble header, then process as ZIP)
+
+Unknown magic bytes MUST be rejected.
 
 ### 3.2 Compression
 

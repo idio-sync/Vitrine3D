@@ -4050,7 +4050,16 @@ body.kiosk-mode.kiosk-editorial .editorial-info-overlay.open .editorial-info-con
 body.kiosk-mode.kiosk-editorial .editorial-info-overlay.open .editorial-info-content > :nth-child(3) { animation-delay: 0.22s; }
 body.kiosk-mode.kiosk-editorial .editorial-info-overlay.open .editorial-info-content > :nth-child(n+4) { animation-delay: 0.28s; }
 
-/* --- Loading overlay — slower fade for cinematic reveal --- */
+/* --- Loading overlay — cinematic fade-in and slower fade-out --- */
+
+body.kiosk-mode.kiosk-editorial #loading-overlay:not(.hidden):not(.fade-out) {
+    animation: editorialLoadingFadeIn 0.4s ease-out both;
+}
+
+@keyframes editorialLoadingFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
 
 body.kiosk-mode.kiosk-editorial #loading-overlay.fade-out {
     transition: opacity 0.6s ease-out;
@@ -4082,7 +4091,8 @@ body.kiosk-mode.kiosk-editorial .editorial-loading-title-bar {
     body.kiosk-mode.kiosk-editorial .editorial-mobile-pill,
     body.kiosk-mode.kiosk-editorial .editorial-anno-strip,
     body.kiosk-mode.kiosk-editorial .editorial-info-overlay.mobile-open,
-    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover.open {
+    body.kiosk-mode.kiosk-editorial .editorial-capsule-popover.open,
+    body.kiosk-mode.kiosk-editorial #loading-overlay:not(.hidden):not(.fade-out) {
         animation: none !important;
     }
 

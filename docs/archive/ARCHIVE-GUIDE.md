@@ -52,7 +52,7 @@ For field-by-field documentation, types, and requirement levels, see [SPECIFICAT
 
 ## Loading Archives
 
-**From the UI**: Click "From File" in the Load Archive section and select a `.ddim` file (or legacy `.a3d` / `.a3z`).
+**From the UI**: Click "From File" in the Load Archive section and select a `.ddim` or `.vdim` file (or legacy `.a3d` / `.a3z`). Protected `.vdim` archives are automatically detected and descrambled on load.
 
 **From a URL parameter**:
 ```
@@ -76,7 +76,7 @@ When an archive is loaded:
 
 Click the **Export Archive** toolbar button to save the current scene:
 
-1. Choose format: `.ddim` (standard)
+1. Choose format: `.ddim` (standard) or `.vdim` (protected — XOR-scrambled with embedded key, not openable by ZIP tools)
 2. The export bundles all loaded assets, current transforms, annotations, metadata, and image attachments
 3. SHA-256 integrity hashes are computed for each asset file (requires HTTPS; a warning is shown on HTTP)
 4. A preview thumbnail is auto-captured from the current viewport (or uses a manual preview if one was set via the viewfinder)
@@ -135,3 +135,9 @@ By packaging Gaussian splats, traditional meshes, and E57 point clouds together 
 ### Open Format
 
 The container is a standard ZIP file with a JSON manifest. No proprietary tools are required to extract or inspect the contents. Any programming language with ZIP and JSON support can read the archive.
+
+### Protected Distribution (.vdim)
+
+For scenarios where casual access to archive contents should be discouraged, archives can be exported in the `.vdim` (Vitrine Protected Archive) format. This applies XOR byte scrambling with an embedded per-archive key, making the file unopenable by standard ZIP tools. The viewer and Tauri desktop apps automatically detect and descramble `.vdim` files on load.
+
+Additionally, when `ARCHIVE_SECRET` is configured in a Docker deployment, archives served via clean URLs (`/view/{hash}`) are scrambled in transit — the raw bytes downloaded from the stream endpoint cannot be opened without the matching key. See [DEPLOYMENT.md — Archive Protection](../DEPLOYMENT.md#archive-protection) for configuration details.

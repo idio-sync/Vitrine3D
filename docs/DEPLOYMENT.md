@@ -63,6 +63,7 @@ docker compose up -d
 | `DEFAULT_KIOSK_THEME` | `editorial` | Default theme for clean URL kiosk views. See [Clean Archive URLs](#clean-archive-urls) |
 | `DEV_AUTH_USER` | _(empty)_ | **Local dev only.** Email injected as the Cloudflare Access header so the admin API authenticates without a real Cloudflare tunnel. Remove before production. |
 | `DJI_API_KEY` | _(empty)_ | DJI developer API key for decrypting v13+ binary flight logs (`.txt`). Register at [developer.dji.com](https://developer.dji.com). Without this, encrypted logs prompt users to export as CSV instead. Also configurable at runtime via admin settings (`flight.djiApiKey`). |
+| `ARCHIVE_SECRET` | _(empty)_ | Shared secret for archive transit scrambling. When set, `/view/{hash}` pages load archives through `/api/archive-stream/{hash}` with XOR byte scrambling, making downloaded files unopenable without the key. See [Archive Protection](#archive-protection). |
 
 #### Build-Time Variables
 
@@ -72,6 +73,7 @@ These `VITE_*` variables are inlined by Vite during `npm run build`. Set them **
 |----------|---------|-------------|
 | `VITE_SPARK_VERSION` | `2.0` | Spark.js renderer version toggle (build-time equivalent of `SPARK_VERSION`) |
 | `VITE_APP_LIBRARY_URL` | _(empty)_ | Library API base URL for the library panel |
+| `VITE_ARCHIVE_SECRET` | _(empty)_ | Archive descramble key (must match `ARCHIVE_SECRET`). Inlined at build time so the client can descramble transit-scrambled archives. |
 
 ### 3. Docker Compose
 
@@ -310,7 +312,7 @@ curl "https://viewer.yourcompany.com/oembed?url=https://viewer.yourcompany.com/?
 
 ### HTTPS Required for SHA-256 Integrity Hashing
 
-**Important:** The viewer uses WebGL exclusively for 3D rendering — WebGPU was evaluated but disabled due to stability issues. However, HTTPS is still required in production for a different reason: **SHA-256 integrity hashing uses the Web Crypto API (`SubtleCrypto`), which is only available in secure contexts.**
+**Important:** The viewer uses WebGL exclusively for 3D rendering — WebGPU was evaluated but disabled due to stability issues. However, HTTPS is still required in production for two reasons: **SHA-256 integrity hashing** and **archive transit scrambling** both use the Web Crypto API (`SubtleCrypto`), which is only available in secure contexts.
 
 | Access Method | Secure Context? | SubtleCrypto (SHA-256) Available? |
 |---------------|----------------|-----------------------------------|
@@ -322,10 +324,11 @@ curl "https://viewer.yourcompany.com/oembed?url=https://viewer.yourcompany.com/?
 
 **What happens without HTTPS:**
 - `SubtleCrypto` is unavailable, so archives are created without SHA-256 integrity data
+- Archive transit scrambling (`ARCHIVE_SECRET`) will not work — HMAC-SHA256 key derivation requires SubtleCrypto
 - The UI shows a warning banner in the Integrity tab and a toast notification on page load
 - All rendering and other features continue to work normally
 
-**Production recommendation:** Always deploy with HTTPS to ensure SHA-256 integrity hashing works when creating archives.
+**Production recommendation:** Always deploy with HTTPS to ensure SHA-256 integrity hashing and archive transit scrambling work correctly.
 
 ### Option A: Cloudflare (Recommended)
 
@@ -430,6 +433,7 @@ All API routes require a valid `Cf-Access-Authenticated-User-Email` header and a
 | `POST` | `/api/collections/:id/archives` | Add an archive to a collection |
 | `DELETE` | `/api/collections/:id/archives/:hash` | Remove an archive from a collection |
 | `GET` | `/api/collections/:id/thumbnail` | Get auto-generated mosaic thumbnail for a collection |
+| `GET` | `/api/archive-stream/:hash` | XOR-scrambled archive stream (requires `ARCHIVE_SECRET`) |
 
 ### Security Notes
 
@@ -569,13 +573,65 @@ volumes:
   vitrine_db:
 ```
 
+## Archive Protection
+
+Archives served via clean URLs (`/view/{hash}`) can be protected with XOR byte scrambling so that downloaded files are not directly openable as ZIP archives. This is an anti-convenience measure — not cryptographic security — designed to prevent casual users from noticing the `.ddim` extension in DevTools, downloading the file, and opening it with 7-Zip.
+
+### How It Works
+
+1. Set `ARCHIVE_SECRET` (server-side env var) and `VITE_ARCHIVE_SECRET` (build-time, must match)
+2. When a clean URL page loads, the meta-server injects a scrambled stream URL instead of the direct file path
+3. The client fetches the archive through `/api/archive-stream/{hash}`, which XOR-scrambles each byte using an HMAC-SHA256-derived key
+4. The client descrambles the bytes on the fly — the result is a valid ZIP that loads normally
+5. If someone downloads the raw stream, they get scrambled bytes that no ZIP tool can open
+
+### Configuration
+
+```yaml
+services:
+  viewer:
+    environment:
+      - ARCHIVE_SECRET=your-secret-key-here    # Server-side
+    build:
+      args:
+        - ARCHIVE_SECRET=your-secret-key-here  # Build-time (becomes VITE_ARCHIVE_SECRET)
+```
+
+Both values **must match**. The server uses `ARCHIVE_SECRET` to derive per-archive XOR keys via HMAC-SHA256. The client uses `VITE_ARCHIVE_SECRET` (inlined at build time) to derive the same key and descramble.
+
+### Protected Archive Format (.vdim)
+
+The editor can also export `.vdim` (Vitrine Protected Archive) files — on-disk scrambled archives with a 48-byte header containing an embedded per-archive key. These files:
+
+- Have magic bytes `VD` (0x56 0x44) instead of `PK` (0x50 0x4B)
+- Cannot be opened by any ZIP tool without descrambling
+- Are automatically detected and descrambled when loaded in the viewer or Tauri desktop app
+- Can be shared as files without exposing the raw archive contents
+
+The `.vdim` export option appears in the editor's export panel alongside the standard `.ddim` format.
+
+### Stream Endpoint
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/archive-stream/{hash}` | XOR-scrambled archive stream. Supports `Range` requests (byte offsets are preserved 1:1). Returns `application/octet-stream`. Only active when `ARCHIVE_SECRET` is set. |
+
+### Threat Model
+
+- **Prevents:** Casual download-and-open of archive files noticed in browser DevTools
+- **Does not prevent:** Determined reverse engineering (the key is embedded in the client JS bundle)
+- **Key derivation:** HMAC-SHA256 with the archive's URL path as the message, producing a 32-byte repeating XOR key
+- **Range request compatible:** XOR is position-independent, so partial fetches descramble correctly
+
+When `ARCHIVE_SECRET` is not set, archives are served as plain files with no scrambling (zero breaking changes to existing deployments).
+
 ## Nginx Configuration
 
 The Docker image includes nginx configured with:
 - GZIP compression for text-based assets
 - 1-day cache headers for static files
 - CORS headers for cross-origin file loading
-- Proper MIME types for `.ddim` (`application/zip`) and `.e57` (`application/octet-stream`) files
+- Proper MIME types for `.ddim` and `.e57` (`application/octet-stream`) files
 - Content Security Policy and security headers
 
 See [`docker/nginx.conf`](../docker/nginx.conf) for the full configuration.

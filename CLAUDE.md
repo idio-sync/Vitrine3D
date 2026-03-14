@@ -5,7 +5,7 @@
 A browser-based 3D viewer for assembling and delivering scan data — Gaussian splats, meshes (GLB/OBJ), and E57 point clouds — together or individually, without losing real-world spatial context. Built as an alternative to Sketchfab for a 3D scanning company's deliverables pipeline.
 
 Two entry points, built as separate Vite bundles:
-- **Editor** (`src/editor/index.html` → `/editor/`): Internal tool for composing scenes — load assets, align them spatially, add annotations, fill in metadata, and export as a `.ddim` archive (Direct Dimensions format). Legacy `.a3d`/`.a3z` archives are still accepted on import.
+- **Editor** (`src/editor/index.html` → `/editor/`): Internal tool for composing scenes — load assets, align them spatially, add annotations, fill in metadata, and export as a `.ddim` archive (Direct Dimensions format) or `.vdim` (protected, XOR-scrambled). Legacy `.a3d`/`.a3z` archives are still accepted on import.
 - **Kiosk** (`src/index.html` → `/`): Client-facing viewer. Loads archives via URL params, applies themes (Editorial, Gallery, Exhibit), supports camera constraints and annotations. Entry point is `kiosk-web.ts` → `kiosk-main.ts`.
 
 ## Tech Stack & Constraints
@@ -47,6 +47,7 @@ src/
     archive-loader.ts     ZIP extraction, manifest parsing, filename sanitization
     archive-creator.ts    Archive creation, SHA-256 hashing, screenshot capture
     archive-pipeline.ts   Archive loading/processing pipeline (extracted from main.ts)
+    archive-scramble.ts   XOR byte scrambling/descrambling, VDIM format, transit key derivation
     export-controller.ts  Archive export, metadata manifests
     event-wiring.ts       Central UI event binding — setupUIEvents()
     asset-store.ts        ES module singleton for blob references (splat, mesh, pointcloud)
@@ -192,7 +193,7 @@ All DOM structure lives in `src/index.html` (kiosk) and `src/editor/index.html` 
 ## Known Fragile Areas
 
 - **`main.ts` is ~1,900 lines** — fully typed glue layer: `init()`, state declarations, deps factories, animation loop, and thin delegation wrappers. Used by editor only; kiosk uses `kiosk-web.ts` → `kiosk-main.ts`.
-- **Tests cover security-critical code only.** ~380 tests across 6 suites: URL validation, theme metadata parsing, archive filename sanitization, flight log parsing. No E2E or integration tests yet.
+- **Tests cover security-critical code only.** ~500 tests across 7 suites: URL validation, theme metadata parsing, archive filename sanitization, flight log parsing, archive scrambling. No E2E or integration tests yet.
 - **Point cloud memory.** No size limits on E57 loading. Large files can OOM the browser.
 - **`@types/three` is installed** but many Three.js references still use `any` for compatibility with Spark.js and dynamic patterns.
 - **Flight log parsers** handle DJI firmware variations (column name aliases, "longtitude" typo). New DJI app versions may introduce column names not yet in the alias list.
