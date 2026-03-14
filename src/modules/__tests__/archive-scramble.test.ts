@@ -2,16 +2,25 @@
 /**
  * Tests for archive-scramble.ts
  *
- * Uses vi.stubEnv to set VITE_ARCHIVE_SECRET before dynamic import,
- * since the module reads the env var at module-load time.
+ * VITE_ARCHIVE_SECRET is defined in vitest.config.ts so the module
+ * picks it up at load time via import.meta.env.
  */
-import { describe, it, expect, vi, beforeAll } from 'vitest';
-
-// Stub the env var before the module is imported
-vi.stubEnv('VITE_ARCHIVE_SECRET', 'test-secret-key-for-unit-tests');
-
-// Dynamic import so the stub is in place when the module initialises
-const modulePromise = import('../archive-scramble.js');
+import { describe, it, expect } from 'vitest';
+import {
+    detectArchiveFormat,
+    descrambleChunk,
+    descrambleArchive,
+    descrambleVdim,
+    deriveTransitKey,
+    isTransitEnabled,
+    scrambleArchive,
+    parseVdimHeader,
+    xorBytes,
+    VDIM_MAGIC,
+    VDIM_HEADER_SIZE,
+    VDIM_VERSION,
+    VDIM_KEY_OFFSET,
+} from '../archive-scramble.js';
 
 function fakeZip(size = 64): Uint8Array {
     const data = new Uint8Array(size);
@@ -23,12 +32,6 @@ function fakeZip(size = 64): Uint8Array {
 // ─── Format Detection ─────────────────────────────────────────────────────────
 
 describe('detectArchiveFormat', () => {
-    let detectArchiveFormat: Awaited<typeof modulePromise>['detectArchiveFormat'];
-
-    beforeAll(async () => {
-        ({ detectArchiveFormat } = await modulePromise);
-    });
-
     it('detects plain ZIP (PK magic)', () => {
         const bytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
         expect(detectArchiveFormat(bytes, false)).toBe('plain');
@@ -46,18 +49,17 @@ describe('detectArchiveFormat', () => {
         expect(detectArchiveFormat(bytes, true)).toBe('scrambled-transit');
     });
 
-    it('throws for unknown magic when transit is disabled', () => {
+    it('throws "Unrecognized archive format" for unknown magic when transit is disabled', () => {
         const bytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
-        expect(() => detectArchiveFormat(bytes, false)).toThrow();
+        expect(() => detectArchiveFormat(bytes, false)).toThrow('Unrecognized archive format');
     });
 
-    it('throws when buffer is less than 2 bytes', () => {
-        expect(() => detectArchiveFormat(new Uint8Array([0x50]), false)).toThrow();
-        expect(() => detectArchiveFormat(new Uint8Array([]), false)).toThrow();
+    it('throws "Unrecognized archive format" when buffer is less than 2 bytes', () => {
+        expect(() => detectArchiveFormat(new Uint8Array([0x50]), false)).toThrow('Unrecognized archive format');
+        expect(() => detectArchiveFormat(new Uint8Array([]), false)).toThrow('Unrecognized archive format');
     });
 
     it('treats legacy .a3d / .a3z archives (ZIP with PK magic) as plain', () => {
-        // a3d and a3z are ZIP-based — they start with PK
         const a3d = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]);
         expect(detectArchiveFormat(a3d, false)).toBe('plain');
     });
@@ -66,13 +68,6 @@ describe('detectArchiveFormat', () => {
 // ─── descrambleChunk ──────────────────────────────────────────────────────────
 
 describe('descrambleChunk', () => {
-    let descrambleChunk: Awaited<typeof modulePromise>['descrambleChunk'];
-    let xorBytes: Awaited<typeof modulePromise>['xorBytes'];
-
-    beforeAll(async () => {
-        ({ descrambleChunk, xorBytes } = await modulePromise);
-    });
-
     it('XORs correctly at offset 0', () => {
         const data = new Uint8Array([0x01, 0x02, 0x03, 0x04]);
         const key = new Uint8Array([0xff, 0xfe]);
@@ -131,18 +126,21 @@ describe('descrambleChunk', () => {
         const result = descrambleChunk(data, 0, key);
         expect(result.length).toBe(0);
     });
+
+    it('handles chunk at key-length boundary (offset = keyLen - 1)', () => {
+        const key = new Uint8Array([0xAA, 0xBB, 0xCC, 0xDD]);
+        const data = new Uint8Array([0x11, 0x22, 0x33]);
+        // offset = 3 (keyLen - 1), so key indices are 3, 0, 1
+        const result = descrambleChunk(data, 3, key);
+        expect(result[0]).toBe(0x11 ^ 0xDD); // key[3]
+        expect(result[1]).toBe(0x22 ^ 0xAA); // key[0] — wraps around
+        expect(result[2]).toBe(0x33 ^ 0xBB); // key[1]
+    });
 });
 
 // ─── descrambleArchive ────────────────────────────────────────────────────────
 
 describe('descrambleArchive', () => {
-    let descrambleArchive: Awaited<typeof modulePromise>['descrambleArchive'];
-    let xorBytes: Awaited<typeof modulePromise>['xorBytes'];
-
-    beforeAll(async () => {
-        ({ descrambleArchive, xorBytes } = await modulePromise);
-    });
-
     it('round-trips: XOR then descramble returns original', () => {
         const zip = fakeZip(32);
         const key = new Uint8Array(32).fill(0xab);
@@ -165,12 +163,6 @@ describe('descrambleArchive', () => {
 // ─── deriveTransitKey ─────────────────────────────────────────────────────────
 
 describe('deriveTransitKey', () => {
-    let deriveTransitKey: Awaited<typeof modulePromise>['deriveTransitKey'];
-
-    beforeAll(async () => {
-        ({ deriveTransitKey } = await modulePromise);
-    });
-
     it('returns a 32-byte Uint8Array', async () => {
         const key = await deriveTransitKey('some-archive-hash');
         expect(key).toBeInstanceOf(Uint8Array);
@@ -193,14 +185,7 @@ describe('deriveTransitKey', () => {
 // ─── isTransitEnabled ────────────────────────────────────────────────────────
 
 describe('isTransitEnabled', () => {
-    let isTransitEnabled: Awaited<typeof modulePromise>['isTransitEnabled'];
-
-    beforeAll(async () => {
-        ({ isTransitEnabled } = await modulePromise);
-    });
-
     it('returns true when VITE_ARCHIVE_SECRET is set', () => {
-        // The stub was set before module import
         expect(isTransitEnabled()).toBe(true);
     });
 });
@@ -208,18 +193,8 @@ describe('isTransitEnabled', () => {
 // ─── scrambleArchive + descrambleVdim round-trip ──────────────────────────────
 
 describe('scrambleArchive + descrambleVdim round-trip', () => {
-    let scrambleArchive: Awaited<typeof modulePromise>['scrambleArchive'];
-    let descrambleVdim: Awaited<typeof modulePromise>['descrambleVdim'];
-    let VDIM_MAGIC: Awaited<typeof modulePromise>['VDIM_MAGIC'];
-    let VDIM_HEADER_SIZE: Awaited<typeof modulePromise>['VDIM_HEADER_SIZE'];
-
-    beforeAll(async () => {
-        ({ scrambleArchive, descrambleVdim, VDIM_MAGIC, VDIM_HEADER_SIZE } = await modulePromise);
-    });
-
     it('scramble then descramble returns the original ZIP', async () => {
         const zip = fakeZip(128);
-        // Fill with recognisable pattern beyond the PK header
         for (let i = 2; i < 128; i++) zip[i] = i & 0xff;
 
         const vdim = await scrambleArchive(zip);
@@ -239,20 +214,11 @@ describe('scrambleArchive + descrambleVdim round-trip', () => {
         expect(vdim.length).toBe(VDIM_HEADER_SIZE + zip.length);
     });
 
-    it('scrambled body is not a valid ZIP (PK bytes are gone)', async () => {
+    it('scrambled body differs from original ZIP', async () => {
         const zip = fakeZip(64);
         const vdim = await scrambleArchive(zip);
         const body = vdim.slice(VDIM_HEADER_SIZE);
-        // The body should NOT start with PK (it's scrambled)
-        const startsWithPK = body[0] === 0x50 && body[1] === 0x4b;
-        // This can theoretically pass by random chance but with a real key it won't
-        // We verify the body differs from the original zip
         expect(body).not.toEqual(zip);
-        // If it happened to start with PK, the XOR cancelled — astronomically unlikely with a random 32-byte key
-        if (startsWithPK) {
-            // Log a warning but don't fail — key just happened to XOR to 0 at bytes 0-1
-            console.warn('Body started with PK by coincidence — key cancelled first two bytes');
-        }
     });
 
     it('throws if input is not a valid ZIP', async () => {
@@ -264,14 +230,6 @@ describe('scrambleArchive + descrambleVdim round-trip', () => {
 // ─── parseVdimHeader ──────────────────────────────────────────────────────────
 
 describe('parseVdimHeader', () => {
-    let parseVdimHeader: Awaited<typeof modulePromise>['parseVdimHeader'];
-    let VDIM_HEADER_SIZE: Awaited<typeof modulePromise>['VDIM_HEADER_SIZE'];
-    let VDIM_VERSION: Awaited<typeof modulePromise>['VDIM_VERSION'];
-
-    beforeAll(async () => {
-        ({ parseVdimHeader, VDIM_HEADER_SIZE, VDIM_VERSION } = await modulePromise);
-    });
-
     function makeHeader(magic = [0x56, 0x44], version = 0x01, keyLen = 32): Uint8Array {
         const h = new Uint8Array(VDIM_HEADER_SIZE);
         h[0] = magic[0];
@@ -283,28 +241,61 @@ describe('parseVdimHeader', () => {
 
     it('rejects headers shorter than VDIM_HEADER_SIZE', async () => {
         const short = new Uint8Array(10);
-        await expect(parseVdimHeader(short)).rejects.toThrow('too short');
+        await expect(parseVdimHeader(short)).rejects.toThrow('Invalid protected archive header');
     });
 
     it('rejects bad magic bytes', async () => {
         const h = makeHeader([0xde, 0xad]);
-        await expect(parseVdimHeader(h)).rejects.toThrow('bad magic');
+        await expect(parseVdimHeader(h)).rejects.toThrow('Invalid protected archive header');
     });
 
     it('rejects keyLen of 8 (not 16 or 32)', async () => {
         const h = makeHeader([0x56, 0x44], 0x01, 8);
-        await expect(parseVdimHeader(h)).rejects.toThrow('unsupported key length');
+        await expect(parseVdimHeader(h)).rejects.toThrow('Invalid protected archive header');
     });
 
     it('rejects keyLen of 64 (not 16 or 32)', async () => {
         const h = makeHeader([0x56, 0x44], 0x01, 64);
-        await expect(parseVdimHeader(h)).rejects.toThrow('unsupported key length');
+        await expect(parseVdimHeader(h)).rejects.toThrow('Invalid protected archive header');
     });
 
     it('accepts keyLen of 16', async () => {
         const h = makeHeader([0x56, 0x44], 0x01, 16);
         const { key } = await parseVdimHeader(h);
         expect(key.length).toBe(16);
+    });
+
+    it('16-byte key round-trip: manually built .vdim parses and descrambles correctly', async () => {
+        const zip = fakeZip(64);
+        for (let i = 2; i < 64; i++) zip[i] = i & 0xff;
+
+        // Generate a 16-byte random key
+        const key16 = new Uint8Array(16);
+        crypto.getRandomValues(key16);
+
+        // Encrypt the key for header storage (same as scrambleArchive does, but with 16 bytes)
+        const secretKey = await deriveTransitKey('vdim-header-key');
+        const encryptedKey = new Uint8Array(32); // zero-padded to 32
+        for (let i = 0; i < 16; i++) encryptedKey[i] = key16[i] ^ secretKey[i];
+
+        // Build header with keyLen=16
+        const header = makeHeader([0x56, 0x44], 0x01, 16);
+        header.set(encryptedKey, VDIM_KEY_OFFSET);
+
+        // XOR the ZIP body with the 16-byte key
+        const body = new Uint8Array(zip);
+        for (let i = 0; i < body.length; i++) body[i] ^= key16[i % 16];
+
+        // Concatenate header + body
+        const vdim = new Uint8Array(VDIM_HEADER_SIZE + body.length);
+        vdim.set(header);
+        vdim.set(body, VDIM_HEADER_SIZE);
+
+        // Parse header and descramble
+        const parsed = await parseVdimHeader(vdim.slice(0, VDIM_HEADER_SIZE));
+        expect(parsed.key.length).toBe(16);
+        const recovered = descrambleArchive(vdim.slice(VDIM_HEADER_SIZE), parsed.key);
+        expect(recovered).toEqual(zip);
     });
 
     it('accepts keyLen of 32 and extracts correct version', async () => {
@@ -318,14 +309,11 @@ describe('parseVdimHeader', () => {
 // ─── Error message specificity ────────────────────────────────────────────────
 
 describe('error message specificity', () => {
-    it('wrong secret produces the specific descrambling-failed error, not a generic one', async () => {
-        const { descrambleArchive, xorBytes } = await modulePromise;
-
+    it('wrong secret produces the specific descrambling-failed error, not a generic one', () => {
         const zip = fakeZip(32);
         const key = new Uint8Array(32).fill(0x12);
         const scrambled = xorBytes(new Uint8Array(zip), key, 0);
 
-        // Use a different key to simulate wrong secret
         const wrongKey = new Uint8Array(32).fill(0x34);
         let caught: Error | undefined;
         try {

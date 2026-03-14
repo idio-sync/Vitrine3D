@@ -39,7 +39,7 @@ export type ArchiveFormat = 'plain' | 'protected-vdim' | 'scrambled-transit';
  */
 export function detectArchiveFormat(bytes: Uint8Array, transitEnabled: boolean): ArchiveFormat {
     if (bytes.length < 2) {
-        throw new Error('Archive too short to detect format (need at least 2 bytes)');
+        throw new Error('Unrecognized archive format');
     }
 
     if (bytes[0] === ZIP_MAGIC[0] && bytes[1] === ZIP_MAGIC[1]) {
@@ -54,9 +54,7 @@ export function detectArchiveFormat(bytes: Uint8Array, transitEnabled: boolean):
         return 'scrambled-transit';
     }
 
-    throw new Error(
-        'Unknown archive format — file does not start with a recognised magic sequence (PK or VD)'
-    );
+    throw new Error('Unrecognized archive format');
 }
 
 /**
@@ -123,18 +121,18 @@ export function isTransitEnabled(): boolean {
  */
 export async function parseVdimHeader(header: Uint8Array): Promise<{ version: number; key: Uint8Array }> {
     if (header.length < VDIM_HEADER_SIZE) {
-        throw new Error(`Invalid .vdim header: too short (${header.length} < ${VDIM_HEADER_SIZE})`);
+        throw new Error('Invalid protected archive header');
     }
 
     if (header[0] !== VDIM_MAGIC[0] || header[1] !== VDIM_MAGIC[1]) {
-        throw new Error('Invalid .vdim header: bad magic bytes (expected VD)');
+        throw new Error('Invalid protected archive header');
     }
 
     const version = header[2];
     const keyLen = header[3];
 
     if (keyLen !== 16 && keyLen !== 32) {
-        throw new Error(`Invalid .vdim header: unsupported key length ${keyLen} (must be 16 or 32)`);
+        throw new Error('Invalid protected archive header');
     }
 
     // Extract encrypted key material from bytes 8–39
