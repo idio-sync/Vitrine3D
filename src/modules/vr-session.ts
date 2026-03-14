@@ -60,6 +60,13 @@ let activeAnnotationCard: THREE.Mesh | null = null;
 // Camera rig — wraps the camera for VR movement
 let cameraRig: THREE.Group | null = null;
 
+// Reusable objects for per-frame VR hot paths (avoid GC pressure at 72-90Hz)
+const _vrRaycaster = new THREE.Raycaster();
+const _vrTempVec3A = new THREE.Vector3();
+const _vrTempVec3B = new THREE.Vector3();
+const _vrTempVec3C = new THREE.Vector3();
+const _vrTempQuat = new THREE.Quaternion();
+
 // =============================================================================
 // Initialization
 // =============================================================================
@@ -427,13 +434,12 @@ function updateTeleport(): void {
     // Teleport arc on trigger hold
     if (rightSource && triggerPressed && !isTeleporting) {
         // Calculate arc from controller position/direction
-        const controllerPos = new THREE.Vector3();
-        const controllerDir = new THREE.Vector3(0, 0, -1);
-        controller.getWorldPosition(controllerPos);
-        controller.getWorldDirection(controllerDir);
-        controllerDir.negate(); // getWorldDirection returns -Z
+        controller.getWorldPosition(_vrTempVec3A);
+        _vrTempVec3B.set(0, 0, -1);
+        controller.getWorldDirection(_vrTempVec3B);
+        _vrTempVec3B.negate(); // getWorldDirection returns -Z
 
-        const arcPoints = calculateArc(controllerPos, controllerDir);
+        const arcPoints = calculateArc(_vrTempVec3A, _vrTempVec3B);
         const landing = findTeleportLanding(arcPoints, deps.scene, VR.TELEPORT_MAX_DISTANCE);
 
         // Update arc visual
@@ -674,22 +680,19 @@ function updateWristMenu(): void {
     }
 
     // Position menu above left wrist
-    const controllerPos = new THREE.Vector3();
-    const controllerQuat = new THREE.Quaternion();
-    leftController.getWorldPosition(controllerPos);
-    leftController.getWorldQuaternion(controllerQuat);
+    leftController.getWorldPosition(_vrTempVec3A);
+    leftController.getWorldQuaternion(_vrTempQuat);
 
-    wristMenu.position.copy(controllerPos);
+    wristMenu.position.copy(_vrTempVec3A);
     wristMenu.position.y += 0.1;
-    wristMenu.quaternion.copy(controllerQuat);
+    wristMenu.quaternion.copy(_vrTempQuat);
 
     // Check gaze direction — show menu when user looks at wrist
     const xrCamera = deps.renderer.xr.getCamera();
-    const headForward = new THREE.Vector3(0, 0, -1).applyQuaternion(xrCamera.quaternion);
-    const headPos = new THREE.Vector3();
-    xrCamera.getWorldPosition(headPos);
-    const toWrist = controllerPos.clone().sub(headPos).normalize();
-    const dot = headForward.dot(toWrist);
+    _vrTempVec3B.set(0, 0, -1).applyQuaternion(xrCamera.quaternion);
+    xrCamera.getWorldPosition(_vrTempVec3C);
+    _vrTempVec3C.subVectors(_vrTempVec3A, _vrTempVec3C).normalize();
+    const dot = _vrTempVec3B.dot(_vrTempVec3C);
 
     wristMenu.visible = dot > VR.WRIST_MENU_LOOK_THRESHOLD;
 
@@ -710,16 +713,14 @@ function handleWristMenuInteraction(): void {
     if (!rightController) return;
 
     // Build raycaster from right controller
-    const raycaster = new THREE.Raycaster();
-    const controllerPos = new THREE.Vector3();
-    const controllerDir = new THREE.Vector3(0, 0, -1);
-    rightController.getWorldPosition(controllerPos);
-    rightController.getWorldDirection(controllerDir);
-    controllerDir.negate();
-    raycaster.set(controllerPos, controllerDir);
+    rightController.getWorldPosition(_vrTempVec3A);
+    _vrTempVec3B.set(0, 0, -1);
+    rightController.getWorldDirection(_vrTempVec3B);
+    _vrTempVec3B.negate();
+    _vrRaycaster.set(_vrTempVec3A, _vrTempVec3B);
 
     const panel = wristMenu.userData.panel as THREE.Mesh;
-    const intersects = raycaster.intersectObject(panel);
+    const intersects = _vrRaycaster.intersectObject(panel);
 
     if (intersects.length === 0) {
         if (wristMenu.userData.hoveredButton !== null) {
@@ -778,12 +779,12 @@ function disposeWristMenu(): void {
             if (child instanceof THREE.Mesh) {
                 child.geometry.dispose();
                 if (Array.isArray(child.material)) {
-                    child.material.forEach(m => m.dispose());
+                    child.material.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
                 } else {
+                    const map = (child.material as THREE.MeshBasicMaterial).map;
+                    if (map) map.dispose();
                     child.material.dispose();
                 }
-                const map = (child.material as THREE.MeshBasicMaterial).map;
-                if (map) map.dispose();
             }
         });
         wristMenu.removeFromParent();
@@ -933,13 +934,11 @@ function updateAnnotationInteraction(): void {
     const rightController = deps.renderer.xr.getController(1);
     if (!rightController) return;
 
-    const raycaster = new THREE.Raycaster();
-    const pos = new THREE.Vector3();
-    const dir = new THREE.Vector3(0, 0, -1);
-    rightController.getWorldPosition(pos);
-    rightController.getWorldDirection(dir);
-    dir.negate();
-    raycaster.set(pos, dir);
+    rightController.getWorldPosition(_vrTempVec3A);
+    _vrTempVec3B.set(0, 0, -1);
+    rightController.getWorldDirection(_vrTempVec3B);
+    _vrTempVec3B.negate();
+    _vrRaycaster.set(_vrTempVec3A, _vrTempVec3B);
 
     // Check trigger state
     let triggerPressed = false;
@@ -950,7 +949,7 @@ function updateAnnotationInteraction(): void {
         }
     }
 
-    const intersects = raycaster.intersectObjects(vrMarkerSprites);
+    const intersects = _vrRaycaster.intersectObjects(vrMarkerSprites);
 
     // Reset all markers to default scale
     const baseScale = 0.1 * VR.MARKER_SCALE_VR;

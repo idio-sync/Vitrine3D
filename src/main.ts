@@ -2194,10 +2194,16 @@ async function init() {
         if (flightTooltip) flightPathManager.setupTooltip(flightTooltip);
         flightPathManager.setupFreeLook();
         log.info(' FlightPathManager initialized');
+        let savedControlsTarget: THREE.Vector3 | null = null;
         flightPathManager.onCameraModeChange((mode) => {
             if (mode === 'orbit') {
                 controls.enabled = true;
+                if (savedControlsTarget) {
+                    controls.target.copy(savedControlsTarget);
+                    savedControlsTarget = null;
+                }
             } else {
+                savedControlsTarget = controls.target.clone();
                 controls.enabled = false;
             }
         });

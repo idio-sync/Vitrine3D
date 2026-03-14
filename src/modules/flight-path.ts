@@ -16,6 +16,9 @@ import type { FlightPoint, FlightPathData, FlightCameraMode } from '@/types.js';
 
 const log = Logger.getLogger('flight-path');
 
+// Reusable objects to avoid per-frame allocations during playback (60Hz)
+const _IDENTITY_QUAT = Object.freeze(new THREE.Quaternion());
+
 export type ColorMode = 'speed' | 'altitude' | 'climbrate';
 
 /** Find the maximum value in an array without spreading (avoids stack overflow on large arrays). */
@@ -174,7 +177,6 @@ export class FlightPathManager {
     // Saved camera state for restoring on exit
     private _savedCameraPos: THREE.Vector3 | null = null;
     private _savedCameraQuat: THREE.Quaternion | null = null;
-    private _savedControlsTarget: THREE.Vector3 | null = null;
     // Callback for when camera mode changes (main.ts uses to toggle controls.enabled)
     private _onCameraModeChange: ((mode: FlightCameraMode) => void) | null = null;
     private _onPlaybackUpdate: ((currentMs: number, totalMs: number) => void) | null = null;
@@ -182,6 +184,10 @@ export class FlightPathManager {
     private _pipEnabled = false;
     private _pipCamera: THREE.PerspectiveCamera | null = null;
     private _onPlaybackEnd: (() => void) | null = null;
+    // Reusable temp objects for per-frame playback updates
+    private readonly _tempWorldPos = new THREE.Vector3();
+    private readonly _tempGroupQuat = new THREE.Quaternion();
+    private readonly _tempLocalOffset = new THREE.Vector3();
 
     constructor(group: THREE.Group, _scene: THREE.Scene, camera: THREE.Camera, renderer: THREE.WebGLRenderer) {
         this.group = group;
@@ -811,9 +817,10 @@ export class FlightPathManager {
         if (!pathData) return;
         const trimmed = this.getTrimmedPoints(pathData);
         if (trimmed.length < 2) return;
+        const clamped = Math.max(0, Math.min(1, t));
         const start = trimmed[0].timestamp;
         const end = trimmed[trimmed.length - 1].timestamp;
-        this._playbackTime = start + t * (end - start);
+        this._playbackTime = start + clamped * (end - start);
         this.updatePlaybackPosition();
     }
 
@@ -884,12 +891,10 @@ export class FlightPathManager {
         } else {
             // Chase: behind and above, offset transformed by group rotation
             const heading = points.length > 0 ? this.getPlaybackHeading(points, this._playbackTime) : 0;
-            const camDist = 0.5;
-            const camHeight = 0.3;
             const localOffset = new THREE.Vector3(
-                -Math.sin(heading) * camDist,
-                camHeight,
-                -Math.cos(heading) * camDist
+                -Math.sin(heading) * FLIGHT_LOG.CHASE_CAM_DISTANCE,
+                FLIGHT_LOG.CHASE_CAM_HEIGHT,
+                -Math.cos(heading) * FLIGHT_LOG.CHASE_CAM_DISTANCE
             );
             localOffset.applyQuaternion(groupQuat);
             toPos = worldPos.clone().add(localOffset);
@@ -1077,7 +1082,7 @@ export class FlightPathManager {
                 this._freeLookOffset.identity();
                 this._recentering = false;
             } else {
-                this._freeLookOffset.copy(this._recenterStartQuat).slerp(new THREE.Quaternion(), this._recenterProgress);
+                this._freeLookOffset.copy(this._recenterStartQuat).slerp(_IDENTITY_QUAT as THREE.Quaternion, this._recenterProgress);
             }
         }
 
@@ -1133,33 +1138,31 @@ export class FlightPathManager {
         }
 
         // Get world-space position of marker (accounts for group transform from alignment)
-        const worldPos = this._playbackMarker.getWorldPosition(new THREE.Vector3());
-        const groupQuat = this.group.getWorldQuaternion(new THREE.Quaternion());
+        this._playbackMarker.getWorldPosition(this._tempWorldPos);
+        this.group.getWorldQuaternion(this._tempGroupQuat);
 
         // Follow camera
         if (this._cameraMode === 'chase' && this.camera instanceof THREE.PerspectiveCamera && !this._transitioning) {
             // Position camera slightly behind and above in world space
             const heading = this.getPlaybackHeading(points, t);
-            const camDist = 0.5;
-            const camHeight = 0.3;
             // Compute local offset, then transform by group rotation
-            const localOffset = new THREE.Vector3(
-                -Math.sin(heading) * camDist,
-                camHeight,
-                -Math.cos(heading) * camDist
+            this._tempLocalOffset.set(
+                -Math.sin(heading) * FLIGHT_LOG.CHASE_CAM_DISTANCE,
+                FLIGHT_LOG.CHASE_CAM_HEIGHT,
+                -Math.cos(heading) * FLIGHT_LOG.CHASE_CAM_DISTANCE
             );
-            localOffset.applyQuaternion(groupQuat);
-            this.camera.position.copy(worldPos).add(localOffset);
-            this.camera.lookAt(worldPos);
+            this._tempLocalOffset.applyQuaternion(this._tempGroupQuat);
+            this.camera.position.copy(this._tempWorldPos).add(this._tempLocalOffset);
+            this.camera.lookAt(this._tempWorldPos);
         }
 
         // FPV camera
         if (this._cameraMode === 'fpv' && this.camera instanceof THREE.PerspectiveCamera && !this._transitioning) {
-            this.camera.position.copy(worldPos);
+            this.camera.position.copy(this._tempWorldPos);
 
             // Compute target orientation in local space, then transform to world
             this._fpvQuaternion.copy(this.computeFpvOrientation(points, t));
-            this._fpvQuaternion.premultiply(groupQuat);
+            this._fpvQuaternion.premultiply(this._tempGroupQuat);
 
             // Smooth the base orientation (low-pass filter: small alpha = heavy smoothing)
             this._smoothedQuaternion.slerp(this._fpvQuaternion, FlightPathManager.SLERP_ALPHA);
@@ -1303,7 +1306,7 @@ export class FlightPathManager {
 
     /** Smoothly recenter free-look to the base gimbal/heading orientation. */
     recenterFreeLook(): void {
-        if (this._freeLookOffset.equals(new THREE.Quaternion())) return; // already centered
+        if (this._freeLookOffset.equals(_IDENTITY_QUAT as THREE.Quaternion)) return; // already centered
         this._recentering = true;
         this._recenterStartQuat.copy(this._freeLookOffset);
         this._recenterProgress = 0;

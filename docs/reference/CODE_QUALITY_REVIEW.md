@@ -419,7 +419,7 @@ Phase F (flip strict: true)      — do after Phase E
 |----------|-------|---------------|-------|---------|-------------|
 | **CRITICAL** | 3 | 0 | 2 | 1 | Security (XSS), Logic (VR toggle) |
 | **HIGH** | 22 | 4 | 15 | 3 | Memory leaks, runtime bugs, missing cleanup |
-| **MEDIUM** | 40 | 36 | 3 | 1 | Duplication, magic numbers, type safety, performance |
+| **MEDIUM** | 40 | 29 | 10 | 1 | Duplication, magic numbers, type safety, performance |
 | **LOW** | 22 | 20 | 2 | 0 | Style, naming, minor robustness |
 
 **Removed after verification:** C10 (archive-stream is intentionally public for `/view/{hash}` sharing), H40 (clearColor is frame-transient — main loop resets it), H41 (deps factories capture current value at call time — correct pattern), H42 (callback-before-transition is the intended design — transition continues in render loop). M-VR3 needs manual testing (fade callback exists but visual effect unclear).
@@ -429,6 +429,7 @@ Phase F (flip strict: true)      — do after Phase E
 **Fixed in Phase 4** (Viewer Memory Leaks): H34, H35.
 **Fixed in Phase 5** (Editorial Theme Leaks): H36, H37, H38, H39.
 **Fixed in Phase 6** (Server Robustness): M-SRV1, M-SRV2, M-SRV3, L20.
+**Fixed in Phase 7** (Per-Frame Allocations): M-VR1, M-VR2, M-FP1, M-FP2, M-FP3, M-FP4, M-FP5.
 
 **Fix plan:** `docs/superpowers/plans/2026-03-13-incremental-review-plan.md` — 12 phases ordered by severity and dependency.
 
@@ -508,17 +509,17 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 
 | # | Issue | File | Impact |
 |---|-------|------|--------|
-| M-VR1 | Per-frame allocation of `THREE.Raycaster` + `Vector3` objects in VR hot path at 72-90Hz | `vr-session.ts:713,936,367` | GC pressure causes frame drops and VR judder/motion sickness |
+| ~~M-VR1~~ | ~~Per-frame allocation of `THREE.Raycaster` + `Vector3` objects in VR hot path at 72-90Hz~~ | `vr-session.ts` | **FIXED** — hoisted to module-scope `_vrRaycaster`, `_vrTempVec3A/B/C`, `_vrTempQuat` |
 
 ### Flight Path (5)
 
 | # | Issue | File | Impact |
 |---|-------|------|--------|
-| M-FP1 | `_savedControlsTarget` declared but never written — orbit target not restored after chase/FPV round-trip | `flight-path.ts:177` | Camera orbits around stale target after returning to orbit mode |
-| M-FP2 | `updatePlaybackPosition` allocates `new Vector3()`/`Quaternion()` every frame at 60fps | `flight-path.ts:1136-1137` | GC pressure during playback |
-| M-FP3 | `seekTo()` does not clamp normalized `t` to [0, 1] | `flight-path.ts:809-818` | Slider overshoot reads past points array bounds |
-| M-FP4 | Chase camera magic numbers (`camDist = 0.5`, `camHeight = 0.3`) duplicated in 2 locations | `flight-path.ts:1143-1144,887-888` | Not in constants.ts |
-| M-FP5 | `recenterFreeLook()` and slerp animation allocate `new Quaternion()` each frame for identity comparison | `flight-path.ts:1306,1080` | Unnecessary per-frame allocation |
+| ~~M-FP1~~ | ~~`_savedControlsTarget` declared but never written — orbit target not restored after chase/FPV round-trip~~ | `flight-path.ts`, `main.ts` | **FIXED** — removed dead field; save/restore `controls.target` in main.ts `onCameraModeChange` callback |
+| ~~M-FP2~~ | ~~`updatePlaybackPosition` allocates `new Vector3()`/`Quaternion()` every frame at 60fps~~ | `flight-path.ts` | **FIXED** — hoisted to private class fields `_tempWorldPos`, `_tempGroupQuat`, `_tempLocalOffset` |
+| ~~M-FP3~~ | ~~`seekTo()` does not clamp normalized `t` to [0, 1]~~ | `flight-path.ts` | **FIXED** — added `Math.max(0, Math.min(1, t))` |
+| ~~M-FP4~~ | ~~Chase camera magic numbers (`camDist = 0.5`, `camHeight = 0.3`) duplicated in 2 locations~~ | `flight-path.ts`, `constants.ts` | **FIXED** — added `CHASE_CAM_DISTANCE`/`CHASE_CAM_HEIGHT` to `FLIGHT_LOG` constants |
+| ~~M-FP5~~ | ~~`recenterFreeLook()` and slerp animation allocate `new Quaternion()` each frame for identity comparison~~ | `flight-path.ts` | **FIXED** — added module-scope `_IDENTITY_QUAT` constant |
 
 ### Archive/Export (4)
 
@@ -571,7 +572,7 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 
 | # | Issue | File | Impact |
 |---|-------|------|--------|
-| M-VR2 | Wrist menu material disposed before extracting `.map` texture for disposal | `vr-session.ts:775-792` | When material is an array, `.map` access on array returns `undefined` |
+| ~~M-VR2~~ | ~~Wrist menu material disposed before extracting `.map` texture for disposal~~ | `vr-session.ts` | **FIXED** — extract and dispose `.map` before calling `material.dispose()` |
 | M-VR3 | VR teleport fade — callback mechanism exists but visual effect unclear | `vr-session.ts:507-528` | **NEEDS MANUAL TESTING** — fade callback is wired but may not render a visible fade-to-black quad |
 | M-BG1 | `background-loader.ts` module singleton breaks if multiple viewers exist | `background-loader.ts:46-50` | Second `enterReducedQualityMode` silently ignored |
 | M-ICP1 | ~20 lines of `console.log('[ICP-DEBUG]')` left in production code | `main.ts:989,1008-1027,1049,1060-1064` | Clutters browser console, exposes internals |
@@ -721,8 +722,8 @@ The VDIM archive "protection" uses XOR with a 32-byte repeating key. The key is 
 20. **M-TS6** — Shared `BaseState` interface for editor/kiosk
 21. **M-DUP6–9** — Extract shared detail/VR/comparison helpers
 22. **M-SIZE1** — Extract modules from main.ts (detail, comparison, optimization panel)
-23. **M-VR1** — Hoist VR per-frame allocations to module scope
-24. **M-FP2/5** — Hoist flight path per-frame allocations
+23. ~~**M-VR1** — Hoist VR per-frame allocations to module scope~~
+24. ~~**M-FP2/5** — Hoist flight path per-frame allocations~~
 
 ### Long-term
 

@@ -114,21 +114,21 @@ All findings were cross-checked against current code. Corrections from verificat
 
 ---
 
-## Phase 7 — Per-Frame Allocation Fixes (MEDIUM)
+## ~~Phase 7 — Per-Frame Allocation Fixes (MEDIUM)~~ DONE
 
-**Scope:** 7 issues across 2 files
+**Scope:** 7 issues across 4 files
 **Estimated effort:** Medium — hoist allocations to class/module scope
 **Impact:** Eliminates GC-induced frame drops in VR (72-90Hz) and flight playback (60Hz)
 
 | # | Issue | File | Fix |
 |---|-------|------|-----|
-| M-VR1 | VR Raycaster/Vector3 per-frame | `vr-session.ts` | Hoist to module-scope `_raycaster`, `_tempVec3A/B`, `_tempDir` |
-| M-FP2 | Playback per-frame Vector3/Quaternion | `flight-path.ts` | Add private `_tempWorldPos`, `_tempGroupQuat` class fields |
-| M-FP5 | Identity Quaternion allocated per-frame | `flight-path.ts` | Add module-scope `const IDENTITY_QUAT = Object.freeze(new THREE.Quaternion())` |
-| M-FP3 | `seekTo()` doesn't clamp `t` | `flight-path.ts` | Add `t = Math.max(0, Math.min(1, t))` |
-| M-FP1 | `_savedControlsTarget` never written | `flight-path.ts` | Save/restore controls target on camera mode transitions |
-| M-FP4 | Chase camera magic numbers duplicated | `flight-path.ts` + `constants.ts` | Add `CHASE_CAM_DISTANCE/HEIGHT` to `FLIGHT_LOG` constants |
-| M-VR2 | Wrist menu material dispose order | `vr-session.ts` | Extract map before material.dispose() |
+| ~~M-VR1~~ | ~~VR Raycaster/Vector3 per-frame~~ | `vr-session.ts` | ~~FIXED — hoisted to module-scope `_vrRaycaster`, `_vrTempVec3A/B/C`, `_vrTempQuat`~~ |
+| ~~M-FP2~~ | ~~Playback per-frame Vector3/Quaternion~~ | `flight-path.ts` | ~~FIXED — private class fields `_tempWorldPos`, `_tempGroupQuat`, `_tempLocalOffset`~~ |
+| ~~M-FP5~~ | ~~Identity Quaternion allocated per-frame~~ | `flight-path.ts` | ~~FIXED — module-scope `_IDENTITY_QUAT = Object.freeze(new THREE.Quaternion())`~~ |
+| ~~M-FP3~~ | ~~`seekTo()` doesn't clamp `t`~~ | `flight-path.ts` | ~~FIXED — `Math.max(0, Math.min(1, t))`~~ |
+| ~~M-FP1~~ | ~~`_savedControlsTarget` never written~~ | `flight-path.ts`, `main.ts` | ~~FIXED — removed dead field; save/restore in main.ts `onCameraModeChange` callback~~ |
+| ~~M-FP4~~ | ~~Chase camera magic numbers duplicated~~ | `flight-path.ts`, `constants.ts` | ~~FIXED — `CHASE_CAM_DISTANCE`/`CHASE_CAM_HEIGHT` in `FLIGHT_LOG`~~ |
+| ~~M-VR2~~ | ~~Wrist menu material dispose order~~ | `vr-session.ts` | ~~FIXED — extract and dispose `.map` before `material.dispose()`~~ |
 
 ---
 

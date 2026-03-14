@@ -435,4 +435,8 @@ export const FLIGHT_LOG = {
     MAX_RENDER_POINTS: 2000,
     /** Marker sphere radius (scene units) */
     MARKER_RADIUS: 0.02,
+    /** Chase camera distance behind the drone (scene units) */
+    CHASE_CAM_DISTANCE: 0.5,
+    /** Chase camera height above the drone (scene units) */
+    CHASE_CAM_HEIGHT: 0.3,
 } as const;
