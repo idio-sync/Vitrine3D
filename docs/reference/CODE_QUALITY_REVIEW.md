@@ -17,6 +17,14 @@
 6. [Open — LOW Issues](#6-open--low-issues)
 7. [Systemic Patterns](#7-systemic-patterns)
 8. [Recommended Priority](#8-recommended-priority)
+9. [TypeScript `strict: true` Migration Plan](#9-typescript-strict-true-migration-plan)
+10. [Incremental Status Summary (2026-03-13)](#10-incremental-status-summary)
+11. [CRITICAL Issues (Incremental)](#11-critical-issues)
+12. [HIGH Issues (Incremental)](#12-high-issues)
+13. [MEDIUM Issues (Incremental)](#13-medium-issues)
+14. [LOW Issues (Incremental)](#14-low-issues)
+15. [Systemic Patterns (Incremental)](#15-systemic-patterns-incremental)
+16. [Updated Recommended Priority](#16-updated-recommended-priority)
 
 ---
 
@@ -393,3 +401,335 @@ Phase F (flip strict: true)      — do after Phase E
 ```
 
 **Phases A–D can be done independently of the MEDIUM issues plan.** Phase E depends on Phase 19 (kiosk-main decomposition) for practical reasons.
+
+---
+
+# Incremental Review #2
+
+**Date:** 2026-03-13
+**Scope:** 164 commits since 2026-03-11 — 62 files changed, ~10,800 lines added across new features (VR, detail viewer, comparison viewer, rendering presets, archive scramble, flight FPV/chase/PiP, VAAPI transcoding, editorial theme expansion)
+**Methodology:** 6 parallel review agents covering: new modules, flight path, archive/export pipeline, editor core, editorial theme/CSS, Docker/server
+**Total findings:** 87 (3 CRITICAL, 22 HIGH, 40 MEDIUM, 22 LOW)
+
+---
+
+## 10. Incremental Status Summary
+
+| Severity | Total | Verified Open | Removed | Source Areas |
+|----------|-------|---------------|---------|-------------|
+| **CRITICAL** | 3 | 2 | 1 | Security (XSS), Logic (VR toggle) |
+| **HIGH** | 22 | 19 | 3 | Memory leaks, runtime bugs, missing cleanup |
+| **MEDIUM** | 40 | 39 | 1 | Duplication, magic numbers, type safety, performance |
+| **LOW** | 22 | 22 | 0 | Style, naming, minor robustness |
+
+**Removed after verification:** C10 (archive-stream is intentionally public for `/view/{hash}` sharing), H40 (clearColor is frame-transient — main loop resets it), H41 (deps factories capture current value at call time — correct pattern), H42 (callback-before-transition is the intended design — transition continues in render loop). M-VR3 needs manual testing (fade callback exists but visual effect unclear).
+
+**Fix plan:** `docs/superpowers/plans/2026-03-13-incremental-review-plan.md` — 12 phases ordered by severity and dependency.
+
+---
+
+## 11. CRITICAL Issues
+
+### ~~C10~~ — `/api/archive-stream` intentionally unauthenticated — **FALSE POSITIVE (removed)**
+
+The endpoint is designed to be public — it serves scrambled archive data to the public `/view/{hash}` page. Adding auth would break the public sharing workflow. The hash (`SHA-256(archiveUrl).slice(0, 16)`) acts as the access token. Input validation (H28) still applies.
+
+### C11 — XSS via `innerHTML` in `detail-viewer.ts:_showError()`
+
+| Field | Value |
+|-------|-------|
+| File | `detail-viewer.ts:788` |
+| Impact | The `message` parameter is interpolated directly into `innerHTML`. Currently only called with hardcoded strings, but the method is a general-purpose helper — any future caller passing server-provided error text creates an XSS vector. |
+
+**Fix:** Use `createElement` + `textContent` instead of `innerHTML`.
+
+### C12 — VR flight path toggle uses wrong visibility source in kiosk
+
+| Field | Value |
+|-------|-------|
+| File | `kiosk-main.ts:635` |
+| Impact | `flightPathManager.setVisible(!splatMesh?.visible)` toggles flight path to the inverse of the **splat's** visibility instead of its own. Incorrect behavior in VR immersive sessions. |
+
+**Fix:** Change to `flightPathManager.setVisible(!flightPathManager.isVisible)`.
+
+---
+
+## 12. HIGH Issues
+
+### Security & Auth (3)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| H26 | VAAPI device path passed unsanitized to ffmpeg `execFile` — admin can probe arbitrary filesystem paths via error output | `meta-server.js:66,2894,2932` | `video.vaapi_device` setting has no validation; string types pass through `validateSetting()` unchecked |
+| H27 | `GET /api/settings` returns all settings (including DJI API key) without `requireAuth()` | `meta-server.js:249,3331` | `handleGetSettings` has no auth check unlike `handlePutSettings`. Settings include `flight.djiApiKey` |
+| H28 | No input validation on `streamHash` extracted from URL path | `meta-server.js:3255-3257` | Hash is extracted via `pathname.slice()` with no regex validation — should enforce `/^[a-f0-9]{16}$/` |
+
+### Runtime Bugs (5)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| H29 | Environment blob wrapping bug — `new Blob([envData])` wraps the ExtractedFile object instead of its `.blob` property | `archive-pipeline.ts:832` | HDR environment loads produce `[object Object]` as content — silently corrupt environment maps |
+| H30 | `archiveLoader.getManifest()` does not exist — will throw `TypeError` at runtime | `archive-pipeline.ts:463` | `ArchiveLoader` has `.manifest` property, not `.getManifest()` method. Throws when loading archives with comparisons |
+| H31 | Comparisons not re-exported — `setComparisons()` never called during `prepareArchive()` | `export-controller.ts` | Comparison pairs from loaded archives are silently lost on re-export |
+| H32 | `state.metadata` referenced but missing from `AppState` — always `undefined` | `main.ts:3381` | Recording titles never reflect actual archive title, always fall back to `'Untitled'` |
+| H33 | `state.theme` missing from `KioskState` interface — always `undefined` | `kiosk-main.ts:445,482,3305` | ComparisonViewer and DetailViewer always receive `null` theme |
+
+### Memory Leaks (6)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| H34 | ComparisonViewer DOM listeners never removed on `close()` — only keydown removed | `comparison-viewer.ts:525-596` | After open/close cycles, stale closures reference disposed Three.js objects |
+| H35 | DetailViewer `open()` returns early on load error without calling `close()` — leaves paused render loop, visible overlay, leaked renderer | `detail-viewer.ts:216-219` | Renderer, event listeners, and overlay remain active; parent render loop stays paused |
+| H36 | 9 `document.addEventListener` calls in editorial `setup()` never removed on `cleanup()` | `editorial/layout.js:128,1137,1328,1465,1493,1513,1778,1965,2353` | Each archive reload adds 9 document-level listeners that accumulate in long-running kiosk sessions |
+| H37 | `editorial-frozen-label` DOM element missing from cleanup class list — accumulates on archive reload | `editorial/layout.js:715-722` | Element appended to `fixedRoot` but not in `EDITORIAL_ROOT_CLASSES` array |
+| H38 | Detail blob URLs not cleaned up in kiosk `cleanupCurrentScene()` | `kiosk-main.ts:2763-2811` | `state.loadedDetailBlobs` URLs never revoked when navigating between archives |
+| H39 | Flight dropdown callbacks (`onPlaybackUpdate`, `onPlaybackEnd`, `onCameraModeChange`) not cleaned up | `editorial/layout.js:2268,2275,2283,2353` | Closures over stale DOM elements after cleanup/setup cycle |
+
+### Renderer State (2 — both removed after verification)
+
+| # | Issue | File | Status |
+|---|-------|------|--------|
+| ~~H40~~ | ~~PiP rendering does not restore `clearColor`~~ | `flight-path.ts:979` | **Removed** — main render loop resets clearColor each frame; frame-transient state |
+| ~~H41~~ | ~~Stale `sparkRenderer` captured in `ArchivePipelineDeps`~~ | `main.ts:700` | **Removed** — deps factories are called fresh each invocation, capturing current value |
+
+### Playback Logic (1 — removed after verification)
+
+| # | Issue | File | Status |
+|---|-------|------|--------|
+| ~~H42~~ | ~~`stopPlayback()` fires `_onPlaybackEnd` before transition completes~~ | `flight-path.ts:778-800` | **Removed** — intended design; callback fires immediately, transition continues in render loop |
+
+### Double Extension (1)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| H43 | `.vdim` not in double-extension strip regex — re-exporting `.vdim` produces `file.vdim.vdim` | `export-controller.ts:710` | Previous double-extension fix (H12) didn't include the new format |
+
+---
+
+## 13. MEDIUM Issues
+
+### VR Performance (1)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| M-VR1 | Per-frame allocation of `THREE.Raycaster` + `Vector3` objects in VR hot path at 72-90Hz | `vr-session.ts:713,936,367` | GC pressure causes frame drops and VR judder/motion sickness |
+
+### Flight Path (5)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| M-FP1 | `_savedControlsTarget` declared but never written — orbit target not restored after chase/FPV round-trip | `flight-path.ts:177` | Camera orbits around stale target after returning to orbit mode |
+| M-FP2 | `updatePlaybackPosition` allocates `new Vector3()`/`Quaternion()` every frame at 60fps | `flight-path.ts:1136-1137` | GC pressure during playback |
+| M-FP3 | `seekTo()` does not clamp normalized `t` to [0, 1] | `flight-path.ts:809-818` | Slider overshoot reads past points array bounds |
+| M-FP4 | Chase camera magic numbers (`camDist = 0.5`, `camHeight = 0.3`) duplicated in 2 locations | `flight-path.ts:1143-1144,887-888` | Not in constants.ts |
+| M-FP5 | `recenterFreeLook()` and slerp animation allocate `new Quaternion()` each frame for identity comparison | `flight-path.ts:1306,1080` | Unnecessary per-frame allocation |
+
+### Archive/Export (4)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| M-ARC1 | XOR key obfuscation labeled "encrypted" in comments — overstates security guarantee | `archive-scramble.ts:138,200-201` | Misleading for anyone auditing the security model |
+| M-ARC2 | `environmentBlob` never cleared between archive loads — stale HDR persists | `archive-pipeline.ts` + `asset-store.ts` | Loading archive without HDR retains previous archive's environment |
+| M-ARC3 | Detail model re-export fetches from blob URL which may have been revoked | `export-controller.ts:616-617` | If archive loader has been disposed, detail model is silently lost |
+| M-ARC4 | `archiveLoader` parameter typed as `any` in `processArchive` — prevents catching compile-time bugs like the `getManifest()` issue (H30) | `archive-pipeline.ts:605` | Direct cause of H30 surviving to runtime |
+
+### Editor/Kiosk Duplication (4)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| M-DUP6 | Detail inspect handler duplicated ~80 lines between editor and kiosk | `main.ts:1764-1842` vs `kiosk-main.ts:412-491` | Drift risk — bugs fixed in one but not the other |
+| M-DUP7 | VR initialization duplicated ~30 lines between editor and kiosk | `main.ts:2466-2498` vs `kiosk-main.ts:614-643` | The kiosk version has the C12 bug that the editor version does not — exactly the drift duplication causes |
+| M-DUP8 | Comparison viewer preview blob-loading pattern duplicated 3x in main.ts | `main.ts:1774-1837,2102-2158` | Same extract/cache/open pattern repeated |
+| M-DUP9 | `_disposeMaterial` duplicated between `detail-viewer.ts` and `comparison-viewer.ts` | `detail-viewer.ts:808-816` vs `comparison-viewer.ts:711-719` | Identical implementations |
+
+### Module Growth (2)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| M-SIZE1 | `main.ts` has grown from ~1,900 to 4,357 lines — 130% increase | `main.ts` | Detail models (~280 lines), comparison (~120 lines), optimization panel (~430 lines) could be extracted |
+| M-SIZE2 | `editorial/layout.js` has grown to ~2,650 lines with flight dropdown, mobile overlay, detail viewer layout | `editorial/layout.js` | Increasingly hard to navigate |
+
+### Theme Consistency (2)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| M-TH1 | Exhibit and Gallery themes missing `onFlightPathLoaded` hook — no flight UI in those themes | `exhibit/layout.js`, `gallery/layout.js` | Flight paths have no UI when using exhibit or gallery themes |
+| M-TH2 | z-index stacking uses 36 values (0-250) with no documented scale | `editorial/layout.css` | Correct stacking by coincidence, not design |
+
+### Type Safety (2)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| M-TS6 | `KioskState` incompatible with `AppState` — 37+ missing properties, 10+ compiler errors at deps boundaries | `kiosk-main.ts` | No compile-time safety for kiosk state usage; root cause of bugs like C12, H33 |
+| M-TS7 | `normalizeManifest` works on `unknown` type — 14 compiler errors accessing properties | `kiosk-main.ts:162-171` | `deepSnakeKeys` returns `unknown`, all property accesses unchecked |
+
+### Server (3)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| M-SRV1 | `/api/gpu` endpoint exposes hardware info without authentication | `meta-server.js:3327-3330` | GPU driver version and encoder list useful for fingerprinting |
+| M-SRV2 | TOCTOU race between `existsSync` and `createReadStream` in archive streaming | `meta-server.js:2502-2547` | File deleted between stat and read causes unhandled stream error |
+| M-SRV3 | File read stream `error` event not handled — can crash Node process | `meta-server.js:2539-2548` | Unhandled stream error takes down entire meta-server |
+
+### Other (4)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| M-VR2 | Wrist menu material disposed before extracting `.map` texture for disposal | `vr-session.ts:775-792` | When material is an array, `.map` access on array returns `undefined` |
+| M-VR3 | VR teleport fade — callback mechanism exists but visual effect unclear | `vr-session.ts:507-528` | **NEEDS MANUAL TESTING** — fade callback is wired but may not render a visible fade-to-black quad |
+| M-BG1 | `background-loader.ts` module singleton breaks if multiple viewers exist | `background-loader.ts:46-50` | Second `enterReducedQualityMode` silently ignored |
+| M-ICP1 | ~20 lines of `console.log('[ICP-DEBUG]')` left in production code | `main.ts:989,1008-1027,1049,1060-1064` | Clutters browser console, exposes internals |
+
+### CSS (3)
+
+| # | Issue | File | Impact |
+|---|-------|------|--------|
+| M-CSS1 | `!important` used 23 times in editorial layout.css | `editorial/layout.css` | Most for mobile overrides — acceptable but creates specificity ceiling |
+| M-CSS2 | `parseMarkdown` output injected via innerHTML at 4 sites — defense-in-depth concern | `editorial/layout.js:304,418,433,528` | `parseMarkdown` escapes first, but regex bypass could inject HTML |
+| M-CSS3 | `createCollapsible` uses innerHTML with `title` param — currently hardcoded but not enforced | `editorial/layout.js:151` | Future caller with manifest-derived data creates XSS vector |
+
+---
+
+## 14. LOW Issues
+
+### Flight Path (3)
+
+| # | Issue | File |
+|---|-------|------|
+| L1 | `_onPointerUp` handler does not check for FPV mode (inconsistent with down/move guards) | `flight-path.ts:1287-1289` |
+| L2 | FPV default pitch angle `-15` degrees is a magic number | `flight-path.ts:1228` |
+| L3 | Unused `_scene` constructor parameter | `flight-path.ts:186` |
+
+### VR (2)
+
+| # | Issue | File |
+|---|-------|------|
+| L4 | VR teleport physics constants (`ARC_SEGMENTS`, `GRAVITY`, `VELOCITY`) not in `constants.ts` VR object | `vr-session.ts:309-311` |
+| L5 | VR auto-enter overlay uses `innerHTML` with hardcoded content — safe but inconsistent with project security patterns | `vr-session.ts:221-222` |
+
+### Archive/Export (3)
+
+| # | Issue | File |
+|---|-------|------|
+| L6 | Orphaned `_ARCHIVE_EXTENSIONS` variable with underscore prefix | `archive-loader.ts:26` |
+| L7 | `_format` parameter in `createArchive` captured but unused | `archive-creator.ts:1998` |
+| L8 | Magic number `2 * 1024 * 1024 * 1024` for source file size warning | `export-controller.ts:584` |
+
+### New Modules (3)
+
+| # | Issue | File |
+|---|-------|------|
+| L9 | `ComparisonViewer.activeLeader` not readable from outside the class | `comparison-viewer.ts:54` |
+| L10 | `_handleKeydown` class property initialized to no-op then reassigned in `_wireEvents` | `comparison-viewer.ts:599,562` |
+| L11 | Detail viewer editor control event listeners never removed — accumulate across open/close cycles | `detail-viewer.ts:399-577` |
+
+### Kiosk (3)
+
+| # | Issue | File |
+|---|-------|------|
+| L12 | Missing `.zip` and `.vdim` in kiosk `FILE_CATEGORIES.archive` | `kiosk-main.ts:257` |
+| L13 | Inconsistent render loop pause/resume naming: editor `pauseRenderLoop` vs kiosk `pauseRender` | `main.ts:4268` vs `kiosk-main.ts:5690` |
+| L14 | Magic number `0.382` (golden ratio) and `720` (sidebar max) inline in kiosk | `kiosk-main.ts:714` |
+
+### Editorial Theme (4)
+
+| # | Issue | File |
+|---|-------|------|
+| L15 | Duplicate flight log stats rendering code (~30 lines) in setup vs onFlightPathLoaded | `editorial/layout.js:1800-1829` vs `2370-2400` |
+| L16 | Magic number `38.2%` (golden ratio) repeated 6 times without CSS variable | `editorial/layout.css` |
+| L17 | Mobile breakpoint changed from 768px to 699px — may affect tablet portrait mode | `kiosk.css` |
+| L18 | `var` declarations inside `for` loop in `createStaticMap` — should be `let` | `editorial/layout.js:79-98` |
+
+### Docker (2)
+
+| # | Issue | File |
+|---|-------|------|
+| L19 | `vainfo` HEVC/AV1 detection tests profiles and entrypoints independently — may false-positive | `meta-server.js:113-115` |
+| L20 | nginx.conf missing `.vdim` in archive content-type block | `docker/nginx.conf:38` |
+
+### Worker (1)
+
+| # | Issue | File |
+|---|-------|------|
+| L21 | `draco-compress.worker.ts` `JSON.parse` on GLB chunk without try/catch — confusing error message on corrupt GLB | `draco-compress.worker.ts:54-56` |
+
+### Editor Core (1)
+
+| # | Issue | File |
+|---|-------|------|
+| L22 | `_pendingDetailKey` declared at line 4157 but first used at line 1866 | `main.ts:4157,1866` |
+
+---
+
+## 15. Systemic Patterns (Incremental)
+
+### main.ts Growth Crisis
+
+`main.ts` has grown from the documented ~1,900 lines to **4,357 lines** — a 130% increase in 2 days. New features (detail models, comparison viewer, optimization panel, VR wiring, flight path UI, rendering presets) were wired inline rather than extracted to modules. This is now the single largest file in the project and the primary source of duplication with `kiosk-main.ts`.
+
+### Editor/Kiosk Divergence Accelerating
+
+Every new feature (VR, detail viewer, comparison viewer, presets) is wired independently in both `main.ts` and `kiosk-main.ts`. The VR toggle bug (C12) is a direct consequence — the kiosk version references the wrong visibility source, a bug the editor version does not have. The `KioskState` vs `AppState` type incompatibility (M-TS6) means these drift bugs cannot be caught at compile time.
+
+### Event Listener Lifecycle Gaps
+
+A recurring pattern across new modules: event listeners are added in setup/init but never removed in cleanup/close. This affects:
+- Editorial layout.js (9 document listeners per archive load — H36)
+- ComparisonViewer (all DOM listeners except keydown — H34)
+- DetailViewer editor controls (never removed — L11)
+- Flight dropdown callbacks (H39)
+
+The project would benefit from a standard `AbortController` pattern for grouped listener cleanup.
+
+### Per-Frame Allocation in Hot Paths
+
+Both VR (`vr-session.ts`) and flight playback (`flight-path.ts`) allocate `new THREE.Vector3()`, `new THREE.Quaternion()`, and `new THREE.Raycaster()` objects inside code that runs at 60-90Hz. This creates GC pressure that causes frame drops — especially problematic in VR where judder causes motion sickness.
+
+### XOR Scramble Security Model Unclear
+
+The VDIM archive "protection" uses XOR with a 32-byte repeating key. The key is "encrypted" with an HMAC derived from `VITE_ARCHIVE_SECRET` (which defaults to empty string). Comments say "encrypted" but the scheme provides obfuscation at best. The security model should be explicitly documented as preventing casual redistribution, not protecting against determined attackers.
+
+---
+
+## 16. Updated Recommended Priority
+
+### Immediate (security + data integrity)
+
+1. **H26** — Validate `video.vaapi_device` against `/dev/dri/renderD\d+` pattern
+2. **H27** — Add `requireAuth()` to `GET /api/settings`
+3. **H28** — Validate stream hash format
+4. **C11** — Fix innerHTML XSS in detail-viewer `_showError()`
+5. **C12** — Fix VR flight path toggle visibility source
+
+### Next (runtime bugs)
+
+7. **H29** — Fix environment blob wrapping (`envData.blob` not `new Blob([envData])`)
+8. **H30** — Fix `archiveLoader.getManifest()` → `.manifest`
+9. **H31** — Add `setComparisons()` call in `prepareArchive()`
+10. **H32** — Fix `state.metadata` reference in recording title
+11. **H33** — Add `theme` to `KioskState` interface
+12. **H43** — Add `.vdim` to double-extension strip regex
+
+### Soon (memory leaks)
+
+13. **H34** — ComparisonViewer listener cleanup on close
+14. **H35** — DetailViewer cleanup on load error
+15. **H36** — Editorial document listener cleanup
+16. **H37** — Add `editorial-frozen-label` to cleanup list
+17. **H38** — Revoke detail blob URLs in kiosk cleanup
+18. **H39** — Flight dropdown callback cleanup
+19. **H40** — PiP clearColor save/restore
+
+### Medium-term (architecture)
+
+20. **M-TS6** — Shared `BaseState` interface for editor/kiosk
+21. **M-DUP6–9** — Extract shared detail/VR/comparison helpers
+22. **M-SIZE1** — Extract modules from main.ts (detail, comparison, optimization panel)
+23. **M-VR1** — Hoist VR per-frame allocations to module scope
+24. **M-FP2/5** — Hoist flight path per-frame allocations
+
+### Long-term
+
+25. **M-ARC1** — Document XOR scramble security model accurately
+26. **M-TH1** — Flight path support in exhibit/gallery themes
+27. **M-CSS1–3** — Defense-in-depth innerHTML improvements
