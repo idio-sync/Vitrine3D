@@ -21,6 +21,33 @@ export type AssetStateValue = 'unloaded' | 'loading' | 'loaded' | 'error';
 export type MarkerDensity = 'off' | 'sparse' | 'all';
 export type FlightCameraMode = 'orbit' | 'chase' | 'fpv';
 export type SfmDisplayMode = 'frustums' | 'markers';
+export type ComparisonMode = 'side-by-side' | 'slider' | 'toggle';
+
+export interface ComparisonSide {
+    asset_key: string;
+    label?: string;
+    date?: string;
+    description?: string;
+}
+
+export interface ComparisonPair {
+    id: string;
+    before: ComparisonSide;
+    after: ComparisonSide;
+    alignment?: Transform;
+    default_mode?: ComparisonMode;
+}
+
+export interface AnnotationComparison {
+    before_label?: string;
+    before_date?: string;
+    before_description?: string;
+    after_label?: string;
+    after_date?: string;
+    after_description?: string;
+    alignment?: Transform;
+    default_mode?: ComparisonMode;
+}
 
 export interface ViewDefaults {
     sfmCameras: {
@@ -136,6 +163,8 @@ export interface AppState {
     // Detail model inspection (runtime-only, not serialized)
     detailAssetIndex: Map<string, { filename: string }>;
     loadedDetailBlobs: Map<string, string>;
+    // Comparison (runtime-only, not serialized)
+    comparisonAfterEntry?: { key: string; filename: string } | null;
 }
 
 // ===== Scene References =====
@@ -257,6 +286,9 @@ export interface Annotation {
     detail_thumbnail?: string;
     detail_annotations?: Annotation[];
     detail_view_settings?: DetailViewSettings;
+    // Comparison (before/after) link
+    comparison_asset_key?: string;
+    comparison?: AnnotationComparison;
 }
 
 /** View settings for the detail model inspection overlay. */
