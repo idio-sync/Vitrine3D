@@ -48,6 +48,7 @@ const CHUNKED_UPLOAD = (process.env.CHUNKED_UPLOAD || '').toLowerCase() === 'tru
 const MAX_CHUNK_SIZE = 100 * 1024 * 1024; // 100 MB per-chunk hard cap
 const CHUNKS_DIR = '/tmp/v3d_chunks';
 const DEFAULT_KIOSK_THEME = process.env.DEFAULT_KIOSK_THEME || '';
+const ARCHIVE_SECRET = process.env.ARCHIVE_SECRET || '';
 
 const HTML_ROOT = '/usr/share/nginx/html';
 const META_DIR = path.join(HTML_ROOT, 'meta');
@@ -124,6 +125,33 @@ function probeGpu() {
     } catch (err) {
         console.log('[gpu] No VAAPI available (vainfo failed) — using software encoding');
     }
+}
+
+/**
+ * Derive a 32-byte XOR key for archive scrambling.
+ * HMAC-SHA256(ARCHIVE_SECRET, archiveHash) — deterministic, matches client-side deriveTransitKey().
+ */
+function deriveArchiveKey(archiveHash) {
+    return crypto.createHmac('sha256', ARCHIVE_SECRET).update(archiveHash).digest();
+}
+
+/**
+ * Create a Transform stream that XORs all bytes with a repeating key.
+ * Position tracking ensures correct key alignment for Range requests.
+ */
+function createXorTransform(key, startOffset = 0) {
+    const { Transform } = require('stream');
+    let position = startOffset;
+    return new Transform({
+        transform(chunk, encoding, callback) {
+            const output = Buffer.alloc(chunk.length);
+            for (let i = 0; i < chunk.length; i++) {
+                output[i] = chunk[i] ^ key[(position + i) % key.length];
+            }
+            position += chunk.length;
+            callback(null, output);
+        }
+    });
 }
 
 probeGpu();
@@ -2452,6 +2480,75 @@ function handleCollectionPage(req, res, slug) {
  * Injects archive config into index.html so config.js picks it up automatically.
  * URL stays as /view/{hash} — no query params for archive/kiosk/autoload visible.
  */
+/**
+ * GET /api/archive-stream/{hash} — stream archive bytes through XOR transform.
+ * Supports Range requests with correct byte alignment.
+ */
+function handleArchiveStream(req, res, hash) {
+    if (!ARCHIVE_SECRET) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Archive streaming not configured');
+        return;
+    }
+
+    const row = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
+    if (!row) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Archive not found');
+        return;
+    }
+
+    const filePath = path.join(ARCHIVES_DIR, row.filename);
+    if (!fs.existsSync(filePath)) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Archive file not found');
+        return;
+    }
+
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+    const key = deriveArchiveKey(hash);
+
+    const rangeHeader = req.headers.range;
+    if (rangeHeader) {
+        const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+        if (!match) {
+            res.writeHead(416, { 'Content-Type': 'text/plain' });
+            res.end('Invalid Range header');
+            return;
+        }
+        const start = parseInt(match[1], 10);
+        const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
+
+        if (start >= fileSize || end >= fileSize || start > end) {
+            res.writeHead(416, {
+                'Content-Range': `bytes */${fileSize}`,
+                'Content-Type': 'text/plain'
+            });
+            res.end('Range not satisfiable');
+            return;
+        }
+
+        const chunkSize = end - start + 1;
+        res.writeHead(206, {
+            'Content-Type': 'application/octet-stream',
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Content-Length': chunkSize,
+            'Accept-Ranges': 'bytes',
+        });
+        const stream = fs.createReadStream(filePath, { start, end });
+        stream.pipe(createXorTransform(key, start)).pipe(res);
+    } else {
+        res.writeHead(200, {
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': fileSize,
+            'Accept-Ranges': 'bytes',
+        });
+        const stream = fs.createReadStream(filePath);
+        stream.pipe(createXorTransform(key, 0)).pipe(res);
+    }
+}
+
 function handleViewArchive(req, res, hash) {
     const row = db.prepare('SELECT * FROM archives WHERE hash = ?').get(hash);
     if (!row) {
@@ -2480,7 +2577,9 @@ function handleViewArchive(req, res, hash) {
         return;
     }
 
-    const archiveUrl = '/archives/' + row.filename;
+    const archiveUrl = ARCHIVE_SECRET
+        ? '/api/archive-stream/' + row.hash
+        : '/archives/' + row.filename;
     const inject = { archive: archiveUrl, kiosk: true, autoload: false };
     inject.theme = DEFAULT_KIOSK_THEME || 'editorial';
     const injectTag = '<script>window.__VITRINE_CLEAN_URL=' + JSON.stringify(inject) + ';</script>\n';
@@ -2528,7 +2627,9 @@ function handleViewArchiveByUuid(req, res, uuid) {
         return;
     }
 
-    const archiveUrl = '/archives/' + row.filename;
+    const archiveUrl = ARCHIVE_SECRET
+        ? '/api/archive-stream/' + row.hash
+        : '/archives/' + row.filename;
     const inject = { archive: archiveUrl, kiosk: true, autoload: false };
     inject.theme = DEFAULT_KIOSK_THEME || 'editorial';
     const injectTag = '<script>window.__VITRINE_CLEAN_URL=' + JSON.stringify(inject) + ';</script>\n';
@@ -3149,6 +3250,12 @@ const server = http.createServer((req, res) => {
 
     // oEmbed endpoint
     if (pathname === '/oembed') return handleOembed(req, res);
+
+    // Archive stream endpoint (XOR scrambled)
+    if (pathname.startsWith('/api/archive-stream/')) {
+        const streamHash = pathname.slice('/api/archive-stream/'.length);
+        return handleArchiveStream(req, res, streamHash);
+    }
 
     // Clean archive URLs: /view/{uuid} (UUID v4, new format)
     const viewUuidMatch = pathname.match(/^\/view\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);

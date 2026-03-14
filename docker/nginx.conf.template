@@ -149,7 +149,7 @@ server {
         return 403;
     }
 
-    # Serve archive files (.ddim, .a3d, .a3z) with proper headers
+    # Serve archive files (.ddim, .a3d, .a3z) — no ZIP content-type hint
     # Range header must be in Allow-Headers for cross-origin byte-range requests (used by loadRemoteIndex)
     location ~* \.(ddim|a3d|a3z)$ {
         expires 1d;
@@ -158,9 +158,8 @@ server {
         add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
         add_header Access-Control-Allow-Headers "Origin, Content-Type, Accept, Range" always;
         add_header Vary "Origin" always;
-        # Serve as application/zip for proper handling
         types {
-            application/zip ddim a3d a3z;
+            application/octet-stream ddim a3d a3z;
         }
     }
 
