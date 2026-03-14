@@ -88,7 +88,7 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [ ] Surface area measurement from mesh triangles within a selected region
 - [ ] Volume estimation from closed mesh regions
 - [ ] Deviation analysis — color-map distance between two representations (mesh vs. point cloud)
-- [ ] Change detection — compare two captures of the same subject over time
+- [x] **Done** — Change detection — compare two captures of the same subject over time (before/after temporal comparison viewer with side-by-side, slider, and toggle modes; works for scene-level meshes and annotation detail models)
 
 ### Progressive Loading
 - [ ] Octree-based point cloud renderer that loads visible nodes on demand
@@ -112,9 +112,8 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [ ] Web Annotation Data Model (W3C) compatible annotation export
 
 ### Alternative Kiosk Formats
-- [ ] Web Bundle (`.wbn`) — W3C format for self-contained web content
-- [ ] Service Worker-based ZIP viewer (`.zip` where `index.html` is the entry point)
-- [ ] Investigate pre-rendered turntable images/video as a preservation fallback
+- [x] Archive bundled Tauri application
+- [x] Pre-rendered turntable images/video as a preservation fallback
 
 ---
 
@@ -181,6 +180,9 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 
 ### Detail Model Viewer
 - [x] **Done** — Detail model inspection: attach high-resolution GLB meshes to annotations with dedicated overlay viewer, sub-annotations, per-model view settings (camera, lighting, background), thumbnail capture, editorial split-push layout in kiosk mode (`detail-viewer.ts`)
+
+### Comparison Viewer
+- [x] **Done** — Before/after temporal comparison viewer: three viewing modes (side-by-side with synced cameras, slider/curtain with drag divider, toggle/crossfade); supports both scene-level mesh comparisons (`mesh_0` vs `mesh_1`) and annotation-level detail model comparisons; single WebGLRenderer with viewport/scissor rendering; keyboard shortcuts (Space, arrows, Escape); comparison data stored in one archive; editor sidebar for attaching comparison models and metadata (`comparison-viewer.ts`)
 
 ### VR Mode
 - [x] **Done** — WebXR VR support in editor and kiosk: SparkXr integration, teleport locomotion with parabolic arc, snap turning, canvas-rendered wrist menu (asset toggles, locomotion mode, exit), VR annotation markers with text card popups, automatic splat budget and framebuffer scaling, `?vr=true` auto-enter overlay (`vr-session.ts`)

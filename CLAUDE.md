@@ -64,6 +64,7 @@ src/
     spark-compat.ts       Spark.js version abstraction (SPARK_VERSION env var toggle)
     flight-path.ts        Flight path rendering, import/export, hover tooltips
     flight-parsers.ts     DJI CSV, KML/KMZ, SRT flight log parsers
+    comparison-viewer.ts  Before/after comparison overlay (side-by-side, slider, toggle modes)
     kiosk-viewer.ts       Offline viewer generator (DEPRECATED — do not extend)
     kiosk-main.ts         Kiosk mode entry point
     __tests__/            Vitest test suites (url-validation, theme-loader, archive-loader, utilities, quality-tier, flight-parsers)
