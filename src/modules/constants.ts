@@ -135,14 +135,20 @@ export const MATERIAL = {
 export const SPARK_DEFAULTS = {
     /** Prevent edge popping without excessive overdraw (default: 1.4) */
     CLIP_XY: 2.0,
-    /** Cull near-invisible splats (3/255 ≈ 0.012) */
-    MIN_ALPHA: 3 / 255,
-    /** Aggressive behind-camera culling */
-    BEHIND_FOVEATE: 0.1,
+    /** Cull near-invisible splats — HD: 3/255 ≈ 0.012 */
+    MIN_ALPHA_HD: 3 / 255,
+    /** Cull more aggressively on SD — removes noisy near-transparent splats */
+    MIN_ALPHA_SD: 10 / 255,
+    /** Behind-camera culling — HD: moderate */
+    BEHIND_FOVEATE_HD: 0.1,
+    /** Behind-camera culling — SD: more aggressive, drops splats sooner */
+    BEHIND_FOVEATE_SD: 0.05,
     /** ~57° half-angle priority cone (matches ~60° camera FOV) */
     CONE_FOV: 1.0,
-    /** Deprioritize splats outside view cone → center-out LOD fill */
-    CONE_FOVEATE: 0.3,
+    /** Cone foveation — HD: gentle deprioritization outside view cone */
+    CONE_FOVEATE_HD: 0.3,
+    /** Cone foveation — SD: stronger deprioritization to focus budget on center */
+    CONE_FOVEATE_SD: 0.5,
     /** maxStdDev for SD tier — ~35% fewer pixels per large splat (perceptually similar) */
     MAX_STD_DEV_SD: Math.sqrt(5),
     /** maxStdDev for HD tier — Spark default, full quality */
