@@ -125,7 +125,7 @@ function setupAutoFade(titleBlock, cornerElement) {
         }, 4000);
     };
 
-    document.addEventListener('mousemove', fadeIn);
+    document.addEventListener('mousemove', fadeIn, { signal: _signal });
 
     // Touch: tap on viewer canvas reveals title for 3s (mousemove doesn't fire on touch)
     const canvas = document.getElementById('viewer-canvas');
@@ -718,16 +718,27 @@ const EDITORIAL_ROOT_CLASSES = [
     'editorial-bottom-ribbon',
     'editorial-mobile-pill',
     'editorial-info-overlay',
-    'editorial-anno-strip'
+    'editorial-anno-strip',
+    'editorial-frozen-label'
 ];
 
 export function cleanup() {
+    // Abort all document-level listeners registered during setup()
+    if (_editorialAbort) { _editorialAbort.abort(); _editorialAbort = null; }
+
     // Remove from both viewerContainer and body (mobile portals fixed elements to body)
     const viewerContainer = document.getElementById('viewer-container') || document.body;
     EDITORIAL_ROOT_CLASSES.forEach(cls => {
         viewerContainer.querySelectorAll('.' + cls).forEach(el => el.remove());
         document.body.querySelectorAll('.' + cls).forEach(el => el.remove());
     });
+    // Null out flight path manager callbacks to prevent stale closures
+    if (_flightPathManager) {
+        _flightPathManager.onPlaybackUpdate(null);
+        _flightPathManager.onPlaybackEnd(null);
+        _flightPathManager.onCameraModeChange(null);
+        _flightPathManager = null;
+    }
     // Reset walkthrough module state
     wtStopDots = null;
     wtTitleEl = null;
@@ -754,8 +765,15 @@ export function setup(manifest, deps) {
     const log = Logger.getLogger('editorial-layout');
     log.info('Setting up editorial layout');
 
+    // Store flight path manager ref for cleanup
+    _flightPathManager = flightPathManager || null;
+
     // Remove any previously-created editorial layout elements (re-entry safe)
     cleanup();
+
+    // Create AbortController for document-level listeners (aborted in cleanup())
+    _editorialAbort = new AbortController();
+    const _signal = _editorialAbort.signal;
 
     // Hide orbit-reset when the archive locks the orbit pivot (pan disabled)
     const vs = manifest && manifest.viewer_settings;
@@ -1136,7 +1154,7 @@ export function setup(manifest, deps) {
         // Close dropdown on outside click but keep slice active
         document.addEventListener('click', () => {
             sliceDropdown.classList.remove('open');
-        });
+        }, { signal: _signal });
         sliceDropdown.addEventListener('click', (e) => { e.stopPropagation(); });
 
         // Re-open dropdown when clicking active slice button
@@ -1325,7 +1343,7 @@ export function setup(manifest, deps) {
 
         // Open/close dropdown
         annoBtn.addEventListener('click', (e) => { e.stopPropagation(); annoDropdown.classList.toggle('open'); });
-        document.addEventListener('click', () => { annoDropdown.classList.remove('open'); });
+        document.addEventListener('click', () => { annoDropdown.classList.remove('open'); }, { signal: _signal });
 
         annoWrapper.appendChild(annoBtn);
         annoWrapper.appendChild(annoBadge);
@@ -1462,7 +1480,7 @@ export function setup(manifest, deps) {
     materialDropdown.appendChild(offItem);
 
     materialBtn.addEventListener('click', (e) => { e.stopPropagation(); materialDropdown.classList.toggle('open'); });
-    document.addEventListener('click', () => { materialDropdown.classList.remove('open'); });
+    document.addEventListener('click', () => { materialDropdown.classList.remove('open'); }, { signal: _signal });
 
     materialWrapper.appendChild(materialBtn);
     materialWrapper.appendChild(materialDropdown);
@@ -1490,7 +1508,7 @@ export function setup(manifest, deps) {
         e.stopPropagation();
         overflowPanel.classList.toggle('open');
     });
-    document.addEventListener('click', () => overflowPanel.classList.remove('open'));
+    document.addEventListener('click', () => overflowPanel.classList.remove('open'), { signal: _signal });
     overflowPanel.addEventListener('click', (e) => e.stopPropagation());
 
     toolsGroup.appendChild(overflowBtn);
@@ -1516,7 +1534,7 @@ export function setup(manifest, deps) {
             const compress = fsBtn.querySelector('.icon-compress');
             if (expand) expand.style.display = isFs ? 'none' : '';
             if (compress) compress.style.display = isFs ? '' : 'none';
-        });
+        }, { signal: _signal });
     }
 
     ribbon.appendChild(toolsGroup);
@@ -1775,7 +1793,7 @@ export function setup(manifest, deps) {
     }
 
     capsuleMoreBtn.addEventListener('click', (e) => { e.stopPropagation(); morePopover.classList.toggle('open'); });
-    document.addEventListener('click', () => morePopover.classList.remove('open'));
+    document.addEventListener('click', () => morePopover.classList.remove('open'), { signal: _signal });
 
     moreWrapper.appendChild(capsuleMoreBtn);
     moreWrapper.appendChild(morePopover);
@@ -1979,7 +1997,7 @@ export function setup(manifest, deps) {
                 deps.measurementSystem.clearAll();
             }
         }
-    });
+    }, { signal: _signal });
 
     log.info('Editorial layout setup complete');
 }
@@ -2350,7 +2368,7 @@ function buildFlightDropdown(fpm, container) {
         e.stopPropagation();
         fpDropdown.classList.toggle('open');
     });
-    document.addEventListener('click', () => { fpDropdown.classList.remove('open'); });
+    document.addEventListener('click', () => { fpDropdown.classList.remove('open'); }, { signal: _signal });
     fpDropdown.addEventListener('click', (e) => { e.stopPropagation(); });
 
     fpWrapper.appendChild(fpBtn);
@@ -2482,6 +2500,8 @@ function onKeyboardShortcut(key) {
 // ---- Walkthrough hooks ----
 
 let syncInfoOverlayState = null; // late-bound: assigned inside setup() capsule creation, called from module-level createInfoOverlay()
+let _editorialAbort = null; // AbortController for document-level listeners
+let _flightPathManager = null; // stored ref for cleanup
 
 let wtStopDots = null;
 let wtTitleEl = null;

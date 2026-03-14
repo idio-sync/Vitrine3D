@@ -84,18 +84,18 @@ All findings were cross-checked against current code. Corrections from verificat
 
 ---
 
-## Phase 5 — Memory Leaks: Editorial Theme (HIGH)
+## ~~Phase 5 — Memory Leaks: Editorial Theme (HIGH)~~ DONE
 
-**Scope:** 4 issues in 1 file
+**Scope:** 4 issues in 2 files
 **Estimated effort:** Medium — requires tracking document listeners
 **Impact:** Fixes listener accumulation in long-running kiosk sessions
 
 | # | Issue | File | Fix |
 |---|-------|------|-----|
-| H36 | 9 document listeners never removed | `editorial/layout.js` | Store named refs in module-scoped array; remove in `cleanup()` |
-| H37 | `editorial-frozen-label` not in cleanup list | `editorial/layout.js` | Add to `EDITORIAL_ROOT_CLASSES` array |
-| H38 | Detail blob URLs not revoked in kiosk cleanup | `kiosk-main.ts` | Add revoke loop + `.clear()` in `cleanupCurrentScene()` |
-| H39 | Flight dropdown callbacks not cleaned up | `editorial/layout.js` | Null out `fpm.onPlaybackUpdate` etc. in `cleanup()` |
+| ~~H36~~ | ~~9 document listeners never removed~~ | `editorial/layout.js` | ~~FIXED — AbortController with signal on all 9 listeners; abort() in cleanup()~~ |
+| ~~H37~~ | ~~`editorial-frozen-label` not in cleanup list~~ | `editorial/layout.js` | ~~FIXED — Added to EDITORIAL_ROOT_CLASSES array~~ |
+| ~~H38~~ | ~~Detail blob URLs not revoked in kiosk cleanup~~ | `kiosk-main.ts` | ~~FIXED — revokeObjectURL loop + .clear() in cleanupCurrentScene()~~ |
+| ~~H39~~ | ~~Flight dropdown callbacks not cleaned up~~ | `editorial/layout.js` | ~~FIXED — Module-scoped ref; null out onPlaybackUpdate/onPlaybackEnd/onCameraModeChange in cleanup()~~ |
 
 ---
 

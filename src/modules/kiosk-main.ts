@@ -2800,6 +2800,13 @@ function cleanupCurrentScene(): void {
         state.archiveLoader.dispose();
         state.archiveLoader = null;
     }
+    // Revoke detail blob URLs to free memory
+    for (const url of state.loadedDetailBlobs.values()) {
+        URL.revokeObjectURL(url);
+    }
+    state.loadedDetailBlobs.clear();
+    state.detailAssetIndex.clear();
+
     // Clean up layout module DOM elements (titles, ribbons, overlays, etc.)
     getLayoutModule()?.cleanup?.();
 

@@ -418,7 +418,7 @@ Phase F (flip strict: true)      — do after Phase E
 | Severity | Total | Verified Open | Fixed | Removed | Source Areas |
 |----------|-------|---------------|-------|---------|-------------|
 | **CRITICAL** | 3 | 0 | 2 | 1 | Security (XSS), Logic (VR toggle) |
-| **HIGH** | 22 | 8 | 11 | 3 | Memory leaks, runtime bugs, missing cleanup |
+| **HIGH** | 22 | 4 | 15 | 3 | Memory leaks, runtime bugs, missing cleanup |
 | **MEDIUM** | 40 | 39 | 0 | 1 | Duplication, magic numbers, type safety, performance |
 | **LOW** | 22 | 21 | 1 | 0 | Style, naming, minor robustness |
 
@@ -427,6 +427,7 @@ Phase F (flip strict: true)      — do after Phase E
 **Fixed in `ccd5dc0`** (Phase 1 — Security & Auth): C11, C12, H26, H27, H28.
 **Fixed in Phase 2+3** (Runtime Bugs + Extensions): H29, H30, H31, H32, H33, H43, L12.
 **Fixed in Phase 4** (Viewer Memory Leaks): H34, H35.
+**Fixed in Phase 5** (Editorial Theme Leaks): H36, H37, H38, H39.
 
 **Fix plan:** `docs/superpowers/plans/2026-03-13-incremental-review-plan.md` — 12 phases ordered by severity and dependency.
 
@@ -474,10 +475,10 @@ Changed `!splatMesh?.visible` to `!flightPathManager.isVisible`. Added `isVisibl
 |---|-------|------|--------|
 | ~~H34~~ | ~~ComparisonViewer DOM listeners never removed on `close()`~~ | `comparison-viewer.ts` | **FIXED** — added `AbortController` with signal on all listeners; `abort()` called in `close()` |
 | ~~H35~~ | ~~DetailViewer `open()` returns early on load error without cleanup~~ | `detail-viewer.ts` | **FIXED** — resume parent render loop on error; error close button calls `this.close()` |
-| H36 | 9 `document.addEventListener` calls in editorial `setup()` never removed on `cleanup()` | `editorial/layout.js:128,1137,1328,1465,1493,1513,1778,1965,2353` | Each archive reload adds 9 document-level listeners that accumulate in long-running kiosk sessions |
-| H37 | `editorial-frozen-label` DOM element missing from cleanup class list — accumulates on archive reload | `editorial/layout.js:715-722` | Element appended to `fixedRoot` but not in `EDITORIAL_ROOT_CLASSES` array |
-| H38 | Detail blob URLs not cleaned up in kiosk `cleanupCurrentScene()` | `kiosk-main.ts:2763-2811` | `state.loadedDetailBlobs` URLs never revoked when navigating between archives |
-| H39 | Flight dropdown callbacks (`onPlaybackUpdate`, `onPlaybackEnd`, `onCameraModeChange`) not cleaned up | `editorial/layout.js:2268,2275,2283,2353` | Closures over stale DOM elements after cleanup/setup cycle |
+| ~~H36~~ | ~~9 `document.addEventListener` calls in editorial `setup()` never removed on `cleanup()`~~ | `editorial/layout.js` | **FIXED** — added `AbortController` with signal on all 9 document listeners; `abort()` called in `cleanup()` |
+| ~~H37~~ | ~~`editorial-frozen-label` DOM element missing from cleanup class list~~ | `editorial/layout.js` | **FIXED** — added `'editorial-frozen-label'` to `EDITORIAL_ROOT_CLASSES` array |
+| ~~H38~~ | ~~Detail blob URLs not cleaned up in kiosk `cleanupCurrentScene()`~~ | `kiosk-main.ts` | **FIXED** — added `URL.revokeObjectURL()` loop + `.clear()` in `cleanupCurrentScene()` |
+| ~~H39~~ | ~~Flight dropdown callbacks not cleaned up~~ | `editorial/layout.js` | **FIXED** — stored `flightPathManager` ref at module scope; null out `onPlaybackUpdate`/`onPlaybackEnd`/`onCameraModeChange` in `cleanup()` |
 
 ### Renderer State (2 — both removed after verification)
 
@@ -668,10 +669,10 @@ Every new feature (VR, detail viewer, comparison viewer, presets) is wired indep
 ### Event Listener Lifecycle Gaps
 
 A recurring pattern across new modules: event listeners are added in setup/init but never removed in cleanup/close. This affects:
-- Editorial layout.js (9 document listeners per archive load — H36)
+- ~~Editorial layout.js (9 document listeners per archive load — H36)~~ **FIXED**
 - ComparisonViewer (all DOM listeners except keydown — H34)
 - DetailViewer editor controls (never removed — L11)
-- Flight dropdown callbacks (H39)
+- ~~Flight dropdown callbacks (H39)~~ **FIXED**
 
 The project would benefit from a standard `AbortController` pattern for grouped listener cleanup.
 
@@ -705,14 +706,14 @@ The VDIM archive "protection" uses XOR with a 32-byte repeating key. The key is 
 12. ~~**H43** — Add `.vdim` to double-extension strip regex~~
 13. ~~**L12** — Add `.zip`/`.vdim` to kiosk `FILE_CATEGORIES`~~
 
-### Soon (memory leaks) — Phase 4 DONE, Phase 5 remaining
+### ~~Soon (memory leaks) — Phases 4+5 DONE~~
 
 13. ~~**H34** — ComparisonViewer listener cleanup on close~~
 14. ~~**H35** — DetailViewer cleanup on load error~~
-15. **H36** — Editorial document listener cleanup
-16. **H37** — Add `editorial-frozen-label` to cleanup list
-17. **H38** — Revoke detail blob URLs in kiosk cleanup
-18. **H39** — Flight dropdown callback cleanup
+15. ~~**H36** — Editorial document listener cleanup~~
+16. ~~**H37** — Add `editorial-frozen-label` to cleanup list~~
+17. ~~**H38** — Revoke detail blob URLs in kiosk cleanup~~
+18. ~~**H39** — Flight dropdown callback cleanup~~
 
 ### Medium-term (architecture)
 
