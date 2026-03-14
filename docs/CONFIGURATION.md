@@ -6,7 +6,7 @@
 
 | Parameter | Description |
 |-----------|-------------|
-| `archive` | URL to archive container (.ddim, or legacy .a3d/.a3z). **Takes priority over individual file params.** |
+| `archive` | URL to archive container (.ddim or .zip, or legacy .a3d/.a3z). **Takes priority over individual file params.** |
 | `splat` | URL to Gaussian splat file |
 | `model` | URL to 3D model file |
 | `pointcloud` | URL to E57 point cloud file |
@@ -25,6 +25,7 @@
 | `kiosk` | `true`, `false` | Enable kiosk (read-only) mode |
 | `layout` | `sidebar`, `editorial`, `gallery`, `exhibit` | Layout override (overrides theme default) |
 | `autoload` | `true`, `false` | Auto-load archive on page load (default `true`; `false` shows a click-to-load gate) |
+| `vr` | `true`, `false` | Show full-screen "Tap to enter VR" overlay on load (requires WebXR-compatible headset and browser) |
 
 ### Inline Alignment
 
@@ -59,6 +60,9 @@ https://viewer.example.com?archive=/scene.ddim&controls=none&theme=editorial
 
 # Deferred loading (click-to-load gate)
 https://viewer.example.com?archive=/scene.ddim&autoload=false
+
+# VR auto-enter overlay (for headset kiosks)
+https://viewer.example.com?archive=/scene.ddim&vr=true
 ```
 
 ## Share & Embed

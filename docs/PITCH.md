@@ -41,6 +41,24 @@ Think of it as **a publishing platform for 3D captures**: load your assets, alig
 - **Colmap integration** — import `cameras.bin` + `images.bin` binary files to visualize Structure-from-Motion camera positions as frustum wireframes or instanced markers
 - **Flight path alignment** — automatically align SfM cameras to GPS flight paths using timestamp-matched Umeyama similarity transforms
 
+### Detail Model Inspection
+- **Annotation-linked detail models** — attach high-resolution GLB meshes to annotations for close-up inspection in a dedicated overlay viewer
+- **Sub-annotations** — place additional markers directly on detail models with their own titles and descriptions
+- **Per-model view settings** — camera constraints, lighting presets (Neutral/Studio/Outdoor/Warm), background color, and auto-rotate saved per detail model
+- **Editorial split-push layout** — kiosk viewers see the main scene freeze while the detail viewer and info panel slide in
+
+### WebXR Virtual Reality
+- **VR mode** — enter immersive VR on compatible headsets (Meta Quest, HTC Vive, Valve Index) in both editor and kiosk
+- **Teleport locomotion** — aim with a parabolic arc, release to jump; snap turning in 30° increments
+- **Wrist menu** — canvas-rendered menu on left wrist with asset toggles, locomotion mode switching, and exit
+- **VR annotations** — 3D markers in VR space with trigger-activated text card popups
+- **Automatic performance tuning** — splat budget, framebuffer scale, and render quality adjusted for VR
+
+### Object Optimization Profiles
+- **Size-aware presets** — Small, Medium, Large, Massive, and Custom profiles configure both HD and SD mesh targets in one step
+- **Archive persistence** — selected profile saved in the archive and restored on reload
+- **Mesh Performance Guide** — reference document with face count budgets by device tier and object size
+
 ### Video & GIF Recording
 - **Scene recording** — capture turntable spins, walkthrough playback, annotation tours, or free camera movement as WebM video
 - **Server-side transcoding** — recorded WebM is transcoded to MP4 and GIF via FFmpeg for easy sharing
@@ -100,14 +118,14 @@ Both are built as **separate Vite bundles** from the same codebase, sharing core
 | CAD | occt-import-js (OpenCASCADE WASM) |
 | Compression | fflate (ZIP), Draco / meshoptimizer (geometry) |
 | Build | Vite + TypeScript |
-| Testing | Vitest (~420 tests across 21 suites covering security, parsing, alignment, and quality paths) |
+| Testing | Vitest (25 suites covering security, parsing, alignment, VR, detail models, and quality paths) |
 | Apps | Tauri v2 (Windows, macOS, Linux, Android) |
 | Server | Docker (nginx + Node API), SQLite, s6-overlay |
 | Auth | Cloudflare Access |
 
 ### Module Architecture
 
-The codebase is organized as **~57 focused TypeScript modules** orchestrated by a central glue layer. Modules communicate through a typed dependency-injection pattern — no global imports, no circular dependencies.
+The codebase is organized as **~60 focused TypeScript modules** orchestrated by a central glue layer. Modules communicate through a typed dependency-injection pattern — no global imports, no circular dependencies.
 
 ```
 Scene Management -----> Three.js setup, rendering, camera, lighting
@@ -123,6 +141,9 @@ Flight Path ----------> DJI telemetry parsing, 3D path rendering, hover tooltips
 Colmap / SfM ---------> Camera position visualization, flight path alignment
 Post-Processing ------> SSAO, bloom, vignette, chromatic aberration, film grain
 Recording Manager ----> Video/GIF capture, turntable/walkthrough/free modes
+Detail Viewer -------> Annotation-linked detail model overlay with sub-annotations
+VR Session ----------> WebXR teleport, snap turn, wrist menu, VR annotations
+Background Loader ---> Throttled loading with yield-to-renderer for smooth UX
 ```
 
 ### Deployment Options
@@ -148,6 +169,8 @@ Recording Manager ----> Video/GIF capture, turntable/walkthrough/free modes
 | Video/GIF recording | No | No | Rare | Turntable, walkthrough, annotation tour, free recording |
 | Themeable presentation | Limited | No | Custom | 5 built-in themes + template system |
 | Guided walkthroughs | Basic | No | Rare | Full authoring + playback engine |
+| VR support | Basic | No | Rare | WebXR with teleport, wrist menu, VR annotations |
+| Detail model inspection | No | No | No | Annotation-linked detail viewer with sub-annotations |
 
 ---
 
@@ -164,8 +187,10 @@ Recording Manager ----> Video/GIF capture, turntable/walkthrough/free modes
 ## Current Status
 
 - **v1.0** — Production-ready editor and kiosk viewer
-- **~420 automated tests** across 21 suites covering security, parsing, alignment, and quality paths
-- **Full TypeScript migration** (all 57 modules converted to `.ts`, hybrid `allowJs` for config scripts)
+- **25 automated test suites** covering security, parsing, alignment, VR, detail models, and quality paths
+- **Full TypeScript migration** (all 60 modules converted to `.ts`, hybrid `allowJs` for config scripts)
+- **WebXR VR mode** with teleport, wrist menu, and VR annotations
+- **Detail model inspection** with annotation-linked overlay viewer and sub-annotations
 - **Docker deployment** in production with SQLite metadata, Cloudflare Access auth
 - **Tauri v2 desktop builds** for Windows, macOS, Linux, and Android
 - **Open archive format** with published specification and standards alignment

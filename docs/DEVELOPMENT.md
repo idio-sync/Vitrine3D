@@ -41,7 +41,7 @@ src/
   types.ts                 Shared TypeScript interfaces
   styles.css               All styling
   kiosk.css                Kiosk-specific styles
-  modules/                 57 TypeScript modules
+  modules/                 60 TypeScript modules
   themes/                  Kiosk theme packages
   vendor/                  Vendored dependencies (Spark.js 2.0 preview)
 
@@ -146,7 +146,7 @@ npm run test:watch  # Watch mode
 
 Tests use **Vitest** with jsdom environment. Test files live in `src/modules/__tests__/`.
 
-Current test suites (21 suites, ~420 tests):
+Current test suites (25 suites):
 - `url-validation.test.ts` — URL validation and domain allowlisting
 - `archive-loader.test.ts` — ZIP extraction, filename sanitization
 - `archive-creator.test.ts` — Archive creation and SHA-256 hashing
@@ -168,6 +168,10 @@ Current test suites (21 suites, ~420 tests):
 - `undo-manager.test.ts` — Undo/redo stack
 - `asset-store.test.ts` — Blob reference management
 - `constants.test.ts` — Constants module contracts
+- `vr-session.test.ts` — VR arc physics, teleport landing, API surface
+- `detail-types.test.ts` — Detail model type contracts
+- `background-loader.test.ts` — Background loading throttle and yield
+- `rendering-presets.test.ts` — Rendering preset contracts
 
 ## Docker Build
 
@@ -202,6 +206,9 @@ Requires Rust toolchain. See [TAURI_APPLICATION.md](docs/reference/TAURI_APPLICA
 | `src/modules/constants.ts` | Numeric/string constants (no logic) |
 | `vite.config.ts` | Build config, aliases, custom plugins |
 | `docker/meta-server.js` | Node.js API server (OG tags, admin, video transcode, collections) |
+| `src/modules/detail-viewer.ts` | Detail model overlay viewer with sub-annotations and view settings |
+| `src/modules/vr-session.ts` | WebXR VR mode — teleport, snap turn, wrist menu, VR annotations |
+| `src/modules/background-loader.ts` | Background loading throttle and yield-to-renderer APIs |
 
 ## Adding a New Module
 

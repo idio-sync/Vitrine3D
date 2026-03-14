@@ -425,6 +425,7 @@ Entry keys MUST follow the pattern `<type>_<index>` where:
 | `thumbnail_` | Preview image |
 | `screenshot_` | User-captured viewport screenshot |
 | `image_` | Embedded image attachment (referenced by annotations or descriptions via the `asset:` protocol) |
+| `detail_` | Detail model (GLB) attached to a specific annotation for close-up inspection |
 | `source_` | Archived source file (not rendered in viewer; e.g., raw photography, calibration data, reports) |
 
 Index is a zero-based integer. Examples: `scene_0`, `mesh_0`, `mesh_1`, `pointcloud_0`, `thumbnail_0`.
@@ -479,6 +480,14 @@ The `_flight_meta` object MAY contain:
 | `origin_gps` | array of 2 numbers | GPS coordinates `[latitude, longitude]` of the first telemetry point, used as the local origin for coordinate conversion. |
 | `max_alt_m` | number | Maximum altitude recorded in the flight log, in metres. |
 | `source_format` | string | Redundant copy of `_source_format` stored inside the metadata object for self-contained readability. |
+
+**Detail model fields** (applicable to `detail_` entries):
+
+| Field | Type | Status | Description |
+|-------|------|--------|-------------|
+| `role` | string | RECOMMENDED | SHOULD be `"detail"`. |
+
+Detail models are GLB files referenced by annotations via the `detail_asset_key` field. They are not rendered in the main scene — they are opened in a dedicated viewer overlay when the user clicks the annotation's inspect button. Orphaned detail entries (not referenced by any annotation) SHOULD be removed on export.
 
 #### 5.9.3 _parameters
 
@@ -538,6 +547,11 @@ An array of spatial annotation objects. Annotations mark specific locations in 3
 | `position` | object | REQUIRED | 3D world-space position. Fields: `x`, `y`, `z` (numbers). |
 | `camera_position` | object | RECOMMENDED | Camera location for viewing this annotation. Fields: `x`, `y`, `z` (numbers). |
 | `camera_target` | object | RECOMMENDED | Camera look-at point. Fields: `x`, `y`, `z` (numbers). |
+| `detail_asset_key` | string | OPTIONAL | Entry key of an attached detail model (e.g., `"detail_0"`). When present, viewers SHOULD display an "Inspect Detail" button. |
+| `detail_button_label` | string | OPTIONAL | Custom label for the inspect button. Default: `"Inspect Detail"`. |
+| `detail_thumbnail` | string | OPTIONAL | Asset path to a thumbnail image for the detail model (e.g., `"images/detail_0_thumb.png"`). |
+| `detail_annotations` | array | OPTIONAL | Array of sub-annotation objects placed on the detail model. Same schema as top-level annotations. |
+| `detail_view_settings` | object | OPTIONAL | Camera, lighting, and display settings for the detail viewer. Fields include `environment_preset` (`"neutral"`, `"studio"`, `"outdoor"`, `"warm"`), `background_color`, `auto_rotate`, `lock_orbit`, `lock_distance`, `initial_camera_position`, `initial_camera_target`, and others. |
 
 ```json
 "annotations": [
@@ -547,7 +561,15 @@ An array of spatial annotation objects. Annotations mark specific locations in 3
         "body": "Visible hairline crack running along the seam between blocks 14 and 15...",
         "position": { "x": 0.042, "y": 2.845, "z": 0.410 },
         "camera_position": { "x": 0.15, "y": 2.90, "z": 1.60 },
-        "camera_target": { "x": 0.042, "y": 2.845, "z": 0.410 }
+        "camera_target": { "x": 0.042, "y": 2.845, "z": 0.410 },
+        "detail_asset_key": "detail_0",
+        "detail_thumbnail": "images/detail_0_thumb.png",
+        "detail_view_settings": {
+            "environment_preset": "studio",
+            "auto_rotate": true,
+            "lock_orbit": false,
+            "annotations_visible_on_open": true
+        }
     }
 ]
 ```
@@ -586,7 +608,7 @@ Fields prefixed with `_` throughout the manifest are considered implementation-s
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `quality` | object | Computed statistics: `splat_count`, `mesh_polygons`, `mesh_vertices`, `splat_file_size`, `mesh_file_size`, `pointcloud_points`, `pointcloud_file_size` (all numbers). |
+| `quality` | object | Computed statistics: `splat_count`, `mesh_polygons`, `mesh_vertices`, `splat_file_size`, `mesh_file_size`, `pointcloud_points`, `pointcloud_file_size` (all numbers), `objectProfile` (string, optional — optimization profile used: `"small"`, `"medium"`, `"large"`, `"massive"`, or `"custom"`), `texture_count` (number), `texture_max_resolution` (number). |
 | `custom_fields` | object | Arbitrary key-value pairs for institutional or project-specific metadata. |
 
 ```json
@@ -594,7 +616,8 @@ Fields prefixed with `_` throughout the manifest are considered implementation-s
     "quality": {
         "splat_count": 3000000,
         "mesh_polygons": 45000000,
-        "mesh_vertices": 22500000
+        "mesh_vertices": 22500000,
+        "objectProfile": "medium"
     },
     "custom_fields": {
         "nps_unit_code": "LINC",

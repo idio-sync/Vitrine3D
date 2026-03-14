@@ -8,37 +8,52 @@ The application is built as two separate bundles: a **kiosk viewer** (`/`) for c
 
 ## Features
 
-- **Archive container support** (.ddim) — bundle all assets, metadata, and multi-data alignment into a single file
-- Load and display **3D models** (.glb, .gltf, .obj)
-- Load and display **Gaussian splat** files (.ply, .splat, .ksplat, .spz, .sog)
-- Load and display **E57 point clouds** (.e57) via [three-e57-loader](https://www.npmjs.com/package/three-e57-loader)
-- Load and display **parametric CAD files** (.step, .stp, .iges, .igs) via [occt-import-js](https://github.com/kovacsv/occt-import-js) (OpenCASCADE WASM) — tessellated and rendered as a shaded mesh
-- **Scene settings** — tone mapping (6 modes + exposure), HDR environment maps (3 presets + file/URL loading), environment-as-background skybox, shadow casting with shadow catcher ground plane, background image loading
-- **Auto-rotate** — turntable toggle in toolbar for both main app and kiosk viewer
-- **Screenshot capture** — capture viewport screenshots with a viewfinder-based archive preview override, thumbnail gallery with delete, and automatic export to `/screenshots/` in archives
-- **Video & GIF recording** — record turntable spins, walkthrough tours, annotation tours, or free camera movements; trim inline; server-side FFmpeg transcode to MP4 and GIF
-- **Post-processing effects** — SSAO (ambient occlusion), bloom, vignette, chromatic aberration, and film grain via configurable pipeline
-- **Transform controls** for positioning, rotating, and scaling each object independently
-- **Alignment Tools** for registering splats and models in overlapping space
-- **Measurement tool** — point-to-point distance measurement with two-click flow, 3D line overlay, and configurable units (m/cm/mm/in/ft); works in main editor and kiosk viewer
-- **Annotation system** for placing spatial notes on 3D surfaces, with image attachments and depth-aware markers
-- **Archive tags** — add comma-separated tags to archives, displayed as chips in all viewer modes; stored as `project.tags` in the manifest
-- **Metadata editor** with 8 tabs covering project info, provenance, archival records, quality metrics, preservation, and more — with inline field validation
-- **Cross-section tool** — arbitrary-orientation clipping plane with draggable 3D handle; works in main app and kiosk viewer
-- **Walkthrough engine** — author guided camera tours with fly/fade/cut transitions, dwell times, annotation links, auto-play and loop; playback in editor and kiosk viewer
-- **Kiosk themes** — Editorial (golden ratio layout), Gallery (cinematic full-bleed), Exhibit (institutional with attract mode), and Minimal; self-contained theme packages with layout CSS/JS and click gates
-- **Lazy archive loading** — only the manifest is decompressed on open; individual assets load on demand
-- **Library panel** — built-in archive browser in the viewer when admin is enabled: gallery view, detail pane, upload, rename, delete, and direct-to-editor loading
-- **Admin panel** (`/admin`) — standalone archive management page with the same upload/rename/delete capabilities
-- **Share dialog** — generate customized share links, embed codes, and QR codes with preset modes (kiosk, minimal, editor) and theme selection
-- **Social link previews** — Open Graph, Twitter Card, and oEmbed support for rich previews when sharing viewer URLs on Slack, Discord, Twitter, WordPress, etc.
-- **Flight path import** — import DJI drone flight logs (CSV, KML/KMZ, SRT) as 3D path overlays with telemetry tooltips; multiple logs per archive; manual alignment via transform gizmo; displayed in both editor and kiosk viewer
-- **SfM camera visualization** — import Colmap `cameras.bin` + `images.bin` to display camera positions as frustum wireframes or instanced markers; align cameras to a manually positioned flight path via Umeyama similarity transform; full archive support and kiosk toggle
-- **Collections** — organize archives into named collections; editorial-themed collection browser in kiosk mode; collection management in the library panel
-- **Library browser** — full-page themed archive and collection browser at `/library`
-- **Camera constraints** — lock orbit, pan, zoom, and height limits per-archive; applied automatically in kiosk mode
-- **Docker deployment** with s6-overlay process supervision (nginx + Node API), SQLite metadata storage, Cloudflare Access authentication, and environment-variable configuration
-- **Digital preservation metadata** aligned with Dublin Core, PRONOM, and Smithsonian EDAN standards
+### Multi-Format 3D Viewing
+- **Gaussian splats** — PLY, SPLAT, KSplat, SPZ, SOG via Spark.js with runtime LOD
+- **3D meshes** — GLB/glTF (Draco-compressed), OBJ, STL
+- **Point clouds** — E57 via WASM parser
+- **Parametric CAD** — STEP/IGES via OpenCASCADE WASM
+- **Drawings** — DXF as an independent layer
+- **Flight paths** — DJI CSV, KML/KMZ, SRT rendered as 3D lines with telemetry tooltips
+- **SfM cameras** — Colmap binary import with frustum visualization and flight path alignment
+- All formats loadable simultaneously in the same 3D space
+
+### Scene Composition & Analysis
+- **Transform controls** — position, rotate, and scale each asset independently
+- **Alignment tools** — ICP, N-point landmark matching, auto-align, fit-to-view
+- **Measurement** — point-to-point distance with configurable units (m/cm/mm/in/ft)
+- **Cross-section** — arbitrary clipping plane with draggable 3D handle
+- **Annotations** — depth-aware 3D surface markers with image attachments
+- **Detail model inspection** — annotation-linked GLB overlays with sub-annotations and per-model view settings
+
+### Rendering & Media
+- **Scene settings** — tone mapping, HDR environment maps, skybox, shadows, background images
+- **Post-processing** — SSAO, bloom, vignette, chromatic aberration, film grain
+- **Video & GIF recording** — turntable, walkthrough, annotation tour, and free camera modes with server-side FFmpeg transcode
+- **Screenshot capture** — viewfinder-based capture with thumbnail gallery
+
+### Archive Format (.ddim)
+- **ZIP-based container** — bundle assets, metadata, alignment, annotations, and screenshots (.zip also accepted)
+- **Preservation metadata** — 8-tab editor aligned with Dublin Core, PRONOM, and Smithsonian EDAN
+- **SIP compliance validation** — required/recommended field checking with compliance scoring
+- **SHA-256 integrity hashing** — streaming verification for large files
+- **Object optimization profiles** — size-aware presets (Small/Medium/Large/Massive) for HD and SD mesh targets
+- **Lazy loading** — only the manifest is decompressed on open; assets load on demand
+
+### Presentation & Sharing
+- **5 kiosk themes** — Editorial, Gallery, Exhibit, Industrial, and Minimal
+- **Walkthrough engine** — authored camera tours with fly/fade/cut transitions and annotation links
+- **WebXR VR mode** — teleport locomotion, snap turning, wrist menu, VR annotations, auto performance tuning
+- **Share dialog** — customized links, embed codes, and QR codes
+- **Social link previews** — Open Graph, Twitter Card, and oEmbed
+- **Camera constraints** — lockable orbit, pan, zoom, and height limits per archive
+- **Collections** — organize archives into browsable, themed collections
+
+### Infrastructure
+- **Two-bundle build** — kiosk viewer (`/`) and editor (`/editor/`) from the same codebase
+- **Docker deployment** — nginx + Node API with SQLite, Cloudflare Access auth, s6-overlay
+- **Tauri desktop app** — native builds for Windows, macOS, Linux, and Android
+- **Library & admin** — archive browser, upload, rename, delete at `/library` and `/admin`
 
 ## Quick Start
 
@@ -77,6 +92,7 @@ docker run -p 8080:80 \
 
 ### Archive Containers
 - `.ddim` — Direct Dimensions archive container with metadata (ZIP-based)
+- `.zip` — plain ZIP archives with the same internal structure are also accepted
 
 ### 3D Models (via Three.js)
 - `.glb` — Binary glTF (Draco-compressed GLBs supported via DRACOLoader)
@@ -123,6 +139,7 @@ docker run -p 8080:80 \
 | [Architecture](docs/reference/ARCHITECTURE.md) | Codebase structure and module relationships |
 | [Specification](docs/archive/SPECIFICATION.md) | Formal archive-3d container format spec |
 | [Tauri Desktop App](docs/reference/TAURI_APPLICATION.md) | Native desktop builds via Tauri v2 |
+| [Mesh Performance Guide](docs/reference/MESH_PERFORMANCE_GUIDE.md) | Face count budgets by device tier and object size |
 | [Roadmap](docs/ROADMAP.md) | Planned features and priorities |
 
 ## Technologies
@@ -153,6 +170,8 @@ Requires a modern browser with WebGL 2.0 support:
 - Edge 79+
 
 E57 and STEP/IGES loading additionally require WebAssembly support (available in all the above browsers).
+
+VR mode requires a WebXR-compatible browser and headset (Chrome 79+, Edge 79+). Firefox and Safari do not support WebXR.
 
 ## Related Projects
 

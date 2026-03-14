@@ -161,10 +161,10 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 - [x] **Done** — Tauri v2 packaged viewer for institutional desktops (defaults to kiosk mode + editorial theme)
 
 ### Testing & Type Safety
-- [x] **Done** — Add a testing framework (Vitest) with ~420 tests across 21 suites (url-validation, theme-loader, archive-loader, utilities, quality-tier, archive-creator, share-dialog, alignment, flight-parsers, colmap-alignment, colmap-loader, icp-alignment, points3d-parser, mesh-decimator, format-file-size, sip-validator, metadata-profile, walkthrough-engine, undo-manager, asset-store, constants)
+- [x] **Done** — Add a testing framework (Vitest) with 25 suites (url-validation, theme-loader, archive-loader, utilities, quality-tier, archive-creator, share-dialog, alignment, flight-parsers, colmap-alignment, colmap-loader, icp-alignment, points3d-parser, mesh-decimator, format-file-size, sip-validator, metadata-profile, walkthrough-engine, undo-manager, asset-store, constants, vr-session, detail-types, background-loader, rendering-presets)
 - [x] **Done** — Prioritize tests for: filename sanitization, URL validation, theme metadata parsing, utilities, quality-tier detection
 - [x] **Done** — Add shared TypeScript types (`src/types.ts`): `AppState`, `SceneRefs`, deps interfaces with JSDoc `@returns` on factory functions
-- [x] **Done** — TypeScript migration complete: all 57 modules converted to `.ts`, hybrid `allowJs: true` for config scripts, `@types/three` installed
+- [x] **Done** — TypeScript migration complete: all 60 modules converted to `.ts`, hybrid `allowJs: true` for config scripts, `@types/three` installed
 - [x] **Done** — Phase 4: Convert `main.js` → `main.ts` (~1,900 lines), extract `source-files-manager.ts` and `file-input-handlers.ts`
 
 ### Rendering
@@ -178,5 +178,18 @@ Prioritized list of future work, drawn from the [code review](reference/CODE_REV
 
 ### Collections
 - [x] **Done** — Collection management: create, rename, delete collections; add/remove archives from collections; mosaic thumbnail generation; editorial-themed collection browser in kiosk mode (`collection-manager.ts`, `collection-page.ts`, `collections-browser.ts`)
+
+### Detail Model Viewer
+- [x] **Done** — Detail model inspection: attach high-resolution GLB meshes to annotations with dedicated overlay viewer, sub-annotations, per-model view settings (camera, lighting, background), thumbnail capture, editorial split-push layout in kiosk mode (`detail-viewer.ts`)
+
+### VR Mode
+- [x] **Done** — WebXR VR support in editor and kiosk: SparkXr integration, teleport locomotion with parabolic arc, snap turning, canvas-rendered wrist menu (asset toggles, locomotion mode, exit), VR annotation markers with text card popups, automatic splat budget and framebuffer scaling, `?vr=true` auto-enter overlay (`vr-session.ts`)
+
+### Optimization & Performance
+- [x] **Done** — Object optimization profiles: unified size-aware presets (Small/Medium/Large/Massive/Custom) configuring both HD and SD mesh decimation targets; profile saved in archive manifest and restored on load
+- [x] **Done** — Background loading with throttling and yield-to-renderer APIs; applied to archive pipeline and editor (`background-loader.ts`)
+- [x] **Done** — Splat LOD transcode moved to Web Worker for non-blocking exports
+- [x] **Done** — Draco compression moved to Web Worker for non-blocking mesh optimization
+- [x] **Done** — `.zip` format accepted as archive input alongside `.ddim`
 
 </details>

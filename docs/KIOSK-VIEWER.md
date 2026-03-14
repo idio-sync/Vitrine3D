@@ -24,6 +24,8 @@ Kiosk view mode is a read-only mode used for presentation of 3D data. It can be 
 - SfM camera visualization — displays Colmap camera positions as frustum wireframes or instanced markers, with a toggle button that appears when camera data is present in the archive
 - Data overlay toggles — pill-style toggle buttons for SfM Cameras and Flight Paths appear when the respective data is present in the archive
 - Collections browser — editorial-themed collection pages accessible from the library, with mosaic thumbnails and archive membership
+- Detail model inspection — annotations with attached detail models show an "Inspect Detail" button with optional thumbnail preview; opens a dedicated viewer overlay with saved lighting, camera, and sub-annotations
+- WebXR VR mode — enter immersive VR on compatible headsets with teleport locomotion, snap turning, wrist menu, and VR annotation markers (see [VR Mode in USAGE.md](USAGE.md#vr-mode))
 
 ## SfM Cameras (Colmap)
 
@@ -63,6 +65,42 @@ When both Colmap cameras and a flight path are loaded, the **Align Cameras to Pa
 5. Applies the transform to the camera group, aligning cameras to the flight path's world-space positions
 
 Requires at least 3 matched point pairs. Reports RMSE — values above 1.0 trigger a warning.
+
+## Detail Model Inspection
+
+Annotations can have detail models (GLB meshes) attached for close-up inspection. In the kiosk viewer, these annotations show an **Inspect Detail** button in the popup, optionally with a thumbnail preview.
+
+### How it works
+
+1. Click an annotation marker or chip that has a detail model attached
+2. The annotation popup shows a thumbnail (if captured) and an **Inspect Detail** button
+3. Click the button — the detail model is extracted from the archive and a dedicated viewer overlay opens
+4. The overlay has its own orbit camera, lighting preset, background color, and sub-annotations as configured by the editor author
+5. Click **Back to Scene** (or the frozen main scene preview) to return
+
+### Editorial theme layout
+
+In the editorial theme, the detail viewer uses a split-push layout:
+- The main 3D scene freezes and shifts to the right as a preview panel
+- The detail viewer and info panel slide in from the left
+- Clicking the frozen preview or the back button returns to the main scene
+
+### Archive requirements
+
+Detail models must be attached to annotations in the editor before export. They are stored as `detail_N` entries in the archive with role `"detail"`. View settings (camera constraints, lighting, auto-rotate) are saved per-detail-model.
+
+## VR Mode (Kiosk)
+
+The kiosk viewer supports WebXR VR on compatible headsets. The **Enter VR** button appears automatically when WebXR is detected. Use `?vr=true` to show a full-screen "Tap to enter VR" overlay on load.
+
+VR features in kiosk mode:
+- Teleport locomotion with parabolic arc aiming
+- Snap turning (30° increments)
+- Wrist menu for asset visibility toggles and locomotion mode switching
+- VR annotation markers — point and trigger to view annotation text cards
+- Automatic splat budget and framebuffer scale adjustments for VR performance
+
+For full VR control details, see [VR Mode in USAGE.md](USAGE.md#vr-mode).
 
 ## Keyboard Shortcuts
 

@@ -1,6 +1,8 @@
 # Mesh Performance Guide — Vitrine3D
 
 > Face count budgets, texture guidelines, and optimization strategies for delivering 3D scan data across device tiers. All recommendations account for Gaussian splat co-rendering via Spark.js.
+>
+> **See also:** [Splat Performance Guide](SPLAT_PERFORMANCE_GUIDE.md) for Gaussian splat-specific budgets, LOD tuning, and file format selection.
 
 ---
 

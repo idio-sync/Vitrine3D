@@ -8,7 +8,7 @@ This guide covers the **editor** at `/editor/`. For the kiosk viewer at `/`, see
 
 **From URL parameters**: Pass file URLs directly in the address bar (see [Configuration](CONFIGURATION.md#url-parameters)).
 
-**From an archive**: Loading a `.ddim` file (or legacy `.a3d` / `.a3z`) automatically extracts and displays all bundled assets with their saved transforms, metadata, and annotations.
+**From an archive**: Loading a `.ddim` or `.zip` file automatically extracts and displays all bundled assets with their saved transforms, metadata, and annotations.
 
 **Asset types**:
 - **Splat** — Gaussian splat (`.splat`, `.ply`, `.sog`, `.sogz`)
@@ -17,6 +17,7 @@ This guide covers the **editor** at `/editor/`. For the kiosk viewer at `/`, see
 - **Drawing** — 2D/3D CAD drawing (`.dxf`); load from file or URL like any other asset type
 - **Flight Path** — Drone flight log (`.txt`, `.csv`, `.kml`, `.kmz`, `.srt`); renders GPS telemetry as a 3D line with hover data points. Supports non-destructive trim with start/end scrubber handles
 - **SfM Cameras** — Colmap Structure-from-Motion data (`cameras.bin` + `images.bin`); visualizes camera positions as frustum wireframes or instanced markers. Can be auto-aligned to a flight path via Umeyama similarity transform
+- **Detail Model** — High-resolution GLB mesh attached to a specific annotation for close-up inspection. Opened in a dedicated overlay viewer with its own lighting, camera, and sub-annotations
 
 ## Example: Archive Creation to Delivery
 
@@ -223,6 +224,104 @@ A walkthrough is a guided sequence of camera stops that plays back automatically
 | `fade` | Fades to black, cuts camera, fades back in |
 | `cut` | Instant camera jump with no animation |
 
+## Detail Model Viewer
+
+The detail model viewer lets you attach a high-resolution 3D model (GLB) to any annotation for close-up inspection. When a viewer clicks "Inspect Detail" on an annotation, a dedicated overlay opens with its own scene, lighting, camera, and annotation system.
+
+### Attaching a detail model (editor)
+
+1. Select an annotation in the 3D view or annotation list
+2. In the annotation sidebar, find the **Detail Model** section
+3. Click **Attach .glb** and select a GLB file — the model is added to the archive
+4. Optionally capture a **thumbnail** (shown as a preview in the annotation popup)
+5. Click **Inspect** to open the detail viewer and configure it
+
+### Detail viewer controls
+
+Inside the detail viewer overlay:
+
+- **Orbit, pan, zoom** — same controls as the main scene
+- **Lighting preset** — choose from Neutral, Studio, Outdoor, or Warm
+- **Camera constraints** — lock orbit, distance, or height; set initial camera position
+- **Auto-rotate** — toggle turntable rotation with configurable speed
+- **Background color** — independent from the main scene
+- **Sub-annotations** — click **Place Annotation** to add markers directly on the detail model. Sub-annotations are saved inside the parent annotation and persist in the archive
+- **View settings** — all camera, lighting, and display settings are saved per-detail-model in the archive
+
+### Detail viewer in kiosk mode
+
+In the kiosk viewer, annotations with attached detail models show an **Inspect Detail** button (with optional thumbnail preview) in the annotation popup. Clicking it opens the detail viewer in read-only mode with the saved view settings. The editorial theme uses a split-push layout — the main scene freezes on the right while the detail viewer and info panel slide in from the left.
+
+### Archive format
+
+Detail models are stored as `detail_N` entries (e.g., `detail_0`, `detail_1`) under `assets/` in the archive with role `"detail"`. Thumbnails are stored as `images/detail_N_thumb.png`. Sub-annotations and view settings are stored inline in the parent annotation's `detail_annotations` and `detail_view_settings` fields.
+
+## VR Mode
+
+Vitrine3D supports WebXR virtual reality on compatible headsets (e.g., Meta Quest, HTC Vive, Valve Index). VR mode is available in both the editor and kiosk viewer.
+
+### Requirements
+
+- A WebXR-compatible browser (Chrome, Edge, or Quest Browser)
+- A VR headset with controllers
+- The **Enter VR** button appears automatically when WebXR is detected
+
+### Entering VR
+
+- Click the **Enter VR** button in the toolbar (bottom-right corner)
+- Alternatively, use `?vr=true` in the URL to show a full-screen "Tap to enter VR" overlay on load
+
+### VR controls
+
+| Input | Action |
+|-------|--------|
+| Right trigger | Teleport (aim with parabolic arc, release to jump) |
+| Right thumbstick | Snap turn (30° increments) |
+| Left wrist gaze | Show wrist menu (look at your left wrist) |
+
+### Wrist menu
+
+A canvas-rendered menu appears on your left wrist when you look at it. It provides:
+
+- **Asset toggles** — show/hide Splat, Mesh, Point Cloud, CAD, Flight Path
+- **Locomotion mode** — switch between Teleport and Smooth movement
+- **Exit VR** — return to desktop view
+
+### VR annotations
+
+3D annotation markers appear as sprites in VR space, scaled 2× larger than desktop markers. Point a controller at a marker and pull the trigger to show a text card popup that billboards toward you.
+
+### Performance
+
+VR automatically adjusts rendering for performance:
+- Splat budget: 2M splats (PC headsets) vs 500K (standalone, future)
+- Framebuffer scale: 50% of native resolution
+- Max standard deviation reduced for cheaper splat rendering
+
+## Object Optimization Profiles
+
+The Optimization section in the editor provides size-aware presets that configure both HD (web-optimized) and SD (mobile proxy) mesh settings in one step.
+
+### Profiles
+
+| Profile | Best for | HD Target Faces | SD Target Faces |
+|---------|----------|-----------------|-----------------|
+| **Small** | Jewelry, shoes, pottery | 300K | 50K |
+| **Medium** | Furniture, busts, sculptures | 500K | 100K |
+| **Large** | Monuments, room interiors | 1M | 250K |
+| **Massive** | Full buildings, complexes | 2M | 500K |
+| **Custom** | Manual configuration | User-defined | User-defined |
+
+### How to use
+
+1. Open the **Optimization** section in the editor controls panel
+2. Select an **Object Profile** from the dropdown — HD and SD fields auto-populate
+3. Under **Web Optimization**, click **Optimize** to decimate the mesh to the HD target
+4. Under **SD Proxy**, click **Generate SD Proxy** to create a mobile-friendly version
+5. The selected profile is saved in the archive and restored when the archive is reloaded
+
+The **Custom** profile unlocks manual target face count and ratio inputs for both tiers. See the [Mesh Performance Guide](reference/MESH_PERFORMANCE_GUIDE.md) for detailed face count budgets by device and object size.
+
 ## Post-Processing Effects
 
 The editor includes optional post-processing effects accessible from the Scene Settings panel:
@@ -329,3 +428,4 @@ The left-side toolbar provides quick access to:
 | Cross-Section | Toggle cross-section clipping plane tool |
 | Measurement | Toggle point-to-point distance measurement tool |
 | Walkthrough | Open the walkthrough editor/player panel |
+| Enter VR | Enter WebXR VR mode (visible only when WebXR is available) |
