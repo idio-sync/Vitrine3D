@@ -1,0 +1,38 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Select config for branch
+        id: config
+        shell: bash
+        run: |
+          if [[ "$BRANCH" == "dev" ]]; then
+            echo "file=release-please-config-dev.json" >> "$GITHUB_OUTPUT"
+          else
+            echo "file=release-please-config.json" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          BRANCH: ${{ github.ref_name }}
+
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: ${{ steps.config.outputs.file }}
+          manifest-file: .release-please-manifest.json
+          target-branch: ${{ github.ref_name }}
