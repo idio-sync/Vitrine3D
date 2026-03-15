@@ -563,7 +563,7 @@ export class ArchiveCreator {
             metadata_schema_version: "1.0",
             metadata_profile: 'standard',
             packer: "vitrine3d",
-            packer_version: "1.0.0", // x-release-please-version
+            packer_version: "1.1.0", // x-release-please-version
             _creation_date: "",
             _last_modified: "",
             project: {
