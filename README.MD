@@ -35,8 +35,8 @@ The application is built as two separate bundles: a **kiosk viewer** (`/`) for c
 
 ### Archive Format (.ddim / .vdim)
 - **ZIP-based container** — bundle assets, metadata, alignment, annotations, and screenshots (.zip also accepted)
-- **Protected archives (.vdim)** — XOR-scrambled format with embedded key, unopenable by standard ZIP tools
-- **Transit scrambling** — server-side XOR stream endpoint prevents casual download-and-open of archives served via clean URLs
+- **Protected archives (.vdim) - optional** — XOR-scrambled format with embedded key, unopenable by standard ZIP tools
+- **Transit scrambling - optional** — server-side XOR stream endpoint prevents casual download-and-open of archives served via clean URLs
 - **Preservation metadata** — 8-tab editor aligned with Dublin Core, PRONOM, and Smithsonian EDAN
 - **SIP compliance validation** — required/recommended field checking with compliance scoring
 - **SHA-256 integrity hashing** — streaming verification for large files
